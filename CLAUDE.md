@@ -23,7 +23,9 @@ pnpm --filter @appling/lang build   # rebuild only the language after grammar ch
 ## Architecture
 
 - `packages/lang` (`@appling/lang`): the language. `src/appling.langium` is the grammar; `langium generate` writes `src/generated/` (gitignored, never edit). `index.ts` exports the services factory, the printer and the generated AST.
-- `packages/cli` (`@appling/cli`): the `appling` binary with two commands, `check` (build with validation, print diagnostics, exit 1 on errors) and `fmt` (requires a syntax error free parse, then prints canonically and writes back).
+- `packages/cli` (`@appling/cli`): the `appling` binary with two commands, `check` (build with validation, print diagnostics) and `fmt` (requires a syntax error free parse, then prints canonically and writes back). All given files load as one workspace so cross file module references resolve. Exit codes: 0 no errors, 1 `check` errors or `fmt` skipped a file, 2 unknown command. `fmt` must be idempotent: a second run changes nothing.
+
+Each package has a user facing `README.md` (published to npm) documenting the CLI usage and exit codes, the language overview, its rules and the public API. Keep them in sync when changing CLI behavior, grammar keywords, validation rules or exports from `index.ts`.
 
 Key mechanics that span several files:
 
