@@ -1,11 +1,10 @@
 import { AstUtils, type AstNode, type ValidationAcceptor, type ValidationChecks } from 'langium';
 import {
-    isAction, isEntity, isEnum, isMachine, isModule, isValueType,
-    type ApplingAstType, type Endpoint, type Machine, type Migration, type Model, type Module, type Policy,
-    type Projection, type SetEffect
+    isAction, isEntity, isEnum, isMachine, isMigration, isModule, isValueType,
+    type ApplingAstType, type Endpoint, type Machine, type Migration, type MigrationStep, type Model, type Module,
+    type Policy, type Projection, type RenameStep, type SetEffect
 } from './generated/ast.js';
-import { projectionSourceEntity } from './appling-scope.js';
-import { hasStableId } from './appling-printer.js';
+import { namedPaths, projectionSourceEntity } from './appling-scope.js';
 import type { ApplingServices } from './appling-module.js';
 
 type Layer = 'cross' | 'domain' | 'behavior' | 'application' | 'interface' | 'experience';
@@ -22,7 +21,7 @@ const LAYER_OF: Record<string, Layer> = {
 export function registerValidationChecks(services: ApplingServices): void {
     const validator = new ApplingValidator(services);
     const checks: ValidationChecks<ApplingAstType> = {
-        Model: [validator.checkStableIds, validator.checkLayerReferences],
+        Model: validator.checkLayerReferences,
         Module: validator.checkExports,
         Machine: validator.checkMachine,
         SetEffect: validator.checkSetEffect,
@@ -37,18 +36,6 @@ export function registerValidationChecks(services: ApplingServices): void {
 export class ApplingValidator {
 
     constructor(private readonly services: ApplingServices) { }
-
-    checkStableIds(model: Model, accept: ValidationAcceptor): void {
-        const owners = this.allStableIds();
-        for (const node of AstUtils.streamAst(model).filter(hasStableId)) {
-            const id = (node as AstNode & { id?: string }).id;
-            if (!id) {
-                accept('error', `${node.$type} has no stable id. Run "appling fmt" to assign one.`, { node });
-            } else if ((owners.get(id) ?? 0) > 1) {
-                accept('error', `Stable id ${id} is used more than once.`, { node, property: 'id' });
-            }
-        }
-    }
 
     checkLayerReferences(model: Model, accept: ValidationAcceptor): void {
         for (const node of AstUtils.streamAst(model)) {
@@ -121,13 +108,18 @@ export class ApplingValidator {
     }
 
     checkMigration(migration: Migration, accept: ValidationAcceptor): void {
-        const ids = this.allStableIds();
+        const module = migration.$container;
+        const nameOf = (node: AstNode) => this.services.references.NameProvider.getName(node);
+        const paths = new Set(module.members.flatMap(m => [...namedPaths(m, nameOf)].map(([path]) => path)));
+        const steps = module.members.filter(isMigration).flatMap(m => m.steps);
         for (const step of migration.steps) {
-            const exists = ids.has(step.target);
-            if (step.$type === 'RemoveStep' ? exists : !exists) {
+            const path = step.$type === 'RenameStep' ? renamed(step) : step.target;
+            const current = followSteps(path, steps.slice(steps.indexOf(step) + 1));
+            if (current === undefined) continue;
+            if (step.$type === 'RemoveStep' ? paths.has(current) : !paths.has(current)) {
                 accept('error', step.$type === 'RemoveStep'
-                    ? `Removed element ${step.target} still exists.`
-                    : `No element has stable id ${step.target}.`, { node: step, property: 'target' });
+                    ? `Removed element ${current} still exists.`
+                    : `Module ${module.name} has no element ${current}.`, { node: step, property: 'target' });
             }
         }
     }
@@ -137,15 +129,20 @@ export class ApplingValidator {
             .flatMap(doc => AstUtils.streamAst(doc.parseResult.value))
             .toArray();
     }
+}
 
-    private allStableIds(): Map<string, number> {
-        const counts = new Map<string, number>();
-        for (const node of this.allNodes()) {
-            const id = (node as AstNode & { id?: string }).id;
-            if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
-        }
-        return counts;
+/** Where a path ends up after the later migration steps, or undefined when one of them removes it. */
+function followSteps(path: string, steps: MigrationStep[]): string | undefined {
+    for (const step of steps) {
+        if (path !== step.target && !path.startsWith(`${step.target}.`)) continue;
+        if (step.$type === 'RemoveStep') return undefined;
+        if (step.$type === 'RenameStep') path = renamed(step) + path.slice(step.target.length);
     }
+    return path;
+}
+
+function renamed(step: RenameStep): string {
+    return step.target.replace(/[^.]+$/, step.newName);
 }
 
 /** The top level declaration inside a module that owns this node. */

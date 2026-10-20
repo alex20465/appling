@@ -6,7 +6,7 @@ entry Model:
 // Cross cutting
 
 Module:
-    'module' name=Ident id=STABLE_ID? '{'
+    'module' name=Ident '{'
         (exports+=Export | members+=Member)*
     '}';
 
@@ -23,33 +23,33 @@ Member:
     | Migration;
 
 Role:
-    'role' name=Ident id=STABLE_ID?;
+    'role' name=Ident;
 
 Actor:
-    'actor' kind=('human' | 'system' | 'service') name=Ident id=STABLE_ID?
+    'actor' kind=('human' | 'system' | 'service') name=Ident
     ('roles' roles+=[Role:QualifiedName] (',' roles+=[Role:QualifiedName])*)?;
 
 Tenant:
-    'tenant' name=Ident id=STABLE_ID? 'on' entity=[Entity:QualifiedName];
+    'tenant' name=Ident 'on' entity=[Entity:QualifiedName];
 
 // L1 Domain
 
 Enum:
-    'enum' name=Ident id=STABLE_ID? '{' literals+=EnumLiteral* '}';
+    'enum' name=Ident '{' literals+=EnumLiteral* '}';
 
 EnumLiteral:
-    name=Ident id=STABLE_ID?;
+    name=Ident;
 
 ValueType:
-    'value' name=Ident id=STABLE_ID? '{' fields+=Field* '}';
+    'value' name=Ident '{' fields+=Field* '}';
 
 Entity:
-    'entity' name=Ident id=STABLE_ID? '{'
+    'entity' name=Ident '{'
         (fields+=Field | invariants+=Invariant | policies+=Policy)*
     '}';
 
 Field:
-    name=Ident id=STABLE_ID? ':' type=TypeRef modifiers+=FieldModifier*
+    name=Ident ':' type=TypeRef modifiers+=FieldModifier*
     ('default' default=Expr)? ('=' derived=Expr)?;
 
 FieldModifier returns string:
@@ -64,10 +64,10 @@ PrimitiveType returns string:
 type TypeDecl = Enum | ValueType | Entity;
 
 Invariant:
-    'invariant' label=STRING id=STABLE_ID? '{' condition=Expr '}';
+    'invariant' label=STRING '{' condition=Expr '}';
 
 Policy:
-    'policy' id=STABLE_ID? (operations+=Operation (',' operations+=Operation)*)?
+    'policy' (operations+=Operation (',' operations+=Operation)*)?
     ('fields' fields+=[Field:Ident] (',' fields+=[Field:Ident])*)?
     '{' condition=Expr '}';
 
@@ -77,10 +77,10 @@ Operation returns string:
 // L2 Behavior
 
 Event:
-    'event' name=Ident id=STABLE_ID? '{' fields+=Field* '}';
+    'event' name=Ident '{' fields+=Field* '}';
 
 Action:
-    'action' name=Ident id=STABLE_ID? ('on' entity=[Entity:QualifiedName])? '{'
+    'action' name=Ident ('on' entity=[Entity:QualifiedName])? '{'
         ('input' '{' inputs+=Param* '}')?
         preconditions+=Precondition*
         ('effect' '{' effects+=Effect* '}')?
@@ -93,10 +93,10 @@ Param:
     name=Ident ':' type=TypeRef;
 
 ErrorDecl:
-    name=Ident id=STABLE_ID?;
+    name=Ident;
 
 Precondition:
-    'requires' id=STABLE_ID? '{' condition=Expr '}' ('else' error=[ErrorDecl:Ident])?;
+    'requires' '{' condition=Expr '}' ('else' error=[ErrorDecl:Ident])?;
 
 Effect:
     SetEffect | CreateEffect | EmitEffect;
@@ -114,22 +114,22 @@ Assignment:
     name=Ident '=' value=Expr;
 
 Machine:
-    'machine' name=Ident id=STABLE_ID? 'on' field=[Field:QualifiedName] '{' transitions+=Transition* '}';
+    'machine' name=Ident 'on' field=[Field:QualifiedName] '{' transitions+=Transition* '}';
 
 Transition:
-    'transition' id=STABLE_ID? from+=Ident (',' from+=Ident)* '->' to=Ident
+    'transition' from+=Ident (',' from+=Ident)* '->' to=Ident
     ('via' action=[Action:QualifiedName] | 'on' event=[Event:QualifiedName])
     ('when' '{' guard=Expr '}')?
     ('effect' '{' effects+=Effect* '}')?;
 
 Job:
-    'job' name=Ident id=STABLE_ID? ('every' schedule=STRING | 'on' event=[Event:QualifiedName])
+    'job' name=Ident ('every' schedule=STRING | 'on' event=[Event:QualifiedName])
     'run' action=[Action:QualifiedName] ('where' '{' filter=Expr '}')?;
 
 // L3 Application
 
 Query:
-    'query' name=Ident id=STABLE_ID? 'from' entity=[Entity:QualifiedName] '{'
+    'query' name=Ident 'from' entity=[Entity:QualifiedName] '{'
         ('where' '{' filter=Expr '}')?
         ('sort' sorts+=Sort (',' sorts+=Sort)*)?
         ('paginate' pageSize=NUMBER)?
@@ -140,25 +140,25 @@ Sort:
     field=[Field:Ident] direction=('asc' | 'desc')?;
 
 Projection:
-    'projection' name=Ident id=STABLE_ID? 'from' source=[ProjectionSource:QualifiedName] '{'
+    'projection' name=Ident 'from' source=[ProjectionSource:QualifiedName] '{'
         fields+=ProjectionField*
     '}';
 
 type ProjectionSource = Entity | Query;
 
 ProjectionField:
-    name=Ident id=STABLE_ID? ('=' value=Expr)?;
+    name=Ident ('=' value=Expr)?;
 
 External:
-    'external' name=Ident id=STABLE_ID? '{' operations+=ExternalOperation* '}';
+    'external' name=Ident '{' operations+=ExternalOperation* '}';
 
 ExternalOperation:
-    'op' name=Ident id=STABLE_ID? '(' (params+=Param (',' params+=Param)*)? ')'
+    'op' name=Ident '(' (params+=Param (',' params+=Param)*)? ')'
     ('returns' returns=TypeRef)?
     ('errors' errors+=ErrorDecl (',' errors+=ErrorDecl)*)?;
 
 UseCase:
-    'usecase' name=Ident id=STABLE_ID? ('(' (params+=Param (',' params+=Param)*)? ')')? '{'
+    'usecase' name=Ident ('(' (params+=Param (',' params+=Param)*)? ')')? '{'
         (steps+=Step | policies+=Policy)*
     '}';
 
@@ -166,13 +166,13 @@ Step:
     CallStep | AwaitStep;
 
 CallStep:
-    'step' id=STABLE_ID? call=Call handlers+=Handler*;
+    'step' call=Call handlers+=Handler*;
 
 Handler:
     'on' error=[ErrorDecl:Ident] 'do' call=Call;
 
 AwaitStep:
-    'await' id=STABLE_ID? event=[Event:QualifiedName] ('timeout' timeout=STRING 'do' call=Call)?;
+    'await' event=[Event:QualifiedName] ('timeout' timeout=STRING 'do' call=Call)?;
 
 Call:
     target=[Callable:QualifiedName] '(' (args+=Expr (',' args+=Expr)*)? ')';
@@ -182,7 +182,7 @@ type Callable = Action | Query | UseCase | ExternalOperation;
 // L4 Interfaces
 
 Interface:
-    'interface' protocol=Ident name=Ident id=STABLE_ID? '{'
+    'interface' protocol=Ident name=Ident '{'
         ('auth' auth=Ident)?
         ('limit' rateLimit=NUMBER 'per' rateUnit=('second' | 'minute' | 'hour'))?
         ('cors' origins+=STRING (',' origins+=STRING)*)?
@@ -190,7 +190,7 @@ Interface:
     '}';
 
 Endpoint:
-    verb=Ident path=STRING id=STABLE_ID? '->' target=[Exposable:QualifiedName]
+    verb=Ident path=STRING '->' target=[Exposable:QualifiedName]
     ('as' projection=[Projection:QualifiedName] ('{' picks+=[ProjectionField:Ident] (',' picks+=[ProjectionField:Ident])* '}')?)?;
 
 type Exposable = Query | Action | UseCase;
@@ -198,38 +198,38 @@ type Exposable = Query | Action | UseCase;
 // L5 Experience
 
 Page:
-    'page' name=Ident id=STABLE_ID? 'route' route=STRING '{' components+=Component* '}';
+    'page' name=Ident 'route' route=STRING '{' components+=Component* '}';
 
 Component:
     ListView | DetailView | FormView;
 
 ListView:
-    'list' id=STABLE_ID? query=[Query:QualifiedName]
+    'list' query=[Query:QualifiedName]
     'as' projection=[Projection:QualifiedName] ('{' picks+=[ProjectionField:Ident] (',' picks+=[ProjectionField:Ident])* '}')?
     ('actions' actions+=[Action:QualifiedName] (',' actions+=[Action:QualifiedName])*)?;
 
 DetailView:
-    'detail' id=STABLE_ID? projection=[Projection:QualifiedName]
+    'detail' projection=[Projection:QualifiedName]
     ('{' picks+=[ProjectionField:Ident] (',' picks+=[ProjectionField:Ident])* '}')?
     ('actions' actions+=[Action:QualifiedName] (',' actions+=[Action:QualifiedName])*)?;
 
 FormView:
-    'form' id=STABLE_ID? submits=[Submittable:QualifiedName];
+    'form' submits=[Submittable:QualifiedName];
 
 type Submittable = Action | UseCase;
 
 Navigation:
-    'navigation' name=Ident id=STABLE_ID? '{' items+=NavItem* '}';
+    'navigation' name=Ident '{' items+=NavItem* '}';
 
 NavItem:
-    label=STRING id=STABLE_ID? '->' page=[Page:QualifiedName] ('{' children+=NavItem* '}')?;
+    label=STRING '->' page=[Page:QualifiedName] ('{' children+=NavItem* '}')?;
 
 Flow:
-    'flow' name=Ident id=STABLE_ID? 'for' usecase=[UseCase:QualifiedName]
+    'flow' name=Ident 'for' usecase=[UseCase:QualifiedName]
     '{' pages+=[Page:QualifiedName] ('->' pages+=[Page:QualifiedName])* '}';
 
 Messages:
-    'messages' name=Ident id=STABLE_ID? '{' entries+=Message* '}';
+    'messages' name=Ident '{' entries+=Message* '}';
 
 Message:
     key=QualifiedName '=' text=STRING;
@@ -237,12 +237,13 @@ Message:
 // Evolution
 
 Migration:
-    'migration' name=Ident id=STABLE_ID? '{' steps+=MigrationStep* '}';
+    'migration' name=Ident '{' steps+=MigrationStep* '}';
 
+// Targets are paths inside the migration's module, as they were before the step.
 MigrationStep:
-    {infer RenameStep} 'rename' target=STABLE_ID 'from' oldName=Ident 'to' newName=Ident
-    | {infer RetypeStep} 'retype' target=STABLE_ID 'from' oldType=TypeRef 'to' newType=TypeRef
-    | {infer RemoveStep} 'remove' target=STABLE_ID;
+    {infer RenameStep} 'rename' target=QualifiedName '->' newName=Ident
+    | {infer RetypeStep} 'retype' target=QualifiedName ':' oldType=TypeRef '->' newType=TypeRef
+    | {infer RemoveStep} 'remove' target=QualifiedName;
 
 // Expressions: a CEL subset
 
@@ -297,7 +298,6 @@ Ident returns string:
     | 'desc' | 'remove' | 'rename' | 'retype' | 'roles' | 'second' | 'minute' | 'hour';
 
 hidden terminal WS: /\s+/;
-terminal STABLE_ID: /#[a-z0-9]+/;
 terminal ID: /[_a-zA-Z][\w]*/;
 terminal NUMBER returns number: /[0-9]+(\.[0-9]+)?/;
 terminal STRING: /"(\\.|[^"\\])*"/;

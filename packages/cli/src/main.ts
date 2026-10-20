@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-import { randomBytes } from 'node:crypto';
 import { readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
-import { AstUtils, URI, type LangiumDocument } from 'langium';
+import { URI, type LangiumDocument } from 'langium';
 import { NodeFileSystem } from 'langium/node';
-import { createApplingServices, hasStableId, print } from '@appling/lang';
+import { createApplingServices, print } from '@appling/lang';
 
 const USAGE = 'Usage: appling <check|fmt> [files or folders...]';
 
@@ -34,16 +33,6 @@ function check(documents: LangiumDocument[]): number {
 }
 
 function format(documents: LangiumDocument[]): number {
-    const used = new Set(documents.flatMap(doc => AstUtils.streamAst(doc.parseResult.value)
-        .filter(hasStableId)
-        .map(n => (n as { id?: string }).id)
-        .toArray()));
-    const newId = () => {
-        let id: string;
-        do id = '#' + randomBytes(4).readUInt32BE().toString(36).padStart(7, '0').slice(-5); while (used.has(id));
-        used.add(id);
-        return id;
-    };
     let failed = 0;
     for (const doc of documents) {
         const { lexerErrors, parserErrors } = doc.parseResult;
@@ -52,7 +41,7 @@ function format(documents: LangiumDocument[]): number {
             console.error(`${relative('.', doc.uri.fsPath)}: not formatted, fix syntax errors first (run "appling check")`);
             continue;
         }
-        const text = print(doc.parseResult.value, newId);
+        const text = print(doc.parseResult.value);
         if (text !== doc.textDocument.getText()) {
             writeFileSync(doc.uri.fsPath, text);
             console.log(`formatted ${relative('.', doc.uri.fsPath)}`);

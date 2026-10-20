@@ -2,28 +2,28 @@
 
 Appling is a declarative language that describes a business or web application as one validated model. The model covers what exists, what can happen, how capabilities are organized and exposed, and how people interact with them.
 
-The text is the canonical source of truth. Parsed and linked, it becomes a semantic graph that tools can validate, visualize with semantic zoom, simulate and edit with AI. Code generation is out of scope.
+The text is the canonical source of truth. Parsed and linked, it becomes a semantic graph that tools can validate, visualize with semantic zoom, simulate and edit with AI. Code generation is a possible future feature.
 
 ```
-module sales #1m4nf {
+module sales {
   export Order
 
-  enum OrderStatus #11brq {
-    draft #l3fpq
-    placed #i2kjm
+  enum OrderStatus {
+    draft
+    placed
   }
 
-  entity Order #1kzox {
-    reference #j6why: String unique
-    status #172vt: OrderStatus state default draft
+  entity Order {
+    reference: String unique
+    status: OrderStatus state default draft
   }
 
-  action PlaceOrder #ybpiu on Order {
-    requires #vve7f { reference != "" }
+  action PlaceOrder on Order {
+    requires { reference != "" }
   }
 
-  machine OrderFlow #mltgu on Order.status {
-    transition #1l1gk draft -> placed via PlaceOrder
+  machine OrderFlow on Order.status {
+    transition draft -> placed via PlaceOrder
   }
 }
 ```
@@ -39,7 +39,7 @@ module sales #1m4nf {
 | L4 Interfaces | How programs reach them | `interface` |
 | L5 Experience | How people reach them | `page`, `navigation`, `flow`, `messages` |
 
-Each concept is defined once in the layer that owns it. References only point down the layers, interfaces and pages reach data only through projections, and modules only see what other modules export. Every element carries a stable id such as `#1kzox`, so renames keep references, history and layout intact.
+Each concept is defined once in the layer that owns it. References only point down the layers, interfaces and pages reach data only through projections, and modules only see what other modules export. Every element is identified by its qualified name, such as `sales.Order.status`, and renames are recorded as `migration` steps.
 
 The full design is in [concept.md](concept.md).
 
@@ -47,7 +47,7 @@ The full design is in [concept.md](concept.md).
 
 | Package | Purpose |
 |---|---|
-| [`@appling/cli`](packages/cli) | The `appling` command: `check` validates models, `fmt` writes the canonical form and assigns stable ids |
+| [`@appling/cli`](packages/cli) | The `appling` command: `check` validates models, `fmt` writes the canonical form |
 | [`@appling/lang`](packages/lang) | The language: grammar, scoping, validation and canonical printer, built on [Langium](https://langium.org) |
 
 ```sh
@@ -63,7 +63,7 @@ Developed with Node.js 24. pnpm is pinned through `packageManager` in `package.j
 pnpm install
 pnpm build            # generates the parser, then compiles both packages
 pnpm check examples   # validates the sample models
-pnpm fmt examples     # canonical formatting, assigns missing stable ids
+pnpm fmt examples     # canonical formatting
 ```
 
 `check` and `fmt` run the built CLI, so rebuild after changing the grammar or sources.

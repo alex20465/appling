@@ -8,7 +8,7 @@ Create a declarative Domain-Specific Language (DSL) that describes the structura
 
 The model is the **single source of truth**. It has a canonical text syntax that round-trips losslessly to an Abstract Syntax Tree (AST). After reference resolution, the AST becomes a semantic graph. All tools (visualization, AI, validation) work on that graph.
 
-The primary goal is not code generation, but an **interactive, zoomable visualization** that both humans and AI can explore, construct, and modify, backed by a model that can be **validated structurally and simulated behaviorally**.
+The primary goal is an **interactive, zoomable visualization** that both humans and AI can explore, construct, and modify, backed by a model that can be **validated structurally and simulated behaviorally**. Code generation is a possible future feature.
 
 **Differentiator:** layered application modeling exists already (WebML/IFML, MDA, Ash, Mendix). This project's distinct contribution is AI-native editing plus semantic-zoom exploration of one validated model.
 
@@ -135,7 +135,7 @@ Rules:
 
 - The graph is a projection of the semantic graph, not a separate source of truth.
 - Zoom levels follow the module containment hierarchy. Aggregated nodes and edges, such as module-to-module dependencies, are computed from the model, never drawn by hand.
-- Every model element has a **stable ID**, so graph edits map back to exact AST nodes and survive renames.
+- Every model element is identified by its **qualified name**, such as `sales.Order.status`, so graph edits map back to exact AST nodes. Renames are recorded as migration steps, so tools can follow an element to its new name.
 - Layout and view state (positions, collapsed groups, saved views) are stored **separately** from the model. They are not part of the truth and do not appear in model diffs.
 
 ## 5. Validation and Simulation
@@ -151,7 +151,7 @@ Rules:
 - Evaluates expressions, action preconditions and effects, and state machine transitions against sample data and actors.
 - Answers questions such as "Can an order reach Paid?", "Which actors can trigger Cancel?", and "Which invariants does this action risk violating?"
 
-Code generation and production runtime remain out of scope. The simulator is the minimum that makes behavior verifiable.
+Production runtime remains out of scope. The simulator is the minimum that makes behavior verifiable.
 
 ## 6. AI Integration
 
@@ -170,11 +170,11 @@ AI-generated changes pass the same structural validation as human edits, and are
 
 - The model is versioned with its text representation, for example in git.
 - Changes to Layer 1 that affect persisted data, such as renames, type changes, or removals, are recorded as explicit migration steps in the model.
-- Stable IDs allow renames without breaking references, layout, or history.
+- Migration steps target elements by their qualified name as it was before the step, so layout and history can follow renames.
 
 ## 8. Out of Scope (initial)
 
-- Code generation and production runtime
+- Production runtime
 - Deployment, infrastructure, environments
 - Performance, scaling, and SLAs
 - Visual design system and styling details

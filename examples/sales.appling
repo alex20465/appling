@@ -1,120 +1,120 @@
 // Order management: one module across all five layers.
-module sales #1m4nf {
+module sales {
   export Order, OrderSummary, OpenOrders, PlaceOrder
 
-  role Customer #1ii9f
-  actor human Shopper #15jyt roles Customer
+  role Customer
+  actor human Shopper roles Customer
 
   // L1 Domain
-  enum OrderStatus #11brq {
-    draft #l3fpq
-    placed #i2kjm
-    paid #ss89n
-    cancelled #12ofl
+  enum OrderStatus {
+    draft
+    placed
+    paid
+    cancelled
   }
 
-  value Line #a09qu {
-    product #1o8xy: String
-    quantity #pmen3: Int
-    amount #f4m6p: Money
+  value Line {
+    product: String
+    quantity: Int
+    amount: Money
   }
 
-  entity Order #1kzox {
-    reference #j6why: String unique
-    customer #1j6kg: crm.Account
-    lines #ol0v1: Line[] owned
-    status #172vt: OrderStatus state default draft
-    placed_at #x6mbz: DateTime?
-    total #1jb5j: Money = sum(lines.map(l, l.amount))
+  entity Order {
+    reference: String unique
+    customer: crm.Account
+    lines: Line[] owned
+    status: OrderStatus state default draft
+    placed_at: DateTime?
+    total: Money = sum(lines.map(l, l.amount))
 
-    invariant "total never negative" #1ogpx { total >= 0 }
+    invariant "total never negative" { total >= 0 }
 
-    policy #ptbgb read { actor.is(crm.Clerk) || customer == actor.account }
-    policy #1nbuv create, update, delete { actor.is(crm.Clerk) }
-    policy #h6g4i read fields total { status != draft || actor.is(crm.Clerk) }
+    policy read { actor.is(crm.Clerk) || customer == actor.account }
+    policy create, update, delete { actor.is(crm.Clerk) }
+    policy read fields total { status != draft || actor.is(crm.Clerk) }
   }
 
   // L2 Behavior
-  event OrderPlaced #eu3he {
-    order #1ih1h: Order
+  event OrderPlaced {
+    order: Order
   }
-  event PaymentReceived #ryoyr {
-    order #430vn: Order
+  event PaymentReceived {
+    order: Order
   }
 
-  action PlaceOrder #ybpiu on Order {
-    requires #vve7f { lines.size() > 0 } else EmptyOrder
+  action PlaceOrder on Order {
+    requires { lines.size() > 0 } else EmptyOrder
     effect {
       set placed_at = now
     }
-    errors EmptyOrder #4snfc
-    policy #yju8a { actor.is(Customer) && customer == actor.account }
+    errors EmptyOrder
+    policy { actor.is(Customer) && customer == actor.account }
   }
 
-  action Cancel #p4sqr on Order {
+  action Cancel on Order {
     input {
       reason: String?
     }
-    policy #y14a2 { actor.is(crm.Clerk) }
+    policy { actor.is(crm.Clerk) }
   }
 
-  machine OrderFlow #mltgu on Order.status {
-    transition #1l1gk draft -> placed via PlaceOrder effect { emit OrderPlaced { order = this } }
-    transition #1fd7g placed -> paid on PaymentReceived
-    transition #1cf12 draft, placed -> cancelled via Cancel when { !has(paid_at) }
+  machine OrderFlow on Order.status {
+    transition draft -> placed via PlaceOrder effect { emit OrderPlaced { order = this } }
+    transition placed -> paid on PaymentReceived
+    transition draft, placed -> cancelled via Cancel when { !has(paid_at) }
   }
 
-  job ExpireDrafts #7uxaw every "0 3 * * *" run Cancel where { status == draft && created_at < now - duration("720h") }
+  job ExpireDrafts every "0 3 * * *" run Cancel where { status == draft && created_at < now - duration("720h") }
 
   // L3 Application
-  query OpenOrders #hmg69 from Order {
+  query OpenOrders from Order {
     where { status in [placed, paid] }
     sort placed_at desc
     paginate 50
   }
 
-  projection OrderSummary #1d051 from Order {
-    reference #19nga
-    status #b5aqs
-    total #1hb0c
-    customer_name #me74n = customer.name
+  projection OrderSummary from Order {
+    reference
+    status
+    total
+    customer_name = customer.name
   }
 
-  external Payments #nquvr {
-    op Charge #1vok0 (amount: Money) returns String errors Declined #jm2kl
+  external Payments {
+    op Charge (amount: Money) returns String errors Declined
   }
 
-  usecase Checkout #1gxy4 (order: Order) {
-    step #1ty5a PlaceOrder(order)
-    step #weran Payments.Charge(order.total) on Declined do Cancel(order)
-    await #gfzg1 PaymentReceived timeout "24h" do Cancel(order)
+  usecase Checkout (order: Order) {
+    step PlaceOrder(order)
+    step Payments.Charge(order.total) on Declined do Cancel(order)
+    await PaymentReceived timeout "24h" do Cancel(order)
   }
 
   // L4 Interfaces
-  interface rest PublicApi #16qec {
+  interface rest PublicApi {
     auth bearer
     limit 100 per minute
-    GET "/orders" #rvmsp -> OpenOrders as OrderSummary { reference, status, total }
-    POST "/orders/{id}/place" #11z5r -> PlaceOrder
+    GET "/orders" -> OpenOrders as OrderSummary { reference, status, total }
+    POST "/orders/{id}/place" -> PlaceOrder
   }
 
   // L5 Experience
-  page Orders #1epa9 route "/orders" {
-    list #18c9u OpenOrders as OrderSummary { reference, status, total } actions Cancel
+  page Orders route "/orders" {
+    list OpenOrders as OrderSummary { reference, status, total } actions Cancel
   }
 
-  page OrderDetail #1kv0j route "/orders/{id}" {
-    detail #ogzwk OrderSummary actions PlaceOrder, Cancel
-    form #hhyzq Cancel
+  page OrderDetail route "/orders/{id}" {
+    detail OrderSummary actions PlaceOrder, Cancel
+    form Cancel
   }
 
-  navigation Main #4js9z {
-    "Orders" #ci50k -> Orders
+  navigation Main {
+    "Orders" -> Orders
   }
 
-  flow CheckoutFlow #1cdy2 for Checkout { Orders -> OrderDetail }
+  flow CheckoutFlow for Checkout { Orders -> OrderDetail }
 
-  messages en #8yd1x {
+  messages en {
     OrderSummary.total = "Total"
   }
 }

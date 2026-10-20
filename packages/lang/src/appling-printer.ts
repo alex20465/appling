@@ -1,4 +1,4 @@
-import { AstUtils, CstUtils, GrammarUtils, type AstNode, type LeafCstNode } from 'langium';
+import { CstUtils, GrammarUtils, type AstNode, type LeafCstNode } from 'langium';
 import { Expr, isModel, reflection } from './generated/ast.js';
 
 /**
@@ -17,12 +17,7 @@ const CALLS = new Set(['NameExpr', 'MemberExpr', 'Call']);
 const NO_SPACE_BEFORE = new Set([',', ')', ']', '.', ':', '?']);
 const NO_SPACE_AFTER = new Set(['(', '[', '.']);
 
-export function hasStableId(node: AstNode): boolean {
-    return reflection.getTypeMetaData(node.$type).properties.id !== undefined;
-}
-
-export function print(root: AstNode, newId: () => string): string {
-    const inserts = missingIdInserts(root, newId);
+export function print(root: AstNode): string {
     const braces: boolean[] = [];
     let out = '';
     let prev: LeafCstNode | undefined;
@@ -35,7 +30,7 @@ export function print(root: AstNode, newId: () => string): string {
             const depth = braces.filter(Boolean).length;
             out += separator(prev, leaf, depth, opened, closed);
         }
-        out += leaf.text + (inserts.get(leaf.end) ?? '');
+        out += leaf.text;
         opened = false;
         if (!leaf.hidden && leaf.text === '{') {
             opened = BLOCKS.has(leaf.astNode.$type) && !INLINE_BRACES_AFTER.has(prev?.text ?? '');
@@ -109,19 +104,4 @@ function sameLine(a: LeafCstNode, b: LeafCstNode): boolean {
 function hasBlankLine(a: LeafCstNode, b: LeafCstNode): boolean {
     const startsModule = isModel(b.astNode.$container) && b.offset === firstTokenOffset(b.astNode);
     return b.range.start.line - a.range.end.line > 1 || (startsModule && !a.hidden);
-}
-
-/** Where a missing stable id goes: after the name, label or path, otherwise after the leading keyword. */
-function missingIdInserts(root: AstNode, newId: () => string): Map<number, string> {
-    const inserts = new Map<number, string>();
-    for (const node of AstUtils.streamAst(root)) {
-        if (!hasStableId(node) || (node as AstNode & { id?: string }).id) continue;
-        const cst = node.$cstNode;
-        const anchor = GrammarUtils.findNodeForProperty(cst, 'name')
-            ?? GrammarUtils.findNodeForProperty(cst, 'label')
-            ?? GrammarUtils.findNodeForProperty(cst, 'path')
-            ?? firstToken(node);
-        if (anchor) inserts.set(anchor.end, ` ${newId()}`);
-    }
-    return inserts;
 }

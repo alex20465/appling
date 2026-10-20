@@ -87,7 +87,7 @@ function effectEntity(node: AstNode): Entity | undefined {
     return machine?.field.ref?.$container as Entity | undefined;
 }
 
-function* namedPaths(node: AstNode, nameOf: (n: AstNode) => string | undefined, prefix = ''): Generator<[string, AstNode]> {
+export function* namedPaths(node: AstNode, nameOf: (n: AstNode) => string | undefined, prefix = ''): Generator<[string, AstNode]> {
     const name = nameOf(node);
     if (!name) return;
     const path = prefix ? `${prefix}.${name}` : name;

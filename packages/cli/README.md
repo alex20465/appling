@@ -40,7 +40,6 @@ models/sales.appling:13:23 error A machine must govern an entity field marked "s
 
 Rewrites every file into its canonical form:
 
-- Gives every element without a stable id a new one, such as `entity Order #1kzox`.
 - Normalizes whitespace, indentation and line breaks. Comments are kept.
 - Running it twice changes nothing.
 
