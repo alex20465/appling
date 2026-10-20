@@ -1,4 +1,4 @@
-# Appling
+![Appling](assets/readme_banner.png)
 
 Appling is a declarative language that describes a business or web application as one validated model. The model covers what exists, what can happen, how capabilities are organized and exposed, and how people interact with them.
 
