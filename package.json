@@ -1,0 +1,23 @@
+{
+  "name": "appling",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "appling": "./out/cli.js"
+  },
+  "scripts": {
+    "generate": "langium generate",
+    "build": "langium generate && tsc",
+    "check": "node out/cli.js check",
+    "fmt": "node out/cli.js fmt"
+  },
+  "dependencies": {
+    "langium": "^4.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "langium-cli": "^4.4.0",
+    "typescript": "^7.0.2"
+  }
+}

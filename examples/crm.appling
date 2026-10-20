@@ -1,0 +1,13 @@
+module crm #1vazl {
+  export Account, Clerk
+
+  role Clerk #1e8dw
+
+  entity Account #1abae {
+    name #1hoel: String unique
+    email #2ii4d: String
+    policy #1b8o4 read { actor.is(Clerk) || actor.account == this }
+  }
+
+  tenant Company #1poig on Account
+}

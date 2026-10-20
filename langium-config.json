@@ -1,0 +1,11 @@
+{
+  "projectName": "Appling",
+  "languages": [
+    {
+      "id": "appling",
+      "grammar": "src/language/appling.langium",
+      "fileExtensions": [".appling"]
+    }
+  ],
+  "out": "src/language/generated"
+}
