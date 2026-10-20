@@ -1,0 +1,31 @@
+{
+  "name": "@appling/lang",
+  "version": "0.1.0",
+  "description": "Appling language: grammar, scoping, validation and canonical printer",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./out/index.d.ts",
+      "default": "./out/index.js"
+    }
+  },
+  "files": [
+    "out",
+    "src/appling.langium"
+  ],
+  "scripts": {
+    "build": "langium generate && tsc"
+  },
+  "dependencies": {
+    "langium": "4.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "langium-cli": "4.4.0",
+    "typescript": "7.0.2"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

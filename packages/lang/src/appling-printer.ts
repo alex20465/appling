@@ -1,5 +1,5 @@
 import { AstUtils, CstUtils, GrammarUtils, type AstNode, type LeafCstNode } from 'langium';
-import { isModel, reflection } from './generated/ast.js';
+import { Expr, isModel, reflection } from './generated/ast.js';
 
 /**
  * Canonical text form. Every gap between two tokens gets exactly one spelling, so
@@ -75,7 +75,7 @@ function isMemberStart(leaf: LeafCstNode): boolean {
         const container: AstNode | undefined = node.$container;
         if (!container) return false;
         if (isModel(container)) return true;
-        if (BLOCKS.has(container.$type) && insideBraces(container, leaf.offset)) return true;
+        if (BLOCKS.has(container.$type) && insideBraces(container, leaf.offset)) return !reflection.isSubtype(node.$type, Expr.$type);
         node = container;
     }
     return false;

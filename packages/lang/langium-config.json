@@ -3,9 +3,9 @@
   "languages": [
     {
       "id": "appling",
-      "grammar": "src/language/appling.langium",
+      "grammar": "src/appling.langium",
       "fileExtensions": [".appling"]
     }
   ],
-  "out": "src/language/generated"
+  "out": "src/generated"
 }

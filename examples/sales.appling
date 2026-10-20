@@ -68,8 +68,7 @@ module sales #1m4nf {
 
   // L3 Application
   query OpenOrders #hmg69 from Order {
-    where {
-    status in [placed, paid] }
+    where { status in [placed, paid] }
     sort placed_at desc
     paginate 50
   }

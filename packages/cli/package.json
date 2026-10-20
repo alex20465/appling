@@ -1,0 +1,27 @@
+{
+  "name": "@appling/cli",
+  "version": "0.1.0",
+  "description": "Command line tool to check and format Appling models",
+  "type": "module",
+  "bin": {
+    "appling": "./out/main.js"
+  },
+  "files": [
+    "out"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@appling/lang": "workspace:*",
+    "langium": "4.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "7.0.2"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

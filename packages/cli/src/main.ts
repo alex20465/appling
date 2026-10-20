@@ -4,8 +4,7 @@ import { readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { AstUtils, URI, type LangiumDocument } from 'langium';
 import { NodeFileSystem } from 'langium/node';
-import { createApplingServices } from './language/appling-module.js';
-import { hasStableId, print } from './language/appling-printer.js';
+import { createApplingServices, hasStableId, print } from '@appling/lang';
 
 const USAGE = 'Usage: appling <check|fmt> [files or folders...]';
 
