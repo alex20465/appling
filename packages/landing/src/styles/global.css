@@ -37,24 +37,30 @@
 }
 
 @theme {
-  --color-surface: #080808;
-  --color-surface-raised: #111111;
-  --color-surface-elevated: #171717;
-  --color-surface-hover: #1f1f1f;
-  --color-line: #262626;
-  --color-line-strong: #6b6b6b;
-  --color-ink: #fafafa;
-  --color-ink-soft: #d4d4d4;
-  --color-ink-muted: #a3a3a3;
+  --color-surface: #0c0a08;
+  --color-surface-raised: #14110d;
+  --color-surface-elevated: #1b1712;
+  --color-surface-hover: #241f18;
+  --color-line: #2e2820;
+  --color-line-strong: #7a6e5e;
+  --color-ink: #f7f2ea;
+  --color-ink-soft: #d9d0c3;
+  --color-ink-muted: #aaa092;
   --color-leaf: #5cbf63;
   --color-leaf-hover: #4caf53;
-  --color-on-leaf: #080808;
+  --color-on-leaf: #0c0a08;
   --color-leaf-soft: #5cbf6324;
   --color-leaf-line: #5cbf6366;
   --color-sprout: #a6dc5a;
   --color-fern: #2e7d3a;
   --color-forest: #1f6b2c;
   --color-pine: #173d24;
+  --color-rust: #f2b632;
+  --color-on-rust: #0c0a08;
+  --color-amber: #d98a1c;
+  --color-copper: #a85f17;
+  --color-umber: #6b3f12;
+  --color-soot: #3d2510;
 
   --font-sans: "Switzer", system-ui, sans-serif;
   --font-serif: "Sentient", Georgia, serif;
@@ -72,7 +78,12 @@
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--color-leaf);
+  color: var(--color-rust);
+}
+
+@utility hazard {
+  height: 6px;
+  background: repeating-linear-gradient(-45deg, var(--color-rust) 0 10px, var(--color-surface) 10px 20px);
 }
 
 @utility text-h1 {
@@ -102,12 +113,15 @@
   .sr { fill: none; stroke-linecap: round; stroke-linejoin: round; }
   .draw { stroke-dasharray: 1; animation: draw 1.2s ease-out both; }
   .leafp { transform-box: fill-box; transform-origin: 0% 50%; animation: pop .6s cubic-bezier(.3,1.5,.5,1) both; }
+  .ref { stroke-dasharray: 4 8; animation: flow 1.6s linear infinite, fadein 1s ease 2.4s both; }
   .flutter { transform-box: fill-box; transform-origin: 0% 50%; animation: flutter 3.2s ease-in-out infinite alternate; }
   .ring { transform-box: fill-box; transform-origin: center; animation: pulse 2.8s ease-out infinite; }
-  .ref { stroke-dasharray: 4 8; animation: flow 1.6s linear infinite, fadein 1s ease 2.4s both; }
   .appear { animation: fadein .8s ease both; }
   .growring { transform-box: fill-box; transform-origin: center; animation: grow 6s ease-out infinite; }
   .pollen { animation: rise 6s ease-in infinite; }
+  .eyes { transition: transform .2s ease-out; }
+  .drift { animation: drift 5.5s ease-in-out infinite alternate; }
+  .wink { transform-box: fill-box; transform-origin: center; animation: wink 5s ease-in-out infinite; }
   .chip { animation: fadein .6s ease both, floaty 3.4s ease-in-out infinite alternate; }
 
   .tier { animation: drop .8s cubic-bezier(.2,.9,.3,1.15) both; }
@@ -148,6 +162,8 @@
 @keyframes travel { 0% { transform: translateX(0); opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { transform: translateX(46px); opacity: 0; } }
 @keyframes typing { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 @keyframes blink { 50% { opacity: 0; } }
+@keyframes drift { from { transform: translateY(0) rotate(-3deg); } to { transform: translateY(-26px) rotate(3deg); } }
+@keyframes wink { 0%, 94%, 100% { transform: none; } 97% { transform: scaleY(.1); } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

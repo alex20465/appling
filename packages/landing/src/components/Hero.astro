@@ -48,15 +48,15 @@ const featureChip = `${chip} box-border min-h-8 border border-leaf-line bg-surfa
 
     <div class="relative aspect-[520/480] min-w-0 max-w-[560px] flex-[1_1_440px]">
       <svg viewBox="0 0 520 480" role="img" aria-label="A digital tree: circuit traces grow from .appling source files and branch out into natural leaves" class="block size-full">
-        <circle cx="260" cy="236" r="196" fill="#111111"></circle>
-        <circle class="growring" cx="260" cy="236" r="196" fill="none" stroke="#262626" stroke-width="2"></circle>
-        <circle class="growring" cx="260" cy="236" r="196" fill="none" stroke="#262626" stroke-width="2" style="animation-delay: 3s"></circle>
+        <circle cx="260" cy="236" r="196" fill="#14110d"></circle>
+        <circle class="growring" cx="260" cy="236" r="196" fill="none" stroke="#2e2820" stroke-width="2"></circle>
+        <circle class="growring" cx="260" cy="236" r="196" fill="none" stroke="#2e2820" stroke-width="2" style="animation-delay: 3s"></circle>
         <defs>
-          <pattern id="dotgrid" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.3" fill="#262626"></circle></pattern>
+          <pattern id="dotgrid" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.3" fill="#2e2820"></circle></pattern>
         </defs>
         <circle cx="260" cy="236" r="196" fill="url(#dotgrid)"></circle>
-        <path d="M44 436 C140 420 380 420 476 436 L476 466 Q476 478 464 478 L56 478 Q44 478 44 466 Z" fill="#171717"></path>
-        <path class="sr" d="M44 436 C140 420 380 420 476 436" stroke="#262626" stroke-width="2"></path>
+        <path d="M44 436 C140 420 380 420 476 436 L476 466 Q476 478 464 478 L56 478 Q44 478 44 466 Z" fill="#1b1712"></path>
+        <path class="sr" d="M44 436 C140 420 380 420 476 436" stroke="#2e2820" stroke-width="2"></path>
 
         <path class="sr draw" pathLength="1" d="M248 432 V444 L226 466 H196" stroke="#2e7d3a" stroke-width="4" style="animation-delay: 0.1s; animation-duration: .5s"></path>
         <path class="sr draw" pathLength="1" d="M258 432 V476" stroke="#2e7d3a" stroke-width="4" style="animation-delay: 0.15s; animation-duration: .5s"></path>
@@ -71,10 +71,10 @@ const featureChip = `${chip} box-border min-h-8 border border-leaf-line bg-surfa
         <path class="sr draw" pathLength="1" d="M268 432 V300 L316 252 H352 L372 232" stroke="#2e7d3a" stroke-width="5" style="animation-delay: 0.6s"></path>
         <path class="sr draw" pathLength="1" d="M258 176 L226 144" stroke="#2e7d3a" stroke-width="5" style="animation-delay: 1.2s"></path>
         <g class="appear" style="animation-delay: 1.4s">
-          <circle cx="248" cy="318" r="4.5" fill="#111111" stroke="#5cbf63" stroke-width="2.5"></circle>
-          <circle cx="268" cy="300" r="4.5" fill="#111111" stroke="#5cbf63" stroke-width="2.5"></circle>
-          <circle cx="258" cy="176" r="4.5" fill="#111111" stroke="#5cbf63" stroke-width="2.5"></circle>
-          <circle cx="352" cy="252" r="4.5" fill="#111111" stroke="#5cbf63" stroke-width="2.5"></circle>
+          <circle cx="248" cy="318" r="4.5" fill="#14110d" stroke="#5cbf63" stroke-width="2.5"></circle>
+          <circle cx="268" cy="300" r="4.5" fill="#14110d" stroke="#5cbf63" stroke-width="2.5"></circle>
+          <circle cx="258" cy="176" r="4.5" fill="#14110d" stroke="#5cbf63" stroke-width="2.5"></circle>
+          <circle cx="352" cy="252" r="4.5" fill="#14110d" stroke="#5cbf63" stroke-width="2.5"></circle>
         </g>
 
         {sparks.map(([path, begin]) => (
@@ -99,7 +99,7 @@ const featureChip = `${chip} box-border min-h-8 border border-leaf-line bg-surfa
             <circle class="ring" cx={cx} cy={cy} r="5.5" fill="#5cbf63" style={`animation-delay: ${i * 0.35}s`}></circle>
           ))}
           {seeds.map(([cx, cy]) => (
-            <circle cx={cx} cy={cy} r="5.5" fill="#5cbf63" stroke="#111111" stroke-width="2"></circle>
+            <circle cx={cx} cy={cy} r="5.5" fill="#5cbf63" stroke="#14110d" stroke-width="2"></circle>
           ))}
         </g>
 
@@ -129,12 +129,12 @@ const featureChip = `${chip} box-border min-h-8 border border-leaf-line bg-surfa
       </span>
       <span class={`${codeChip} top-[90%] left-[2%] border-line bg-surface-raised text-ink-soft`} style="animation-delay: .6s, .4s">
         <svg viewBox="0 0 24 24" aria-hidden="true" class="size-3.5">
-          <path class="sr" d="M6 3h8l4 4v14H6z M14 3v4h4" stroke="#a3a3a3" stroke-width="2"></path>
+          <path class="sr" d="M6 3h8l4 4v14H6z M14 3v4h4" stroke="#aaa092" stroke-width="2"></path>
         </svg>sales.appling
       </span>
       <span class={`${codeChip} top-[90%] right-[2%] border-line bg-surface-raised text-ink-soft`} style="animation-delay: .8s, 1.2s">
         <svg viewBox="0 0 24 24" aria-hidden="true" class="size-3.5">
-          <path class="sr" d="M6 3h8l4 4v14H6z M14 3v4h4" stroke="#a3a3a3" stroke-width="2"></path>
+          <path class="sr" d="M6 3h8l4 4v14H6z M14 3v4h4" stroke="#aaa092" stroke-width="2"></path>
         </svg>billing.appling
       </span>
       <span class={`${codeChip} top-[72%] left-[57%] border-leaf-line bg-leaf-soft text-ink`} style="animation-delay: 1.4s, 2s">

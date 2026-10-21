@@ -2,6 +2,7 @@
 import "../styles/global.css";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
+import Mascots from "../components/Mascots.astro";
 
 interface Props {
   title: string;
@@ -17,6 +18,8 @@ const { title } = Astro.props;
     <title>{title}</title>
   </head>
   <body class="bg-surface font-sans text-base leading-[1.6] text-ink">
+    <Mascots />
+    <div class="hazard" aria-hidden="true"></div>
     <Header />
     <main class="mx-auto max-w-[1264px] border-x border-line">
       <slot />

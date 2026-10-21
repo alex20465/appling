@@ -1,0 +1,110 @@
+---
+// Eyes are [x, y, radius] in pixels of each artwork, where the painted eyes were removed.
+// reach is how far they may travel inside that visor. Each bot glides in beside its anchor
+// section while that section passes the middle of the viewport.
+const bots = [
+  { name: "sprout", w: 474, h: 560, eyes: [[262, 191, 11], [322, 189, 11]], reach: 8, side: "left", anchor: "#top", delay: "0s" },
+  { name: "inspect", w: 429, h: 560, eyes: [[216, 193, 15], [262, 196, 15]], reach: 8, side: "right", anchor: "#example", delay: "-2.4s" },
+];
+---
+
+<div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10 overflow-hidden max-xl:hidden">
+  {bots.map((bot) => {
+    const cx = bot.eyes.reduce((sum, [x]) => sum + x, 0) / bot.eyes.length / bot.w;
+    const cy = bot.eyes.reduce((sum, [, y]) => sum + y, 0) / bot.eyes.length / bot.h;
+    return (
+      <div class="bot absolute top-1/2 w-[300px] -translate-y-1/2 opacity-0" data-cx={cx} data-cy={cy} data-reach={bot.reach} data-side={bot.side} data-anchor={bot.anchor} style={`${bot.side}: max(-60px, calc((100% - 1264px) / 4 - 150px))`}>
+        <div class="drift relative" style={`animation-delay: ${bot.delay}`}>
+          <img src={`/appling-bot-${bot.name}.webp`} alt="" width={bot.w} height={bot.h} class="block h-auto w-full" />
+          <svg viewBox={`0 0 ${bot.w} ${bot.h}`} class="absolute inset-0 size-full">
+            <g class="eyes">
+              <g class="wink" style={`animation-delay: ${bot.delay}`}>
+                {bot.eyes.map(([x, y, r]) => (
+                  <>
+                    <circle cx={x} cy={y} r={r * 1.5} fill="#7fd13b" opacity=".35"></circle>
+                    <circle cx={x} cy={y} r={r * 1.2} fill="none" stroke="#5cbf63" stroke-width={r * 0.25} opacity=".7"></circle>
+                    <circle cx={x} cy={y} r={r} fill="#dcf53c"></circle>
+                  </>
+                ))}
+              </g>
+            </g>
+          </svg>
+        </div>
+      </div>
+    );
+  })}
+</div>
+
+<script>
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Share of the remaining distance covered per frame; lower feels floatier
+  const EASE = still ? 1 : 0.07;
+
+  const bots = [...document.querySelectorAll<HTMLElement>(".bot")].map((el) => ({
+    el,
+    section: document.querySelector<HTMLElement>(el.dataset.anchor!)!,
+    away: el.dataset.side === "left" ? -1 : 1,
+    shown: 0,
+    y: 0,
+    tilt: 0,
+  }));
+
+  let target: { x: number; y: number } | null = null;
+  let lastScroll = scrollY;
+  let speed = 0;
+
+  function watch(bot: HTMLElement) {
+    const eyes = bot.querySelector<SVGGElement>(".eyes")!;
+    if (!target) {
+      eyes.style.transform = "";
+      return;
+    }
+    const box = bot.getBoundingClientRect();
+    const dx = target.x - (box.left + box.width * Number(bot.dataset.cx));
+    const dy = target.y - (box.top + box.height * Number(bot.dataset.cy));
+    const pull = Math.min(1, Math.hypot(dx, dy) / 400) * Number(bot.dataset.reach);
+    const angle = Math.atan2(dy, dx);
+    eyes.style.transform = `translate(${Math.cos(angle) * pull}px, ${Math.sin(angle) * pull * 0.7}px)`;
+  }
+
+  function frame() {
+    speed += (scrollY - lastScroll - speed) * 0.1;
+    lastScroll = scrollY;
+    const half = innerHeight / 2;
+
+    for (const bot of bots) {
+      const box = bot.section.getBoundingClientRect();
+      // 0 while the section is off screen, 1 once it reaches the middle of the viewport
+      const shown = Math.max(0, Math.min(1, (innerHeight - box.top) / half, box.bottom / half));
+      // -1 when the section top is at the middle, 1 when its bottom is
+      const passing = Math.max(-1, Math.min(1, ((half - box.top) / box.height) * 2 - 1));
+
+      bot.shown += (shown - bot.shown) * EASE;
+      bot.y += (-passing * 120 - bot.y) * EASE;
+      bot.tilt += ((still ? 0 : Math.max(-12, Math.min(12, speed * 0.5))) - bot.tilt) * 0.1;
+
+      const x = (1 - bot.shown) * 420 * bot.away;
+      bot.el.style.transform = `translate(${x}px, ${bot.y}px) rotate(${bot.tilt}deg)`;
+      bot.el.style.opacity = String(bot.shown);
+      watch(bot.el);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  document.addEventListener("mousemove", (event) => {
+    target = { x: event.clientX, y: event.clientY };
+  });
+
+  // Cursor left the window: look straight into the camera
+  document.addEventListener("mouseout", (event) => {
+    if (!event.relatedTarget) target = null;
+  });
+
+  // Keyboard users: look at whatever just got focus
+  document.addEventListener("focusin", (event) => {
+    const box = (event.target as Element).getBoundingClientRect();
+    target = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+  });
+
+  requestAnimationFrame(frame);
+</script>

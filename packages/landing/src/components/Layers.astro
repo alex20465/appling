@@ -1,18 +1,18 @@
 ---
 const tiers = [
-  { n: 1, color: "#173d24", text: "#fafafa", textAt: "150 407", top: "280,164 539.8,314 280,464 20.2,314", left: "20.2,314 280,464 280,500 20.2,350", right: "280,464 539.8,314 539.8,350 280,500" },
-  { n: 2, color: "#1f6b2c", text: "#fafafa", textAt: "174 357", top: "280,156 491.3,278 280,400 68.7,278", left: "68.7,278 280,400 280,436 68.7,314", right: "280,400 491.3,278 491.3,314 280,436" },
-  { n: 3, color: "#2e7d3a", text: "#fafafa", textAt: "199 307", top: "280,148 442.8,242 280,336 117.2,242", left: "117.2,242 280,336 280,372 117.2,278", right: "280,336 442.8,242 442.8,278 280,372" },
-  { n: 4, color: "#5cbf63", text: "#080808", textAt: "223 257", top: "280,140 394.3,206 280,272 165.7,206", left: "165.7,206 280,272 280,308 165.7,242", right: "280,272 394.3,206 394.3,242 280,308" },
-  { n: 5, color: "#a6dc5a", text: "#080808", textAt: "247 207", top: "280,132 345.8,170 280,208 214.2,170", left: "214.2,170 280,208 280,244 214.2,206", right: "280,208 345.8,170 345.8,206 280,244" },
+  { n: 1, color: "#3d2510", text: "#f7f2ea", textAt: "150 407", top: "280,164 539.8,314 280,464 20.2,314", left: "20.2,314 280,464 280,500 20.2,350", right: "280,464 539.8,314 539.8,350 280,500" },
+  { n: 2, color: "#6b3f12", text: "#f7f2ea", textAt: "174 357", top: "280,156 491.3,278 280,400 68.7,278", left: "68.7,278 280,400 280,436 68.7,314", right: "280,400 491.3,278 491.3,314 280,436" },
+  { n: 3, color: "#a85f17", text: "#f7f2ea", textAt: "199 307", top: "280,148 442.8,242 280,336 117.2,242", left: "117.2,242 280,336 280,372 117.2,278", right: "280,336 442.8,242 442.8,278 280,372" },
+  { n: 4, color: "#d98a1c", text: "#0c0a08", textAt: "223 257", top: "280,140 394.3,206 280,272 165.7,206", left: "165.7,206 280,272 280,308 165.7,242", right: "280,272 394.3,206 394.3,242 280,308" },
+  { n: 5, color: "#f2b632", text: "#0c0a08", textAt: "247 207", top: "280,132 345.8,170 280,208 214.2,170", left: "214.2,170 280,208 280,244 214.2,206", right: "280,208 345.8,170 345.8,206 280,244" },
 ];
 
 const legend = [
-  { n: 5, color: "#a6dc5a", label: "L5 Experience", title: "How people reach it", members: "page · navigation · flow · messages" },
-  { n: 4, color: "#5cbf63", label: "L4 Interfaces", title: "How programs reach it", members: "interface" },
-  { n: 3, color: "#2e7d3a", label: "L3 Application", title: "How capabilities are organized", members: "query · projection · external · usecase" },
-  { n: 2, color: "#1f6b2c", label: "L2 Behavior", title: "What can happen", members: "event · action · machine · job" },
-  { n: 1, color: "#173d24", label: "L1 Domain", title: "What exists", members: "enum · value · entity · invariant · policy" },
+  { n: 5, color: "#f2b632", label: "L5 Experience", title: "How people reach it", members: "page · navigation · flow · messages" },
+  { n: 4, color: "#d98a1c", label: "L4 Interfaces", title: "How programs reach it", members: "interface" },
+  { n: 3, color: "#a85f17", label: "L3 Application", title: "How capabilities are organized", members: "query · projection · external · usecase" },
+  { n: 2, color: "#6b3f12", label: "L2 Behavior", title: "What can happen", members: "event · action · machine · job" },
+  { n: 1, color: "#3d2510", label: "L1 Domain", title: "What exists", members: "enum · value · entity · invariant · policy" },
 ];
 ---
 
@@ -25,8 +25,8 @@ const legend = [
     </div>
     <div class="flex flex-wrap items-center gap-12">
       <div class="min-w-0 max-w-[600px] flex-[1_1_460px]">
-        <svg viewBox="0 80 560 440" role="img" aria-label="A stepped pyramid of five layers, L1 Domain at the base up to L5 Experience at the top, ringed by cross-cutting concerns" class="block h-auto w-full">
-          <ellipse class="sr ref" cx="280" cy="350" rx="275" ry="160" stroke="#6b6b6b" stroke-width="2" style="animation-delay: 0s, 0s"></ellipse>
+        <svg viewBox="0 80 560 440" role="img" aria-label="A stack of five compacted cubes, L1 Domain at the base up to L5 Experience at the top with a sprout growing from it, ringed by cross cutting concerns" class="block h-auto w-full">
+          <ellipse class="sr ref" cx="280" cy="350" rx="275" ry="160" stroke="#7a6e5e" stroke-width="2" style="animation-delay: 0s, 0s"></ellipse>
           {tiers.map((tier) => (
             <g class="tier" style={`animation-delay: ${(tier.n - 1) * 0.15}s`}>
               <g class="lift" data-layer={tier.n}>
@@ -64,7 +64,7 @@ const legend = [
         ))}
         <article class="flex items-start gap-4 rounded-md px-4 py-3">
           <svg viewBox="0 0 28 28" aria-hidden="true" class="mt-1 size-7 flex-none">
-            <ellipse class="sr" cx="14" cy="14" rx="12" ry="7" stroke="#6b6b6b" stroke-width="2" stroke-dasharray="3 3"></ellipse>
+            <ellipse class="sr" cx="14" cy="14" rx="12" ry="7" stroke="#7a6e5e" stroke-width="2" stroke-dasharray="3 3"></ellipse>
           </svg>
           <div class="flex min-w-0 flex-col gap-0.5">
             <span class="eyebrow">Cross cutting</span>
