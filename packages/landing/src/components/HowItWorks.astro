@@ -1,0 +1,67 @@
+---
+const steps = [
+  {
+    title: "Text",
+    text: "Write the model in plain .appling files. The text is the canonical source.",
+    icon: '<path class="sr" d="M6 3h8l4 4v14H6z M14 3v4h4 M9 12h6 M9 16h6" stroke="#5cbf63" stroke-width="1.5"></path>',
+  },
+  {
+    title: "Graph",
+    text: "Parsed and linked across files and modules, every element by its qualified name.",
+    icon: '<path class="sr" d="M6 6 L18 8 L12 18 Z" stroke="#5cbf63" stroke-width="1.5"></path><circle cx="6" cy="6" r="2.6" fill="#5cbf63"></circle><circle cx="18" cy="8" r="2.6" fill="#5cbf63"></circle><circle cx="12" cy="18" r="2.6" fill="#a6dc5a"></circle>',
+  },
+  {
+    title: "Validated",
+    text: "Layer rules, exports and migrations are checked on every build.",
+    icon: '<path class="sr" d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z M9 12l2 2 4-4" stroke="#5cbf63" stroke-width="1.5"></path>',
+  },
+  {
+    title: "Visualize and generate",
+    text: "Explore and simulate the graph, edit with AI, and generate code, all from the same source.",
+    icon: '<path class="sr" d="M20 20l-4.5-4.5 M11 8v6 M8 11h6" stroke="#5cbf63" stroke-width="1.5"></path><circle class="sr" cx="11" cy="11" r="6" stroke="#5cbf63" stroke-width="1.5"></circle>',
+    highlight: true,
+  },
+];
+---
+
+<section id="how" class="border-t border-line px-4 py-16 sm:px-8">
+  <div class="mx-auto flex max-w-[1200px] flex-col gap-8">
+    <div class="flex max-w-[640px] flex-col gap-3">
+      <span class="eyebrow">How it works</span>
+      <h2 class="text-h1">From text to a living graph</h2>
+    </div>
+    <div class="flex flex-col">
+      <div class="flex items-stretch gap-2 max-[960px]:flex-col">
+        {steps.map((step, i) => (
+          <>
+            {i > 0 && (
+              <div aria-hidden="true" class="flex flex-[0_0_64px] items-center justify-center max-[960px]:rotate-90 max-[960px]:self-center">
+                <svg viewBox="0 0 64 24" class="h-6 w-16 overflow-visible">
+                  <path class="sr flowline" d="M4 12 H52" stroke="#6b6b6b" stroke-width="2"></path>
+                  <path class="sr" d="M48 5 L59 12 L48 19" stroke="#6b6b6b" stroke-width="2.5"></path>
+                  <circle class="dot" cx="6" cy="12" r="4" fill="#5cbf63" style={`animation-delay: ${(i - 1) * 0.6}s`}></circle>
+                </svg>
+              </div>
+            )}
+            <article class:list={["step flex min-w-0 flex-[1_1_0] flex-col gap-3 rounded-sm border p-6", step.highlight ? "border-leaf-line bg-leaf-soft" : "border-line bg-surface-raised"]}>
+              <div class="flex items-center justify-between gap-4">
+                <span class="inline-flex size-11 items-center justify-center rounded-md border border-line bg-surface-elevated">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" class="size-5" set:html={step.icon}></svg>
+                </span>
+                <span class="eyebrow">{String(i + 1).padStart(2, "0")}</span>
+              </div>
+              <h3 class="text-[17px] leading-6 font-semibold">{step.title}</h3>
+              <p class="text-sm leading-[22px] text-ink-muted">{step.text}</p>
+            </article>
+          </>
+        ))}
+      </div>
+      <div aria-hidden="true" class="relative mx-[11%] h-10 rounded-b-3xl border-2 border-t-0 border-dashed border-line-strong max-[960px]:hidden">
+        <svg viewBox="0 0 16 12" class="absolute -top-1.5 -left-[9px] h-3 w-4">
+          <path class="sr" d="M2 10 L8 2 L14 10" stroke="#6b6b6b" stroke-width="2.5"></path>
+        </svg>
+        <span class="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-surface px-3 font-mono text-xs leading-[22px] whitespace-nowrap text-ink-muted">edits write back to text</span>
+      </div>
+    </div>
+  </div>
+</section>

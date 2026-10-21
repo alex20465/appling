@@ -1,0 +1,24 @@
+---
+import { GITHUB_URL } from "../links";
+
+const links = [
+  { href: "/#layers", label: "Layers" },
+  { href: "/#how", label: "How it works" },
+  { href: "/#example", label: "Example" },
+  { href: "/#cli", label: "CLI" },
+  { href: GITHUB_URL, label: "GitHub" },
+];
+---
+
+<header class="border-b border-line px-4">
+  <nav aria-label="Main" class="mx-auto flex max-w-[1200px] flex-wrap items-center justify-between gap-4 py-3">
+    <a href="/#top" class="flex items-center gap-2 text-ink no-underline">
+      <img src="/appling-icon.svg" alt="" class="sprout size-7" />
+      <span class="intro text-[17px] leading-6 font-semibold" style="animation-delay: 500ms">Appling</span>
+    </a>
+    <div class="flex flex-wrap items-center gap-6">
+      {links.map((link) => <a href={link.href} class="font-mono text-xs leading-[19px] font-medium text-ink-muted no-underline hover:text-ink">{link.label}</a>)}
+      <a href="/#start" class="inline-flex min-h-11 items-center rounded-md bg-leaf px-4 font-mono text-[13px] leading-4 font-semibold text-on-leaf no-underline hover:bg-leaf-hover hover:text-on-leaf">Get started</a>
+    </div>
+  </nav>
+</header>

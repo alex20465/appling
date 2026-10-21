@@ -23,6 +23,7 @@ pnpm --filter @appling/lang build   # rebuild only the language after grammar ch
 ## Architecture
 
 - `packages/lang` (`@appling/lang`): the language. `src/appling.langium` is the grammar; `langium generate` writes `src/generated/` (gitignored, never edit). `index.ts` exports the services factory, the printer and the generated AST.
+- `packages/landing` (`@appling/landing`, private): the Astro 7 + Tailwind 4 landing site. Pages live in `src/pages/`, share `src/layouts/Layout.astro` (header, footer) and the design tokens in `src/styles/global.css`. The design source for every page is the Design canvas https://claude.ai/artifact/KLixzPpo9HLrXJG21jWkVC (one artboard per page, built on the Appling design system); implement new pages from their artboard there.
 - `packages/cli` (`@appling/cli`): the `appling` binary with two commands, `check` (build with validation, print diagnostics) and `fmt` (requires a syntax error free parse, then prints canonically and writes back). All given files load as one workspace so cross file module references resolve. Exit codes: 0 no errors, 1 `check` errors or `fmt` skipped a file, 2 unknown command. `fmt` must be idempotent: a second run changes nothing.
 
 Each package has a user facing `README.md` (published to npm) documenting the CLI usage and exit codes, the language overview, its rules and the public API. Keep them in sync when changing CLI behavior, grammar keywords, validation rules or exports from `index.ts`.

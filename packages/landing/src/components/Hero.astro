@@ -1,0 +1,147 @@
+---
+// [x, y, rotate, scale, fill, vein, flutter delay, pop delay]
+const leaves = [
+  [178, 208, -170, 1.15, "#2e7d3a", "#a6dc5a", 0.53, 1.8],
+  [178, 208, -138, 1.35, "#5cbf63", "#1f6b2c", 1.06, 1.9],
+  [226, 144, -118, 1.0, "#1f6b2c", "#a6dc5a", 1.59, 2.0],
+  [282, 104, -100, 1.3, "#2e7d3a", "#a6dc5a", 2.12, 2.1],
+  [282, 104, -68, 1.6, "#5cbf63", "#1f6b2c", 0.15, 2.2],
+  [282, 104, -36, 1.2, "#1f6b2c", "#a6dc5a", 0.68, 2.3],
+  [372, 232, -42, 1.2, "#2e7d3a", "#a6dc5a", 1.21, 2.4],
+  [372, 232, -8, 1.4, "#5cbf63", "#1f6b2c", 1.74, 2.5],
+] as const;
+
+const seeds = [
+  [178, 208],
+  [226, 144],
+  [282, 104],
+  [372, 232],
+];
+
+// Sparks travelling the traces: [path, begin]
+const sparks = [
+  ["M196 466 H226 L248 444 V318 L206 276 V236 L178 208", "2.4s"],
+  ["M258 476 V150 L282 126 V104", "3.3s"],
+  ["M330 466 H286 L268 448 V300 L316 252 H352 L372 232", "4.2s"],
+];
+
+const chip = "chip absolute inline-flex items-center gap-2 rounded-full";
+const codeChip = `${chip} border px-3 py-1 font-mono text-xs leading-5`;
+const featureChip = `${chip} box-border min-h-8 border border-leaf-line bg-surface-elevated px-3.5 py-1 font-mono text-xs leading-5 font-semibold text-ink`;
+---
+
+<section id="top" class="px-4 pt-16 pb-16 sm:px-8">
+  <div class="mx-auto flex max-w-[1200px] flex-wrap items-center gap-12">
+    <div class="flex min-w-0 flex-[1_1_480px] flex-col gap-6">
+      <span class="intro eyebrow" style="animation-delay: 300ms">Open source · MIT licensed</span>
+      <h1 class="intro text-[clamp(40px,6vw,60.8px)] leading-[1.08] font-semibold tracking-[-0.03em] text-balance" style="animation-delay: 400ms">
+        Define once. Reference outward. Validate <em class="font-serif font-normal tracking-[-0.015em] text-leaf">always</em>.
+      </h1>
+      <p class="intro max-w-[560px] text-ink-soft" style="animation-delay: 550ms">
+        Appling is a declarative language that describes a business application as one validated model. That text is the single source of truth: Appling visualizes it as a living graph and generates code from it, so people and AI always build from the same model.
+      </p>
+      <div class="intro flex flex-wrap items-center gap-2" style="animation-delay: 700ms">
+        <a href="#start" class="inline-flex min-h-11 items-center rounded-md bg-leaf px-6 font-mono text-[13px] leading-4 font-semibold text-on-leaf no-underline hover:bg-leaf-hover hover:text-on-leaf">Get started</a>
+        <code class="inline-flex min-h-11 items-center rounded-md border border-line-strong bg-surface px-4 text-code text-ink">npm i -D @appling/cli</code>
+      </div>
+    </div>
+
+    <div class="relative aspect-[520/480] min-w-0 max-w-[560px] flex-[1_1_440px]">
+      <svg viewBox="0 0 520 480" role="img" aria-label="A digital tree: circuit traces grow from .appling source files and branch out into natural leaves" class="block size-full">
+        <circle cx="260" cy="236" r="196" fill="#111111"></circle>
+        <circle class="growring" cx="260" cy="236" r="196" fill="none" stroke="#262626" stroke-width="2"></circle>
+        <circle class="growring" cx="260" cy="236" r="196" fill="none" stroke="#262626" stroke-width="2" style="animation-delay: 3s"></circle>
+        <defs>
+          <pattern id="dotgrid" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.3" fill="#262626"></circle></pattern>
+        </defs>
+        <circle cx="260" cy="236" r="196" fill="url(#dotgrid)"></circle>
+        <path d="M44 436 C140 420 380 420 476 436 L476 466 Q476 478 464 478 L56 478 Q44 478 44 466 Z" fill="#171717"></path>
+        <path class="sr" d="M44 436 C140 420 380 420 476 436" stroke="#262626" stroke-width="2"></path>
+
+        <path class="sr draw" pathLength="1" d="M248 432 V444 L226 466 H196" stroke="#2e7d3a" stroke-width="4" style="animation-delay: 0.1s; animation-duration: .5s"></path>
+        <path class="sr draw" pathLength="1" d="M258 432 V476" stroke="#2e7d3a" stroke-width="4" style="animation-delay: 0.15s; animation-duration: .5s"></path>
+        <path class="sr draw" pathLength="1" d="M268 432 V448 L286 466 H330" stroke="#2e7d3a" stroke-width="4" style="animation-delay: 0.2s; animation-duration: .5s"></path>
+        <g class="appear" style="animation-delay: .5s">
+          <rect x="191" y="461" width="10" height="10" rx="2" fill="#2e7d3a"></rect>
+          <rect x="253" y="471" width="10" height="10" rx="2" fill="#2e7d3a"></rect>
+          <rect x="325" y="461" width="10" height="10" rx="2" fill="#2e7d3a"></rect>
+        </g>
+        <path class="sr draw" pathLength="1" d="M248 432 V318 L206 276 V236 L178 208" stroke="#2e7d3a" stroke-width="5" style="animation-delay: 0.5s"></path>
+        <path class="sr draw" pathLength="1" d="M258 432 V150 L282 126 V104" stroke="#2e7d3a" stroke-width="5" style="animation-delay: 0.55s"></path>
+        <path class="sr draw" pathLength="1" d="M268 432 V300 L316 252 H352 L372 232" stroke="#2e7d3a" stroke-width="5" style="animation-delay: 0.6s"></path>
+        <path class="sr draw" pathLength="1" d="M258 176 L226 144" stroke="#2e7d3a" stroke-width="5" style="animation-delay: 1.2s"></path>
+        <g class="appear" style="animation-delay: 1.4s">
+          <circle cx="248" cy="318" r="4.5" fill="#111111" stroke="#5cbf63" stroke-width="2.5"></circle>
+          <circle cx="268" cy="300" r="4.5" fill="#111111" stroke="#5cbf63" stroke-width="2.5"></circle>
+          <circle cx="258" cy="176" r="4.5" fill="#111111" stroke="#5cbf63" stroke-width="2.5"></circle>
+          <circle cx="352" cy="252" r="4.5" fill="#111111" stroke="#5cbf63" stroke-width="2.5"></circle>
+        </g>
+
+        {sparks.map(([path, begin]) => (
+          <circle cx="0" cy="0" r="4.5" fill="#a6dc5a" opacity="0">
+            <animateMotion dur="2.6s" begin={begin} repeatCount="indefinite" path={path}></animateMotion>
+            <animate attributeName="opacity" values="0;1;1;0" dur="2.6s" begin={begin} repeatCount="indefinite"></animate>
+          </circle>
+        ))}
+
+        {leaves.map(([x, y, rotate, scale, fill, vein, flutter, pop]) => (
+          <g transform={`translate(${x} ${y}) rotate(${rotate}) scale(${scale})`}>
+            <g class="flutter" style={`animation-delay: ${flutter}s`}>
+              <g class="leafp" style={`animation-delay: ${pop}s`}>
+                <path d="M0 0 C6 -9 20 -13 34 -8 C40 -6 44 -3 46 0 C44 3 40 6 34 8 C20 13 6 9 0 0 Z" fill={fill}></path>
+                <path class="sr" d="M3 0 C16 -1 30 -1 43 0" stroke={vein} stroke-width="1.4"></path>
+              </g>
+            </g>
+          </g>
+        ))}
+        <g class="appear" style="animation-delay: 1.6s">
+          {seeds.map(([cx, cy], i) => (
+            <circle class="ring" cx={cx} cy={cy} r="5.5" fill="#5cbf63" style={`animation-delay: ${i * 0.35}s`}></circle>
+          ))}
+          {seeds.map(([cx, cy]) => (
+            <circle cx={cx} cy={cy} r="5.5" fill="#5cbf63" stroke="#111111" stroke-width="2"></circle>
+          ))}
+        </g>
+
+        <circle class="pollen" cx="200" cy="320" r="2.5" fill="#a6dc5a"></circle>
+        <circle class="pollen" cx="320" cy="300" r="2.5" fill="#a6dc5a" style="animation-delay: 1.5s"></circle>
+        <circle class="pollen" cx="240" cy="220" r="2" fill="#a6dc5a" style="animation-delay: 3s"></circle>
+        <circle class="pollen" cx="300" cy="230" r="2" fill="#5cbf63" style="animation-delay: 4.2s"></circle>
+        <circle class="pollen" cx="170" cy="210" r="2.5" fill="#a6dc5a" style="animation-delay: 2.4s"></circle>
+      </svg>
+
+      <span class={`${codeChip} top-[52%] left-0 border-line bg-surface-elevated text-ink`} style="animation-delay: 2.5s, 0s">
+        <span class="size-2 rounded-full bg-fern"></span>entity Order
+      </span>
+      <span class={`${codeChip} top-[52%] right-0 border-line bg-surface-elevated text-ink`} style="animation-delay: 2.7s, .8s">
+        <span class="size-2 rounded-full bg-leaf"></span>action PlaceOrder
+      </span>
+      <span class={`${featureChip} top-[16%] left-0`} style="animation-delay: 2.4s, 1.6s">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="size-4">
+          <path class="sr" d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" stroke="#5cbf63" stroke-width="2"></path>
+          <circle class="sr" cx="12" cy="12" r="3" stroke="#5cbf63" stroke-width="2"></circle>
+        </svg>Visualize
+      </span>
+      <span class={`${featureChip} top-[16%] right-0`} style="animation-delay: 2.6s, 2.4s">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="size-4">
+          <path class="sr" d="M8 7l-5 5 5 5 M16 7l5 5-5 5 M14 4l-4 16" stroke="#5cbf63" stroke-width="2"></path>
+        </svg>Generate code
+      </span>
+      <span class={`${codeChip} top-[90%] left-[2%] border-line bg-surface-raised text-ink-soft`} style="animation-delay: .6s, .4s">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="size-3.5">
+          <path class="sr" d="M6 3h8l4 4v14H6z M14 3v4h4" stroke="#a3a3a3" stroke-width="2"></path>
+        </svg>sales.appling
+      </span>
+      <span class={`${codeChip} top-[90%] right-[2%] border-line bg-surface-raised text-ink-soft`} style="animation-delay: .8s, 1.2s">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="size-3.5">
+          <path class="sr" d="M6 3h8l4 4v14H6z M14 3v4h4" stroke="#a3a3a3" stroke-width="2"></path>
+        </svg>billing.appling
+      </span>
+      <span class={`${codeChip} top-[72%] left-[57%] border-leaf-line bg-leaf-soft text-ink`} style="animation-delay: 1.4s, 2s">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="size-3.5">
+          <path class="sr" d="M5 12l5 5L19 7" stroke="#5cbf63" stroke-width="3"></path>
+        </svg>single source of truth
+      </span>
+    </div>
+  </div>
+</section>

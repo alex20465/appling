@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1000" height="1000" viewBox="0 0 1000 1000">
+  <defs>
+    <linearGradient id="linear-gradient-1" x1="152" y1="751" x2="906" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00e0da"/>
+      <stop offset="0.44" stop-color="#41ddb2"/>
+      <stop offset="0.64" stop-color="#83d989"/>
+      <stop offset="0.79" stop-color="#c1d695"/>
+      <stop offset="1" stop-color="#ffd2a1"/>
+    </linearGradient>
+  </defs>
+  <title>appling-icon.svg</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <path d="M756.673 275.821 C682.339 384.974 667.832 407 618 535 C615 543 621 551 629 550 C884 525 884 345 884 81 C884 74 878 69 871 70 C588 111 524 197 517 513 C516 527 498 530 493 517 C404 292 301 251 90 250 C84 250 79 255 79 261 C77 647 167 798 489 801 C495 801 500 806 500 812 L504 921 C504 927 509 931 515 931 L538 931 C544 931 549 927 549 920 C549 640.712 534.391 433.496 732.007 253.176 C736.445 249.127 743.311 249.311 747.596 253.596 L755.309 261.309 C759.19 265.19 759.763 271.284 756.673 275.821 Z" fill="url(#linear-gradient-1)"/>
+  </g>
+</svg>

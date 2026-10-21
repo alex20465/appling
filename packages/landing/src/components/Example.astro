@@ -1,0 +1,117 @@
+---
+import { GITHUB_URL } from "../links";
+
+const source = `<span class="kw">module</span> sales <span class="pu">{</span>
+  <span class="kw">export</span> <span class="ty">Order</span>
+
+  <span class="kw">enum</span> <span class="ty">OrderStatus</span> <span class="pu">{</span>
+    <span class="va">draft</span>
+    <span class="va">placed</span>
+  <span class="pu">}</span>
+
+  <span class="kw">entity</span> <span class="ty">Order</span> <span class="pu">{</span>
+    reference<span class="pu">:</span> <span class="ty">String</span> <span class="kw">unique</span>
+    status<span class="pu">:</span> <span class="ty">OrderStatus</span> <span class="kw">state</span> <span class="kw">default</span> <span class="va">draft</span>
+  <span class="pu">}</span>
+
+  <span class="kw">action</span> <span class="ty">PlaceOrder</span> <span class="kw">on</span> <span class="ty">Order</span> <span class="pu">{</span>
+    <span class="kw">requires</span> <span class="pu">{</span> reference <span class="pu">!=</span> <span class="st">""</span> <span class="pu">}</span>
+  <span class="pu">}</span>
+
+  <span class="kw">machine</span> <span class="ty">OrderFlow</span> <span class="kw">on</span> <span class="ty">Order</span><span class="pu">.</span>status <span class="pu">{</span>
+    <span class="kw">transition</span> <span class="va">draft</span> <span class="pu">-&gt;</span> <span class="va">placed</span> <span class="kw">via</span> <span class="ty">PlaceOrder</span>
+  <span class="pu">}</span>
+<span class="pu">}</span>`;
+
+const nodes = [
+  { left: 16, top: 24, height: 64, kind: "L1 · enum", name: "OrderStatus", delay: 0.1 },
+  { left: 288, top: 24, height: 64, kind: "L2 · action", name: "PlaceOrder", delay: 0.2 },
+  { left: 152, top: 148, height: 72, kind: "L1 · entity · exported", name: "sales.Order", delay: 0, highlight: true },
+  { left: 152, top: 280, height: 64, kind: "L2 · machine", name: "OrderFlow", delay: 0.3 },
+];
+
+const edges = [
+  { d: "M200 148 C200 118 104 122 104 94", delay: 0.6 },
+  { d: "M376 88 C376 120 280 118 280 144", delay: 0.8 },
+  { d: "M240 280 L240 226", delay: 1 },
+  { d: "M328 312 C420 312 440 200 440 94", delay: 1.2 },
+];
+
+const edgeLabels = [
+  { left: 112, top: 104, text: "status" },
+  { left: 334, top: 104, text: "on" },
+  { left: 248, top: 240, text: "on status" },
+  { left: 412, top: 196, text: "via" },
+];
+
+const quotes = [
+  "[CUSTOMER QUOTE: what Appling changed for their team]",
+  "[CUSTOMER QUOTE: a concrete before and after]",
+];
+---
+
+<section id="example" class="border-t border-line px-4 py-16 sm:px-8">
+  <div class="mx-auto flex max-w-[1200px] flex-col gap-8">
+    <div class="flex max-w-[640px] flex-col gap-3">
+      <span class="eyebrow">Example</span>
+      <h2 class="text-h1">One file in, one linked model out</h2>
+      <p class="text-ink-soft">The same sales module, as text and as the graph Appling builds from it.</p>
+    </div>
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,440px),1fr))] gap-px border border-line bg-line">
+      <div class="min-w-0 bg-surface-raised">
+        <div class="flex justify-between gap-4 border-b border-line px-4 py-2 font-mono text-xs leading-5">
+          <span class="text-ink-muted">sales.appling</span>
+          <span class="flex items-center gap-2 text-leaf"><span class="size-1.5 rounded-full bg-leaf"></span>valid</span>
+        </div>
+        <pre class="overflow-x-auto p-6 text-code" set:html={source}></pre>
+      </div>
+      <div class="flex min-w-0 flex-col gap-4 bg-surface-raised p-6">
+        <span class="eyebrow">The graph</span>
+        <div class="overflow-x-auto">
+          <div class="relative mx-auto h-[360px] w-[480px]">
+            <svg viewBox="0 0 480 360" aria-hidden="true" class="absolute inset-0 h-[360px] w-[480px]">
+              <defs>
+                <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#6b6b6b"></path></marker>
+              </defs>
+              {edges.map((edge) => (
+                <path class="sr ref edge" d={edge.d} stroke="#6b6b6b" stroke-width="1.5" style={`animation-delay: 0s, ${edge.delay}s`}></path>
+              ))}
+            </svg>
+            {nodes.map((node) => (
+              <div
+                class:list={["node absolute box-border flex w-44 flex-col justify-center rounded-sm border px-3.5 py-2", node.highlight ? "border-leaf-line bg-[#142215]" : "border-line-strong bg-surface-elevated"]}
+                style={`left: ${node.left}px; top: ${node.top}px; height: ${node.height}px; animation-delay: ${node.delay}s`}
+              >
+                <span class:list={["eyebrow", !node.highlight && "text-ink-muted"]}>{node.kind}</span>
+                <code class="text-code text-ink">{node.name}</code>
+              </div>
+            ))}
+            {edgeLabels.map((label) => (
+              <span class="absolute bg-surface-raised px-1.5 font-mono text-xs leading-[18px] text-ink-muted" style={`left: ${label.left}px; top: ${label.top}px`}>{label.text}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-6 pt-8">
+      <div class="flex flex-col gap-3">
+        <span class="eyebrow">What people say</span>
+        <h3 class="text-[21.6px] leading-[26px] font-semibold tracking-[-0.015em]">Proof from real projects</h3>
+      </div>
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-px border border-line bg-line">
+        {quotes.map((quote) => (
+          <figure class="flex flex-col gap-4 bg-surface-raised p-6">
+            <blockquote class="text-ink-soft">{quote}</blockquote>
+            <figcaption class="font-mono text-xs leading-5 text-leaf">[NAME], [ROLE], [COMPANY]</figcaption>
+          </figure>
+        ))}
+        <a href={`${GITHUB_URL}/tree/main/examples`} class="flex flex-col justify-between gap-4 bg-leaf-soft p-6 text-ink no-underline hover:text-ink">
+          <span class="eyebrow">Example repository</span>
+          <span class="text-[21.6px] leading-[26px] font-semibold tracking-[-0.015em]">Browse full models on GitHub</span>
+          <span class="font-mono text-xs leading-5 text-ink-muted">alex20465/appling/examples →</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
