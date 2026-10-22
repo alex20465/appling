@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { basename, join, relative, resolve } from 'node:path';
+import { existsSync, readdirSync, writeFileSync } from 'node:fs';
+import { basename, relative, resolve } from 'node:path';
 import { URI, type LangiumDocument } from 'langium';
 import { NodeFileSystem } from 'langium/node';
 import { createApplingServices, print, type ApplingServices, type Model } from '@appling/lang';
 import { checkPrerequisites, describe, loadExtension, plan, readConfig, runPlan, type Plan } from '@appling/codegen';
-import { buildGraph, dependencies, writeRelease, type Graph } from '@appling/model';
+import { buildGraph, dependencies, findApplingFiles, writeRelease, type Graph } from '@appling/model';
 
 const USAGE = [
     'Usage: appling <check|fmt|graph> [files or folders...]',
@@ -20,7 +20,7 @@ async function main([command, ...args]: string[]): Promise<number> {
     }
     const onlyPlan = command === 'generate' && args[0] === '--plan';
     const [version, paths] = command === 'release' ? [args[0], args.slice(1)] : ['', args.slice(onlyPlan ? 1 : 0)];
-    const files = (paths.length ? paths : ['.']).flatMap(p => applingFiles(resolve(p)));
+    const files = (paths.length ? paths : ['.']).flatMap(p => findApplingFiles(resolve(p)));
     const { shared, Appling } = createApplingServices(NodeFileSystem);
     const documents = await Promise.all(files.map(f => shared.workspace.LangiumDocuments.getOrCreateDocument(URI.file(f))));
     await shared.workspace.DocumentBuilder.build(documents, { validation: command !== 'fmt' });
@@ -129,13 +129,6 @@ function format(documents: LangiumDocument[]): number {
         }
     }
     return failed ? 1 : 0;
-}
-
-function applingFiles(path: string): string[] {
-    if (!statSync(path).isDirectory()) return [path];
-    return readdirSync(path, { withFileTypes: true })
-        .filter(e => !e.name.startsWith('.') && e.name !== 'node_modules')
-        .flatMap(e => e.isDirectory() ? applingFiles(join(path, e.name)) : e.name.endsWith('.appling') ? [join(path, e.name)] : []);
 }
 
 main(process.argv.slice(2)).then(code => process.exit(code));

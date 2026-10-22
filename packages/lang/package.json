@@ -11,6 +11,10 @@
     "./lsp": {
       "types": "./out/lsp.d.ts",
       "default": "./out/lsp.js"
+    },
+    "./monarch": {
+      "types": "./out/generated/monarch.d.ts",
+      "default": "./out/generated/monarch.js"
     }
   },
   "files": [

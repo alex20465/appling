@@ -34,7 +34,7 @@ Done when `pnpm test` passes, the CLI can dump the graph of `examples/`, `exampl
 
 `@appling/ide`, `@appling/ai`
 
-- [ ] A1 Read only IDE: `npx @appling/ide` starts a local server on the workspace. Browser UI (React, React Flow, Monaco) with a text editor backed by the LSP, the zoomable graph at the three levels of `concept.md` section 4, and selection synced between text and graph. Layout lives in `.appling/layout.json`, outside the model.
+- [x] A1 Read only IDE: `npx @appling/ide` starts a local server on the workspace. Browser UI (React, React Flow, Monaco) with a text editor backed by the LSP, the zoomable graph at the three levels of `concept.md` section 4, and selection synced between text and graph. Layout lives in `.appling/layout.json`, outside the model.
 - [ ] A2 Editing: edit elements and attributes in the graph through the edit operations. Migration entries appear when a release exists.
 - [ ] A3 AI: MCP server exposing check, graph query, edit operations and the registry. Provider adapter and chat panel in the IDE. AI changes pass validation and are shown as reviewable diffs.
 

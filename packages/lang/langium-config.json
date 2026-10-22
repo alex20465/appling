@@ -4,7 +4,12 @@
     {
       "id": "appling",
       "grammar": "src/appling.langium",
-      "fileExtensions": [".appling"]
+      "fileExtensions": [
+        ".appling"
+      ],
+      "monarch": {
+        "out": "src/generated/monarch.ts"
+      }
     }
   ],
   "out": "src/generated"
