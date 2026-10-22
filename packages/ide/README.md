@@ -16,6 +16,7 @@ It serves the folder's `.appling` files on `http://127.0.0.1:4410` and only answ
 - An inspector with the element's properties, members and references in both directions, where you edit the model: rename, change a type, set any property, add a member from its source text, or remove the element.
 - Editing in the graph: drag from a declaration to an entity, enum or value type to add a field that references it, press Delete to remove the selected element.
 - Every edit goes through the Appling edit operations: the touched text is printed canonically, the edit is rejected with the reasons when it would introduce errors, and it lands in the editor as one undoable step. Renames follow references, expressions, exports and message keys.
+- An AI tab: ask about the model or ask for changes. The assistant looks things up in the graph and edits a working copy; its changes come back as a proposal with the text and graph differences, which you accept or reject. Set the model in `appling.config.json` (`"ai": { "provider": "anthropic", "model": "claude-opus-5-5" }`) and the provider's API key in the environment.
 - Once a release exists (`appling release`), the header shows how many migration steps were recorded since; renames, type changes and removals of released domain elements add them automatically.
 - Layout stays out of the model, in `.appling/layout.json`, and follows renames recorded as migration steps.
 

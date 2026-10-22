@@ -8,7 +8,9 @@ import { createConnection } from 'vscode-languageserver/node';
 import { WebSocketMessageReader, WebSocketMessageWriter, type IWebSocket } from 'vscode-ws-jsonrpc';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { createApplingLspServices } from '@appling/lang/lsp';
+import { chat, languageModel, modelSettings } from '@appling/ai';
 import { applyEdit, latestRelease, readReleases, type EditOperation } from '@appling/model';
+import type { ModelMessage } from 'ai';
 import { readLayout, snapshot, writeLayout } from './workspace.js';
 
 const CLIENT = fileURLToPath(new URL('../../dist/client/', import.meta.url));
@@ -78,6 +80,13 @@ async function handle(request: IncomingMessage, response: ServerResponse, root: 
     if (url.pathname === '/api/edit' && request.method === 'POST') {
         const { sources, operation } = JSON.parse(await body(request)) as { sources: Record<string, string>, operation: EditOperation };
         return json(response, await applyEdit(sources, operation, { release: latestRelease(readReleases(root)) }));
+    }
+    if (url.pathname === '/api/chat' && request.method === 'POST') {
+        const { messages } = JSON.parse(await body(request)) as { messages: ModelMessage[] };
+        response.writeHead(200, { 'content-type': 'application/x-ndjson' });
+        for await (const event of chat(root, messages, languageModel(modelSettings(root)))) response.write(JSON.stringify(event) + '\n');
+        response.end();
+        return;
     }
     if (url.pathname === '/api/release' && request.method === 'GET') {
         const release = latestRelease(readReleases(root));

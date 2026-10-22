@@ -36,7 +36,7 @@ Done when `pnpm test` passes, the CLI can dump the graph of `examples/`, `exampl
 
 - [x] A1 Read only IDE: `npx @appling/ide` starts a local server on the workspace. Browser UI (React, React Flow, Monaco) with a text editor backed by the LSP, the zoomable graph at the three levels of `concept.md` section 4, and selection synced between text and graph. Layout lives in `.appling/layout.json`, outside the model.
 - [x] A2 Editing: edit elements and attributes in the graph through the edit operations. Migration entries appear when a release exists.
-- [ ] A3 AI: MCP server exposing check, graph query, edit operations and the registry. Provider adapter and chat panel in the IDE. AI changes pass validation and are shown as reviewable diffs.
+- [x] A3 AI: MCP server exposing check, graph query, edit operations and the registry. Provider adapter and chat panel in the IDE. AI changes pass validation and are shown as reviewable diffs.
 
 ## Track B: Code generation
 
@@ -62,7 +62,7 @@ Extensions are configured in `appling.config.json` by package name. Third party 
 - [x] B2 Django and Ash maps for L1: entities, enums, value types, invariants, policies.
 - [x] B3 Django and Ash maps for L2 to L4: actions, state machines, events, jobs, queries, projections, use cases, interfaces.
 - [x] B4 Tests: test skeletons for invariants, preconditions, transitions and policies; test bodies are registry tasks.
-- [ ] B5 Registry skill in `@appling/ai`: picks open entries, implements them, runs the related tests, marks them done.
+- [x] B5 Registry skill in `@appling/ai`: picks open entries, implements them, runs the related tests, marks them done.
 - [ ] B6 Migrations through `makemigrations` and `mix ash.codegen`, fed with Appling `rename` and `retype` steps so they are not guessed as remove plus add.
 
 ## Order

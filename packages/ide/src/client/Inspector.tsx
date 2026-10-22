@@ -20,7 +20,7 @@ export function Inspector({ index, qn, onSelect, onEdit }: InspectorProps) {
         setErrors([]);
         setRemoving(false);
     }, [qn]);
-    if (!node) return <aside className="inspector"><p className="muted">Select an element in the text or the graph.</p></aside>;
+    if (!node) return <div className="inspector"><p className="muted">Select an element in the text or the graph.</p></div>;
 
     const edit = async (operation: EditOperation) => setErrors(await onEdit(operation));
     const parent = index.parent(node.qn);
@@ -32,7 +32,7 @@ export function Inspector({ index, qn, onSelect, onEdit }: InspectorProps) {
     const editable = Object.entries(node.props).filter(([key]) => !(TYPED.has(node.kind) && key === 'type'));
 
     return (
-        <aside className="inspector">
+        <div className="inspector">
             <div className="eyebrow">{node.kind} · {node.layer}</div>
             <h2>{node.qn}</h2>
             {errors.length > 0 && <ul className="errors" role="alert">{errors.map(e => <li key={e}>{e}</li>)}</ul>}
@@ -58,7 +58,7 @@ export function Inspector({ index, qn, onSelect, onEdit }: InspectorProps) {
             <Section title="Contains" items={index.children(node.qn).map(c => <li key={c.qn}>{link(c.qn)}</li>)} />
             <Section title="Refers to" items={outgoing.map(e => <li key={`${e.kind}${e.to}`}><span className="muted">{e.kind}</span> {link(e.to)}</li>)} />
             <Section title="Referred by" items={incoming.map(e => <li key={`${e.kind}${e.from}`}><span className="muted">{e.kind}</span> {link(e.from)}</li>)} />
-        </aside>
+        </div>
     );
 }
 

@@ -53,6 +53,8 @@ export interface MapContext {
 export interface CodegenExtension {
     name: string;
     prerequisites?: Prerequisite[];
+    /** The command that runs the generated project's tests, from its root. */
+    test?: string[];
     /** Steps that run once, before any element, such as creating the project. */
     setup?(context: MapContext): Step[];
     steps(node: GraphNode, context: MapContext): Step[] | undefined;

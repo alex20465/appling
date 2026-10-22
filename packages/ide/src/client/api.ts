@@ -1,3 +1,4 @@
+import type { ChatEvent } from '@appling/ai';
 import type { EditOperation, EditResult } from '@appling/model';
 import type { Layout, Snapshot } from '../shared/snapshot.js';
 
@@ -34,4 +35,17 @@ export async function requestEdit(sources: Record<string, string>, operation: Ed
 
 export async function loadRelease(): Promise<{ version: string, created: string } | null> {
     return (await fetch('/api/release')).json();
+}
+
+/** Streams the events of one chat turn: text, tool calls, a proposal, errors. */
+export async function* chatTurn(messages: { role: 'user' | 'assistant', content: string }[]): AsyncGenerator<ChatEvent> {
+    const response = await fetch('/api/chat', { method: 'POST', body: JSON.stringify({ messages }) });
+    const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+    for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+        buffer += chunk.value;
+        const lines = buffer.split('\n');
+        buffer = lines.pop()!;
+        for (const line of lines.filter(Boolean)) yield JSON.parse(line) as ChatEvent;
+    }
 }

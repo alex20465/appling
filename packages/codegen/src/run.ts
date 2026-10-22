@@ -6,6 +6,8 @@ import { describe, type Plan, type RegistryEntry } from './plan.js';
 
 export interface Registry {
     extension: string;
+    /** The command that runs the generated project's tests. */
+    test?: string[];
     entries: Record<string, RegistryEntry>;
 }
 
@@ -39,8 +41,17 @@ export function runPlan(plan: Plan, out: string, log: (line: string) => void = (
             writeFileSync(file, step.write(existsSync(file) ? readFileSync(file, 'utf8') : undefined));
         }
     }
-    const registry: Registry = { extension: plan.extension, entries: Object.fromEntries(plan.entries.map(e => [e.qn, e])) };
-    mkdirSync(join(root, '.appling'), { recursive: true });
-    writeFileSync(join(root, REGISTRY), JSON.stringify(registry, null, 2) + '\n');
+    const registry: Registry = { extension: plan.extension, test: plan.test, entries: Object.fromEntries(plan.entries.map(e => [e.qn, e])) };
+    writeRegistry(root, registry);
     return registry;
+}
+
+export function readRegistry(out: string): Registry | undefined {
+    const file = join(resolve(out), REGISTRY);
+    return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as Registry : undefined;
+}
+
+export function writeRegistry(out: string, registry: Registry): void {
+    mkdirSync(join(resolve(out), '.appling'), { recursive: true });
+    writeFileSync(join(resolve(out), REGISTRY), JSON.stringify(registry, null, 2) + '\n');
 }

@@ -9,6 +9,7 @@ import { app, attributeType, fieldsOf, fileOf, mix, moduleName, patch, relationT
 
 const extension: CodegenExtension = {
     name: '@appling/codegen-ash',
+    test: ['mix', 'test'],
     prerequisites: [
         { name: 'Elixir', command: ['mix', '--version'], expect: /Mix 1\.(1[7-9]|[2-9]\d)/, hint: 'install Elixir 1.17 or later' },
         { name: 'igniter_new', command: ['mix', 'help', 'igniter.new'], hint: 'run "mix archive.install hex igniter_new"' }

@@ -5,6 +5,7 @@ import { loadLayout, loadRelease, loadSnapshot, onSnapshot, requestEdit, saveFil
 import { Editor, type Reveal } from './Editor.js';
 import { GraphView } from './graph/GraphView.js';
 import { elementAt, followRenames, GraphIndex, moveLayout } from './graph/model.js';
+import { Chat } from './Chat.js';
 import { Inspector } from './Inspector.js';
 import { applyTextEdits, connectLanguageServer, modelTexts, monaco } from './monaco.js';
 
@@ -15,6 +16,7 @@ export function App() {
     const [active, setActive] = useState<string>();
     const [reveal, setReveal] = useState<Reveal>();
     const [release, setRelease] = useState<{ version: string } | null>(null);
+    const [side, setSide] = useState<'inspector' | 'ai'>('inspector');
 
     useEffect(() => {
         loadSnapshot().then(first => {
@@ -95,7 +97,14 @@ export function App() {
                     onSave={(path, text) => saveFile(path, text)}
                 />
                 <GraphView index={index} dependencies={snapshot.dependencies} layout={shownLayout} selected={selected} onSelect={selectFromGraph} onMoved={moved} onEdit={edit} />
-                <Inspector index={index} qn={selected} onSelect={selectFromGraph} onEdit={edit} />
+                <div className="side">
+                    <nav className="tabs" aria-label="Side panel">
+                        <button className={side === 'inspector' ? 'active' : ''} onClick={() => setSide('inspector')}>Inspector</button>
+                        <button className={side === 'ai' ? 'active' : ''} onClick={() => setSide('ai')}>AI</button>
+                    </nav>
+                    <div hidden={side !== 'inspector'} className="side-panel"><Inspector index={index} qn={selected} onSelect={selectFromGraph} onEdit={edit} /></div>
+                    <div hidden={side !== 'ai'} className="side-panel"><Chat onEdit={edit} onSelect={selectFromGraph} /></div>
+                </div>
             </main>
         </div>
     );

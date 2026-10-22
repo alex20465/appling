@@ -10,6 +10,7 @@ const REST_FRAMEWORK = 'djangorestframework~=3.16';
 
 const extension: CodegenExtension = {
     name: '@appling/codegen-django',
+    test: ['uv', 'run', 'python', 'manage.py', 'test'],
     prerequisites: [{ name: 'uv', command: ['uv', '--version'], expect: /^uv \d+\.\d+/, hint: 'install uv (https://docs.astral.sh/uv/) to manage the Python project' }],
     setup,
 

@@ -20,6 +20,9 @@ export interface RegistryEntry {
     steps: string[];
     files: string[];
     missing: Missing[];
+    /** How often someone tried to finish the open work, and what they noted. */
+    attempts?: number;
+    notes?: string[];
 }
 
 export interface PlannedStep {
@@ -29,6 +32,7 @@ export interface PlannedStep {
 
 export interface Plan {
     extension: string;
+    test?: string[];
     steps: PlannedStep[];
     entries: RegistryEntry[];
 }
@@ -51,7 +55,7 @@ export function plan(graph: Graph, extension: CodegenExtension, name: string, op
         return entry(node, nodeSteps, extension.name, context);
     });
     const phase = (s: PlannedStep) => s.step.kind === 'task' ? 0 : s.step.phase ?? 0;
-    return { extension: extension.name, steps: steps.map((s, i) => ({ s, i })).sort((a, b) => phase(a.s) - phase(b.s) || a.i - b.i).map(({ s }) => s), entries };
+    return { extension: extension.name, test: extension.test, steps: steps.map((s, i) => ({ s, i })).sort((a, b) => phase(a.s) - phase(b.s) || a.i - b.i).map(({ s }) => s), entries };
 }
 
 export function describe(step: Step): string {
