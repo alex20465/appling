@@ -7,21 +7,24 @@ import { createApplingServices, print, type ApplingServices, type Model } from '
 import {
     checkPrerequisites, describe, loadExtension, pendingChanges, plan, planMigrations, readApplied, readConfig, readRegistry, runMigrations, runPlan, type Plan
 } from '@appling/codegen';
-import { buildGraph, dependencies, findApplingFiles, writeRelease, type Graph } from '@appling/model';
+import { buildGraph, dependencies, findApplingFiles, Simulator, writeRelease, type Graph } from '@appling/model';
 
 const USAGE = [
     'Usage: appling <check|fmt|graph> [files or folders...]',
     '       appling release <version> [files or folders...]',
-    '       appling generate [--plan | --migrate] [files or folders...]'
+    '       appling generate [--plan | --migrate] [files or folders...]',
+    '       appling simulate <reach <machine> <state> | actors <action> | risks <action>> [files or folders...]'
 ].join('\n');
 
 async function main([command, ...args]: string[]): Promise<number> {
-    if (!['check', 'fmt', 'graph', 'release', 'generate'].includes(command) || (command === 'release' && !args[0])) {
+    const question = command === 'simulate' ? args.slice(0, args[0] === 'reach' ? 3 : 2) : [];
+    if (!['check', 'fmt', 'graph', 'release', 'generate', 'simulate'].includes(command) || (command === 'release' && !args[0])
+        || (command === 'simulate' && (!['reach', 'actors', 'risks'].includes(question[0]) || question.some(a => !a)))) {
         console.error(USAGE);
         return 2;
     }
     const mode = command === 'generate' && (args[0] === '--plan' || args[0] === '--migrate') ? args[0] : undefined;
-    const [version, paths] = command === 'release' ? [args[0], args.slice(1)] : ['', args.slice(mode ? 1 : 0)];
+    const [version, paths] = command === 'release' ? [args[0], args.slice(1)] : ['', args.slice(mode ? 1 : question.length)];
     const files = (paths.length ? paths : ['.']).flatMap(p => findApplingFiles(resolve(p)));
     const { shared, Appling } = createApplingServices(NodeFileSystem);
     const documents = await Promise.all(files.map(f => shared.workspace.LangiumDocuments.getOrCreateDocument(URI.file(f))));
@@ -30,9 +33,32 @@ async function main([command, ...args]: string[]): Promise<number> {
     if (command === 'graph') return graph(documents, Appling);
     if (command === 'release') return release(documents, Appling, version);
     if (command === 'generate') return generate(documents, Appling, mode);
+    if (command === 'simulate') return simulate(documents, Appling, question);
     const errors = report(documents, console.log);
     console.log(`${documents.length} file(s), ${errors} error(s)`);
     return errors ? 1 : 0;
+}
+
+function simulate(documents: LangiumDocument[], services: ApplingServices, [question, target, state]: string[]): number {
+    if (report(documents, console.error)) return 1;
+    const simulator = new Simulator(buildGraph(documents.map(doc => doc.parseResult.value as Model), services));
+    try {
+        if (question === 'reach') {
+            const reach = simulator.reach(target, state);
+            console.log(reach
+                ? [`${state} is reachable from ${reach.from}:`, ...reach.path.map(p => `  ${p.trigger} -> ${p.to}${p.guarded ? ' (guarded)' : ''}`)].join('\n')
+                : `${state} is not reachable`);
+        } else if (question === 'actors') {
+            for (const { actor, verdict } of simulator.actors(target)) console.log(`${actor}: ${verdict === 'depends' ? 'depends on the data' : verdict}`);
+        } else {
+            const risks = simulator.risks(target);
+            console.log(risks.length ? risks.map(r => `${r.invariant} (reads ${r.fields.join(', ')})`).join('\n') : 'no invariant reads a field this action changes');
+        }
+        return 0;
+    } catch (error) {
+        console.error((error as Error).message);
+        return 1;
+    }
 }
 
 async function generate(documents: LangiumDocument[], services: ApplingServices, mode: string | undefined): Promise<number> {

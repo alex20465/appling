@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Simulator } from '@appling/model/simulator';
 import type { EditOperation } from '@appling/model';
 import type { GraphIndex } from './graph/model.js';
 
@@ -55,11 +56,37 @@ export function Inspector({ index, qn, onSelect, onEdit }: InspectorProps) {
                         : <button className="button" onClick={() => setRemoving(true)}>Remove…</button>}
                 </div>
             ) : null}
+            <Behavior index={index} qn={node.qn} kind={node.kind} link={link} />
             <Section title="Contains" items={index.children(node.qn).map(c => <li key={c.qn}>{link(c.qn)}</li>)} />
             <Section title="Refers to" items={outgoing.map(e => <li key={`${e.kind}${e.to}`}><span className="muted">{e.kind}</span> {link(e.to)}</li>)} />
             <Section title="Referred by" items={incoming.map(e => <li key={`${e.kind}${e.from}`}><span className="muted">{e.kind}</span> {link(e.from)}</li>)} />
         </div>
     );
+}
+
+/** What the simulator says about an action or a machine. */
+function Behavior({ index, qn, kind, link }: { index: GraphIndex, qn: string, kind: string, link(qn: string): React.ReactNode }) {
+    const simulator = useMemo(() => new Simulator(index.graph), [index]);
+    if (kind === 'Action') {
+        const verdicts = { yes: 'may', no: 'may not', depends: 'depends on the data' };
+        return (
+            <>
+                <Section title="Who may trigger it" items={simulator.actors(qn).map(a => <li key={a.actor}>{link(a.actor)} <span className="muted">{verdicts[a.verdict]}</span></li>)} />
+                <Section title="Invariants at risk" items={simulator.risks(qn).map(r => <li key={r.invariant}>{link(r.invariant)} <span className="muted">reads {r.fields.join(', ')}</span></li>)} />
+            </>
+        );
+    }
+    if (kind === 'Machine') {
+        const field = index.nodes.get(String(index.nodes.get(qn)!.data.field));
+        const states = field ? index.children(String((field.data.type as { decl?: string }).decl)).map(l => l.qn.slice(l.qn.lastIndexOf('.') + 1)) : [];
+        return (
+            <Section title="Reachable states" items={states.map(state => {
+                const reach = simulator.reach(qn, state);
+                return <li key={state}>{state} <span className="muted">{reach ? (reach.path.length ? `via ${reach.path.map(p => p.trigger).join(', ')}` : 'initial') : 'unreachable'}</span></li>;
+            })} />
+        );
+    }
+    return null;
 }
 
 function TextField({ label, value, action, multiline, placeholder, onSubmit }: { label: string, value: string, action: string, multiline?: boolean, placeholder?: string, onSubmit(value: string): void }) {

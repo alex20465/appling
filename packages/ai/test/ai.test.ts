@@ -44,7 +44,7 @@ test('the MCP server exposes model and registry tools and the registry prompt', 
     const client = new Client({ name: 'test', version: '1' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await Promise.all([createMcpServer(root).connect(serverTransport), client.connect(clientTransport)]);
-    expect((await client.listTools()).tools.map(t => t.name).sort()).toEqual(['check', 'edit', 'graph_query', 'read_source', 'registry_next', 'registry_update', 'run_tests']);
+    expect((await client.listTools()).tools.map(t => t.name).sort()).toEqual(['check', 'edit', 'graph_query', 'read_source', 'registry_next', 'registry_update', 'run_tests', 'simulate']);
     const text = async (name: string, args: Record<string, unknown>) => JSON.parse(((await client.callTool({ name, arguments: args })).content as { text: string }[])[0].text);
     expect(await text('check', {})).toEqual({ errors: [] });
     expect((await text('graph_query', { qn: 'sales.Order' })).contains).toContain('sales.Order.status');
@@ -68,4 +68,16 @@ test('registry tasks come in order, record attempts and stop after the limit', a
     expect(project.nextTask()).toBeUndefined();
     expect(project.targets()[0].registry.entries.c.notes).toEqual(['try 0', 'try 1', 'try 2', 'stopped after 3 attempts']);
     expect(project.runTests()?.passed).toBe(true);
+});
+
+test('the simulate tool answers behavior questions and reports unknown elements as errors', async () => {
+    const root = workspace();
+    const client = new Client({ name: 'test', version: '1' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([createMcpServer(root).connect(serverTransport), client.connect(clientTransport)]);
+    const ask = async (args: Record<string, unknown>) => JSON.parse(((await client.callTool({ name: 'simulate', arguments: args })).content as { text: string }[])[0].text);
+    expect((await ask({ question: 'reach', machine: 'sales.OrderFlow', state: 'cancelled' })).path.map((p: { trigger: string }) => p.trigger)).toEqual(['Cancel']);
+    expect(await ask({ question: 'actors', action: 'sales.Cancel' })).toEqual([{ actor: 'sales.Shopper', verdict: 'no' }]);
+    expect(await ask({ question: 'run', action: 'sales.Cancel', record: { status: 'draft' }, actor: 'sales.Shopper' })).toMatchObject({ allowed: 'no', outcome: 'refused' });
+    expect(await ask({ question: 'risks', action: 'sales.Nope' })).toEqual({ error: 'No element sales.Nope.' });
 });

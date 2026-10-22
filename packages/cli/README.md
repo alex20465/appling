@@ -24,6 +24,9 @@ appling fmt   [files or folders...]
 appling graph [files or folders...]
 appling release <version> [files or folders...]
 appling generate [--plan | --migrate] [files or folders...]
+appling simulate reach <machine> <state> [files or folders...]
+appling simulate actors <action> [files or folders...]
+appling simulate risks <action> [files or folders...]
 ```
 
 Folders are searched recursively for `.appling` files. Hidden folders and `node_modules` are skipped. Without a path, the current folder is used.
@@ -75,6 +78,17 @@ Generates a draft project for every target in `appling.config.json` through its 
 Generation checks the tools the extension needs first and refuses to write into a folder that is not empty.
 
 With `--migrate`, it carries the model's migration steps that a generated project has not applied yet into it: renames, type changes and removals become framework migrations that keep the data (a rename stays a rename, not a drop and an add), the generated model code changes with them, and updating the rest of the code becomes registry tasks. Applied steps are recorded in the project's `.appling/migrations.json`.
+
+### simulate
+
+Asks the simulator about behavior: whether a state of a machine is reachable and by which transitions, which actors may trigger an action (yes, no, or depending on the data), and which invariants an action puts at risk through the fields it changes.
+
+```
+$ appling simulate reach sales.OrderFlow paid models
+paid is reachable from draft:
+  PlaceOrder -> placed
+  PaymentReceived -> paid
+```
 
 ## Exit codes
 

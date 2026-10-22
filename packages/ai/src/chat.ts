@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
-import { stepCountIs, streamText, tool, type LanguageModel, type ModelMessage } from 'ai';
+import { isStepCount, streamText, tool, type LanguageModel, type ModelMessage } from 'ai';
 import { URI } from 'langium';
 import { z } from 'zod';
 import type { EditOperation, Graph } from '@appling/model';
@@ -55,8 +55,8 @@ export async function* chat(root: string, messages: ModelMessage[], model: Langu
     const project = new Project(root);
     const context = new ProposalContext(project);
     try {
-        const result = streamText({ model, system: CHAT_SYSTEM, messages, tools: aiTools(MODEL_TOOLS, context), stopWhen: stepCountIs(25) });
-        for await (const part of result.fullStream) {
+        const result = streamText({ model, instructions: CHAT_SYSTEM, messages, tools: aiTools(MODEL_TOOLS, context), stopWhen: isStepCount(25) });
+        for await (const part of result.stream) {
             if (part.type === 'text-delta') yield { type: 'text', text: part.text };
             else if (part.type === 'tool-call') yield { type: 'tool', name: part.toolName, input: part.input };
             else if (part.type === 'error') yield { type: 'error', message: String(part.error) };

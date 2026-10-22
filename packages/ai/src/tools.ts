@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { EditOperation } from '@appling/model';
+import { Simulator, UNKNOWN, type EditOperation } from '@appling/model';
 import { Project, queryGraph, type Sources } from './project.js';
 
 export const operationSchema = z.discriminatedUnion('op', [
@@ -87,6 +87,31 @@ export const MODEL_TOOLS = {
         description: 'Read the Appling source text of one element by its qualified name.',
         input: { qn: z.string() },
         run: async (context, input) => ({ source: await context.project.source(input.qn, context.sources()) ?? `No element ${input.qn}.` })
+    }),
+    simulate: define({
+        description: 'Ask the simulator about behavior instead of guessing. reach: the shortest path of transitions from the initial state of a machine to a state. actors: for every actor whether it may trigger an action (yes, no, or depends on the data). risks: the invariants an action may violate through the fields it changes. run: run an action on a sample record as an actor, with inputs, and see policies, preconditions, the transition, effects, events and violated invariants.',
+        input: {
+            question: z.enum(['reach', 'actors', 'risks', 'run']),
+            machine: z.string().optional().describe('reach: qualified name of the machine'),
+            state: z.string().optional().describe('reach: the target state'),
+            action: z.string().optional().describe('actors, risks, run: qualified name of the action'),
+            record: z.record(z.string(), z.unknown()).optional().describe('run: field values of the record, such as {"status": "draft", "lines": []}'),
+            actor: z.string().optional().describe('run: qualified name of the actor'),
+            actorFields: z.record(z.string(), z.unknown()).optional(),
+            inputs: z.record(z.string(), z.unknown()).optional()
+        },
+        run: async (context, input) => {
+            const simulator = new Simulator(await context.project.graph(context.sources()));
+            try {
+                const answer = input.question === 'reach' ? simulator.reach(input.machine ?? '', input.state ?? '') ?? { reachable: false }
+                    : input.question === 'actors' ? simulator.actors(input.action ?? '')
+                    : input.question === 'risks' ? simulator.risks(input.action ?? '')
+                    : simulator.run(input.action ?? '', input.record as never ?? {}, { actor: input.actor ?? '', fields: input.actorFields as never }, input.inputs as never);
+                return JSON.parse(JSON.stringify(answer, (_, value) => (value === UNKNOWN ? 'unknown' : value)));
+            } catch (error) {
+                return { error: (error as Error).message };
+            }
+        }
     }),
     edit: define({
         description: 'Change the model with one edit operation. The edit is validated: it is rejected with the errors when it does not parse or introduces errors. Renames follow every reference. With dryRun, only checks it.',

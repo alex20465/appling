@@ -67,6 +67,20 @@ When `release` is given, renaming, retyping or removing a domain (L1) element th
 
 The touched element is printed canonically, so a formatted file stays formatted. An edit is rejected when it does not parse or when validation reports an error that was not there before.
 
+## Simulator
+
+`Simulator` evaluates behavior against sample data and actors (`import { Simulator } from '@appling/model'`, or `@appling/model/simulator` without the language dependencies):
+
+```ts
+const simulator = new Simulator(graph);
+simulator.reach('sales.OrderFlow', 'paid');    // shortest transition path from the initial state, or undefined
+simulator.actors('sales.Cancel');              // per actor: 'yes', 'no' or 'depends' (on the data)
+simulator.risks('sales.Discount');             // invariants that read a field the action changes, also through derived fields
+simulator.run('sales.Cancel', { status: 'draft' }, { actor: 'sales.Staff' }, { reason: 'late' });
+```
+
+An action is allowed when its own policies and the `update` policies of its entity hold. Expressions are evaluated with three valued logic: anything that needs data that is not given is `UNKNOWN`, which `&&` and `||` short circuit around. `run` checks the policies and preconditions, takes the transition whose state and guard match, applies the effects, records emitted events and reports violated invariants.
+
 ## License
 
 MIT

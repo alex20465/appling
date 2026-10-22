@@ -91,5 +91,5 @@ Extensions are configured in `appling.config.json` by package name. Third party 
 - [ ] Appling Sync: regenerate code from the model using the registry
 - [ ] Reverse engineering: AI skill in `@appling/ai` that derives an Appling model from an existing application
 - [ ] More targets (Go, Rust) as extensions
-- [ ] Simulator (`concept.md` section 5): evaluate expressions, preconditions, effects and transitions against sample data and actors
+- [x] Simulator (`concept.md` section 5): evaluate expressions, preconditions, effects and transitions against sample data and actors
 - [ ] L5 code generation
