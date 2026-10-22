@@ -34,7 +34,9 @@ Requires `uv` on the PATH. Python and Django (6.1) are installed by uv into the 
 | `projection` | a REST framework `ModelSerializer` in `<app>/serializers.py`; computed fields that follow references become `source` paths |
 | `external` | a `typing.Protocol` in `<app>/externals.py` that use cases receive as a parameter |
 | `usecase` | a function in `<app>/usecases.py` calling its steps in order, with `try`/`except` for error handlers |
-| `interface rest` | REST framework views in `<app>/api.py` and routes in `<app>/urls.py`: list views for queries with projection, picks and pagination, `APIView`s for actions; `limit` becomes a throttle |
+| `interface rest` | REST framework views in `<app>/api.py` and routes in `<app>/api_urls.py` under `api/`: list views for queries with projection, picks and pagination, `APIView`s for actions; `limit` becomes a throttle |
+| `page` | a server rendered view with its list, detail and form components, posting row actions and forms to a runner view per action |
+| `navigation`, `messages` | the menu of the base template, and labels per language |
 
 | rules | a `TestCase` per invariant, policy, transition and action with preconditions in `<app>/tests.py`, one skipped method per case; writing their bodies is a registry task |
 

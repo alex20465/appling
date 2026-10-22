@@ -14,6 +14,7 @@ from django.urls import include, path
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path("api/", include("sales.api_urls")),
     path("", include("sales.urls")),
 ]
 ",
@@ -114,6 +115,15 @@ class PublicApiPlaceOrder(views.APIView):
             return Response({"error": type(error).__name__}, status=400)
         return Response(status=204)
 ",
+  "sales/api_urls.py": "from django.urls import path
+from sales import api
+
+
+urlpatterns = [
+    path("orders", api.PublicApiOpenOrders.as_view()),
+    path("orders/<int:id>/place", api.PublicApiPlaceOrder.as_view()),
+]
+",
   "sales/apps.py": "from django.apps import AppConfig
 
 
@@ -198,6 +208,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         expire_drafts.enqueue()
 ",
+  "sales/messages.py": "LABELS = {}
+LABELS["en"] = {"OrderSummary.total": "Total"}
+",
   "sales/models.py": "from decimal import Decimal
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
@@ -216,6 +229,82 @@ class Order(models.Model):
     @property
     def total(self):
         return sum([Decimal(l["amount"]) for l in self.lines])
+",
+  "sales/pages.py": "from django.contrib import messages
+from django.core.paginator import Paginator
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.translation import get_language
+from django.views.decorators.http import require_POST
+from sales.actions import cancel, place_order
+from sales.errors import EmptyOrder, InvalidTransition
+from sales.messages import LABELS
+from sales.models import Order
+from sales.queries import OPEN_ORDERS_PAGE_SIZE, open_orders
+
+
+def value(obj, path):
+    """Follows a dotted path such as "customer.name"; None when a step is missing."""
+    for part in path.split("."):
+        obj = getattr(obj, part, None) if obj is not None else None
+    return obj
+
+
+def label(key, default):
+    return LABELS.get(get_language()[:2], {}).get(key, default)
+
+
+def orders(request):
+    components = []
+    rows = open_orders()
+    rows = Paginator(rows, OPEN_ORDERS_PAGE_SIZE).get_page(request.GET.get("page"))
+    components.append({
+        "kind": "list",
+        "columns": [label("OrderSummary.reference", "Reference"), label("OrderSummary.status", "Status"), label("OrderSummary.total", "Total")],
+        "items": [{"id": row.pk, "values": [value(row, "reference"), value(row, "status"), value(row, "total")]} for row in rows],
+        "page": rows,
+        "actions": [{"label": "Cancel", "url": "/_actions/sales/cancel/"}],
+    })
+    return render(request, "sales/page.html", {"title": "Orders", "components": components})
+
+
+@require_POST
+def run_cancel(request, id):
+    order = get_object_or_404(Order, pk=id)
+    try:
+        cancel(order, reason=request.POST.get("reason") or None, actor=request.user)
+        messages.success(request, "Cancel done.")
+    except (InvalidTransition,) as error:
+        messages.error(request, "Cancel failed: " + type(error).__name__)
+    return redirect(request.POST.get("next") or "/")
+
+
+def order_detail(request, id):
+    components = []
+    record = get_object_or_404(Order, pk=id)
+    components.append({
+        "kind": "detail",
+        "id": record.pk,
+        "fields": [(label("OrderSummary.reference", "Reference"), value(record, "reference")), (label("OrderSummary.status", "Status"), value(record, "status")), (label("OrderSummary.total", "Total"), value(record, "total")), (label("OrderSummary.customer_name", "Customer name"), value(record, "customer.name"))],
+        "actions": [{"label": "PlaceOrder", "url": "/_actions/sales/place_order/"}, {"label": "Cancel", "url": "/_actions/sales/cancel/"}],
+    })
+    components.append({
+        "kind": "form",
+        "label": "Cancel",
+        "url": "/_actions/sales/cancel/" + str(id) + "/",
+        "inputs": [("reason", "Reason")],
+    })
+    return render(request, "sales/page.html", {"title": "Order detail", "components": components})
+
+
+@require_POST
+def run_place_order(request, id):
+    order = get_object_or_404(Order, pk=id)
+    try:
+        place_order(order, actor=request.user)
+        messages.success(request, "PlaceOrder done.")
+    except (EmptyOrder, InvalidTransition) as error:
+        messages.error(request, "PlaceOrder failed: " + type(error).__name__)
+    return redirect(request.POST.get("next") or "/")
 ",
   "sales/queries.py": "from django.db import models
 from sales.models import Order
@@ -238,6 +327,62 @@ class OrderSummary(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = ["reference", "status", "total", "customer_name"]
+",
+  "sales/templates/sales/base.html": "<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}{{ title }}{% endblock %}</title>
+  </head>
+  <body>
+    <nav>
+      <a href="/orders">Orders</a>
+    </nav>
+    {% for message in messages %}<p class="message {{ message.tags }}">{{ message }}</p>{% endfor %}
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>
+",
+  "sales/templates/sales/page.html": "{% extends "sales/base.html" %}
+{% block content %}
+<h1>{{ title }}</h1>
+{% for component in components %}
+  {% if component.kind == "list" %}
+    <table>
+      <thead><tr>{% for column in component.columns %}<th>{{ column }}</th>{% endfor %}<th></th></tr></thead>
+      <tbody>
+        {% for item in component.items %}
+          <tr>
+            {% for value in item.values %}<td>{{ value|default_if_none:"" }}</td>{% endfor %}
+            <td>{% for action in component.actions %}<form method="post" action="{{ action.url }}{{ item.id }}/">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button>{{ action.label }}</button></form>{% endfor %}</td>
+          </tr>
+        {% empty %}
+          <tr><td>Nothing here yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if component.page.has_other_pages %}
+      <p>
+        {% if component.page.has_previous %}<a href="?page={{ component.page.previous_page_number }}">Previous</a>{% endif %}
+        {% if component.page.has_next %}<a href="?page={{ component.page.next_page_number }}">Next</a>{% endif %}
+      </p>
+    {% endif %}
+  {% elif component.kind == "detail" %}
+    <dl>{% for name, value in component.fields %}<dt>{{ name }}</dt><dd>{{ value|default_if_none:"" }}</dd>{% endfor %}</dl>
+    {% for action in component.actions %}<form method="post" action="{{ action.url }}{{ component.id }}/">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button>{{ action.label }}</button></form>{% endfor %}
+  {% elif component.kind == "form" %}
+    <form method="post" action="{{ component.url }}">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.path }}">
+      {% for name, field_label in component.inputs %}<label>{{ field_label }} <input name="{{ name }}"></label>{% endfor %}
+      <button>{{ component.label }}</button>
+    </form>
+  {% endif %}
+{% endfor %}
+{% endblock %}
 ",
   "sales/tests.py": "from django.test import TestCase
 
@@ -339,12 +484,14 @@ class OrderFlowDraftPlacedToCancelledTest(TestCase):
         self.skipTest("registry task: sales.OrderFlow.transition[draft,placed->cancelled]")
 ",
   "sales/urls.py": "from django.urls import path
-from sales import api
+from sales import pages
 
 
 urlpatterns = [
-    path("orders", api.PublicApiOpenOrders.as_view()),
-    path("orders/<int:id>/place", api.PublicApiPlaceOrder.as_view()),
+    path("orders", pages.orders),
+    path("_actions/sales/cancel/<int:id>/", pages.run_cancel),
+    path("orders/<int:id>", pages.order_detail),
+    path("_actions/sales/place_order/<int:id>/", pages.run_place_order),
 ]
 ",
   "sales/usecases.py": "from sales.actions import cancel, place_order

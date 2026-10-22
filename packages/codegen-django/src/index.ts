@@ -1,6 +1,7 @@
 import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
 import { interfaceSteps } from './api.js';
 import { migrationSteps } from './migrations.js';
+import { messagesSteps, navigationSteps, pageSteps } from './pages.js';
 import { externalSteps, projectionFieldSteps, projectionSteps, querySteps, useCaseSteps } from './application.js';
 import { actionSteps, errorSteps, eventSteps, jobSteps, machineSteps, transitionSteps } from './behavior.js';
 import { hasKind, task } from './files.js';
@@ -37,6 +38,10 @@ const extension: CodegenExtension = {
             case 'External': return externalSteps(node, context);
             case 'UseCase': return useCaseSteps(node, context);
             case 'Interface': return interfaceSteps(node, context);
+            case 'Page': return pageSteps(node, context);
+            case 'Navigation': return navigationSteps(node, context);
+            case 'Messages': return messagesSteps(node);
+            case 'Flow': return [task(`guide people through ${((node.data.pages ?? []) as string[]).map(p => p.split('.').pop()).join(', ')} for the use case ${String(node.data.usecase).split('.').pop()}, for example with links between the pages`)];
             case 'EnumLiteral':
             case 'Param':
             case 'SetEffect':

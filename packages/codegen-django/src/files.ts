@@ -69,3 +69,18 @@ export function children(node: GraphNode, context: MapContext, kind?: string): G
 export function hasKind(context: MapContext, ...kinds: string[]): boolean {
     return context.graph.nodes.some(n => kinds.includes(n.kind));
 }
+
+/** Adds routes to a URL module of an app, `<app>/<file>.py`, whose views live in `<app>/<views>.py`. */
+export function routesStep(app: string, file: string, views: string, routes: string[]): Step {
+    return template(`${app}/${file}.py`, existing => existing
+        ? existing.replace(/\n\]\n$/, `\n${routes.join('\n')}\n]\n`)
+        : pythonFile(undefined, ['from django.urls import path', `from ${app} import ${views}`], `urlpatterns = [\n${routes.join('\n')}\n]`));
+}
+
+/** Mounts a URL module of an app in `config/urls.py` under a prefix, such as "api/" or "" for the site root. */
+export function includeStep(app: string, file: string, prefix: string): Step {
+    const line = `path(${JSON.stringify(prefix)}, include(${JSON.stringify(`${app}.${file}`)})),`;
+    return template('config/urls.py', existing => existing!.includes(line) ? existing! : existing!
+        .replace('from django.urls import path', 'from django.urls import include, path')
+        .replace(/urlpatterns = \[\n([\s\S]*?)\]/, (_, paths) => `urlpatterns = [\n${paths}    ${line}\n]`));
+}

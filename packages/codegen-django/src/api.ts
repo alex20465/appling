@@ -1,12 +1,12 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { GraphNode } from '@appling/model';
 import { pageSizeName, queryCode } from './application.js';
-import { children, pythonFile, task, template } from './files.js';
+import { children, includeStep, pythonFile, routesStep, task, template } from './files.js';
 import { appOf, lastOf, snake } from './python.js';
 
 const WRITES = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
-/** A REST interface becomes REST framework views in `api.py`, its routes in `urls.py`, mounted at the site root. */
+/** A REST interface becomes REST framework views in `api.py` and its routes in `api_urls.py`, mounted under `api/`. */
 export function interfaceSteps(api: GraphNode, context: MapContext): Step[] | undefined {
     if (api.data.protocol !== 'rest') return undefined;
     const app = appOf(api.module);
@@ -34,12 +34,8 @@ export function interfaceSteps(api: GraphNode, context: MapContext): Step[] | un
     if (!blocks.length) return tasks;
     return [
         template(`${app}/api.py`, existing => pythonFile(existing, imports, blocks.join('\n\n\n'))),
-        template(`${app}/urls.py`, existing => existing
-            ? existing.replace(/\n\]\n$/, `\n${routes.join('\n')}\n]\n`)
-            : pythonFile(undefined, ['from django.urls import path', `from ${app} import api`], `urlpatterns = [\n${routes.join('\n')}\n]`)),
-        template('config/urls.py', existing => existing!.includes(`include("${app}.urls")`) ? existing! : existing!
-            .replace('from django.urls import path', 'from django.urls import include, path')
-            .replace(/urlpatterns = \[\n([\s\S]*?)\]/, (_, paths) => `urlpatterns = [\n${paths}    path("", include("${app}.urls")),\n]`)),
+        routesStep(app, 'api_urls', 'api', routes),
+        includeStep(app, 'api_urls', 'api/'),
         ...tasks
     ];
 }

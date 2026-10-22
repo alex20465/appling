@@ -66,7 +66,7 @@ export function projectionFieldSteps(field: GraphNode, context: MapContext): Ste
 }
 
 /** `customer.name` over entity fields, as a dotted serializer source; undefined for anything else. */
-function sourcePath(expr: ExprData, context: MapContext): string | undefined {
+export function sourcePath(expr: ExprData, context: MapContext): string | undefined {
     const isEntityField = (qn?: string) => qn !== undefined && context.node(qn)?.kind === 'Field' && context.node(parentOf(qn))?.kind === 'Entity';
     if (expr.$type === 'NameExpr' && !expr.call && isEntityField(expr.target)) return expr.name;
     if (expr.$type === 'MemberExpr' && !expr.call && isEntityField(expr.target)) {
