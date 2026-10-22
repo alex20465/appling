@@ -5,6 +5,8 @@ export interface PythonScope {
     /** The instance expression, such as `self`; undefined at class level. */
     self?: string;
     vars?: Set<string>;
+    /** The variable holding the current actor, a Django user; undefined where there is none. */
+    actor?: string;
     imports: Set<string>;
 }
 
@@ -39,16 +41,19 @@ export function python(expr: ExprData, scope: PythonScope): string | undefined {
     }
 }
 
-/** Translates a condition over stored fields of one model to a `models.Q`, or undefined. */
-export function q(expr: ExprData, stored: Set<string>, node: (qn: string) => GraphNode | undefined): string | undefined {
-    const literal = (e: ExprData) => literalOf(e, node);
+/**
+ * Translates a condition over stored fields of one model to a `models.Q`, or undefined. With a scope,
+ * values may also be expressions that do not depend on the row, such as `now - duration("720h")`.
+ */
+export function q(expr: ExprData, stored: Set<string>, node: (qn: string) => GraphNode | undefined, scope?: PythonScope): string | undefined {
+    const literal = (e: ExprData) => literalOf(e, node) ?? (scope && python(e, { ...scope, self: undefined }));
     const field = (e: ExprData | undefined) => e?.$type === 'NameExpr' && !e.call && e.target && stored.has(e.target) ? e.name : undefined;
     if (expr.$type === 'BinaryExpr' && (expr.op === '&&' || expr.op === '||')) {
-        const [left, right] = [q(expr.left!, stored, node), q(expr.right!, stored, node)];
+        const [left, right] = [q(expr.left!, stored, node, scope), q(expr.right!, stored, node, scope)];
         return left && right && `(${left}) ${expr.op === '&&' ? '&' : '|'} (${right})`;
     }
     if (expr.$type === 'UnaryExpr' && expr.op === '!') {
-        const operand = q(expr.operand!, stored, node);
+        const operand = q(expr.operand!, stored, node, scope);
         return operand && `~(${operand})`;
     }
     if (expr.$type === 'NameExpr' && expr.call && expr.name === 'has' && field(expr.args?.[0])) return `models.Q(${field(expr.args![0])}__isnull=False)`;
@@ -76,12 +81,14 @@ function name(expr: ExprData, scope: PythonScope): string | undefined {
     const id = expr.name!;
     if (scope.vars?.has(id)) return id;
     if (id === 'this' && !expr.target) return scope.self;
+    if (id === 'actor' && !expr.target) return scope.actor;
     if (id === 'now' && !expr.target) {
         scope.imports.add('from django.utils import timezone');
         return 'timezone.now()';
     }
     const target = expr.target ? scope.node(expr.target) : undefined;
     if (target?.kind === 'Field' && scope.node(parentOf(target.qn))?.kind === 'Entity') return scope.self && `${scope.self}.${id}`;
+    if (target?.kind === 'Param') return id;
     if (target?.kind === 'EnumLiteral') {
         const enumQn = parentOf(target.qn);
         const enumNode = scope.node(enumQn)!;
@@ -96,7 +103,12 @@ function member(expr: ExprData, scope: PythonScope): string | undefined {
     const target = expr.target ? scope.node(expr.target) : undefined;
     if (!receiver || target?.kind !== 'Field') return undefined;
     const owner = scope.node(parentOf(target.qn))?.kind;
-    if (owner === 'ValueType') return `${receiver}[${JSON.stringify(expr.member)}]`;
+    if (owner === 'ValueType') {
+        const item = `${receiver}[${JSON.stringify(expr.member)}]`;
+        if (!['Decimal', 'Money'].includes((target.data.type as { primitive?: string }).primitive ?? '')) return item;
+        scope.imports.add('from decimal import Decimal');
+        return `Decimal(${item})`;
+    }
     return owner === 'Entity' ? `${receiver}.${expr.member}` : undefined;
 }
 
@@ -119,6 +131,10 @@ function method(expr: ExprData, scope: PythonScope): string | undefined {
     const receiver = python(expr.receiver!, scope);
     if (!receiver) return undefined;
     const args = expr.args ?? [];
+    if (expr.member === 'is' && receiver === scope.actor) {
+        const role = args[0]?.target ? scope.node(args[0].target) : undefined;
+        return role?.kind === 'Role' ? `${receiver}.groups.filter(name=${JSON.stringify(lastOf(role.qn))}).exists()` : undefined;
+    }
     if (['map', 'filter', 'exists', 'all'].includes(expr.member!)) {
         const variable = args[0].name!;
         const body = python(args[1], { ...scope, vars: new Set([...(scope.vars ?? []), variable]) });
@@ -174,4 +190,8 @@ export function appOf(module: string): string {
 
 export function constantOf(name: string): string {
     return name.toUpperCase();
+}
+
+export function snake(name: string): string {
+    return name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
 }

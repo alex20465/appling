@@ -25,8 +25,20 @@ Requires `uv` on the PATH. Python and Django (6.1) are installed by uv into the 
 | `unique`, `?`, `default` | `unique=True`, `null=True, blank=True`, `default=` |
 | derived field | a `@property` with the expression translated to Python |
 | `invariant` | `CheckConstraint` in `Meta.constraints` when it compares stored fields with constants or other fields |
+| `action` | a function in `<app>/actions.py`, atomic unless `consistency eventual`: preconditions raise the declared errors, transitions of the state machine check the current state and guard, effects set fields, create rows and send events after commit |
+| `errors` | exception classes in `<app>/errors.py`, with `InvalidTransition` for state machines |
+| `event` | a Django `Signal` in `<app>/events.py` |
+| `machine` | transitions triggered by an event become signal receivers in `<app>/handlers.py`, connected in `AppConfig.ready` |
+| `job` | scheduled: a `django.tasks` task in `<app>/jobs.py` plus a management command for the scheduler; on an event: a signal receiver |
+| `query` | a function in `<app>/queries.py` returning a queryset with filter and ordering, and the page size |
+| `projection` | a REST framework `ModelSerializer` in `<app>/serializers.py`; computed fields that follow references become `source` paths |
+| `external` | a `typing.Protocol` in `<app>/externals.py` that use cases receive as a parameter |
+| `usecase` | a function in `<app>/usecases.py` calling its steps in order, with `try`/`except` for error handlers |
+| `interface rest` | REST framework views in `<app>/api.py` and routes in `<app>/urls.py`: list views for queries with projection, picks and pagination, `APIView`s for actions; `limit` becomes a throttle |
 
-What cannot be translated becomes a registry task: invariants over derived fields or other entities, derived fields and defaults that use `actor` or other context, and entity policies.
+Models with projections or interfaces also get Django REST framework.
+
+What cannot be translated becomes a registry task: invariants over derived fields or other entities, derived fields and defaults that use `actor` or other context, policies, roles, guards and effects that cannot be expressed in Python, the client of an external system, scheduling of jobs, use cases from their first `await` on, authentication and CORS of interfaces.
 
 ## License
 

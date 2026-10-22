@@ -4,9 +4,24 @@ exports[`examples generate apps, enums, value types and models 1`] = `
 {
   "config/settings.py": "INSTALLED_APPS = [
     'django.contrib.admin',
+    'rest_framework',
     'crm',
     'sales',
 ]
+",
+  "config/urls.py": "from django.contrib import admin
+from django.urls import include, path
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path("", include("sales.urls")),
+]
+",
+  "crm/apps.py": "from django.apps import AppConfig
+
+
+class CrmConfig(AppConfig):
+    name = 'crm'
 ",
   "crm/models.py": "from django.db import models
 
@@ -14,6 +29,87 @@ exports[`examples generate apps, enums, value types and models 1`] = `
 class Account(models.Model):
     name = models.CharField(max_length=255, unique=True)
     email = models.CharField(max_length=255)
+",
+  "sales/actions.py": "from django.db import transaction
+from django.utils import timezone
+from sales.enums import OrderStatus
+from sales.errors import EmptyOrder, InvalidTransition
+from sales.events import order_placed
+from sales.models import Order
+
+
+@transaction.atomic
+def place_order(order: Order, *, actor=None) -> None:
+    if not (len(order.lines) > 0):
+        raise EmptyOrder()
+    if order.status in (OrderStatus.DRAFT,):
+        transaction.on_commit(lambda: order_placed.send(sender=None, order=order))
+        order.status = OrderStatus.PLACED
+    else:
+        raise InvalidTransition("place_order", order.status)
+    order.placed_at = timezone.now()
+    order.save()
+
+
+@transaction.atomic
+def cancel(order: Order, *, reason: str | None = None, actor=None) -> None:
+    if order.status in (OrderStatus.DRAFT, OrderStatus.PLACED) and (not (order.paid_at is not None)):
+        order.status = OrderStatus.CANCELLED
+    else:
+        raise InvalidTransition("cancel", order.status)
+    order.save()
+",
+  "sales/api.py": "from django.shortcuts import get_object_or_404
+from rest_framework import generics, pagination, throttling, views
+from rest_framework.response import Response
+from sales.actions import place_order
+from sales.errors import EmptyOrder, InvalidTransition
+from sales.models import Order
+from sales.queries import OPEN_ORDERS_PAGE_SIZE, open_orders
+from sales.serializers import OrderSummary
+
+
+class PublicApiThrottle(throttling.UserRateThrottle):
+    rate = "100/minute"
+
+
+class PublicApiOpenOrdersSerializer(OrderSummary):
+    class Meta(OrderSummary.Meta):
+        fields = ["reference", "status", "total"]
+
+
+class PublicApiOpenOrdersPagination(pagination.PageNumberPagination):
+    page_size = OPEN_ORDERS_PAGE_SIZE
+
+
+class PublicApiOpenOrders(generics.ListAPIView):
+    serializer_class = PublicApiOpenOrdersSerializer
+    pagination_class = PublicApiOpenOrdersPagination
+    throttle_classes = [PublicApiThrottle]
+
+    def get_queryset(self):
+        return open_orders()
+
+
+class PublicApiPlaceOrder(views.APIView):
+    throttle_classes = [PublicApiThrottle]
+
+    def post(self, request, id):
+        order = get_object_or_404(Order, pk=id)
+        try:
+            place_order(order, actor=request.user)
+        except (InvalidTransition, EmptyOrder) as error:
+            return Response({"error": type(error).__name__}, status=400)
+        return Response(status=204)
+",
+  "sales/apps.py": "from django.apps import AppConfig
+
+
+class SalesConfig(AppConfig):
+    name = 'sales'
+
+    def ready(self):
+        from . import handlers  # noqa: F401
 ",
   "sales/enums.py": "from django.db import models
 
@@ -24,14 +120,82 @@ class OrderStatus(models.TextChoices):
     PAID = "paid"
     CANCELLED = "cancelled"
 ",
-  "sales/models.py": "from django.db import models
+  "sales/errors.py": "class InvalidTransition(Exception):
+    """The state field does not allow this transition."""
+
+
+class EmptyOrder(Exception):
+    pass
+
+
+class Declined(Exception):
+    pass
+",
+  "sales/events.py": "from django.dispatch import Signal
+
+
+order_placed = Signal()
+
+
+payment_received = Signal()
+",
+  "sales/externals.py": "from decimal import Decimal
+from typing import Protocol
+
+
+class Payments(Protocol):
+    def charge(self, amount: Decimal) -> str:
+        ...
+",
+  "sales/handlers.py": "from django.dispatch import receiver
+from sales.enums import OrderStatus
+from sales.errors import InvalidTransition
+from sales.events import payment_received
+
+
+@receiver(payment_received)
+def order_flow_on_payment_received(sender, order, **kwargs) -> None:
+    if order.status in (OrderStatus.PLACED,):
+        order.status = OrderStatus.PAID
+    else:
+        raise InvalidTransition("payment_received", order.status)
+    order.save()
+",
+  "sales/jobs.py": "from datetime import timedelta
+from django.db import models
+from django.tasks import task
+from django.utils import timezone
+from sales.actions import cancel
+from sales.models import Order
+
+
+@task
+def expire_drafts() -> None:
+    for order in Order.objects.filter((models.Q(status="draft")) & (models.Q(created_at__lt=timezone.now() - timedelta(hours=720)))):
+        cancel(order)
+",
+  "sales/management/__init__.py": "",
+  "sales/management/commands/__init__.py": "",
+  "sales/management/commands/expire_drafts.py": "from django.core.management.base import BaseCommand
+from sales.jobs import expire_drafts
+
+
+class Command(BaseCommand):
+    help = "Runs the job ExpireDrafts, scheduled as \\"0 3 * * *\\"."
+
+    def handle(self, *args, **options):
+        expire_drafts.enqueue()
+",
+  "sales/models.py": "from decimal import Decimal
+from django.core.serializers.json import DjangoJSONEncoder
+from django.db import models
 from sales.enums import OrderStatus
 
 
 class Order(models.Model):
     reference = models.CharField(max_length=255, unique=True)
     customer = models.ForeignKey("crm.Account", on_delete=models.PROTECT)
-    lines = models.JSONField(default=list)
+    lines = models.JSONField(encoder=DjangoJSONEncoder, default=list)
     status = models.CharField(max_length=32, choices=OrderStatus.choices, default=OrderStatus.DRAFT)
     created_at = models.DateTimeField()
     placed_at = models.DateTimeField(null=True, blank=True)
@@ -39,12 +203,54 @@ class Order(models.Model):
 
     @property
     def total(self):
-        return sum([l["amount"] for l in self.lines])
+        return sum([Decimal(l["amount"]) for l in self.lines])
 ",
-  "sales/values.py": "from datetime import date, datetime, timedelta
-from decimal import Decimal
+  "sales/queries.py": "from django.db import models
+from sales.models import Order
+
+
+OPEN_ORDERS_PAGE_SIZE = 50
+
+
+def open_orders():
+    return Order.objects.filter(models.Q(status__in=["placed", "paid"])).order_by("-placed_at")
+",
+  "sales/serializers.py": "from rest_framework import serializers
+from sales.models import Order
+
+
+class OrderSummary(serializers.ModelSerializer):
+    total = serializers.ReadOnlyField()
+    customer_name = serializers.ReadOnlyField(source="customer.name")
+
+    class Meta:
+        model = Order
+        fields = ["reference", "status", "total", "customer_name"]
+",
+  "sales/urls.py": "from django.urls import path
+from sales import api
+
+
+urlpatterns = [
+    path("orders", api.PublicApiOpenOrders.as_view()),
+    path("orders/<int:id>/place", api.PublicApiPlaceOrder.as_view()),
+]
+",
+  "sales/usecases.py": "from sales.actions import cancel, place_order
+from sales.errors import Declined
+from sales.externals import Payments
+from sales.models import Order
+
+
+def checkout(order: Order, *, actor=None, payments: Payments) -> None:
+    place_order(order, actor=actor)
+    try:
+        payments.charge(order.total)
+    except Declined:
+        cancel(order, actor=actor)
+",
+  "sales/values.py": "from decimal import Decimal
 from typing import TypedDict
-from uuid import UUID
 
 
 class Line(TypedDict):
