@@ -1,0 +1,193 @@
+version: 1
+detected_at: 2026-10-23
+total_source_files: 110   # tracked .ts/.tsx/.mjs/.langium/.astro under packages, excluding out/ and generated/
+
+scopes:
+  - id: langium-language
+    knowledge: Langium 4.4 grammar, scope provider, validator, CST walking printer, LSP services; how a grammar change ripples into Ident, LAYER_OF, contextOf, BLOCKS/CLAUSES, renameSplices, NAMED/keyOf
+    anchors:
+      - name: langium
+        version: 4.4.0
+        manifest: packages/lang/package.json
+      - name: vscode-languageserver
+        version: ~10.1.0
+        manifest: packages/lang/package.json
+      - name: "@appling/lang"
+        version: repo
+    activation:
+      imports: [langium, vscode-languageserver]
+      files:
+        - packages/lang/src/**
+        - packages/lang/test/**
+        - packages/model/src/edit.ts
+        - packages/model/src/graph.ts
+    footprint: 17
+    density: 0.15
+    confidence: high
+    evidence: [manifest, imports]
+    researched_at: 2026-10-23
+    outputs: [rule, skill]
+
+  - id: codegen-extensions
+    knowledge: CodegenExtension contract (command/template/task steps, undefined vs [], setup, phases, registry, migrate), GraphNode.data only; Django 6.1 + DRF 3.16 targets; Ash via igniter.new and ash.gen.*, AshStateMachine, AshOban, AshJsonApi, phase ordering for patches
+    anchors:
+      - name: "@appling/codegen"
+        version: repo
+      - name: django
+        version: "~=6.1.0"
+        manifest: packages/codegen-django/src/index.ts
+      - name: djangorestframework
+        version: "~=3.16"
+        manifest: packages/codegen-django/src/index.ts
+      - name: ash (ash, ash_postgres, ash_state_machine, ash_oban, ash_json_api, igniter)
+        version: unpinned, latest from hex at generation time
+        manifest: packages/codegen-ash/src/index.ts
+    activation:
+      imports: ["@appling/codegen"]
+      files:
+        - packages/codegen/**
+        - packages/codegen-django/**
+        - packages/codegen-ash/**
+    footprint: 21
+    density: 0.19
+    confidence: high
+    evidence: [manifest, imports]
+    researched_at: 2026-10-23
+    outputs: [rule, skill]
+    note: could split into django and ash if the Ash knowledge turns out much larger
+
+  - id: ai-sdk-mcp
+    knowledge: AI SDK 7 streaming chat and tool calling, provider packages, MockLanguageModelV4 in tests, MCP SDK server over stdio and HTTP, zod 4 tool schemas shared by both
+    anchors:
+      - name: ai
+        version: 7.0.149
+        manifest: packages/ai/package.json
+      - name: "@ai-sdk/anthropic"
+        version: 4.0.86
+        manifest: packages/ai/package.json
+      - name: "@ai-sdk/openai"
+        version: 4.0.100
+        manifest: packages/ai/package.json
+      - name: "@modelcontextprotocol/sdk"
+        version: 1.32.1
+        manifest: packages/ai/package.json
+      - name: zod
+        version: 4.6.7
+        manifest: packages/ai/package.json
+    activation:
+      imports: [ai, "@ai-sdk/anthropic", "@ai-sdk/openai", "@modelcontextprotocol/sdk", zod]
+      files:
+        - packages/ai/**
+        - packages/ide/src/server/server.ts
+        - packages/ide/src/client/Chat.tsx
+    footprint: 7
+    density: 0.06
+    confidence: high
+    evidence: [manifest, imports]
+    researched_at: 2026-10-23
+    outputs: [rule, skill]
+
+  - id: ide-client
+    knowledge: React Flow 12 graph view, ELK layout, Monaco 0.57 with its bundled LSP client over vscode-ws-jsonrpc websockets, applyTextEdits as undoable steps, dirty tracking
+    anchors:
+      - name: "@xyflow/react"
+        version: 12.12.0
+        manifest: packages/ide/package.json
+      - name: elkjs
+        version: 0.12.0
+        manifest: packages/ide/package.json
+      - name: monaco-editor
+        version: 0.57.0
+        manifest: packages/ide/package.json
+      - name: vscode-ws-jsonrpc
+        version: 4.0.3
+        manifest: packages/ide/package.json
+    activation:
+      imports: ["@xyflow/react", elkjs, monaco-editor, vscode-ws-jsonrpc]
+      files:
+        - packages/ide/src/client/**
+        - packages/ide/src/server/server.ts
+    footprint: 9
+    density: 0.08
+    confidence: high
+    evidence: [manifest, imports]
+    researched_at: 2026-10-23
+    outputs: [rule, skill]
+
+  - id: landing-site
+    knowledge: Astro 7 pages and layouts, Tailwind 4 CSS first config, motion 14, design tokens in global.css, artboards on the Design canvas, Bunny deploy
+    anchors:
+      - name: astro
+        version: 7.3.8
+        manifest: packages/landing/package.json
+      - name: tailwindcss
+        version: 4.3.3
+        manifest: packages/landing/package.json
+      - name: motion
+        version: 14.2.0
+        manifest: packages/landing/package.json
+    activation:
+      imports: [astro, tailwindcss, motion]
+      files:
+        - packages/landing/**
+    footprint: 16
+    density: 0.15
+    confidence: medium
+    evidence: [manifest]
+    researched_at: 2026-10-23
+    outputs: [rule, skill]
+    note: imports detected only in astro.config.mjs; footprint is the package folder
+
+  - id: documentation
+    knowledge: docs/ as the single documentation source rendered by the landing at /docs, validated appling check/graph examples, mermaid, GitHub alerts, sidebar sync, which docs page each source path feeds
+    anchors:
+      - name: mermaid
+        version: 12.2.0
+        manifest: packages/landing/package.json
+      - name: "@tailwindcss/typography"
+        version: 0.5.20
+        manifest: packages/landing/package.json
+      - name: remark-github-blockquote-alert
+        version: 2.1.0
+        manifest: packages/landing/package.json
+    activation:
+      files:
+        - packages/*/src/**
+        - packages/*/README.md
+        - examples/**
+        - docs/**
+    confidence: high
+    evidence: [manifest]
+    researched_at: 2026-10-23
+    outputs: [rule, skill]
+    note: a maintenance scope, not a library scope; the rule maps source paths to the pages they feed
+
+  - id: release
+    knowledge: pnpm 12 release management (change intents in .changeset/, pnpm version -r, ledger, committed changelogs, pnpm publish -r), independent versions, intents written at release time from the git log
+    anchors:
+      - name: pnpm
+        version: 12.14.0
+        manifest: package.json (packageManager)
+    activation:
+      files:
+        - packages/*/package.json
+        - packages/*/CHANGELOG.md
+        - .changeset/**
+        - pnpm-workspace.yaml
+    confidence: high
+    evidence: [manifest]
+    researched_at: 2026-10-23
+    outputs: [rule, skill]
+    note: a workflow scope, not a library scope; the skill is also triggered by asking to release or publish
+
+ambient:
+  - name: "@appling/model"
+    density: 0.35
+    note: imported by almost every downstream package; its contracts are already in CLAUDE.md
+  - name: typescript, node builtins
+    note: universal
+  - name: vitest
+    density: 0.14
+    note: every test file; idiomatic use, CLAUDE.md covers commands
+  - name: react
+    note: folds into ide-client, idiomatic use
