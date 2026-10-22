@@ -62,7 +62,8 @@ const facts = new WeakMap<ApplingServices, WorkspaceCache<string, { actors: Acto
 export class ExpressionTyper {
 
     readonly types = new Map<Expr, Type>();
-    readonly targets = new Map<NameExpr | MemberExpr, AstNode>();
+    /** For names, members and effect assignments: the element they stand for. */
+    readonly targets = new Map<AstNode, AstNode>();
     readonly problems: Problem[] = [];
     private readonly actors: Actor[];
     private readonly tenants: Tenant[];
@@ -259,7 +260,7 @@ export class ExpressionTyper {
         const scope = this.services.references.ScopeProvider as ApplingScopeProvider;
         const target = scope.lookup(expr, 'Role', name) ?? scope.lookup(expr, 'Actor', name);
         if (!target) return this.problem(arg, `"${name}" is not a role or actor.`);
-        this.targets.set(arg as NameExpr | MemberExpr, target);
+        this.targets.set(arg, target);
         return primitive('Bool');
     }
 
@@ -291,6 +292,7 @@ export class ExpressionTyper {
             this.problem(assignment, `${owner.name} has no field "${assignment.name}".`, 'name');
             return undefined;
         }
+        this.targets.set(assignment, field);
         return typeOfRef(field.type);
     }
 

@@ -63,31 +63,22 @@ export function isElement(node: AstNode): boolean {
  * expressions become `uses` edges from the element that owns the expression.
  */
 export function buildGraph(models: Model[], services: ApplingServices): Graph {
-    const nodes: GraphNode[] = [];
-    const qns = new Map<AstNode, string>();
-    const owners: [AstNode, string][] = [];
-
-    const visit = (node: AstNode, parent: GraphNode | undefined, siblings: Map<string, number>): void => {
+    const qns = qualifiedNames(models);
+    const byNode = new Map<AstNode, GraphNode>();
+    for (const [node, qn] of qns) {
+        const parent = byNode.get(parentElement(node, qns)!);
         const isModule = node.$type === 'Module';
-        const local = localName(node, siblings);
-        const qn = isModule ? modulePath(node as Module) : `${parent!.qn}.${local}`;
-        const graphNode: GraphNode = {
+        const topLevel = parent?.kind === 'Module';
+        byNode.set(node, {
             qn,
             kind: node.$type,
-            layer: isModule ? 'cross' : parent!.kind === 'Module' ? LAYER_OF[node.$type] : parent!.layer,
-            level: isModule || node.$type === 'UseCase' ? 'out' : parent!.kind === 'Module' ? 'medium' : 'in',
-            module: isModule ? (parent?.qn ?? '') : parent!.kind === 'Module' ? parent!.qn : parent!.module,
+            layer: isModule ? 'cross' : topLevel ? LAYER_OF[node.$type] : parent!.layer,
+            level: isModule || node.$type === 'UseCase' ? 'out' : topLevel ? 'medium' : 'in',
+            module: isModule ? (parent?.qn ?? '') : topLevel ? parent!.qn : parent!.module,
             props: props(node)
-        };
-        nodes.push(graphNode);
-        qns.set(node, qn);
-        owners.push([node, qn]);
-        const children = new Map<string, number>();
-        for (const child of elementsBelow(node)) visit(child, graphNode, children);
-    };
-    for (const model of models) {
-        for (const module of model.modules) visit(module, undefined, new Map());
+        });
     }
+    const nodes = [...byNode.values()];
 
     const edges: GraphEdge[] = [];
     const seen = new Set<string>();
@@ -98,7 +89,7 @@ export function buildGraph(models: Model[], services: ApplingServices): Graph {
             edges.push(edge);
         }
     };
-    for (const [node, qn] of owners) {
+    for (const [node, qn] of qns) {
         for (const child of elementsBelow(node)) add({ from: qn, to: qns.get(child)!, kind: 'contains' });
         for (const ref of referencesOf(node)) {
             const referenced = AstUtils.getReferenceNodes(ref.reference)[0];
@@ -109,12 +100,33 @@ export function buildGraph(models: Model[], services: ApplingServices): Graph {
     const typer = new ExpressionTyper(services);
     models.forEach(m => typer.checkModel(m));
     for (const [expr, target] of typer.targets) {
-        let owner: AstNode | undefined = expr;
-        while (owner && !qns.has(owner)) owner = owner.$container;
+        const owner = parentElement(expr, qns);
         const to = qns.get(target);
         if (owner && to) add({ from: qns.get(owner)!, to, kind: 'uses' });
     }
     return { nodes, edges };
+}
+
+/** The qualified name of every element, in document order. */
+export function qualifiedNames(models: Model[]): Map<AstNode, string> {
+    const qns = new Map<AstNode, string>();
+    const visit = (node: AstNode, parent: string, siblings: Map<string, number>): void => {
+        const qn = node.$type === 'Module' ? modulePath(node as Module) : `${parent}.${localName(node, siblings)}`;
+        qns.set(node, qn);
+        const children = new Map<string, number>();
+        for (const child of elementsBelow(node)) visit(child, qn, children);
+    };
+    for (const model of models) {
+        for (const module of model.modules) visit(module, '', new Map());
+    }
+    return qns;
+}
+
+/** The nearest element that contains a node. */
+export function parentElement(node: AstNode, qns: Map<AstNode, string>): AstNode | undefined {
+    let current = node.$container;
+    while (current && !qns.has(current)) current = current.$container;
+    return current;
 }
 
 /** Module to module dependencies, aggregated from every edge that crosses a module boundary. */

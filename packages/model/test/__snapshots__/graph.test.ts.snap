@@ -674,6 +674,11 @@ exports[`graph of examples 1`] = `
       "to": "crm.Clerk",
     },
     {
+      "from": "sales.OrderFlow.transition[draft->placed].effect[emit OrderPlaced]",
+      "kind": "uses",
+      "to": "sales.OrderPlaced.order",
+    },
+    {
       "from": "sales.OrderFlow.transition[draft,placed->cancelled]",
       "kind": "uses",
       "to": "sales.Order.paid_at",

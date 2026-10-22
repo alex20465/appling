@@ -104,6 +104,9 @@ const canonical = print(model);
 |---|---|
 | `createApplingServices(context)` | Creates the Langium services with Appling scoping and validation |
 | `print(root)` | Prints a parsed model in canonical form |
+| `printRange(node)` | The canonical text of one node in its document, with the gaps around it: `{ start, end, text }` |
+| `buildSources(sources)` | Builds in memory sources keyed by URI as one validated workspace |
+| `errorsOf(workspace)` | The error messages of a built workspace |
 | `modulePath(module)` | The dotted path of a module, such as `a.b` |
 | `LAYER_OF` | The layer of every top level declaration type |
 | `ExpressionTyper` | Types expressions (`checkModel(model)`) and records `types`, `targets` (the element each name in an expression stands for) and `problems` |

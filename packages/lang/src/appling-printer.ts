@@ -1,4 +1,4 @@
-import { CstUtils, GrammarUtils, type AstNode, type LeafCstNode } from 'langium';
+import { AstUtils, CstUtils, GrammarUtils, type AstNode, type LeafCstNode } from 'langium';
 import { Expr, isModel, reflection } from './generated/ast.js';
 
 /**
@@ -18,7 +18,42 @@ const NO_SPACE_BEFORE = new Set([',', ')', ']', '.', ':', '?']);
 const NO_SPACE_AFTER = new Set(['(', '[', '.']);
 
 export function print(root: AstNode): string {
+    return render(root).out + '\n';
+}
+
+export interface PrintedRange {
+    start: number;
+    end: number;
+    text: string;
+}
+
+/**
+ * The canonical text of one node inside its document, including the gaps to the tokens around it,
+ * so replacing the source from start to end with text formats exactly that node.
+ */
+export function printRange(node: AstNode): PrintedRange {
+    const { out, leaves } = render(AstUtils.findRootNode(node));
+    const { offset, end } = node.$cstNode!;
+    const first = leaves.findIndex(l => l.leaf.offset >= offset);
+    const last = leaves.findLastIndex(l => l.leaf.end <= end);
+    const before = leaves[first - 1];
+    const after = leaves[last + 1];
+    return {
+        start: before ? before.leaf.end : 0,
+        end: after ? after.leaf.offset : AstUtils.getDocument(node).textDocument.getText().length,
+        text: out.slice(before ? leaves[first].gapStart : 0, after ? after.textStart : out.length) + (after ? '' : '\n')
+    };
+}
+
+interface RenderedLeaf {
+    leaf: LeafCstNode;
+    gapStart: number;
+    textStart: number;
+}
+
+function render(root: AstNode): { out: string, leaves: RenderedLeaf[] } {
     const braces: boolean[] = [];
+    const leaves: RenderedLeaf[] = [];
     let out = '';
     let prev: LeafCstNode | undefined;
     let opened = false;
@@ -26,10 +61,12 @@ export function print(root: AstNode): string {
     for (const leaf of CstUtils.flattenCst(root.$cstNode!)) {
         if (leaf.tokenType.name === 'WS') continue;
         const closed = !leaf.hidden && leaf.text === '}' && braces.pop() === true;
+        const gapStart = out.length;
         if (prev) {
             const depth = braces.filter(Boolean).length;
             out += separator(prev, leaf, depth, opened, closed);
         }
+        leaves.push({ leaf, gapStart, textStart: out.length });
         out += leaf.text;
         opened = false;
         if (!leaf.hidden && leaf.text === '{') {
@@ -38,7 +75,7 @@ export function print(root: AstNode): string {
         }
         prev = leaf;
     }
-    return out + '\n';
+    return { out, leaves };
 }
 
 function separator(prev: LeafCstNode, leaf: LeafCstNode, depth: number, opened: boolean, closed: boolean): string {
