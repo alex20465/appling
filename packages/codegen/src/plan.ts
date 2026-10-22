@@ -33,6 +33,9 @@ export interface Plan {
     entries: RegistryEntry[];
 }
 
+/** The node name of setup steps. */
+export const PROJECT = '(project)';
+
 const RANK: Record<string, number> = { domain: 1, cross: 2, behavior: 3, application: 4, interface: 5, experience: 6 };
 
 /** Asks the extension for the steps of every node, in dependency order: modules, domain, behavior, application, interfaces, experience. */
@@ -41,13 +44,14 @@ export function plan(graph: Graph, extension: CodegenExtension, name: string, op
     const ordered = graph.nodes.map((node, index) => ({ node, index }))
         .sort((a, b) => rank(a.node) - rank(b.node) || a.index - b.index)
         .map(({ node }) => node);
-    const steps: PlannedStep[] = [];
+    const steps: PlannedStep[] = (extension.setup?.(context) ?? []).map(step => ({ node: PROJECT, step }));
     const entries = ordered.map(node => {
         const nodeSteps = extension.steps(node, context);
         steps.push(...(nodeSteps ?? []).filter(s => s.kind !== 'task').map(step => ({ node: node.qn, step })));
         return entry(node, nodeSteps, extension.name, context);
     });
-    return { extension: extension.name, steps, entries };
+    const phase = (s: PlannedStep) => s.step.kind === 'task' ? 0 : s.step.phase ?? 0;
+    return { extension: extension.name, steps: steps.map((s, i) => ({ s, i })).sort((a, b) => phase(a.s) - phase(b.s) || a.i - b.i).map(({ s }) => s), entries };
 }
 
 export function describe(step: Step): string {

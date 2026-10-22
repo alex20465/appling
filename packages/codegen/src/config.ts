@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { CodegenExtension } from './contract.js';
 
@@ -23,7 +23,7 @@ export function readConfig(root: string): Config {
 
 /** Loads an extension package by name, resolved from the project root. It exports the extension as default. */
 export async function loadExtension(name: string, root: string): Promise<CodegenExtension> {
-    const path = createRequire(join(root, CONFIG)).resolve(name);
+    const path = createRequire(resolve(root, CONFIG)).resolve(name);
     const module = await import(pathToFileURL(path).href) as { default: CodegenExtension };
     return module.default;
 }

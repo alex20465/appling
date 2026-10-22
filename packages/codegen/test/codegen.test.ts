@@ -53,6 +53,16 @@ test('plan orders steps by layer and records a registry entry per node', async (
     expect(buy.missing[0].context.related).toContainEqual({ qn: 'shop.Item', kind: 'Entity', edge: 'entity' });
 });
 
+test('setup runs first and later phases run after every earlier step', async () => {
+    const phased: CodegenExtension = {
+        name: 'phased',
+        setup: () => [{ kind: 'command', run: ['setup'] }],
+        steps: n => n.kind === 'Entity' ? [{ kind: 'command', run: ['late'], phase: 1 }] : n.kind === 'Enum' ? [{ kind: 'command', run: ['early'] }] : []
+    };
+    expect(plan(await graph(), phased, 'shop').steps.map(s => `${s.node} ${s.step.kind === 'command' && s.step.run[0]}`))
+        .toEqual(['(project) setup', 'shop.Status early', 'shop.Item late']);
+});
+
 test('unmapped kinds become todo entries', async () => {
     const result = plan(await graph(), { name: 'empty', steps: () => undefined }, 'shop');
     expect(result.entries.every(e => e.status === 'todo' && e.missing[0].what === `empty does not generate ${e.kind} yet`)).toBe(true);

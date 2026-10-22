@@ -1,0 +1,56 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`examples generate apps, enums, value types and models 1`] = `
+{
+  "config/settings.py": "INSTALLED_APPS = [
+    'django.contrib.admin',
+    'crm',
+    'sales',
+]
+",
+  "crm/models.py": "from django.db import models
+
+
+class Account(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+    email = models.CharField(max_length=255)
+",
+  "sales/enums.py": "from django.db import models
+
+
+class OrderStatus(models.TextChoices):
+    DRAFT = "draft"
+    PLACED = "placed"
+    PAID = "paid"
+    CANCELLED = "cancelled"
+",
+  "sales/models.py": "from django.db import models
+from sales.enums import OrderStatus
+
+
+class Order(models.Model):
+    reference = models.CharField(max_length=255, unique=True)
+    customer = models.ForeignKey("crm.Account", on_delete=models.PROTECT)
+    lines = models.JSONField(default=list)
+    status = models.CharField(max_length=32, choices=OrderStatus.choices, default=OrderStatus.DRAFT)
+    created_at = models.DateTimeField()
+    placed_at = models.DateTimeField(null=True, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def total(self):
+        return sum([l["amount"] for l in self.lines])
+",
+  "sales/values.py": "from datetime import date, datetime, timedelta
+from decimal import Decimal
+from typing import TypedDict
+from uuid import UUID
+
+
+class Line(TypedDict):
+    product: str
+    quantity: int
+    amount: Decimal
+",
+}
+`;

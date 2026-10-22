@@ -18,6 +18,34 @@ export interface GraphNode {
     data: Record<string, unknown>;
 }
 
+/** An expression inside `GraphNode.data`: its AST properties, its type and, for names, the element it stands for. */
+export interface ExprData {
+    $type: 'BinaryExpr' | 'UnaryExpr' | 'NameExpr' | 'MemberExpr' | 'IndexExpr' | 'ListExpr' | 'StringExpr' | 'NumberExpr' | 'BoolExpr' | 'NullExpr';
+    type: string;
+    target?: string;
+    op?: string;
+    left?: ExprData;
+    right?: ExprData;
+    operand?: ExprData;
+    name?: string;
+    member?: string;
+    receiver?: ExprData;
+    call?: boolean;
+    args?: ExprData[];
+    index?: ExprData;
+    items?: ExprData[];
+    value?: string | number | boolean;
+}
+
+/** A type inside `GraphNode.data`; `decl` is the qualified name of an enum, value type or entity. */
+export interface TypeData {
+    $type: 'TypeRef';
+    primitive?: string;
+    decl?: string;
+    many?: boolean;
+    optional?: boolean;
+}
+
 export interface GraphEdge {
     from: string;
     to: string;
