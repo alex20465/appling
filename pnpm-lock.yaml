@@ -208,6 +208,22 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
+  packages/codegen-ash:
+    dependencies:
+      '@appling/model':
+        specifier: workspace:*
+        version: link:../model
+    devDependencies:
+      '@appling/codegen':
+        specifier: workspace:*
+        version: link:../codegen
+      '@types/node':
+        specifier: ^24.19.2
+        version: 24.19.2
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+
   packages/codegen-django:
     dependencies:
       '@appling/model':

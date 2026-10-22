@@ -1,0 +1,16 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`examples plan domains, enums, embedded resources, resources and relationships 1`] = `
+[
+  "(project): mix igniter.new shop --install ash,ash_postgres --yes --no-git",
+  "crm: mix ash.gen.domain Shop.Crm --yes",
+  "sales: mix ash.gen.domain Shop.Sales --yes",
+  "crm.Account: mix ash.gen.resource Shop.Crm.Account --domain Shop.Crm --default-actions read,create,update,destroy --uuid-primary-key id --attribute name:string:required:public,email:string:required:public --extend postgres --timestamps --yes",
+  "crm.Account: lib/shop/crm/account.ex",
+  "sales.OrderStatus: mix ash.gen.enum Shop.Sales.OrderStatus draft,placed,paid,cancelled --yes",
+  "sales.Line: lib/shop/sales/line.ex",
+  "sales.Order: mix ash.gen.resource Shop.Sales.Order --domain Shop.Sales --default-actions read,create,update,destroy --uuid-primary-key id --attribute reference:string:required:public,lines:Shop.Sales.Line:array:required:public,status:Shop.Sales.OrderStatus:required:public,created_at:utc_datetime_usec:required:public,placed_at:utc_datetime_usec:public,paid_at:utc_datetime_usec:public --extend postgres --timestamps --yes",
+  "sales.Order: lib/shop/sales/order.ex",
+  "sales.Order.customer: mix ash.gen.resource Shop.Sales.Order --relationship belongs_to:customer:Shop.Crm.Account:required --yes",
+]
+`;
