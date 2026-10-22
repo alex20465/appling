@@ -33,6 +33,7 @@ export interface PlannedStep {
 export interface Plan {
     extension: string;
     test?: string[];
+    syncExclude?: string[];
     steps: PlannedStep[];
     entries: RegistryEntry[];
 }
@@ -55,7 +56,7 @@ export function plan(graph: Graph, extension: CodegenExtension, name: string, op
         return entry(node, nodeSteps, extension.name, context);
     });
     const phase = (s: PlannedStep) => s.step.kind === 'task' ? 0 : s.step.phase ?? 0;
-    return { extension: extension.name, test: extension.test, steps: steps.map((s, i) => ({ s, i })).sort((a, b) => phase(a.s) - phase(b.s) || a.i - b.i).map(({ s }) => s), entries };
+    return { extension: extension.name, test: extension.test, syncExclude: extension.syncExclude, steps: steps.map((s, i) => ({ s, i })).sort((a, b) => phase(a.s) - phase(b.s) || a.i - b.i).map(({ s }) => s), entries };
 }
 
 export function describe(step: Step): string {

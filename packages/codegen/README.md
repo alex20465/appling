@@ -53,6 +53,10 @@ Returning `undefined` marks the node kind as not supported (a `todo` entry); an 
 
 Third party extensions are named `appling-codegen-*` or `@scope/appling-codegen-*`, have a peer dependency on `@appling/codegen` and export the extension as default.
 
+## Sync
+
+`appling generate --sync` regenerates a project from the changed model and keeps the work done in it: generation stores its output in `.appling/baseline/`, and sync merges a fresh generation three ways (baseline, project, new generation) with `git merge-file`. Conflicting changes get conflict markers and a registry task. An extension lists the paths sync must not touch in `syncExclude`, such as migration history and dependencies.
+
 ## Registry
 
 `.appling/tasks.json` in the generated project holds one entry per qualified name:
@@ -74,6 +78,7 @@ Every graph node has an entry, so the registry is also the coverage report and t
 | `checkPrerequisites(prerequisites)` | Messages for missing tools |
 | `readConfig(root)`, `loadExtension(name, root)` | Configuration and extension loading |
 | `describe(step)` | A one line description of a step |
+| `saveBaseline(out, exclude)`, `mergeGeneration(out, next, exclude)` | The generation baseline, and the three way merge of a fresh generation into a project |
 | `pendingChanges(graph, applied, stamp)`, `planMigrations(...)`, `runMigrations(...)`, `readApplied(out)` | Migration steps not yet applied to a generated project, and carrying them into it |
 
 ## License

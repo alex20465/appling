@@ -1,8 +1,10 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import type { Graph } from '@appling/model';
 import type { Prerequisite } from './contract.js';
 import { describe, type Plan, type PlannedStep, type RegistryEntry } from './plan.js';
+import { saveBaseline } from './sync.js';
 
 export interface Registry {
     extension: string;
@@ -13,9 +15,9 @@ export interface Registry {
 
 export const REGISTRY = join('.appling', 'tasks.json');
 
-/** Returns one message per prerequisite that is missing or has the wrong version. */
-export function checkPrerequisites(prerequisites: Prerequisite[]): string[] {
-    return prerequisites.flatMap(p => {
+/** Returns one message per prerequisite the model needs that is missing or has the wrong version. */
+export function checkPrerequisites(prerequisites: Prerequisite[], graph?: Graph): string[] {
+    return prerequisites.filter(p => !p.needed || !graph || p.needed(graph)).flatMap(p => {
         const result = spawnSync(p.command[0], p.command.slice(1), { encoding: 'utf8' });
         const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
         const ok = !result.error && result.status === 0 && (!p.expect || p.expect.test(output));
@@ -29,6 +31,7 @@ export function runPlan(plan: Plan, out: string, log: (line: string) => void = (
     runSteps(plan.steps, out, log);
     const registry: Registry = { extension: plan.extension, test: plan.test, entries: Object.fromEntries(plan.entries.map(e => [e.qn, e])) };
     writeRegistry(root, registry);
+    saveBaseline(root, plan.syncExclude ?? []);
     return registry;
 }
 

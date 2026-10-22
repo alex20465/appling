@@ -12,6 +12,7 @@ const PRIMITIVES: { [name: string]: [string, string?] } = {
 const extension: CodegenExtension = {
     name: '@appling/codegen-go',
     test: ['go', 'test', './...'],
+    syncExclude: ['go.sum'],
     prerequisites: [{ name: 'Go', command: ['go', 'version'], expect: /go1\.(2[2-9]|[3-9]\d)/, hint: 'install Go 1.22 or later' }],
 
     setup: context => [

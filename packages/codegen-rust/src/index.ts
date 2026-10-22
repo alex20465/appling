@@ -13,6 +13,7 @@ const DERIVE = '#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deser
 const extension: CodegenExtension = {
     name: '@appling/codegen-rust',
     test: ['cargo', 'test'],
+    syncExclude: ['target/**', 'Cargo.lock'],
     prerequisites: [{ name: 'Rust', command: ['cargo', '--version'], expect: /cargo 1\.(8[5-9]|9\d|\d{3})/, hint: 'install Rust 1.85 or later' }],
 
     setup: context => [

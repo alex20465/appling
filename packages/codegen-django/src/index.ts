@@ -13,6 +13,7 @@ const REST_FRAMEWORK = 'djangorestframework~=3.16';
 const extension: CodegenExtension = {
     name: '@appling/codegen-django',
     test: ['uv', 'run', 'python', 'manage.py', 'test'],
+    syncExclude: ['*/migrations/**', '.venv/**', '**/__pycache__/**', 'db.sqlite3', 'uv.lock'],
     prerequisites: [{ name: 'uv', command: ['uv', '--version'], expect: /^uv \d+\.\d+/, hint: 'install uv (https://docs.astral.sh/uv/) to manage the Python project' }],
     setup,
     migrate: migrationSteps,

@@ -1,18 +1,20 @@
 #!/usr/bin/env node
-import { existsSync, readdirSync, writeFileSync } from 'node:fs';
-import { basename, relative, resolve } from 'node:path';
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, join, relative, resolve } from 'node:path';
 import { URI, type LangiumDocument } from 'langium';
 import { NodeFileSystem } from 'langium/node';
 import { createApplingServices, print, type ApplingServices, type Model } from '@appling/lang';
 import {
-    checkPrerequisites, describe, loadExtension, pendingChanges, plan, planMigrations, readApplied, readConfig, readRegistry, runMigrations, runPlan, type Plan
+    BASELINE, checkPrerequisites, describe, loadExtension, mergeGeneration, pendingChanges, plan, planMigrations, readApplied, readConfig, readRegistry,
+    runMigrations, runPlan, type Plan
 } from '@appling/codegen';
 import { buildGraph, dependencies, findApplingFiles, Simulator, writeRelease, type Graph } from '@appling/model';
 
 const USAGE = [
     'Usage: appling <check|fmt|graph> [files or folders...]',
     '       appling release <version> [files or folders...]',
-    '       appling generate [--plan | --migrate] [files or folders...]',
+    '       appling generate [--plan | --migrate | --sync] [files or folders...]',
     '       appling simulate <reach <machine> <state> | actors <action> | risks <action>> [files or folders...]'
 ].join('\n');
 
@@ -23,7 +25,7 @@ async function main([command, ...args]: string[]): Promise<number> {
         console.error(USAGE);
         return 2;
     }
-    const mode = command === 'generate' && (args[0] === '--plan' || args[0] === '--migrate') ? args[0] : undefined;
+    const mode = command === 'generate' && ['--plan', '--migrate', '--sync'].includes(args[0]) ? args[0] : undefined;
     const [version, paths] = command === 'release' ? [args[0], args.slice(1)] : ['', args.slice(mode ? 1 : question.length)];
     const files = (paths.length ? paths : ['.']).flatMap(p => findApplingFiles(resolve(p)));
     const { shared, Appling } = createApplingServices(NodeFileSystem);
@@ -70,12 +72,44 @@ async function generate(documents: LangiumDocument[], services: ApplingServices,
     }
     const graph = buildGraph(documents.map(doc => doc.parseResult.value as Model), services);
     for (const target of targets) {
-        const failed = mode === '--migrate'
-            ? await migrateTarget(graph, target.extension, target.out, target.options ?? {})
+        const failed = mode === '--migrate' ? await migrateTarget(graph, target.extension, target.out, target.options ?? {})
+            : mode === '--sync' ? await syncTarget(graph, target.extension, target.out, target.options ?? {})
             : await generateTarget(graph, target.extension, target.out, target.options ?? {}, mode === '--plan');
         if (failed) return 1;
     }
     return 0;
+}
+
+/**
+ * Brings a generated project up to the current model: applies pending migration steps, generates the model
+ * afresh in a temporary folder and merges it three ways with the project. Returns true when it failed.
+ */
+async function syncTarget(graph: Graph, name: string, out: string, options: Record<string, unknown>): Promise<boolean> {
+    if (!readRegistry(out) || !existsSync(join(out, BASELINE))) {
+        console.error(`${out} has no generation baseline. Generate it with this version of appling first.`);
+        return true;
+    }
+    const extension = await loadExtension(name, '.');
+    if (extension.migrate && await migrateTarget(graph, name, out, options)) return true;
+    const missing = checkPrerequisites(extension.prerequisites ?? [], graph);
+    if (missing.length) {
+        missing.forEach(m => console.error(m));
+        return true;
+    }
+    const temp = mkdtempSync(join(tmpdir(), 'appling-sync-'));
+    try {
+        const next = join(temp, basename(resolve(out)));
+        runPlan(plan(graph, extension, String(options.name ?? basename(resolve(out))), options), next, line => console.log(`  ${line}`));
+        const report = mergeGeneration(out, next, extension.syncExclude ?? []);
+        for (const [label, files] of Object.entries(report)) if (files.length) console.log(`${label}: ${files.join(', ')}`);
+        console.log(`${out}: synced${report.conflicts.length ? `, ${report.conflicts.length} file(s) with conflict markers (registry tasks)` : ''}`);
+        return false;
+    } catch (error) {
+        console.error((error as Error).message);
+        return true;
+    } finally {
+        rmSync(temp, { recursive: true, force: true });
+    }
 }
 
 /** Carries the model's migration steps that a generated project has not applied yet into it. Returns true when it failed. */
@@ -112,7 +146,7 @@ async function generateTarget(graph: Graph, name: string, out: string, options: 
         console.log(summary(result));
         return false;
     }
-    const missing = checkPrerequisites(extension.prerequisites ?? []);
+    const missing = checkPrerequisites(extension.prerequisites ?? [], graph);
     if (missing.length) {
         missing.forEach(m => console.error(m));
         return true;

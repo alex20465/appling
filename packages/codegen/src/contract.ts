@@ -36,6 +36,8 @@ export interface Prerequisite {
     command: string[];
     expect?: RegExp;
     hint: string;
+    /** Whether this model needs the tool; by default every model does. */
+    needed?: (graph: Graph) => boolean;
 }
 
 export interface MapContext {
@@ -58,6 +60,8 @@ export interface CodegenExtension {
     prerequisites?: Prerequisite[];
     /** The command that runs the generated project's tests, from its root. */
     test?: string[];
+    /** Paths sync never reads or writes, such as migration history, dependencies and build output (`**` and `*` globs). */
+    syncExclude?: string[];
     /** Steps that run once, before any element, such as creating the project. */
     setup?(context: MapContext): Step[];
     steps(node: GraphNode, context: MapContext): Step[] | undefined;

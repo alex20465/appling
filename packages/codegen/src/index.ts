@@ -3,3 +3,4 @@ export * from './contract.js';
 export * from './plan.js';
 export * from './run.js';
 export * from './migrate.js';
+export * from './sync.js';
