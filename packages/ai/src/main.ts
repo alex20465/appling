@@ -5,7 +5,7 @@ import { createMcpServer, serveHttp } from './mcp.js';
 
 const args = process.argv.slice(2);
 const httpIndex = args.indexOf('--http');
-const root = resolve(args.find((a, i) => !a.startsWith('--') && i !== httpIndex + 1) ?? '.');
+const root = resolve(args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--http') ?? '.');
 
 if (httpIndex >= 0) {
     const server = await serveHttp(root, Number(args[httpIndex + 1] ?? 4411));

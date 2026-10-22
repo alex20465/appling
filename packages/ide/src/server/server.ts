@@ -1,7 +1,7 @@
 import { watch, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { extname, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { basename, extname, resolve, sep } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { startLanguageServer } from 'langium/lsp';
 import { NodeFileSystem } from 'langium/node';
 import { createConnection } from 'vscode-languageserver/node';
@@ -37,7 +37,7 @@ export async function startIde(root: string, port = 0): Promise<Ide> {
     server.on('upgrade', (request, socket, head) => {
         if (!trusted(request, origins)) return socket.destroy();
         sockets.handleUpgrade(request, socket, head, ws => {
-            if (request.url === '/lsp') serveLanguage(ws);
+            if (request.url === '/lsp') serveLanguage(ws, root);
             else if (request.url === '/events') {
                 events.add(ws);
                 ws.on('close', () => events.delete(ws));
@@ -105,18 +105,29 @@ async function handle(request: IncomingMessage, response: ServerResponse, root: 
     response.end(readFileSync(file));
 }
 
-/** One language server per editor connection, reading the workspace from disk and the open files from the editor. */
-function serveLanguage(ws: WebSocket): void {
+/**
+ * One language server per editor connection, reading the workspace from disk and the open files from the
+ * editor. Editors that do not name a workspace folder get this one, so references to unopened files resolve.
+ */
+function serveLanguage(ws: WebSocket, root: string): void {
+    const folder = { uri: pathToFileURL(root).toString(), name: basename(root) };
     const socket: IWebSocket = {
         $type: 'IWebSocket',
         send: content => ws.send(content),
-        onMessage: callback => ws.on('message', data => callback(data.toString())),
+        onMessage: callback => ws.on('message', data => callback(withWorkspace(data.toString(), folder))),
         onError: callback => ws.on('error', callback),
         onClose: callback => ws.on('close', code => callback(code, '')),
         dispose: () => ws.close()
     };
     const connection = createConnection(new WebSocketMessageReader(socket), new WebSocketMessageWriter(socket));
     startLanguageServer(createApplingLspServices({ connection, ...NodeFileSystem }).shared);
+}
+
+function withWorkspace(message: string, folder: { uri: string, name: string }): string {
+    const parsed = JSON.parse(message) as { method?: string, params?: { rootUri?: string | null, workspaceFolders?: unknown[] | null } };
+    if (parsed.method !== 'initialize' || parsed.params?.workspaceFolders?.length) return message;
+    parsed.params = { ...parsed.params, rootUri: folder.uri, workspaceFolders: [folder] };
+    return JSON.stringify(parsed);
 }
 
 /** Only pages served by this IDE may talk to it: blocks other sites and DNS rebinding. */

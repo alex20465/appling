@@ -41,6 +41,14 @@ export function App() {
         }
     }, [snapshot]);
 
+    const chooseLayers = useCallback((layers: string[]) => {
+        setLayout(current => {
+            const next = { ...current, layers };
+            saveLayout(next);
+            return next;
+        });
+    }, []);
+
     const moved = useCallback((level: Level, qn: string, position: Position) => {
         setLayout(current => {
             const next = { ...current, positions: { ...current.positions, [level]: { ...current.positions?.[level], [qn]: position } } };
@@ -96,7 +104,7 @@ export function App() {
                     onCursor={(uri, offset) => setSelected(elementAt(snapshot.locations, uri, offset))}
                     onSave={(path, text) => saveFile(path, text)}
                 />
-                <GraphView index={index} dependencies={snapshot.dependencies} layout={shownLayout} selected={selected} onSelect={selectFromGraph} onMoved={moved} onEdit={edit} />
+                <GraphView index={index} dependencies={snapshot.dependencies} layout={shownLayout} selected={selected} onSelect={selectFromGraph} onMoved={moved} onEdit={edit} onLayers={chooseLayers} />
                 <div className="side">
                     <nav className="tabs" aria-label="Side panel">
                         <button className={side === 'inspector' ? 'active' : ''} onClick={() => setSide('inspector')}>Inspector</button>

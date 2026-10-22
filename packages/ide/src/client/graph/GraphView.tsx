@@ -6,7 +6,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import type { Layout, Level, Position as Point } from '../../shared/snapshot.js';
 import { CARD_WIDTH, layoutView, type Box } from './layout.js';
-import { levelForZoom, shownFor, view, type Card, type GraphIndex } from './model.js';
+import { LAYERS, levelForZoom, shownFor, view, ZOOM_RANGE, type Card, type GraphIndex } from './model.js';
 import type { Dependency, EditOperation } from '@appling/model';
 
 interface GraphProps {
@@ -17,7 +17,14 @@ interface GraphProps {
     onSelect(qn: string): void;
     onMoved(level: Level, qn: string, position: Point): void;
     onEdit(operation: EditOperation): Promise<string[]>;
+    onLayers(layers: string[]): void;
 }
+
+const DEFAULT_LAYERS = ['domain'];
+
+const LAYER_LABELS: Record<string, string> = {
+    domain: 'Domain', behavior: 'Behavior', application: 'Application', interface: 'Interfaces', experience: 'Experience', cross: 'Cross cutting'
+};
 
 const HOLDERS = new Set(['Entity', 'ValueType', 'Event']);
 const TYPES = new Set(['Entity', 'Enum', 'ValueType']);
@@ -31,7 +38,9 @@ export function GraphView(props: GraphProps) {
     return <ReactFlowProvider><Canvas {...props} /></ReactFlowProvider>;
 }
 
-function Canvas({ index, dependencies, layout, selected, onSelect, onMoved, onEdit }: GraphProps) {
+function Canvas({ index, dependencies, layout, selected, onSelect, onMoved, onEdit, onLayers }: GraphProps) {
+    const layers = layout.layers ?? DEFAULT_LAYERS;
+    const [fitting, setFitting] = useState(true);
     const [problem, setProblem] = useState<string>();
     const run = async (operation: EditOperation) => setProblem((await onEdit(operation)).join(' '));
 
@@ -45,7 +54,8 @@ function Canvas({ index, dependencies, layout, selected, onSelect, onMoved, onEd
     };
     const flow = useReactFlow();
     const [level, setLevel] = useState<Level>('medium');
-    const current = useMemo(() => view(index, dependencies, level), [index, dependencies, level]);
+    const current = useMemo(() => view(index, dependencies, level, layers), [index, dependencies, level, layers]);
+    useEffect(() => setFitting(true), [level, layers.join()]);
     const saved = layout.positions?.[level];
     const [boxes, setBoxes] = useState<Map<string, Box>>();
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -73,6 +83,14 @@ function Canvas({ index, dependencies, layout, selected, onSelect, onMoved, onEd
             }))
         ]);
     }, [boxes, selected, current, index, onSelect, setNodes]);
+
+    /** After the level or the layers change, fit what is shown without leaving the level. */
+    useEffect(() => {
+        if (!fitting || !nodes.length) return;
+        setFitting(false);
+        const [minZoom, maxZoom] = ZOOM_RANGE[level];
+        requestAnimationFrame(() => flow.fitView({ padding: 0.15, minZoom, maxZoom, duration: 300 }));
+    }, [nodes, fitting, level, flow]);
 
     const edges: Edge[] = useMemo(() => current.links.map(l => ({
         id: l.id, source: l.from, target: l.to, label: l.label,
@@ -106,6 +124,16 @@ function Canvas({ index, dependencies, layout, selected, onSelect, onMoved, onEd
                 <Controls showInteractive={false} />
             </ReactFlow>
             {problem && <div className="graph-problem" role="alert" onClick={() => setProblem(undefined)}>{problem}</div>}
+            {level !== 'out' && (
+                <div className="layers" role="group" aria-label="Layers">
+                    {LAYERS.map(l => (
+                        <button key={l} aria-pressed={layers.includes(l)} className={layers.includes(l) ? 'active' : ''}
+                            onClick={() => onLayers(layers.includes(l) ? layers.filter(x => x !== l) : [...layers, l])}>
+                            {LAYER_LABELS[l]}
+                        </button>
+                    ))}
+                </div>
+            )}
             <div className="levels" role="group" aria-label="Zoom level">
                 {(['out', 'medium', 'in'] as Level[]).map(l => (
                     <button key={l} className={l === level ? 'active' : ''} onClick={() => flow.zoomTo(ZOOM[l], { duration: 300 })}>

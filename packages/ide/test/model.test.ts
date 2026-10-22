@@ -26,8 +26,8 @@ test('medium zoom shows declarations in module groups with lifted references', a
     const medium = view(index, deps, 'medium');
     expect(medium.groups.map(g => g.qn)).toEqual(['crm', 'sales']);
     expect(medium.cards.find(c => c.qn === 'sales.Order')).toMatchObject({ title: 'entity Order', group: 'sales', rows: [] });
-    expect(medium.links.map(l => l.id)).toContain('sales.Order>crm.Account>type');
-    expect(medium.links.map(l => l.id)).toContain('sales.OrderFlow>sales.PlaceOrder>action');
+    expect(medium.links).toContainEqual({ id: 'sales.Order>crm.Account', from: 'sales.Order', to: 'crm.Account', label: 'type' });
+    expect(medium.links.find(l => l.id === 'sales.OrderFlow>sales.PlaceOrder')?.label).toBe('action');
 });
 
 test('zoomed in cards list their members', async () => {
@@ -53,4 +53,15 @@ test('saved positions follow renames recorded in migrations', async () => {
     const { documents, services } = await buildWorkspace({ 'm.appling': 'module m {\n  entity Item {\n    sku: String\n  }\n  migration since_v1_0_0 {\n    rename Item.code -> sku\n  }\n}\n' });
     const graph = buildGraph(documents.map(d => d.parseResult.value as Model), services);
     expect(followRenames({ positions: { in: { 'm.Item.code': { x: 1, y: 2 } } } }, graph)).toEqual({ positions: { in: { 'm.Item.sku': { x: 1, y: 2 } } } });
+});
+
+test('a layer view shows only its declarations and the references among them', async () => {
+    const { index, deps } = await examplesIndex();
+    const domain = view(index, deps, 'medium', ['domain']);
+    expect(domain.cards.map(c => c.qn)).toEqual(['crm.Account', 'sales.OrderStatus', 'sales.Line', 'sales.Order']);
+    expect(domain.links.map(l => `${l.id} ${l.label}`).sort()).toEqual(['sales.Order>crm.Account type', 'sales.Order>sales.Line type, uses', 'sales.Order>sales.OrderStatus type, uses']);
+    expect(domain.groups.map(g => g.qn)).toEqual(['crm', 'sales']);
+    const behavior = view(index, deps, 'medium', ['behavior']);
+    expect(behavior.cards.every(c => c.layer === 'behavior')).toBe(true);
+    expect(behavior.groups.map(g => g.qn)).toEqual(['sales']);
 });

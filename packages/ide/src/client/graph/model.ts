@@ -67,8 +67,16 @@ export class GraphIndex {
     }
 }
 
-/** What the canvas shows at a zoom level: modules and use cases, declarations, or declarations with their members. */
-export function view(index: GraphIndex, dependencies: Dependency[], level: Level): View {
+export const LAYERS = ['domain', 'behavior', 'application', 'interface', 'experience', 'cross'];
+
+/** The zoom range of each level, for fitting the view without leaving the level. */
+export const ZOOM_RANGE: Record<Level, [number, number]> = { out: [0.1, 0.49], medium: [0.5, 1.04], in: [1.05, 2.5] };
+
+/**
+ * What the canvas shows at a zoom level: modules and use cases, or the declarations of the chosen layers
+ * (with their members when zoomed in) and only the references among them.
+ */
+export function view(index: GraphIndex, dependencies: Dependency[], level: Level, layers: string[] = LAYERS): View {
     const modules = index.graph.nodes.filter(n => n.kind === 'Module');
     if (level === 'out') {
         return {
@@ -78,7 +86,7 @@ export function view(index: GraphIndex, dependencies: Dependency[], level: Level
             links: dependencies.map(d => ({ id: `${d.from}>${d.to}`, from: d.from, to: d.to, label: `${d.count}` }))
         };
     }
-    const declarations = index.graph.nodes.filter(n => n.kind !== 'Module' && index.nodes.get(index.parent(n.qn) ?? '')?.kind === 'Module');
+    const declarations = index.graph.nodes.filter(n => n.kind !== 'Module' && layers.includes(n.layer) && index.nodes.get(index.parent(n.qn) ?? '')?.kind === 'Module');
     const cards = declarations.map(d => ({ ...card(d, level === 'in' ? index.children(d.qn) : [], `${KEYWORDS[d.kind] ?? d.kind.toLowerCase()} ${localName(d.qn, index)}`), group: index.parent(d.qn) }));
     const shown = new Set(cards.map(c => c.qn));
     const links = new Map<string, Link>();
@@ -86,12 +94,15 @@ export function view(index: GraphIndex, dependencies: Dependency[], level: Level
         const from = index.lineage(edge.from).find(q => shown.has(q));
         const to = index.lineage(edge.to).find(q => shown.has(q));
         if (!from || !to || from === to) continue;
-        const id = `${from}>${to}>${edge.kind}`;
-        if (!links.has(id)) links.set(id, { id, from, to, label: edge.kind });
+        const id = `${from}>${to}`;
+        const link = links.get(id) ?? { id, from, to, label: '' };
+        const kinds = new Set([...link.label.split(', ').filter(Boolean), edge.kind]);
+        links.set(id, { ...link, label: [...kinds].sort().join(', ') });
     }
+    const occupied = new Set(cards.flatMap(c => index.lineage(c.group!)));
     return {
         level,
-        groups: modules.map(m => ({ ...card(m, [], m.qn), group: index.nodes.get(index.parent(m.qn) ?? '')?.kind === 'Module' ? index.parent(m.qn) : undefined })),
+        groups: modules.filter(m => occupied.has(m.qn)).map(m => ({ ...card(m, [], m.qn), group: index.nodes.get(index.parent(m.qn) ?? '')?.kind === 'Module' ? index.parent(m.qn) : undefined })),
         cards,
         links: [...links.values()]
     };

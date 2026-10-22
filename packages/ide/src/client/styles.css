@@ -52,7 +52,10 @@ button:focus-visible { outline: 2px solid var(--leaf); outline-offset: 2px; }
 .graph-canvas .react-flow { background: var(--surface); }
 .react-flow__controls button { background: var(--surface-elevated); color: var(--ink); border-color: var(--line); fill: var(--ink); }
 .react-flow__edge-text { font-family: var(--font-mono); }
-.levels { position: absolute; top: 12px; left: 12px; display: flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); }
+.layers { position: absolute; top: 12px; right: 12px; z-index: 4; display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); }
+.layers button { padding: 4px 10px; border-radius: 4px; font-size: 12px; color: var(--ink-muted); }
+.layers button.active { background: var(--leaf-soft); color: var(--leaf); }
+.levels { position: absolute; top: 12px; left: 12px; z-index: 4; display: flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); }
 .levels button { padding: 4px 10px; border-radius: 4px; font-size: 12px; color: var(--ink-muted); }
 .levels button.active { background: var(--leaf-soft); color: var(--leaf); }
 

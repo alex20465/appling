@@ -12,6 +12,7 @@ It serves the folder's `.appling` files on `http://127.0.0.1:4410` and only answ
 
 - A text editor (Monaco) backed by the Appling language server: diagnostics, completion, hover, go to definition, references, rename and formatting. Ctrl+S (Cmd+S) saves.
 - The graph with semantic zoom. Zoomed out: modules, their use cases and the dependencies between modules, with the number of references behind each. Medium: the declarations of each module and the references between them. Zoomed in: declarations with their members. The buttons switch levels too.
+- Layer views: the declaration and member levels show only the layers you pick (Domain, Behavior, Application, Interfaces, Experience, Cross cutting), and only the references among them, one line per pair of declarations. Domain alone is the default; the choice is saved with the layout.
 - Selection in sync: moving the cursor selects the element in the graph and the inspector, clicking the graph or the inspector reveals the text.
 - An inspector with the element's properties, members and references in both directions, where you edit the model: rename, change a type, set any property, add a member from its source text, or remove the element.
 - Editing in the graph: drag from a declaration to an entity, enum or value type to add a field that references it, press Delete to remove the selected element.
