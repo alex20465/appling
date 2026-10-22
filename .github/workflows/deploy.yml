@@ -1,0 +1,38 @@
+name: Production Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cloning
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @appling/landing build
+
+      - run: pnpm --filter @appling/landing bunny:move
+        env:
+          BUNNY_STORAGE_NAME: appling-tools
+          BUNNY_ACCESS_KEY: ${{ secrets.BUNNY_ACCESS_KEY }}
+
+      - run: pnpm --filter @appling/landing bunny:purge
+        env:
+          BUNNY_PULLZONE_NAME: appling-tools
+          BUNNY_ACCESS_KEY: ${{ secrets.BUNNY_ACCESS_KEY }}

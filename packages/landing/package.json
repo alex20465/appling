@@ -5,12 +5,17 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "bunny:move": "bunny-transfer move ./dist ${BUNNY_STORAGE_NAME}",
+    "bunny:purge": "bunny-transfer purge ${BUNNY_PULLZONE_NAME}"
   },
   "dependencies": {
     "@tailwindcss/vite": "4.3.3",
     "astro": "7.3.8",
     "motion": "14.2.0",
     "tailwindcss": "4.3.3"
+  },
+  "devDependencies": {
+    "bunny-transfer": "0.0.5"
   }
 }
