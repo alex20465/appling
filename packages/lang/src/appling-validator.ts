@@ -7,9 +7,9 @@ import {
 import { namedPaths, projectionSourceEntity } from './appling-scope.js';
 import type { ApplingServices } from './appling-module.js';
 
-type Layer = 'cross' | 'domain' | 'behavior' | 'application' | 'interface' | 'experience';
+export type Layer = 'cross' | 'domain' | 'behavior' | 'application' | 'interface' | 'experience';
 
-const LAYER_OF: Record<string, Layer> = {
+export const LAYER_OF: Record<string, Layer> = {
     Module: 'cross', Role: 'cross', Actor: 'cross', Tenant: 'cross', Migration: 'cross',
     Enum: 'domain', ValueType: 'domain', Entity: 'domain',
     Event: 'behavior', Action: 'behavior', Machine: 'behavior', Job: 'behavior',

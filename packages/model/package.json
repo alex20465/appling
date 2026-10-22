@@ -1,0 +1,30 @@
+{
+  "name": "@appling/model",
+  "version": "0.1.0",
+  "description": "Appling semantic graph: nodes, edges and module dependencies of a resolved model",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./out/index.d.ts",
+      "default": "./out/index.js"
+    }
+  },
+  "files": [
+    "out"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@appling/lang": "workspace:*",
+    "langium": "4.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "7.0.2"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

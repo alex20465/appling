@@ -80,6 +80,8 @@ const canonical = print(model);
 |---|---|
 | `createApplingServices(context)` | Creates the Langium services with Appling scoping and validation |
 | `print(root)` | Prints a parsed model in canonical form |
+| `modulePath(module)` | The dotted path of a module, such as `a.b` |
+| `LAYER_OF` | The layer of every top level declaration type |
 | AST types and guards | `Model`, `Entity`, `isEntity` and the rest of the generated AST |
 
 When you use the API directly, also install `langium` for `URI` and `NodeFileSystem`.

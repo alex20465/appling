@@ -3,33 +3,45 @@ import { readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { URI, type LangiumDocument } from 'langium';
 import { NodeFileSystem } from 'langium/node';
-import { createApplingServices, print } from '@appling/lang';
+import { createApplingServices, print, type Model } from '@appling/lang';
+import { buildGraph, dependencies } from '@appling/model';
 
-const USAGE = 'Usage: appling <check|fmt> [files or folders...]';
+const USAGE = 'Usage: appling <check|fmt|graph> [files or folders...]';
 
 async function main([command, ...paths]: string[]): Promise<number> {
-    if (command !== 'check' && command !== 'fmt') {
+    if (command !== 'check' && command !== 'fmt' && command !== 'graph') {
         console.error(USAGE);
         return 2;
     }
     const files = (paths.length ? paths : ['.']).flatMap(p => applingFiles(resolve(p)));
     const { shared } = createApplingServices(NodeFileSystem);
     const documents = await Promise.all(files.map(f => shared.workspace.LangiumDocuments.getOrCreateDocument(URI.file(f))));
-    await shared.workspace.DocumentBuilder.build(documents, { validation: command === 'check' });
-    return command === 'check' ? check(documents) : format(documents);
+    await shared.workspace.DocumentBuilder.build(documents, { validation: command !== 'fmt' });
+    if (command === 'fmt') return format(documents);
+    if (command === 'graph') return graph(documents);
+    const errors = report(documents, console.log);
+    console.log(`${documents.length} file(s), ${errors} error(s)`);
+    return errors ? 1 : 0;
 }
 
-function check(documents: LangiumDocument[]): number {
+/** Prints every diagnostic and returns the number of errors. */
+function report(documents: LangiumDocument[], log: (line: string) => void): number {
     let errors = 0;
     for (const doc of documents) {
         for (const d of doc.diagnostics ?? []) {
             const severity = d.severity === 1 ? 'error' : 'warning';
             if (severity === 'error') errors++;
-            console.log(`${relative('.', doc.uri.fsPath)}:${d.range.start.line + 1}:${d.range.start.character + 1} ${severity} ${d.message}`);
+            log(`${relative('.', doc.uri.fsPath)}:${d.range.start.line + 1}:${d.range.start.character + 1} ${severity} ${d.message}`);
         }
     }
-    console.log(`${documents.length} file(s), ${errors} error(s)`);
-    return errors ? 1 : 0;
+    return errors;
+}
+
+function graph(documents: LangiumDocument[]): number {
+    if (report(documents, console.error)) return 1;
+    const result = buildGraph(documents.map(doc => doc.parseResult.value as Model));
+    console.log(JSON.stringify({ ...result, dependencies: dependencies(result) }, null, 2));
+    return 0;
 }
 
 function format(documents: LangiumDocument[]): number {

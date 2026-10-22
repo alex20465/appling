@@ -1,0 +1,1267 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`graph of examples 1`] = `
+{
+  "edges": [
+    {
+      "from": "crm",
+      "kind": "contains",
+      "to": "crm.Clerk",
+    },
+    {
+      "from": "crm",
+      "kind": "contains",
+      "to": "crm.Account",
+    },
+    {
+      "from": "crm",
+      "kind": "contains",
+      "to": "crm.Company",
+    },
+    {
+      "from": "crm.Account",
+      "kind": "contains",
+      "to": "crm.Account.name",
+    },
+    {
+      "from": "crm.Account",
+      "kind": "contains",
+      "to": "crm.Account.email",
+    },
+    {
+      "from": "crm.Account",
+      "kind": "contains",
+      "to": "crm.Account.policy[read]",
+    },
+    {
+      "from": "crm.Company",
+      "kind": "entity",
+      "to": "crm.Account",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.Customer",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.Shopper",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.OrderStatus",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.Line",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.Order",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.OrderPlaced",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.PaymentReceived",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.PlaceOrder",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.Cancel",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.OrderFlow",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.ExpireDrafts",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.OpenOrders",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.OrderSummary",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.Payments",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.Checkout",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.PublicApi",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.Orders",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.OrderDetail",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.Main",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.CheckoutFlow",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.en",
+    },
+    {
+      "from": "sales.Shopper",
+      "kind": "roles",
+      "to": "sales.Customer",
+    },
+    {
+      "from": "sales.OrderStatus",
+      "kind": "contains",
+      "to": "sales.OrderStatus.draft",
+    },
+    {
+      "from": "sales.OrderStatus",
+      "kind": "contains",
+      "to": "sales.OrderStatus.placed",
+    },
+    {
+      "from": "sales.OrderStatus",
+      "kind": "contains",
+      "to": "sales.OrderStatus.paid",
+    },
+    {
+      "from": "sales.OrderStatus",
+      "kind": "contains",
+      "to": "sales.OrderStatus.cancelled",
+    },
+    {
+      "from": "sales.Line",
+      "kind": "contains",
+      "to": "sales.Line.product",
+    },
+    {
+      "from": "sales.Line",
+      "kind": "contains",
+      "to": "sales.Line.quantity",
+    },
+    {
+      "from": "sales.Line",
+      "kind": "contains",
+      "to": "sales.Line.amount",
+    },
+    {
+      "from": "sales.Order",
+      "kind": "contains",
+      "to": "sales.Order.reference",
+    },
+    {
+      "from": "sales.Order",
+      "kind": "contains",
+      "to": "sales.Order.customer",
+    },
+    {
+      "from": "sales.Order",
+      "kind": "contains",
+      "to": "sales.Order.lines",
+    },
+    {
+      "from": "sales.Order",
+      "kind": "contains",
+      "to": "sales.Order.status",
+    },
+    {
+      "from": "sales.Order",
+      "kind": "contains",
+      "to": "sales.Order.placed_at",
+    },
+    {
+      "from": "sales.Order",
+      "kind": "contains",
+      "to": "sales.Order.total",
+    },
+    {
+      "from": "sales.Order",
+      "kind": "contains",
+      "to": "sales.Order.invariant["total never negative"]",
+    },
+    {
+      "from": "sales.Order",
+      "kind": "contains",
+      "to": "sales.Order.policy[read]",
+    },
+    {
+      "from": "sales.Order",
+      "kind": "contains",
+      "to": "sales.Order.policy[create,update,delete]",
+    },
+    {
+      "from": "sales.Order",
+      "kind": "contains",
+      "to": "sales.Order.policy[read fields total]",
+    },
+    {
+      "from": "sales.Order.customer",
+      "kind": "type",
+      "to": "crm.Account",
+    },
+    {
+      "from": "sales.Order.lines",
+      "kind": "type",
+      "to": "sales.Line",
+    },
+    {
+      "from": "sales.Order.status",
+      "kind": "type",
+      "to": "sales.OrderStatus",
+    },
+    {
+      "from": "sales.Order.policy[read fields total]",
+      "kind": "fields",
+      "to": "sales.Order.total",
+    },
+    {
+      "from": "sales.OrderPlaced",
+      "kind": "contains",
+      "to": "sales.OrderPlaced.order",
+    },
+    {
+      "from": "sales.OrderPlaced.order",
+      "kind": "type",
+      "to": "sales.Order",
+    },
+    {
+      "from": "sales.PaymentReceived",
+      "kind": "contains",
+      "to": "sales.PaymentReceived.order",
+    },
+    {
+      "from": "sales.PaymentReceived.order",
+      "kind": "type",
+      "to": "sales.Order",
+    },
+    {
+      "from": "sales.PlaceOrder",
+      "kind": "contains",
+      "to": "sales.PlaceOrder.effect[set placed_at]",
+    },
+    {
+      "from": "sales.PlaceOrder",
+      "kind": "contains",
+      "to": "sales.PlaceOrder.EmptyOrder",
+    },
+    {
+      "from": "sales.PlaceOrder",
+      "kind": "contains",
+      "to": "sales.PlaceOrder.policy[]",
+    },
+    {
+      "from": "sales.PlaceOrder",
+      "kind": "entity",
+      "to": "sales.Order",
+    },
+    {
+      "from": "sales.PlaceOrder",
+      "kind": "error",
+      "to": "sales.PlaceOrder.EmptyOrder",
+    },
+    {
+      "from": "sales.PlaceOrder.effect[set placed_at]",
+      "kind": "field",
+      "to": "sales.Order.placed_at",
+    },
+    {
+      "from": "sales.Cancel",
+      "kind": "contains",
+      "to": "sales.Cancel.reason",
+    },
+    {
+      "from": "sales.Cancel",
+      "kind": "contains",
+      "to": "sales.Cancel.policy[]",
+    },
+    {
+      "from": "sales.Cancel",
+      "kind": "entity",
+      "to": "sales.Order",
+    },
+    {
+      "from": "sales.OrderFlow",
+      "kind": "contains",
+      "to": "sales.OrderFlow.transition[draft->placed]",
+    },
+    {
+      "from": "sales.OrderFlow",
+      "kind": "contains",
+      "to": "sales.OrderFlow.transition[placed->paid]",
+    },
+    {
+      "from": "sales.OrderFlow",
+      "kind": "contains",
+      "to": "sales.OrderFlow.transition[draft,placed->cancelled]",
+    },
+    {
+      "from": "sales.OrderFlow",
+      "kind": "field",
+      "to": "sales.Order.status",
+    },
+    {
+      "from": "sales.OrderFlow.transition[draft->placed]",
+      "kind": "contains",
+      "to": "sales.OrderFlow.transition[draft->placed].effect[emit OrderPlaced]",
+    },
+    {
+      "from": "sales.OrderFlow.transition[draft->placed]",
+      "kind": "action",
+      "to": "sales.PlaceOrder",
+    },
+    {
+      "from": "sales.OrderFlow.transition[draft->placed].effect[emit OrderPlaced]",
+      "kind": "event",
+      "to": "sales.OrderPlaced",
+    },
+    {
+      "from": "sales.OrderFlow.transition[placed->paid]",
+      "kind": "event",
+      "to": "sales.PaymentReceived",
+    },
+    {
+      "from": "sales.OrderFlow.transition[draft,placed->cancelled]",
+      "kind": "action",
+      "to": "sales.Cancel",
+    },
+    {
+      "from": "sales.ExpireDrafts",
+      "kind": "action",
+      "to": "sales.Cancel",
+    },
+    {
+      "from": "sales.OpenOrders",
+      "kind": "entity",
+      "to": "sales.Order",
+    },
+    {
+      "from": "sales.OpenOrders",
+      "kind": "field",
+      "to": "sales.Order.placed_at",
+    },
+    {
+      "from": "sales.OrderSummary",
+      "kind": "contains",
+      "to": "sales.OrderSummary.reference",
+    },
+    {
+      "from": "sales.OrderSummary",
+      "kind": "contains",
+      "to": "sales.OrderSummary.status",
+    },
+    {
+      "from": "sales.OrderSummary",
+      "kind": "contains",
+      "to": "sales.OrderSummary.total",
+    },
+    {
+      "from": "sales.OrderSummary",
+      "kind": "contains",
+      "to": "sales.OrderSummary.customer_name",
+    },
+    {
+      "from": "sales.OrderSummary",
+      "kind": "source",
+      "to": "sales.Order",
+    },
+    {
+      "from": "sales.Payments",
+      "kind": "contains",
+      "to": "sales.Payments.Charge",
+    },
+    {
+      "from": "sales.Payments.Charge",
+      "kind": "contains",
+      "to": "sales.Payments.Charge.amount",
+    },
+    {
+      "from": "sales.Payments.Charge",
+      "kind": "contains",
+      "to": "sales.Payments.Charge.Declined",
+    },
+    {
+      "from": "sales.Checkout",
+      "kind": "contains",
+      "to": "sales.Checkout.order",
+    },
+    {
+      "from": "sales.Checkout",
+      "kind": "target",
+      "to": "sales.PlaceOrder",
+    },
+    {
+      "from": "sales.Checkout",
+      "kind": "target",
+      "to": "sales.Payments.Charge",
+    },
+    {
+      "from": "sales.Checkout",
+      "kind": "error",
+      "to": "sales.Payments.Charge.Declined",
+    },
+    {
+      "from": "sales.Checkout",
+      "kind": "target",
+      "to": "sales.Cancel",
+    },
+    {
+      "from": "sales.Checkout",
+      "kind": "event",
+      "to": "sales.PaymentReceived",
+    },
+    {
+      "from": "sales.Checkout.order",
+      "kind": "type",
+      "to": "sales.Order",
+    },
+    {
+      "from": "sales.PublicApi",
+      "kind": "contains",
+      "to": "sales.PublicApi.endpoint[GET /orders]",
+    },
+    {
+      "from": "sales.PublicApi",
+      "kind": "contains",
+      "to": "sales.PublicApi.endpoint[POST /orders/{id}/place]",
+    },
+    {
+      "from": "sales.PublicApi.endpoint[GET /orders]",
+      "kind": "target",
+      "to": "sales.OpenOrders",
+    },
+    {
+      "from": "sales.PublicApi.endpoint[GET /orders]",
+      "kind": "projection",
+      "to": "sales.OrderSummary",
+    },
+    {
+      "from": "sales.PublicApi.endpoint[GET /orders]",
+      "kind": "picks",
+      "to": "sales.OrderSummary.reference",
+    },
+    {
+      "from": "sales.PublicApi.endpoint[GET /orders]",
+      "kind": "picks",
+      "to": "sales.OrderSummary.status",
+    },
+    {
+      "from": "sales.PublicApi.endpoint[GET /orders]",
+      "kind": "picks",
+      "to": "sales.OrderSummary.total",
+    },
+    {
+      "from": "sales.PublicApi.endpoint[POST /orders/{id}/place]",
+      "kind": "target",
+      "to": "sales.PlaceOrder",
+    },
+    {
+      "from": "sales.Orders",
+      "kind": "query",
+      "to": "sales.OpenOrders",
+    },
+    {
+      "from": "sales.Orders",
+      "kind": "projection",
+      "to": "sales.OrderSummary",
+    },
+    {
+      "from": "sales.Orders",
+      "kind": "picks",
+      "to": "sales.OrderSummary.reference",
+    },
+    {
+      "from": "sales.Orders",
+      "kind": "picks",
+      "to": "sales.OrderSummary.status",
+    },
+    {
+      "from": "sales.Orders",
+      "kind": "picks",
+      "to": "sales.OrderSummary.total",
+    },
+    {
+      "from": "sales.Orders",
+      "kind": "actions",
+      "to": "sales.Cancel",
+    },
+    {
+      "from": "sales.OrderDetail",
+      "kind": "projection",
+      "to": "sales.OrderSummary",
+    },
+    {
+      "from": "sales.OrderDetail",
+      "kind": "actions",
+      "to": "sales.PlaceOrder",
+    },
+    {
+      "from": "sales.OrderDetail",
+      "kind": "actions",
+      "to": "sales.Cancel",
+    },
+    {
+      "from": "sales.OrderDetail",
+      "kind": "submits",
+      "to": "sales.Cancel",
+    },
+    {
+      "from": "sales.Main",
+      "kind": "page",
+      "to": "sales.Orders",
+    },
+    {
+      "from": "sales.CheckoutFlow",
+      "kind": "usecase",
+      "to": "sales.Checkout",
+    },
+    {
+      "from": "sales.CheckoutFlow",
+      "kind": "pages",
+      "to": "sales.Orders",
+    },
+    {
+      "from": "sales.CheckoutFlow",
+      "kind": "pages",
+      "to": "sales.OrderDetail",
+    },
+  ],
+  "nodes": [
+    {
+      "kind": "Module",
+      "layer": "cross",
+      "level": "out",
+      "module": "",
+      "props": {
+        "exports": [
+          "export Account, Clerk",
+        ],
+      },
+      "qn": "crm",
+    },
+    {
+      "kind": "Role",
+      "layer": "cross",
+      "level": "medium",
+      "module": "crm",
+      "props": {},
+      "qn": "crm.Clerk",
+    },
+    {
+      "kind": "Entity",
+      "layer": "domain",
+      "level": "medium",
+      "module": "crm",
+      "props": {},
+      "qn": "crm.Account",
+    },
+    {
+      "kind": "Field",
+      "layer": "domain",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "modifiers": [
+          "unique",
+        ],
+        "type": "String",
+      },
+      "qn": "crm.Account.name",
+    },
+    {
+      "kind": "Field",
+      "layer": "domain",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "type": "String",
+      },
+      "qn": "crm.Account.email",
+    },
+    {
+      "kind": "Policy",
+      "layer": "domain",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "condition": "actor.is(Clerk) || actor.account == this",
+        "operations": [
+          "read",
+        ],
+      },
+      "qn": "crm.Account.policy[read]",
+    },
+    {
+      "kind": "Tenant",
+      "layer": "cross",
+      "level": "medium",
+      "module": "crm",
+      "props": {},
+      "qn": "crm.Company",
+    },
+    {
+      "kind": "Module",
+      "layer": "cross",
+      "level": "out",
+      "module": "",
+      "props": {
+        "exports": [
+          "export Order, OrderSummary, OpenOrders, PlaceOrder",
+        ],
+      },
+      "qn": "sales",
+    },
+    {
+      "kind": "Role",
+      "layer": "cross",
+      "level": "medium",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.Customer",
+    },
+    {
+      "kind": "Actor",
+      "layer": "cross",
+      "level": "medium",
+      "module": "sales",
+      "props": {
+        "kind": "human",
+      },
+      "qn": "sales.Shopper",
+    },
+    {
+      "kind": "Enum",
+      "layer": "domain",
+      "level": "medium",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.OrderStatus",
+    },
+    {
+      "kind": "EnumLiteral",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.OrderStatus.draft",
+    },
+    {
+      "kind": "EnumLiteral",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.OrderStatus.placed",
+    },
+    {
+      "kind": "EnumLiteral",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.OrderStatus.paid",
+    },
+    {
+      "kind": "EnumLiteral",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.OrderStatus.cancelled",
+    },
+    {
+      "kind": "ValueType",
+      "layer": "domain",
+      "level": "medium",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.Line",
+    },
+    {
+      "kind": "Field",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "type": "String",
+      },
+      "qn": "sales.Line.product",
+    },
+    {
+      "kind": "Field",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "type": "Int",
+      },
+      "qn": "sales.Line.quantity",
+    },
+    {
+      "kind": "Field",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "type": "Money",
+      },
+      "qn": "sales.Line.amount",
+    },
+    {
+      "kind": "Entity",
+      "layer": "domain",
+      "level": "medium",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.Order",
+    },
+    {
+      "kind": "Field",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "modifiers": [
+          "unique",
+        ],
+        "type": "String",
+      },
+      "qn": "sales.Order.reference",
+    },
+    {
+      "kind": "Field",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "type": "crm.Account",
+      },
+      "qn": "sales.Order.customer",
+    },
+    {
+      "kind": "Field",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "modifiers": [
+          "owned",
+        ],
+        "type": "Line[]",
+      },
+      "qn": "sales.Order.lines",
+    },
+    {
+      "kind": "Field",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "default": "draft",
+        "modifiers": [
+          "state",
+        ],
+        "type": "OrderStatus",
+      },
+      "qn": "sales.Order.status",
+    },
+    {
+      "kind": "Field",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "type": "DateTime?",
+      },
+      "qn": "sales.Order.placed_at",
+    },
+    {
+      "kind": "Field",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "derived": "sum(lines.map(l, l.amount))",
+        "type": "Money",
+      },
+      "qn": "sales.Order.total",
+    },
+    {
+      "kind": "Invariant",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "condition": "total >= 0",
+        "label": "total never negative",
+      },
+      "qn": "sales.Order.invariant["total never negative"]",
+    },
+    {
+      "kind": "Policy",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "condition": "actor.is(crm.Clerk) || customer == actor.account",
+        "operations": [
+          "read",
+        ],
+      },
+      "qn": "sales.Order.policy[read]",
+    },
+    {
+      "kind": "Policy",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "condition": "actor.is(crm.Clerk)",
+        "operations": [
+          "create",
+          "update",
+          "delete",
+        ],
+      },
+      "qn": "sales.Order.policy[create,update,delete]",
+    },
+    {
+      "kind": "Policy",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "condition": "status != draft || actor.is(crm.Clerk)",
+        "operations": [
+          "read",
+        ],
+      },
+      "qn": "sales.Order.policy[read fields total]",
+    },
+    {
+      "kind": "Event",
+      "layer": "behavior",
+      "level": "medium",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.OrderPlaced",
+    },
+    {
+      "kind": "Field",
+      "layer": "behavior",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "type": "Order",
+      },
+      "qn": "sales.OrderPlaced.order",
+    },
+    {
+      "kind": "Event",
+      "layer": "behavior",
+      "level": "medium",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.PaymentReceived",
+    },
+    {
+      "kind": "Field",
+      "layer": "behavior",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "type": "Order",
+      },
+      "qn": "sales.PaymentReceived.order",
+    },
+    {
+      "kind": "Action",
+      "layer": "behavior",
+      "level": "medium",
+      "module": "sales",
+      "props": {
+        "preconditions": [
+          "requires { lines.size() > 0 } else EmptyOrder",
+        ],
+      },
+      "qn": "sales.PlaceOrder",
+    },
+    {
+      "kind": "SetEffect",
+      "layer": "behavior",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "value": "now",
+      },
+      "qn": "sales.PlaceOrder.effect[set placed_at]",
+    },
+    {
+      "kind": "ErrorDecl",
+      "layer": "behavior",
+      "level": "in",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.PlaceOrder.EmptyOrder",
+    },
+    {
+      "kind": "Policy",
+      "layer": "behavior",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "condition": "actor.is(Customer) && customer == actor.account",
+      },
+      "qn": "sales.PlaceOrder.policy[]",
+    },
+    {
+      "kind": "Action",
+      "layer": "behavior",
+      "level": "medium",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.Cancel",
+    },
+    {
+      "kind": "Param",
+      "layer": "behavior",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "type": "String?",
+      },
+      "qn": "sales.Cancel.reason",
+    },
+    {
+      "kind": "Policy",
+      "layer": "behavior",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "condition": "actor.is(crm.Clerk)",
+      },
+      "qn": "sales.Cancel.policy[]",
+    },
+    {
+      "kind": "Machine",
+      "layer": "behavior",
+      "level": "medium",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.OrderFlow",
+    },
+    {
+      "kind": "Transition",
+      "layer": "behavior",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "from": [
+          "draft",
+        ],
+        "to": "placed",
+      },
+      "qn": "sales.OrderFlow.transition[draft->placed]",
+    },
+    {
+      "kind": "EmitEffect",
+      "layer": "behavior",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "assignments": [
+          "order = this",
+        ],
+      },
+      "qn": "sales.OrderFlow.transition[draft->placed].effect[emit OrderPlaced]",
+    },
+    {
+      "kind": "Transition",
+      "layer": "behavior",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "from": [
+          "placed",
+        ],
+        "to": "paid",
+      },
+      "qn": "sales.OrderFlow.transition[placed->paid]",
+    },
+    {
+      "kind": "Transition",
+      "layer": "behavior",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "from": [
+          "draft",
+          "placed",
+        ],
+        "guard": "!has(paid_at)",
+        "to": "cancelled",
+      },
+      "qn": "sales.OrderFlow.transition[draft,placed->cancelled]",
+    },
+    {
+      "kind": "Job",
+      "layer": "behavior",
+      "level": "medium",
+      "module": "sales",
+      "props": {
+        "filter": "status == draft && created_at < now - duration("720h")",
+        "schedule": "0 3 * * *",
+      },
+      "qn": "sales.ExpireDrafts",
+    },
+    {
+      "kind": "Query",
+      "layer": "application",
+      "level": "medium",
+      "module": "sales",
+      "props": {
+        "filter": "status in [placed, paid]",
+        "pageSize": 50,
+        "sorts": [
+          "placed_at desc",
+        ],
+      },
+      "qn": "sales.OpenOrders",
+    },
+    {
+      "kind": "Projection",
+      "layer": "application",
+      "level": "medium",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.OrderSummary",
+    },
+    {
+      "kind": "ProjectionField",
+      "layer": "application",
+      "level": "in",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.OrderSummary.reference",
+    },
+    {
+      "kind": "ProjectionField",
+      "layer": "application",
+      "level": "in",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.OrderSummary.status",
+    },
+    {
+      "kind": "ProjectionField",
+      "layer": "application",
+      "level": "in",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.OrderSummary.total",
+    },
+    {
+      "kind": "ProjectionField",
+      "layer": "application",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "value": "customer.name",
+      },
+      "qn": "sales.OrderSummary.customer_name",
+    },
+    {
+      "kind": "External",
+      "layer": "application",
+      "level": "medium",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.Payments",
+    },
+    {
+      "kind": "ExternalOperation",
+      "layer": "application",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "returns": "String",
+      },
+      "qn": "sales.Payments.Charge",
+    },
+    {
+      "kind": "Param",
+      "layer": "application",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "type": "Money",
+      },
+      "qn": "sales.Payments.Charge.amount",
+    },
+    {
+      "kind": "ErrorDecl",
+      "layer": "application",
+      "level": "in",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.Payments.Charge.Declined",
+    },
+    {
+      "kind": "UseCase",
+      "layer": "application",
+      "level": "out",
+      "module": "sales",
+      "props": {
+        "steps": [
+          "step PlaceOrder(order)",
+          "step Payments.Charge(order.total) on Declined do Cancel(order)",
+          "await PaymentReceived timeout "24h" do Cancel(order)",
+        ],
+      },
+      "qn": "sales.Checkout",
+    },
+    {
+      "kind": "Param",
+      "layer": "application",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "type": "Order",
+      },
+      "qn": "sales.Checkout.order",
+    },
+    {
+      "kind": "Interface",
+      "layer": "interface",
+      "level": "medium",
+      "module": "sales",
+      "props": {
+        "auth": "bearer",
+        "protocol": "rest",
+        "rateLimit": 100,
+        "rateUnit": "minute",
+      },
+      "qn": "sales.PublicApi",
+    },
+    {
+      "kind": "Endpoint",
+      "layer": "interface",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "path": "/orders",
+        "verb": "GET",
+      },
+      "qn": "sales.PublicApi.endpoint[GET /orders]",
+    },
+    {
+      "kind": "Endpoint",
+      "layer": "interface",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "path": "/orders/{id}/place",
+        "verb": "POST",
+      },
+      "qn": "sales.PublicApi.endpoint[POST /orders/{id}/place]",
+    },
+    {
+      "kind": "Page",
+      "layer": "experience",
+      "level": "medium",
+      "module": "sales",
+      "props": {
+        "components": [
+          "list OpenOrders as OrderSummary { reference, status, total } actions Cancel",
+        ],
+        "route": "/orders",
+      },
+      "qn": "sales.Orders",
+    },
+    {
+      "kind": "Page",
+      "layer": "experience",
+      "level": "medium",
+      "module": "sales",
+      "props": {
+        "components": [
+          "detail OrderSummary actions PlaceOrder, Cancel",
+          "form Cancel",
+        ],
+        "route": "/orders/{id}",
+      },
+      "qn": "sales.OrderDetail",
+    },
+    {
+      "kind": "Navigation",
+      "layer": "experience",
+      "level": "medium",
+      "module": "sales",
+      "props": {
+        "items": [
+          ""Orders" -> Orders",
+        ],
+      },
+      "qn": "sales.Main",
+    },
+    {
+      "kind": "Flow",
+      "layer": "experience",
+      "level": "medium",
+      "module": "sales",
+      "props": {},
+      "qn": "sales.CheckoutFlow",
+    },
+    {
+      "kind": "Messages",
+      "layer": "experience",
+      "level": "medium",
+      "module": "sales",
+      "props": {
+        "entries": [
+          "OrderSummary.total = "Total"",
+        ],
+      },
+      "qn": "sales.en",
+    },
+  ],
+}
+`;

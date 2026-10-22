@@ -178,6 +178,9 @@ importers:
       '@appling/lang':
         specifier: workspace:*
         version: link:../lang
+      '@appling/model':
+        specifier: workspace:*
+        version: link:../model
       langium:
         specifier: 4.4.0
         version: 4.4.0
@@ -220,6 +223,22 @@ importers:
       langium-cli:
         specifier: 4.4.0
         version: 4.4.0
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+
+  packages/model:
+    dependencies:
+      '@appling/lang':
+        specifier: workspace:*
+        version: link:../lang
+      langium:
+        specifier: 4.4.0
+        version: 4.4.0
+    devDependencies:
+      '@types/node':
+        specifier: ^24.19.2
+        version: 24.19.2
       typescript:
         specifier: 7.0.2
         version: 7.0.2

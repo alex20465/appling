@@ -1,6 +1,6 @@
 # @appling/cli
 
-Command line tool to check and format Appling models (`.appling` files).
+Command line tool to check, format and inspect Appling models (`.appling` files).
 
 Appling is a declarative language that describes a business or web application in five layers: domain, behavior, application, interfaces and experience. The language itself lives in [`@appling/lang`](https://www.npmjs.com/package/@appling/lang).
 
@@ -21,6 +21,7 @@ npx @appling/cli check models
 ```sh
 appling check [files or folders...]
 appling fmt   [files or folders...]
+appling graph [files or folders...]
 ```
 
 Folders are searched recursively for `.appling` files. Hidden folders and `node_modules` are skipped. Without a path, the current folder is used.
@@ -45,12 +46,26 @@ Rewrites every file into its canonical form:
 
 Files with syntax errors are left untouched and reported.
 
+### graph
+
+Prints the semantic graph of the model as JSON: every element as a node with its qualified name, kind, layer, zoom level, module and properties, every reference as an edge, and the module to module dependencies. Unnamed elements such as policies or transitions get a key derived from their content, for example `sales.Order.policy[read fields total]`.
+
+```json
+{
+  "nodes": [{ "qn": "sales.Order.status", "kind": "Field", "layer": "domain", "level": "in", "module": "sales", "props": { "type": "OrderStatus", "modifiers": ["state"], "default": "draft" } }],
+  "edges": [{ "from": "sales.Order.status", "to": "sales.OrderStatus", "kind": "type" }],
+  "dependencies": [{ "from": "sales", "to": "crm", "count": 1 }]
+}
+```
+
+When the model has errors, they are printed to stderr instead and nothing is written to stdout.
+
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
 | 0 | No errors |
-| 1 | `check` found errors, or `fmt` skipped a file with syntax errors |
+| 1 | `check` or `graph` found errors, or `fmt` skipped a file with syntax errors |
 | 2 | Unknown command |
 
 ## License
