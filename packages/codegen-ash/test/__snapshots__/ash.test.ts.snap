@@ -9,14 +9,9 @@ config :shop, Oban,
   queues: [default: 10, order_expire_drafts: 10],
   repo: Shop.Repo
 ",
-  "lib/shop/api_router.ex": "defmodule Shop.ApiRouter do
-  use AshJsonApi.Router, domains: [Shop.Sales], open_api: "/open_api"
-end
-",
   "lib/shop/application.ex": "defmodule Shop.Application do
   def start(_type, _args) do
     children = [
-      {Bandit, plug: Shop.ApiRouter, port: 4000},
       Shop.Repo
     ]
   end
@@ -131,6 +126,122 @@ end
   end
 end
 ",
+  "lib/shop_web/ash_json_api_router.ex": "defmodule ShopWeb.AshJsonApiRouter do
+  use AshJsonApi.Router,
+    domains: [Shop.Sales],
+    open_api: "/open_api"
+end
+",
+  "lib/shop_web/live/order_detail_live.ex": "defmodule ShopWeb.OrderDetailLive do
+  use ShopWeb, :live_view
+
+  @impl true
+  def mount(%{"id" => id}, _session, socket) do
+    {:ok, socket |> assign(:page_title, "Order detail") |> assign(:id, id) |> load()}
+  end
+
+  defp load(socket) do
+    socket
+    |> assign(:record_1, Ash.get!(Shop.Sales.Order, socket.assigns.id, load: [:customer_name]))
+    |> assign(:form_2, AshPhoenix.Form.for_update(Ash.get!(Shop.Sales.Order, socket.assigns.id), :cancel) |> to_form())
+  end
+
+  @impl true
+  def handle_event("run_place_order", %{"id" => id}, socket) do
+    case Ash.update(Ash.get!(Shop.Sales.Order, id), %{}, action: :place_order) do
+      {:ok, _} -> {:noreply, socket |> put_flash(:info, "PlaceOrder done.") |> load()}
+      {:error, error} -> {:noreply, put_flash(socket, :error, "PlaceOrder failed: " <> Exception.message(error))}
+    end
+  end
+
+  @impl true
+  def handle_event("run_cancel", %{"id" => id}, socket) do
+    case Ash.update(Ash.get!(Shop.Sales.Order, id), %{}, action: :cancel) do
+      {:ok, _} -> {:noreply, socket |> put_flash(:info, "Cancel done.") |> load()}
+      {:error, error} -> {:noreply, put_flash(socket, :error, "Cancel failed: " <> Exception.message(error))}
+    end
+  end
+
+  @impl true
+  def handle_event("submit_cancel", %{"form" => params}, socket) do
+    case AshPhoenix.Form.submit(socket.assigns.form_2, params: params) do
+      {:ok, _} -> {:noreply, socket |> put_flash(:info, "Cancel done.") |> load()}
+      {:error, form} -> {:noreply, assign(socket, :form_2, form)}
+    end
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <Layouts.app flash={@flash}>
+      <nav class="flex gap-4 mb-6"><.link navigate="/orders">Orders</.link></nav>
+      <.header>Order detail</.header>
+      <.list>
+        <:item title="Reference">{to_string(@record_1.reference)}</:item>
+        <:item title="Status">{to_string(@record_1.status)}</:item>
+        <:item title="Customer name">{to_string(@record_1.customer_name)}</:item>
+      </.list>
+      <.button phx-click="run_place_order" phx-value-id={@record_1.id}>PlaceOrder</.button> <.button phx-click="run_cancel" phx-value-id={@record_1.id}>Cancel</.button>
+      <.form for={@form_2} phx-submit="submit_cancel">
+        <.input field={@form_2[:reason]} label="Reason" />
+        <.button>Cancel</.button>
+      </.form>
+    </Layouts.app>
+    """
+  end
+end
+",
+  "lib/shop_web/live/orders_live.ex": "defmodule ShopWeb.OrdersLive do
+  use ShopWeb, :live_view
+
+  @impl true
+  def mount(_params, _session, socket) do
+    {:ok, socket |> assign(:page_title, "Orders") |> load()}
+  end
+
+  defp load(socket) do
+    socket
+    |> assign(:list_1, Ash.read!(Shop.Sales.Order, action: :open_orders, page: [limit: 50]).results)
+  end
+
+  @impl true
+  def handle_event("run_cancel", %{"id" => id}, socket) do
+    case Ash.update(Ash.get!(Shop.Sales.Order, id), %{}, action: :cancel) do
+      {:ok, _} -> {:noreply, socket |> put_flash(:info, "Cancel done.") |> load()}
+      {:error, error} -> {:noreply, put_flash(socket, :error, "Cancel failed: " <> Exception.message(error))}
+    end
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <Layouts.app flash={@flash}>
+      <nav class="flex gap-4 mb-6"><.link navigate="/orders">Orders</.link></nav>
+      <.header>Orders</.header>
+      <.table id="list-1" rows={@list_1}>
+        <:col :let={row} label="Reference">{to_string(row.reference)}</:col>
+        <:col :let={row} label="Status">{to_string(row.status)}</:col>
+        <:action :let={row}><.button phx-click="run_cancel" phx-value-id={row.id}>Cancel</.button></:action>
+      </.table>
+    </Layouts.app>
+    """
+  end
+end
+",
+  "lib/shop_web/router.ex": "defmodule ShopWeb.Router do
+  use ShopWeb, :router
+
+  scope "/", ShopWeb do
+    pipe_through :browser
+
+    get "/", PageController, :home
+
+    live "/orders/:id", OrderDetailLive
+
+    live "/orders", OrdersLive
+  end
+end
+",
   "test/shop/crm/account_test.exs": "defmodule Shop.Crm.AccountTest do
   use ExUnit.Case, async: true
 
@@ -195,8 +306,7 @@ end
 
 exports[`examples plan domains, enums, embedded resources, resources and relationships 1`] = `
 [
-  "(project): mix igniter.new shop --install ash,ash_postgres,ash_state_machine,ash_oban --yes --no-git",
-  "(project): mix igniter.install ash_json_api,bandit --yes",
+  "(project): mix igniter.new shop --with phx.new --with-args=--no-install --install ash,ash_postgres,ash_phoenix,ash_state_machine,ash_oban,ash_json_api --yes --no-git",
   "crm: mix ash.gen.domain Shop.Crm --yes",
   "sales: mix ash.gen.domain Shop.Sales --yes",
   "crm.Account: mix ash.gen.resource Shop.Crm.Account --domain Shop.Crm --default-actions read,create,update,destroy --uuid-primary-key id --attribute name:string:required:public,email:string:required:public --extend postgres --timestamps --yes",
@@ -224,8 +334,11 @@ exports[`examples plan domains, enums, embedded resources, resources and relatio
   "sales.OrderSummary.customer_name: lib/shop/sales/order.ex",
   "sales.PublicApi: lib/shop/sales/order.ex",
   "sales.PublicApi: lib/shop/sales.ex",
-  "sales.PublicApi: lib/shop/api_router.ex",
-  "sales.PublicApi: lib/shop/application.ex",
+  "sales.PublicApi: lib/shop_web/ash_json_api_router.ex",
+  "sales.Orders: lib/shop_web/live/orders_live.ex",
+  "sales.Orders: lib/shop_web/router.ex",
+  "sales.OrderDetail: lib/shop_web/live/order_detail_live.ex",
+  "sales.OrderDetail: lib/shop_web/router.ex",
   "(project): mix ash.codegen initial_resources",
 ]
 `;

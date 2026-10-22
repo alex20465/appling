@@ -1,6 +1,6 @@
 import type { CommandStep, MapContext, Step } from '@appling/codegen';
-import type { GraphNode, TypeData } from '@appling/model';
-import { lastOf } from './elixir.js';
+import type { ExprData, GraphNode, TypeData } from '@appling/model';
+import { ashExpr, lastOf } from './elixir.js';
 
 export const TYPES: Record<string, string> = {
     String: 'string', Text: 'string', Int: 'integer', Decimal: 'decimal', Money: 'decimal', Bool: 'boolean',
@@ -66,4 +66,11 @@ export function storedAttributes(entity: GraphNode, context: MapContext): Set<st
 /** Patches a generated module after every resource and relationship exists, so expressions may follow relationships. */
 export function patch(file: string, write: (existing: string) => string): Step {
     return { kind: 'template', file, write: existing => write(existing!), phase: 2 };
+}
+
+/** The calculation for a derived field, or undefined when Ash expressions cannot say it. */
+export function calculation(field: GraphNode, context: MapContext): string | undefined {
+    const type = field.data.type as TypeData;
+    const body = field.data.derived && !type.many && ashExpr(field.data.derived as ExprData, context.node);
+    return body ? `calculate :${lastOf(field.qn)}, ${attributeType(type, context, true)}, expr(${body})` : undefined;
 }

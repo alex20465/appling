@@ -74,6 +74,8 @@ test('behavior, queries and the JSON:API are patched into the generated modules'
         ['lib/shop/sales.ex', 'defmodule Shop.Sales do\n  use Ash.Domain,\n    otp_app: :shop\n\n  resources do\n    resource Shop.Sales.Order\n  end\nend\n'],
         ['lib/shop/crm/account.ex', 'defmodule Shop.Crm.Account do\n  use Ash.Resource, otp_app: :shop, domain: Shop.Crm\nend\n'],
         ['config/config.exs', 'import Config\n\nconfig :shop, Oban,\n  engine: Oban.Engines.Basic,\n  queues: [default: 10],\n  repo: Shop.Repo\n'],
+        ['lib/shop_web/router.ex', 'defmodule ShopWeb.Router do\n  use ShopWeb, :router\n\n  scope "/", ShopWeb do\n    pipe_through :browser\n\n    get "/", PageController, :home\n  end\nend\n'],
+        ['lib/shop_web/ash_json_api_router.ex', 'defmodule ShopWeb.AshJsonApiRouter do\n  use AshJsonApi.Router,\n    domains: [],\n    open_api: "/open_api"\nend\n'],
         ['lib/shop/application.ex', 'defmodule Shop.Application do\n  def start(_type, _args) do\n    children = [\n      Shop.Repo\n    ]\n  end\nend\n']
     ]);
     for (const { step } of result.steps) {

@@ -3,26 +3,34 @@ import type { ExprData, GraphNode, TypeData } from '@appling/model';
 import { interfaceSteps } from './api.js';
 import { projectionFieldSteps, querySteps } from './application.js';
 import { actionSteps, jobSteps, machineSteps } from './behavior.js';
-import { ashExpr, constant, lastOf, parentOf, validation } from './elixir.js';
+import { constant, lastOf, parentOf, validation } from './elixir.js';
 import { migrationSteps } from './migrations.js';
+import { hasPages, navigationSteps, pageSteps } from './pages.js';
 import { testSteps } from './tests.js';
-import { app, attributeType, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, storedAttributes, task, typeModule } from './naming.js';
+import { app, attributeType, calculation, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, storedAttributes, task, typeModule } from './naming.js';
 
 const extension: CodegenExtension = {
     name: '@appling/codegen-ash',
     test: ['mix', 'test'],
+    syncExclude: ['deps/**', '_build/**', 'priv/repo/migrations/**', 'priv/resource_snapshots/**', 'priv/static/**', 'mix.lock'],
     migrate: migrationSteps,
     prerequisites: [
         { name: 'Elixir', command: ['mix', '--version'], expect: /Mix 1\.(1[7-9]|[2-9]\d)/, hint: 'install Elixir 1.17 or later' },
-        { name: 'igniter_new', command: ['mix', 'help', 'igniter.new'], hint: 'run "mix archive.install hex igniter_new"' }
+        { name: 'igniter_new', command: ['mix', 'help', 'igniter.new'], hint: 'run "mix archive.install hex igniter_new"' },
+        { name: 'phx_new', command: ['mix', 'help', 'phx.new'], hint: 'run "mix archive.install hex phx_new"; models with pages become Phoenix applications', needed: graph => graph.nodes.some(n => n.kind === 'Page') }
     ],
 
     setup: context => {
         const has = (kind: string, test: (n: GraphNode) => boolean = () => true) => context.graph.nodes.some(n => n.kind === kind && test(n));
-        const install = ['ash', 'ash_postgres', ...(has('Machine') ? ['ash_state_machine'] : []), ...(has('Job', j => !!j.data.schedule) ? ['ash_oban'] : [])];
+        const pages = hasPages(context);
+        const api = has('Interface', i => i.data.protocol === 'rest');
+        const install = [
+            'ash', 'ash_postgres', ...(pages ? ['ash_phoenix'] : []), ...(has('Machine') ? ['ash_state_machine'] : []),
+            ...(has('Job', j => !!j.data.schedule) ? ['ash_oban'] : []), ...(pages && api ? ['ash_json_api'] : [])
+        ];
         return [
-            { kind: 'command', run: ['mix', 'igniter.new', app(context), '--install', install.join(','), '--yes', '--no-git'], cwd: '..', creates: ['mix.exs', 'lib/'] },
-            ...(has('Interface', i => i.data.protocol === 'rest') ? [mix(['igniter.install', 'ash_json_api,bandit'])] : []),
+            { kind: 'command', run: ['mix', 'igniter.new', app(context), ...(pages ? ['--with', 'phx.new', '--with-args=--no-install'] : []), '--install', install.join(','), '--yes', '--no-git'], cwd: '..', creates: ['mix.exs', 'lib/'] },
+            ...(api && !pages ? [mix(['igniter.install', 'ash_json_api,bandit'])] : []),
             { kind: 'command', run: ['mix', 'ash.codegen', 'initial_resources'], phase: 3 }
         ];
     },
@@ -52,6 +60,10 @@ const extension: CodegenExtension = {
             case 'Query': return querySteps(node, context);
             case 'ProjectionField': return projectionFieldSteps(node, context);
             case 'Interface': return interfaceSteps(node, context);
+            case 'Page': return pageSteps(node, context);
+            case 'Navigation': return navigationSteps(node, context);
+            case 'Messages': return [];
+            case 'Flow': return [task(`guide people through ${((node.data.pages ?? []) as string[]).map(p => p.split('.').pop()).join(', ')} for the use case ${String(node.data.usecase).split('.').pop()}, for example with links between the LiveViews`)];
             case 'Event': return [task(`publish ${lastOf(node.qn)} with an Ash notifier, for example Ash.Notifier.PubSub`)];
             case 'External': return [task(`implement ${lastOf(node.qn)} as a client module or generic actions`)];
             case 'UseCase': return [task(`implement ${lastOf(node.qn)} as a Reactor or a generic action`)];
@@ -135,12 +147,6 @@ function patchResource(text: string, entity: GraphNode, context: MapContext): st
 
 function block(name: string, lines: string[]): string {
     return lines.length ? `\n  ${name} do\n${lines.map(l => `    ${l}\n`).join('')}  end\n` : '';
-}
-
-function calculation(field: GraphNode, context: MapContext): string | undefined {
-    const type = field.data.type as TypeData;
-    const body = field.data.derived && !type.many && ashExpr(field.data.derived as ExprData, context.node);
-    return body ? `calculate :${lastOf(field.qn)}, ${attributeType(type, context, true)}, expr(${body})` : undefined;
 }
 
 function check(invariant: GraphNode, context: MapContext): string | undefined {

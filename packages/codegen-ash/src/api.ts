@@ -2,6 +2,7 @@ import type { MapContext, Step } from '@appling/codegen';
 import type { GraphNode } from '@appling/model';
 import { lastOf } from './elixir.js';
 import { app, children, fileOf, moduleName, pascal, patch, snake, task, typeModule } from './naming.js';
+import { hasPages } from './pages.js';
 import { addExtension, addToSection } from './resource.js';
 
 /**
@@ -27,20 +28,25 @@ export function interfaceSteps(api: GraphNode, context: MapContext): Step[] | un
     if (!routes.size) return tasks;
     const domain = moduleName(api.module, context);
     const router = `${pascal(app(context))}.ApiRouter`;
+    const serve: Step[] = hasPages(context)
+        ? [patch(`lib/${app(context)}_web/ash_json_api_router.ex`, existing => existing.replace(/domains: \[([^\]]*)\]/, (all, list) => list.includes(domain) ? all : `domains: [${[list.trim(), domain].filter(Boolean).join(', ')}]`))]
+        : [
+            {
+                kind: 'template', phase: 2, file: `lib/${app(context)}/api_router.ex`, write: existing => existing
+                    ? existing.replace(/domains: \[([^\]]*)\]/, (all, list) => list.includes(domain) ? all : `domains: [${list}, ${domain}]`)
+                    : `defmodule ${router} do\n  use AshJsonApi.Router, domains: [${domain}], open_api: "/open_api"\nend\n`
+            },
+            patch(`lib/${app(context)}/application.ex`, existing => existing.includes('Bandit')
+                ? existing
+                : existing.replace(/children = \[\n/, `children = [\n      {Bandit, plug: ${router}, port: 4000},\n`))
+        ];
     const resourceSteps: Step[] = [...routes].flatMap(([resource, lines]) => [
         patch(fileOf(resource, context), existing => existing.includes('\n  json_api do\n') ? existing : addToSection(addExtension(existing, 'AshJsonApi.Resource'), 'json_api', [`type ${JSON.stringify(snake(lastOf(resource.qn)))}`])),
         patch(domainFile(api, context), existing => addToSection(addExtension(existing, 'AshJsonApi.Domain'), 'json_api', [`base_route "/", ${typeModule(resource, context)} do`, ...lines.map(l => `  ${l}`), 'end'], 'routes'))
     ]);
     return [
         ...resourceSteps,
-        {
-            kind: 'template', phase: 2, file: `lib/${app(context)}/api_router.ex`, write: existing => existing
-                ? existing.replace(/domains: \[([^\]]*)\]/, (all, list) => list.includes(domain) ? all : `domains: [${list}, ${domain}]`)
-                : `defmodule ${router} do\n  use AshJsonApi.Router, domains: [${domain}], open_api: "/open_api"\nend\n`
-        },
-        patch(`lib/${app(context)}/application.ex`, existing => existing.includes('Bandit')
-            ? existing
-            : existing.replace(/children = \[\n/, `children = [\n      {Bandit, plug: ${router}, port: 4000},\n`)),
+        ...serve,
         ...tasks
     ];
 }
