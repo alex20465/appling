@@ -95,14 +95,21 @@ export function jobSteps(job: GraphNode, context: MapContext): Step[] {
     const name = snake(lastOf(job.qn));
     const module = typeModule(entity, context);
     const pascal = lastOf(job.qn);
+    const queue = `${snake(lastOf(entity.qn))}_${name}`;
     const lines = [
         `trigger :${name} do`,
         `  action :${snake(lastOf(action.qn))}`,
+        `  read_action :${name}_targets`,
+        `  queue :${queue}`,
         `  where expr(${where})`,
         `  scheduler_cron ${JSON.stringify(job.data.schedule)}`,
         `  worker_module_name ${module}.AshOban.Worker.${pascal}`,
         `  scheduler_module_name ${module}.AshOban.Scheduler.${pascal}`,
         'end'
     ];
-    return [patch(fileOf(entity, context), existing => addToSection(addExtension(existing, 'AshOban'), 'oban', lines, 'triggers'))];
+    const read = [`read :${name}_targets do`, '  pagination keyset?: true, required?: false', 'end'];
+    return [
+        patch(fileOf(entity, context), existing => addToSection(addToSection(addExtension(existing, 'AshOban'), 'actions', read), 'oban', lines, 'triggers')),
+        patch('config/config.exs', existing => existing.replace(/queues: \[([^\]]*)\]/, (all, list) => list.includes(`${queue}:`) ? all : `queues: [${list}, ${queue}: 10]`))
+    ];
 }

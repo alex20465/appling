@@ -2,6 +2,13 @@
 
 exports[`behavior, queries and the JSON:API are patched into the generated modules 1`] = `
 {
+  "config/config.exs": "import Config
+
+config :shop, Oban,
+  engine: Oban.Engines.Basic,
+  queues: [default: 10, order_expire_drafts: 10],
+  repo: Shop.Repo
+",
   "lib/shop/api_router.ex": "defmodule Shop.ApiRouter do
   use AshJsonApi.Router, domains: [Shop.Sales], open_api: "/open_api"
 end
@@ -67,6 +74,10 @@ end
       change transition_state(:paid)
     end
 
+    read :expire_drafts_targets do
+      pagination keyset?: true, required?: false
+    end
+
     read :open_orders do
       filter expr(status in [:placed, :paid])
       prepare build(sort: [placed_at: :desc])
@@ -101,6 +112,8 @@ end
     triggers do
       trigger :expire_drafts do
         action :cancel
+        read_action :expire_drafts_targets
+        queue :order_expire_drafts
         where expr((status == :draft) and (created_at < ago(720, :hour)))
         scheduler_cron "0 3 * * *"
         worker_module_name Shop.Sales.Order.AshOban.Worker.ExpireDrafts
@@ -206,6 +219,7 @@ exports[`examples plan domains, enums, embedded resources, resources and relatio
   "sales.Cancel: lib/shop/sales/order.ex",
   "sales.OrderFlow: lib/shop/sales/order.ex",
   "sales.ExpireDrafts: lib/shop/sales/order.ex",
+  "sales.ExpireDrafts: config/config.exs",
   "sales.OpenOrders: lib/shop/sales/order.ex",
   "sales.OrderSummary.customer_name: lib/shop/sales/order.ex",
   "sales.PublicApi: lib/shop/sales/order.ex",

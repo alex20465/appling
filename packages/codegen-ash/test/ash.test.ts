@@ -73,6 +73,7 @@ test('behavior, queries and the JSON:API are patched into the generated modules'
         ['lib/shop/sales/order.ex', 'defmodule Shop.Sales.Order do\n  use Ash.Resource, otp_app: :shop, domain: Shop.Sales, data_layer: AshPostgres.DataLayer\n\n  actions do\n    defaults [:read, :destroy]\n  end\n\n  attributes do\n    attribute :status, Shop.Sales.OrderStatus do\n      allow_nil? false\n    end\n  end\nend\n'],
         ['lib/shop/sales.ex', 'defmodule Shop.Sales do\n  use Ash.Domain,\n    otp_app: :shop\n\n  resources do\n    resource Shop.Sales.Order\n  end\nend\n'],
         ['lib/shop/crm/account.ex', 'defmodule Shop.Crm.Account do\n  use Ash.Resource, otp_app: :shop, domain: Shop.Crm\nend\n'],
+        ['config/config.exs', 'import Config\n\nconfig :shop, Oban,\n  engine: Oban.Engines.Basic,\n  queues: [default: 10],\n  repo: Shop.Repo\n'],
         ['lib/shop/application.ex', 'defmodule Shop.Application do\n  def start(_type, _args) do\n    children = [\n      Shop.Repo\n    ]\n  end\nend\n']
     ]);
     for (const { step } of result.steps) {

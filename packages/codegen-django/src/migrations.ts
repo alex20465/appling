@@ -2,7 +2,7 @@ import type { MapContext, MigrationChange, ProjectFiles, Step } from '@appling/c
 import type { GraphNode, TypeData } from '@appling/model';
 import { task, template } from './files.js';
 import { djangoField } from './models.js';
-import { appOf, constantOf, lastOf, parentOf } from './python.js';
+import { appOf, constantOf, lastOf, parentOf, snake } from './python.js';
 
 /**
  * Carries one Appling migration step into the generated project: a Django migration with the
@@ -71,10 +71,14 @@ function enumRename(change: MigrationChange, literal: GraphNode, context: MapCon
         const imports = new Set<string>();
         const code = frozen(djangoField(field, context, imports), context);
         const name = lastOf(field.qn);
-        const update = `apps.get_model(${JSON.stringify(app)}, ${JSON.stringify(lastOf(entity.qn))}).objects.filter(${name}=${JSON.stringify(old)}).update(${name}=${JSON.stringify(change.newName)})`;
+        const fn = `rename_${snake(lastOf(entity.qn))}_${name}_${old}`;
+        const body = [
+            `def ${fn}(apps, schema_editor):`,
+            `    apps.get_model(${JSON.stringify(app)}, ${JSON.stringify(lastOf(entity.qn))}).objects.filter(${name}=${JSON.stringify(old)}).update(${name}=${JSON.stringify(change.newName)})`
+        ].join('\n');
         return [
             operation(app, change.block, files, `migrations.AlterField(model_name=${JSON.stringify(lastOf(entity.qn).toLowerCase())}, name=${JSON.stringify(name)}, field=${code})`, frozenImports(imports)),
-            operation(app, change.block, files, `migrations.RunPython(lambda apps, schema_editor: ${update}, migrations.RunPython.noop)`, new Set())
+            dataOperation(app, change.block, files, fn, body)
         ];
     });
     const [from, to] = [`${lastOf(enumNode.qn)}.${constantOf(old)}`, `${lastOf(enumNode.qn)}.${constantOf(change.newName!)}`];
@@ -88,12 +92,41 @@ function enumRename(change: MigrationChange, literal: GraphNode, context: MapCon
     ];
 }
 
-/** Adds an operation to the app's migration for this block, creating it after the app's latest migration. */
-function operation(app: string, block: string, files: ProjectFiles, code: string, imports: Set<string>): Step {
+/**
+ * This run's schema migration for a block in an app, after the app's latest migration, and the data
+ * migration that follows it. Every run gets new files, so applied migrations never change.
+ */
+function migrationFiles(app: string, block: string, files: ProjectFiles): { schema: string, data: string, previous?: string } {
     const existing = files.list(`${app}/migrations`).filter(f => /^\d{4}_.*\.py$/.test(f));
-    const own = existing.find(f => f.endsWith(`_appling_${block}.py`));
-    const previous = existing.filter(f => f !== own).at(-1);
-    const file = own ?? `${String(existing.length ? Number(existing.at(-1)!.slice(0, 4)) + 1 : 1).padStart(4, '0')}_appling_${block}.py`;
+    const number = existing.length ? Number(existing.at(-1)!.slice(0, 4)) + 1 : 1;
+    const name = (n: number, suffix: string) => `${String(n).padStart(4, '0')}_appling_${block}${suffix}.py`;
+    return { schema: name(number, ''), data: name(number + 1, '_data'), previous: existing.at(-1) };
+}
+
+/** Adds a data migration function to the block's data migration, which runs after its schema migration. */
+function dataOperation(app: string, block: string, files: ProjectFiles, fn: string, body: string): Step {
+    const { schema, data } = migrationFiles(app, block, files);
+    return template(`${app}/migrations/${data}`, text => {
+        const start = text ?? [
+            'from django.db import migrations',
+            '',
+            '',
+            'class Migration(migrations.Migration):',
+            `    dependencies = [(${JSON.stringify(app)}, ${JSON.stringify(schema.replace(/\.py$/, ''))})]`,
+            '',
+            '    operations = [',
+            '    ]',
+            ''
+        ].join('\n');
+        return start
+            .replace('\n\n\nclass Migration', `\n\n\n${body}\n\n\nclass Migration`)
+            .replace(/\n    \]\n$/, `\n        migrations.RunPython(${fn}, migrations.RunPython.noop),\n    ]\n`);
+    });
+}
+
+/** Adds an operation to the app's schema migration for this block, creating it after the app's latest migration. */
+function operation(app: string, block: string, files: ProjectFiles, code: string, imports: Set<string>): Step {
+    const { schema: file, previous } = migrationFiles(app, block, files);
     return template(`${app}/migrations/${file}`, text => {
         const start = text ?? [
             'from django.db import migrations, models',
