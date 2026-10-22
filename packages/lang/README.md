@@ -116,6 +116,25 @@ const canonical = print(model);
 
 When you use the API directly, also install `langium` for `URI` and `NodeFileSystem`.
 
+## Language server
+
+`appling-language-server --stdio` starts a language server for any LSP client: diagnostics, completion, go to definition, references, rename, document symbols, hover (kind, qualified name, layer and doc comment) and formatting into the canonical form.
+
+To embed it, for example over a websocket:
+
+```ts
+import { startLanguageServer } from 'langium/lsp';
+import { NodeFileSystem } from 'langium/node';
+import { createApplingLspServices } from '@appling/lang/lsp';
+
+startLanguageServer(createApplingLspServices({ connection, ...NodeFileSystem }).shared);
+```
+
+| Export of `@appling/lang/lsp` | Purpose |
+|---|---|
+| `createApplingLspServices(context)` | The Appling services with Langium's LSP services |
+| `ApplingFormatter`, `ApplingHoverProvider`, `ApplingLspModule` | The Appling specific LSP services |
+
 ## License
 
 MIT

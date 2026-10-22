@@ -216,6 +216,9 @@ importers:
       langium:
         specifier: 4.4.0
         version: 4.4.0
+      vscode-languageserver:
+        specifier: ~10.1.0
+        version: 10.1.2
     devDependencies:
       '@types/node':
         specifier: ^24.19.2

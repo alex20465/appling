@@ -1,12 +1,16 @@
 {
   "name": "@appling/lang",
   "version": "0.1.1",
-  "description": "Appling language: grammar, scoping, validation and canonical printer",
+  "description": "Appling language: grammar, scoping, validation, expression typing, canonical printer and language server",
   "type": "module",
   "exports": {
     ".": {
       "types": "./out/index.d.ts",
       "default": "./out/index.js"
+    },
+    "./lsp": {
+      "types": "./out/lsp.d.ts",
+      "default": "./out/lsp.js"
     }
   },
   "files": [
@@ -17,7 +21,8 @@
     "build": "langium generate && tsc"
   },
   "dependencies": {
-    "langium": "4.4.0"
+    "langium": "4.4.0",
+    "vscode-languageserver": "~10.1.0"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
@@ -27,5 +32,8 @@
   "license": "MIT",
   "publishConfig": {
     "access": "public"
+  },
+  "bin": {
+    "appling-language-server": "./out/language-server.js"
   }
 }
