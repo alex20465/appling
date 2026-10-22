@@ -1,0 +1,51 @@
+{
+  "name": "appling-vscode",
+  "displayName": "Appling",
+  "description": "Appling language support: diagnostics, completion, navigation, rename, hover and canonical formatting",
+  "version": "0.1.0",
+  "publisher": "techthos",
+  "private": true,
+  "license": "MIT",
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Formatters"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "workspaceContains:**/*.appling"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "appling",
+        "aliases": ["Appling"],
+        "extensions": [".appling"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "appling",
+        "scopeName": "source.appling",
+        "path": "./out/appling.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=out/extension.js && esbuild ../lang/out/language-server.js --bundle --platform=node --format=cjs --outfile=out/server.js && cp ../lang/src/syntaxes/appling.tmLanguage.json out/",
+    "package": "vsce package --no-dependencies --out out/appling.vsix"
+  },
+  "devDependencies": {
+    "@appling/lang": "workspace:*",
+    "@types/node": "^24.19.2",
+    "@types/vscode": "1.100.0",
+    "@vscode/vsce": "4.0.0",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2",
+    "vscode-languageclient": "10.1.2"
+  }
+}

@@ -13,13 +13,14 @@
       "default": "./out/lsp.js"
     },
     "./monarch": {
-      "types": "./out/generated/monarch.d.ts",
-      "default": "./out/generated/monarch.js"
+      "types": "./out/syntaxes/monarch.d.ts",
+      "default": "./out/syntaxes/monarch.js"
     }
   },
   "files": [
     "out",
-    "src/appling.langium"
+    "src/appling.langium",
+    "src/syntaxes/appling.tmLanguage.json"
   ],
   "scripts": {
     "build": "langium generate && tsc"

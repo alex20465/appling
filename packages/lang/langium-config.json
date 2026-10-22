@@ -8,7 +8,10 @@
         ".appling"
       ],
       "monarch": {
-        "out": "src/generated/monarch.ts"
+        "out": "src/syntaxes/monarch.ts"
+      },
+      "textMate": {
+        "out": "src/syntaxes/appling.tmLanguage.json"
       }
     }
   ],

@@ -87,7 +87,7 @@ Extensions are configured in `appling.config.json` by package name. Third party 
 
 ## Later
 
-- [ ] VS Code extension on top of `@appling/lang/lsp`
+- [x] VS Code extension on top of `@appling/lang/lsp`
 - [ ] Appling Sync: regenerate code from the model using the registry
 - [ ] Reverse engineering: AI skill in `@appling/ai` that derives an Appling model from an existing application
 - [ ] More targets (Go, Rust) as extensions

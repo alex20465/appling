@@ -22,5 +22,5 @@ export function errors(documents: LangiumDocument[]): string[] {
 
 export function examples(): Record<string, string> {
     const dir = join(import.meta.dirname, '../../../examples');
-    return Object.fromEntries(readdirSync(dir).filter(f => f.endsWith('.appling')).map(f => [f, readFileSync(join(dir, f), 'utf8')]));
+    return Object.fromEntries(readdirSync(dir).filter(f => f.endsWith('.appling') && !f.startsWith('.')).map(f => [f, readFileSync(join(dir, f), 'utf8')]));
 }
