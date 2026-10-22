@@ -18,7 +18,9 @@ const deps = dependencies(graph);
 | `isElement(node)` | Whether an AST node becomes a graph node |
 | `qualifiedNames(models)` | The qualified name of every element AST node, in document order |
 | `parentElement(node, qns)` | The nearest element containing a node |
-| `applyEdit(sources, operation)` | Applies one edit operation to sources keyed by URI |
+| `applyEdit(sources, operation, { release })` | Applies one edit operation to sources keyed by URI |
+| `writeRelease(root, version, graph)`, `readReleases(root)`, `latestRelease(releases)` | Release snapshots in `<root>/.appling/releases/` |
+| `migrationBlockName(version)` | The migration block for steps after a release, such as `since_v1_0_0` |
 | `Graph`, `GraphNode`, `GraphEdge`, `Dependency` | The serializable graph types |
 
 ### Nodes
@@ -59,6 +61,8 @@ if (result.ok) {
 | `{ op: 'retype', target, type }` | Replaces the type of a field or parameter |
 | `{ op: 'remove', target }` | Removes the element, with its separating comma in a list and its name in the module's export list |
 | `{ op: 'set', target, property, value }` | Replaces a property's text, removes it (with its keyword) when the value is empty, or inserts it with its keyword when it is absent |
+
+When `release` is given, renaming, retyping or removing a domain (L1) element that exists in that release also appends a migration step (`rename Order.code -> reference`, `retype Order.total: Decimal -> Money`, `remove Order.legacy`) to the module's `since_v<version>` block, creating it when needed. Elements renamed since the release are traced back through the steps already in that block.
 
 The touched element is printed canonically, so a formatted file stays formatted. An edit is rejected when it does not parse or when validation reports an error that was not there before.
 

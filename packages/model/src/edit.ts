@@ -1,9 +1,11 @@
 import { AstUtils, CstUtils, GrammarAST, GrammarUtils, URI, type AstNode, type CstNode, type LangiumDocument, type LeafCstNode } from 'langium';
 import {
-    ExpressionTyper, buildSources, errorsOf, isEntity, isEnumLiteral, isField, isMachine, isMemberExpr, isMessages,
-    isModule, isProjection, printRange, projectionSourceEntity, type Model, type Workspace
+    ExpressionTyper, LAYER_OF, buildSources, errorsOf, isEntity, isEnumLiteral, isField, isMachine, isMemberExpr, isMessages,
+    isMigration, isModule, isProjection, isRenameStep, modulePath, printRange, projectionSourceEntity,
+    type MigrationStep, type Model, type Workspace
 } from '@appling/lang';
 import { qualifiedNames } from './graph.js';
+import { migrationBlockName, type Release } from './release.js';
 
 export type EditOperation =
     | { op: 'add'; parent: string; source: string }
@@ -37,12 +39,15 @@ class Rejected extends Error { }
 /**
  * Applies one edit to sources keyed by URI. The touched region is printed canonically, the result is
  * validated, and the edit is rejected when it introduces errors. The returned text edits are minimal.
+ * With a release, renaming, retyping or removing a released L1 element also appends a migration step.
  */
-export async function applyEdit(sources: Sources, operation: EditOperation): Promise<EditResult> {
+export async function applyEdit(sources: Sources, operation: EditOperation, options: { release?: Release } = {}): Promise<EditResult> {
     const workspace = await buildSources(sources);
     let changed: Sources;
     try {
+        const step = options.release && migrationStep(workspace, operation, options.release);
         changed = await perform(workspace, sources, operation);
+        if (step) changed = await appendStep(changed, step);
     } catch (error) {
         if (error instanceof Rejected) return { ok: false, errors: [error.message] };
         throw error;
@@ -53,12 +58,7 @@ export async function applyEdit(sources: Sources, operation: EditOperation): Pro
 }
 
 async function perform(workspace: Workspace, sources: Sources, operation: EditOperation): Promise<Sources> {
-    const index = new Map([...qualifiedNames(modelsOf(workspace))].map(([node, qn]) => [qn, node]));
-    const find = (qn: string) => {
-        const node = index.get(qn);
-        if (!node) throw new Rejected(`No element ${qn}.`);
-        return node;
-    };
+    const find = finder(workspace);
     switch (operation.op) {
         case 'add':
             return add(workspace, sources, find(operation.parent), operation.parent, operation.source);
@@ -71,6 +71,59 @@ async function perform(workspace: Workspace, sources: Sources, operation: EditOp
         case 'set':
             return set(workspace, sources, find(operation.target), operation.property, operation.value);
     }
+}
+
+function finder(workspace: Workspace): (qn: string) => AstNode {
+    const index = new Map([...qualifiedNames(modelsOf(workspace))].map(([node, qn]) => [qn, node]));
+    return qn => {
+        const node = index.get(qn);
+        if (!node) throw new Rejected(`No element ${qn}.`);
+        return node;
+    };
+}
+
+interface PendingStep {
+    module: string;
+    block: string;
+    text: string;
+}
+
+/** The step that records an edit of a released L1 element, written with the element's path before the edit. */
+function migrationStep(workspace: Workspace, operation: EditOperation, release: Release): PendingStep | undefined {
+    if (operation.op !== 'rename' && operation.op !== 'retype' && operation.op !== 'remove') return undefined;
+    const node = finder(workspace)(operation.target);
+    const module = AstUtils.getContainerOfType(node.$container, isModule);
+    let member: AstNode = node;
+    while (member.$container && member.$container !== module) member = member.$container;
+    if (!module || !nameOf(node) || LAYER_OF[member.$type] !== 'domain') return undefined;
+    const path = pathInModule(node, module).join('.');
+    const block = migrationBlockName(release.version);
+    const since = module.members.filter(isMigration).find(m => m.name === block)?.steps ?? [];
+    if (!release.graph.nodes.some(n => n.qn === `${modulePath(module)}.${releasedPath(path, since)}`)) return undefined;
+    const text = operation.op === 'rename' ? `rename ${path} -> ${operation.name}`
+        : operation.op === 'retype' ? `retype ${path}: ${GrammarUtils.findNodeForProperty(node.$cstNode, 'type')?.text} -> ${operation.type}`
+        : `remove ${path}`;
+    return { module: modulePath(module), block, text };
+}
+
+/** Undoes the renames recorded since the release, giving the path the element had in the release. */
+function releasedPath(path: string, steps: MigrationStep[]): string {
+    for (const step of [...steps].reverse()) {
+        if (!isRenameStep(step)) continue;
+        const renamed = step.target.replace(/[^.]+$/, step.newName);
+        if (path === renamed || path.startsWith(`${renamed}.`)) path = step.target + path.slice(renamed.length);
+    }
+    return path;
+}
+
+async function appendStep(sources: Sources, step: PendingStep): Promise<Sources> {
+    const workspace = await buildSources(sources);
+    const find = finder(workspace);
+    const block = `${step.module}.${step.block}`;
+    const exists = [...qualifiedNames(modelsOf(workspace)).values()].includes(block);
+    return exists
+        ? add(workspace, sources, find(block), block, step.text)
+        : add(workspace, sources, find(step.module), step.module, `migration ${step.block} { ${step.text} }`);
 }
 
 /** Inserts the source at the last position inside the parent where it parses as one more child of the parent. */

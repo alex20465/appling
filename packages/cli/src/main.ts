@@ -4,24 +4,38 @@ import { join, relative, resolve } from 'node:path';
 import { URI, type LangiumDocument } from 'langium';
 import { NodeFileSystem } from 'langium/node';
 import { createApplingServices, print, type ApplingServices, type Model } from '@appling/lang';
-import { buildGraph, dependencies } from '@appling/model';
+import { buildGraph, dependencies, writeRelease } from '@appling/model';
 
-const USAGE = 'Usage: appling <check|fmt|graph> [files or folders...]';
+const USAGE = 'Usage: appling <check|fmt|graph> [files or folders...]\n       appling release <version> [files or folders...]';
 
-async function main([command, ...paths]: string[]): Promise<number> {
-    if (command !== 'check' && command !== 'fmt' && command !== 'graph') {
+async function main([command, ...args]: string[]): Promise<number> {
+    if (!['check', 'fmt', 'graph', 'release'].includes(command) || (command === 'release' && !args[0])) {
         console.error(USAGE);
         return 2;
     }
+    const [version, paths] = command === 'release' ? [args[0], args.slice(1)] : ['', args];
     const files = (paths.length ? paths : ['.']).flatMap(p => applingFiles(resolve(p)));
     const { shared, Appling } = createApplingServices(NodeFileSystem);
     const documents = await Promise.all(files.map(f => shared.workspace.LangiumDocuments.getOrCreateDocument(URI.file(f))));
     await shared.workspace.DocumentBuilder.build(documents, { validation: command !== 'fmt' });
     if (command === 'fmt') return format(documents);
     if (command === 'graph') return graph(documents, Appling);
+    if (command === 'release') return release(documents, Appling, version);
     const errors = report(documents, console.log);
     console.log(`${documents.length} file(s), ${errors} error(s)`);
     return errors ? 1 : 0;
+}
+
+function release(documents: LangiumDocument[], services: ApplingServices, version: string): number {
+    if (report(documents, console.error)) return 1;
+    try {
+        const file = writeRelease('.', version, buildGraph(documents.map(doc => doc.parseResult.value as Model), services));
+        console.log(`released ${version} to ${relative('.', file)}`);
+        return 0;
+    } catch (error) {
+        console.error((error as Error).message);
+        return 1;
+    }
 }
 
 /** Prints every diagnostic and returns the number of errors. */
