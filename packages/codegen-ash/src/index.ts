@@ -1,11 +1,11 @@
-import type { CodegenExtension, CommandStep, MapContext, Step } from '@appling/codegen';
+import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
+import { interfaceSteps } from './api.js';
+import { projectionFieldSteps, querySteps } from './application.js';
+import { actionSteps, jobSteps, machineSteps } from './behavior.js';
 import { ashExpr, constant, lastOf, parentOf, validation } from './elixir.js';
-
-const TYPES: Record<string, string> = {
-    String: 'string', Text: 'string', Int: 'integer', Decimal: 'decimal', Money: 'decimal', Bool: 'boolean',
-    Date: 'date', DateTime: 'utc_datetime_usec', Duration: 'duration', File: 'string', Uuid: 'uuid'
-};
+import { testSteps } from './tests.js';
+import { app, attributeType, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, storedAttributes, task, typeModule } from './naming.js';
 
 const extension: CodegenExtension = {
     name: '@appling/codegen-ash',
@@ -14,9 +14,14 @@ const extension: CodegenExtension = {
         { name: 'igniter_new', command: ['mix', 'help', 'igniter.new'], hint: 'run "mix archive.install hex igniter_new"' }
     ],
 
-    setup: context => [
-        { kind: 'command', run: ['mix', 'igniter.new', app(context), '--install', 'ash,ash_postgres', '--yes', '--no-git'], cwd: '..', creates: ['mix.exs', 'lib/'] }
-    ],
+    setup: context => {
+        const has = (kind: string, test: (n: GraphNode) => boolean = () => true) => context.graph.nodes.some(n => n.kind === kind && test(n));
+        const install = ['ash', 'ash_postgres', ...(has('Machine') ? ['ash_state_machine'] : []), ...(has('Job', j => !!j.data.schedule) ? ['ash_oban'] : [])];
+        return [
+            { kind: 'command', run: ['mix', 'igniter.new', app(context), '--install', install.join(','), '--yes', '--no-git'], cwd: '..', creates: ['mix.exs', 'lib/'] },
+            ...(has('Interface', i => i.data.protocol === 'rest') ? [mix(['igniter.install', 'ash_json_api,bandit'])] : [])
+        ];
+    },
 
     steps(node, context) {
         switch (node.kind) {
@@ -26,14 +31,53 @@ const extension: CodegenExtension = {
             case 'Entity': return entitySteps(node, context);
             case 'EnumLiteral': return [];
             case 'Field': return fieldSteps(node, context);
-            case 'Invariant': return check(node, context) ? [] : [task(`enforce the invariant "${node.data.label}": ${node.props.condition}`)];
-            case 'Policy': return node.layer === 'domain' ? [task(`add an Ash policy for ${(node.data.operations as string[] | undefined)?.join(', ') ?? 'any action'}: ${node.props.condition}`)] : undefined;
+            case 'Invariant': return [
+                ...(check(node, context) ? [] : [task(`enforce the invariant "${node.data.label}": ${node.props.condition}`)]),
+                ...testSteps(node, owner(node, context), `invariant ${node.data.label}`, ['holds for valid records', 'rejects violations'], context)
+            ];
+            case 'Policy': return [
+                task(`add an Ash policy to ${parentOf(node.qn)} for ${(node.data.operations as string[] | undefined)?.join(', ') ?? 'any action'}: ${node.props.condition}`),
+                ...(context.node(parentOf(node.qn))!.kind === 'Entity'
+                    ? testSteps(node, owner(node, context), lastOf(node.qn), ['allows permitted actors', 'denies other actors'], context)
+                    : [])
+            ];
+            case 'Transition': return transitionTests(node, context);
+            case 'Action': return actionSteps(node, context);
+            case 'Machine': return machineSteps(node, context);
+            case 'Job': return jobSteps(node, context);
+            case 'Query': return querySteps(node, context);
+            case 'ProjectionField': return projectionFieldSteps(node, context);
+            case 'Interface': return interfaceSteps(node, context);
+            case 'Event': return [task(`publish ${lastOf(node.qn)} with an Ash notifier, for example Ash.Notifier.PubSub`)];
+            case 'External': return [task(`implement ${lastOf(node.qn)} as a client module or generic actions`)];
+            case 'UseCase': return [task(`implement ${lastOf(node.qn)} as a Reactor or a generic action`)];
+            case 'Role': return [task(`model the role ${lastOf(node.qn)} on the actor resource`)];
+            case 'Param':
+            case 'ErrorDecl':
+            case 'SetEffect':
+            case 'CreateEffect':
+            case 'EmitEffect':
+            case 'Projection':
+            case 'ExternalOperation':
+            case 'Endpoint':
+                return [];
             default: return undefined;
         }
     }
 };
 
 export default extension;
+
+function owner(node: GraphNode, context: MapContext): GraphNode {
+    return context.node(parentOf(node.qn))!;
+}
+
+function transitionTests(transition: GraphNode, context: MapContext): Step[] {
+    const machine = owner(transition, context);
+    const entity = owner(context.node(machine.data.field as string)!, context);
+    const title = `transition ${(transition.data.from as string[]).join(', ')} -> ${transition.data.to}`;
+    return testSteps(transition, entity, title, ['moves from allowed states', 'refuses other states'], context);
+}
 
 function entitySteps(entity: GraphNode, context: MapContext): Step[] {
     const attributes = fieldsOf(entity, context).filter(f => !f.data.derived && !relationTarget(f, context));
@@ -45,13 +89,14 @@ function entitySteps(entity: GraphNode, context: MapContext): Step[] {
         mix(['ash.gen.resource', typeModule(entity, context), '--domain', moduleName(entity.module, context),
             '--default-actions', 'read,create,update,destroy', '--uuid-primary-key', 'id', ...(specs.length ? ['--attribute', specs.join(',')] : []),
             '--extend', 'postgres', '--timestamps']),
-        { kind: 'template', file: fileOf(entity, context), write: existing => patchResource(existing!, entity, context) }
+        patch(fileOf(entity, context), existing => patchResource(existing, entity, context))
     ];
 }
 
 function fieldSteps(field: GraphNode, context: MapContext): Step[] | undefined {
     const owner = context.node(parentOf(field.qn))!;
     if (owner.kind === 'ValueType') return field.data.derived || field.data.default ? [task(`add ${lastOf(field.qn)} to the embedded resource: ${field.props.derived ?? field.props.default}`)] : [];
+    if (owner.kind === 'Event') return [];
     if (owner.kind !== 'Entity') return undefined;
     const type = field.data.type as TypeData;
     const target = relationTarget(field, context);
@@ -95,8 +140,7 @@ function calculation(field: GraphNode, context: MapContext): string | undefined 
 }
 
 function check(invariant: GraphNode, context: MapContext): string | undefined {
-    const stored = new Set(fieldsOf(context.node(parentOf(invariant.qn))!, context).filter(f => !f.data.derived && !relationTarget(f, context)).map(f => f.qn));
-    return validation(invariant.data.condition as ExprData, stored, context.node);
+    return validation(invariant.data.condition as ExprData, storedAttributes(context.node(parentOf(invariant.qn))!, context), context.node);
 }
 
 function defaultValue(field: GraphNode, context: MapContext): string | undefined {
@@ -115,49 +159,3 @@ function embedded(node: GraphNode, context: MapContext): string {
     return `defmodule ${typeModule(node, context)} do\n  use Ash.Resource, data_layer: :embedded\n\n  attributes do\n${attributes.join('')}  end\nend\n`;
 }
 
-function attributeType(type: TypeData, context: MapContext, asCode = false): string {
-    if (type.primitive) return asCode ? `:${TYPES[type.primitive]}` : TYPES[type.primitive];
-    return typeModule(context.node(type.decl!)!, context);
-}
-
-function relationTarget(field: GraphNode, context: MapContext): GraphNode | undefined {
-    const decl = (field.data.type as TypeData | undefined)?.decl;
-    const target = decl ? context.node(decl) : undefined;
-    return target?.kind === 'Entity' ? target : undefined;
-}
-
-function fieldsOf(node: GraphNode, context: MapContext): GraphNode[] {
-    return context.children(node.qn).filter(f => f.kind === 'Field');
-}
-
-function app(context: MapContext): string {
-    return context.name.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-}
-
-function moduleName(moduleQn: string, context: MapContext): string {
-    return [app(context), ...moduleQn.split('.')].map(pascal).join('.');
-}
-
-function typeModule(node: GraphNode, context: MapContext): string {
-    return `${moduleName(node.module, context)}.${lastOf(node.qn)}`;
-}
-
-function fileOf(node: GraphNode, context: MapContext): string {
-    return ['lib', app(context), ...node.module.split('.').map(snake), `${snake(lastOf(node.qn))}.ex`].join('/');
-}
-
-function pascal(name: string): string {
-    return name.split('_').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
-}
-
-function snake(name: string): string {
-    return name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
-}
-
-function mix(args: string[]): CommandStep {
-    return { kind: 'command', run: ['mix', ...args, '--yes'] };
-}
-
-function task(what: string): Step {
-    return { kind: 'task', what };
-}

@@ -29,7 +29,8 @@ test('examples generate apps, enums, value types and models', async () => {
     expect(files).toMatchSnapshot();
     expect(entries['sales.Order.invariant["total never negative"]'].missing[0].what).toBe('enforce the invariant "total never negative": total >= 0');
     expect(entries['sales.Order.total'].status).toBe('generated');
-    expect(entries['sales.PlaceOrder'].status).toBe('generated');
+    expect(entries['sales.PlaceOrder'].status).toBe('partial');
+    expect(entries['sales.PlaceOrder'].missing.map(m => m.what)).toEqual(['write the test bodies of PlaceOrderPreconditionsTest in sales/tests.py']);
     expect(entries['sales.Checkout'].missing.map(m => m.what)).toEqual(['continue Checkout when PaymentReceived happens, or after 24h with the timeout call; the steps from here on are not generated']);
     expect(entries['sales.ExpireDrafts'].missing.map(m => m.what)).toEqual(['schedule "python manage.py expire_drafts" with cron "0 3 * * *"']);
 });
@@ -75,5 +76,8 @@ test('invariants over stored fields become check constraints, defaults and deriv
         '            models.CheckConstraint(condition=(~models.Q(status="done")) | (models.Q(note__isnull=False)), name="shop_item_noted_when_done"),',
         '        ]'
     ].join('\n'));
-    expect(entries['shop.Item.invariant["not derived"]'].status).toBe('todo');
+    expect(entries['shop.Item.invariant["not derived"]'].missing.map(m => m.what)).toEqual([
+        'enforce the invariant "not derived": big || quantity < 5',
+        'write the test bodies of ItemNotDerivedTest in shop/tests.py'
+    ]);
 });

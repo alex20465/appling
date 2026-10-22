@@ -66,3 +66,23 @@ test('resources get defaults, identities, calculations and validations', async (
         ''
     ].join('\n'));
 });
+
+test('behavior, queries and the JSON:API are patched into the generated modules', async () => {
+    const result = await planFor(examples());
+    const files = new Map<string, string>([
+        ['lib/shop/sales/order.ex', 'defmodule Shop.Sales.Order do\n  use Ash.Resource, otp_app: :shop, domain: Shop.Sales, data_layer: AshPostgres.DataLayer\n\n  actions do\n    defaults [:read, :destroy]\n  end\n\n  attributes do\n    attribute :status, Shop.Sales.OrderStatus do\n      allow_nil? false\n    end\n  end\nend\n'],
+        ['lib/shop/sales.ex', 'defmodule Shop.Sales do\n  use Ash.Domain,\n    otp_app: :shop\n\n  resources do\n    resource Shop.Sales.Order\n  end\nend\n'],
+        ['lib/shop/crm/account.ex', 'defmodule Shop.Crm.Account do\n  use Ash.Resource, otp_app: :shop, domain: Shop.Crm\nend\n'],
+        ['lib/shop/application.ex', 'defmodule Shop.Application do\n  def start(_type, _args) do\n    children = [\n      Shop.Repo\n    ]\n  end\nend\n']
+    ]);
+    for (const { step } of result.steps) {
+        if (step.kind === 'template') files.set(step.file, step.write(files.get(step.file)));
+    }
+    expect(Object.fromEntries([...files].filter(([file]) => !file.endsWith('line.ex')))).toMatchSnapshot();
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['sales.PlaceOrder'].missing.map(m => m.what)).toEqual([
+        'check the precondition requires { lines.size() > 0 } else EmptyOrder in PlaceOrder',
+        'apply the effect effect[emit OrderPlaced] in PlaceOrder, for example with an Ash notifier or a change',
+        'write the tests "action place_order precondition" in test/shop/sales/order_test.exs'
+    ]);
+});

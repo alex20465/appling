@@ -36,6 +36,8 @@ Requires `uv` on the PATH. Python and Django (6.1) are installed by uv into the 
 | `usecase` | a function in `<app>/usecases.py` calling its steps in order, with `try`/`except` for error handlers |
 | `interface rest` | REST framework views in `<app>/api.py` and routes in `<app>/urls.py`: list views for queries with projection, picks and pagination, `APIView`s for actions; `limit` becomes a throttle |
 
+| rules | a `TestCase` per invariant, policy, transition and action with preconditions in `<app>/tests.py`, one skipped method per case; writing their bodies is a registry task |
+
 Models with projections or interfaces also get Django REST framework.
 
 What cannot be translated becomes a registry task: invariants over derived fields or other entities, derived fields and defaults that use `actor` or other context, policies, roles, guards and effects that cannot be expressed in Python, the client of an external system, scheduling of jobs, use cases from their first `await` on, authentication and CORS of interfaces.

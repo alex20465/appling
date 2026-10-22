@@ -20,6 +20,8 @@ export function ashExpr(expr: ExprData, node: Lookup): string | undefined {
             return operand && (expr.op === '!' ? `not ${wrap(operand)}` : `-${wrap(operand)}`);
         }
         case 'BinaryExpr': {
+            const shift = relativeTime(expr);
+            if (shift) return shift;
             const [left, right] = [sub(expr.left!), sub(expr.right!)];
             return left && right && `${wrap(left)} ${OPERATORS[expr.op!] ?? expr.op} ${wrap(right)}`;
         }
@@ -31,6 +33,7 @@ export function ashExpr(expr: ExprData, node: Lookup): string | undefined {
             if (expr.name === 'now' && !expr.target) return 'now()';
             const target = expr.target ? node(expr.target) : undefined;
             if (target?.kind === 'EnumLiteral') return `:${expr.name}`;
+            if (target?.kind === 'Param') return `^arg(:${expr.name})`;
             return target?.kind === 'Field' && node(parentOf(target.qn))?.kind === 'Entity' ? expr.name : undefined;
         }
         case 'MemberExpr': {
@@ -83,8 +86,20 @@ export function constant(expr: ExprData, node: Lookup): string | undefined {
     }
 }
 
+const UNITS: Record<string, string> = { d: 'day', h: 'hour', m: 'minute', s: 'second' };
+
+/** `now - duration("720h")` and `now + duration(...)` as Ash's `ago(720, :hour)` and `from_now(...)`. */
+function relativeTime(expr: ExprData): string | undefined {
+    const [left, right] = [expr.left!, expr.right!];
+    const isNow = left.$type === 'NameExpr' && left.name === 'now' && !left.target && !left.call;
+    const arg = right.$type === 'NameExpr' && right.call && right.name === 'duration' ? right.args?.[0] : undefined;
+    const match = arg?.$type === 'StringExpr' ? /^(\d+)(d|h|m|s)$/.exec(String(arg.value)) : null;
+    if (!isNow || !match || (expr.op !== '-' && expr.op !== '+')) return undefined;
+    return `${expr.op === '-' ? 'ago' : 'from_now'}(${match[1]}, :${UNITS[match[2]]})`;
+}
+
 function wrap(code: string): string {
-    return /^[\w.:]+(\(.*\))?$/.test(code) || /^".*"$/.test(code) ? code : `(${code})`;
+    return /^[\w.:]+(\(.*\))?$/.test(code) || /^".*"$/.test(code) || /^\[.*\]$/.test(code) ? code : `(${code})`;
 }
 
 function joined(parts: (string | undefined)[], combine: (parts: string[]) => string): string | undefined {

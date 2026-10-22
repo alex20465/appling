@@ -1,6 +1,7 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
 import { annotation, children, pythonFile, task, template } from './files.js';
+import { testSteps } from './tests.js';
 import { appOf, constantOf, lastOf, parentOf, python, q, type PythonScope } from './python.js';
 
 const PRIMITIVES: Record<string, string> = {
@@ -63,14 +64,18 @@ export function fieldSteps(field: GraphNode, context: MapContext): Step[] | unde
 }
 
 export function invariantSteps(invariant: GraphNode, context: MapContext): Step[] {
-    return constraint(invariant, context) ? [] : [task(`enforce the invariant "${invariant.data.label}": ${invariant.props.condition}`)];
+    const rule = constraint(invariant, context) ? [] : [task(`enforce the invariant "${invariant.data.label}": ${invariant.props.condition}`)];
+    return [...rule, ...testSteps(invariant, String(invariant.props.condition), ['holds_for_valid_rows', 'rejects_violations'], context)];
 }
 
-export function policyTask(policy: GraphNode): Step {
+export function policySteps(policy: GraphNode, context: MapContext): Step[] {
     const operations = (policy.data.operations ?? []) as string[];
     const fields = ((policy.data.fields ?? []) as string[]).map(lastOf);
     const scope = `${operations.length ? operations.join(', ') : 'any'}${fields.length ? ` (fields ${fields.join(', ')})` : ''}`;
-    return task(`enforce the ${scope} policy of ${parentOf(policy.qn)}: ${policy.props.condition}`);
+    return [
+        task(`enforce the ${scope} policy of ${parentOf(policy.qn)}: ${policy.props.condition}`),
+        ...testSteps(policy, String(policy.props.condition), ['allows_permitted_actors', 'denies_other_actors'], context)
+    ];
 }
 
 function modelClass(entity: GraphNode, context: MapContext, imports: Set<string>): string {

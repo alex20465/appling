@@ -60,8 +60,8 @@ Extensions are configured in `appling.config.json` by package name. Third party 
 
 - [x] B1 Core: plan, step runner, map contract, registry, prerequisite checks, `appling generate`.
 - [x] B2 Django and Ash maps for L1: entities, enums, value types, invariants, policies.
-- [ ] B3 Django and Ash maps for L2 to L4: actions, state machines, events, jobs, queries, projections, use cases, interfaces.
-- [ ] B4 Tests: test skeletons for invariants, preconditions, transitions and policies; test bodies are registry tasks.
+- [x] B3 Django and Ash maps for L2 to L4: actions, state machines, events, jobs, queries, projections, use cases, interfaces.
+- [x] B4 Tests: test skeletons for invariants, preconditions, transitions and policies; test bodies are registry tasks.
 - [ ] B5 Registry skill in `@appling/ai`: picks open entries, implements them, runs the related tests, marks them done.
 - [ ] B6 Migrations through `makemigrations` and `mix ash.codegen`, fed with Appling `rename` and `retype` steps so they are not guessed as remove plus add.
 

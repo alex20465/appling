@@ -2,7 +2,7 @@
 
 The core of Appling code generation. It turns the semantic graph of a model into a draft project for a target framework through an extension, and records in a task registry what was generated and what is still open.
 
-Generation runs once per project. Work the generator cannot do (derived logic, complex preconditions, test bodies) becomes a registry task for the AI or a human, never a placeholder in the code.
+Generation runs once per project. Work the generator cannot do (derived logic, complex preconditions, test bodies) becomes a registry task for the AI or a human. Generated test skeletons skip with a pointer to their registry entry, so open work shows in the test run as well.
 
 ## Configuration
 

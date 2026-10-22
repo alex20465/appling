@@ -1,9 +1,9 @@
 import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
 import { interfaceSteps } from './api.js';
 import { externalSteps, projectionFieldSteps, projectionSteps, querySteps, useCaseSteps } from './application.js';
-import { actionSteps, errorSteps, eventSteps, jobSteps, machineSteps } from './behavior.js';
+import { actionSteps, errorSteps, eventSteps, jobSteps, machineSteps, transitionSteps } from './behavior.js';
 import { hasKind, task } from './files.js';
-import { entitySteps, enumSteps, fieldSteps, installApp, invariantSteps, moduleSteps, policyTask, valueSteps } from './models.js';
+import { entitySteps, enumSteps, fieldSteps, installApp, invariantSteps, moduleSteps, policySteps, valueSteps } from './models.js';
 
 const DJANGO = 'django~=6.1.0';
 const REST_FRAMEWORK = 'djangorestframework~=3.16';
@@ -21,11 +21,12 @@ const extension: CodegenExtension = {
             case 'Entity': return entitySteps(node, context);
             case 'Field': return fieldSteps(node, context);
             case 'Invariant': return invariantSteps(node, context);
-            case 'Policy': return [policyTask(node)];
+            case 'Policy': return policySteps(node, context);
             case 'Event': return eventSteps(node);
             case 'Action': return actionSteps(node, context);
             case 'ErrorDecl': return errorSteps(node);
             case 'Machine': return machineSteps(node, context);
+            case 'Transition': return transitionSteps(node, context);
             case 'Job': return jobSteps(node, context);
             case 'Query': return querySteps(node, context);
             case 'Projection': return projectionSteps(node, context);
@@ -35,7 +36,6 @@ const extension: CodegenExtension = {
             case 'Interface': return interfaceSteps(node, context);
             case 'EnumLiteral':
             case 'Param':
-            case 'Transition':
             case 'SetEffect':
             case 'CreateEffect':
             case 'EmitEffect':

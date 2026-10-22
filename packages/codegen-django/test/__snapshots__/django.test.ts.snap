@@ -30,6 +30,18 @@ class Account(models.Model):
     name = models.CharField(max_length=255, unique=True)
     email = models.CharField(max_length=255)
 ",
+  "crm/tests.py": "from django.test import TestCase
+
+
+class AccountReadPolicyTest(TestCase):
+    """crm.Account.policy[read]: actor.is(Clerk) || actor.account == this"""
+
+    def test_allows_permitted_actors(self):
+        self.skipTest("registry task: crm.Account.policy[read]")
+
+    def test_denies_other_actors(self):
+        self.skipTest("registry task: crm.Account.policy[read]")
+",
   "sales/actions.py": "from django.db import transaction
 from django.utils import timezone
 from sales.enums import OrderStatus
@@ -226,6 +238,105 @@ class OrderSummary(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = ["reference", "status", "total", "customer_name"]
+",
+  "sales/tests.py": "from django.test import TestCase
+
+
+class OrderTotalNeverNegativeTest(TestCase):
+    """sales.Order.invariant["total never negative"]: total >= 0"""
+
+    def test_holds_for_valid_rows(self):
+        self.skipTest("registry task: sales.Order.invariant[\\"total never negative\\"]")
+
+    def test_rejects_violations(self):
+        self.skipTest("registry task: sales.Order.invariant[\\"total never negative\\"]")
+
+
+class OrderReadPolicyTest(TestCase):
+    """sales.Order.policy[read]: actor.is(crm.Clerk) || customer == actor.account"""
+
+    def test_allows_permitted_actors(self):
+        self.skipTest("registry task: sales.Order.policy[read]")
+
+    def test_denies_other_actors(self):
+        self.skipTest("registry task: sales.Order.policy[read]")
+
+
+class OrderCreateUpdateDeletePolicyTest(TestCase):
+    """sales.Order.policy[create,update,delete]: actor.is(crm.Clerk)"""
+
+    def test_allows_permitted_actors(self):
+        self.skipTest("registry task: sales.Order.policy[create,update,delete]")
+
+    def test_denies_other_actors(self):
+        self.skipTest("registry task: sales.Order.policy[create,update,delete]")
+
+
+class OrderReadPolicy2Test(TestCase):
+    """sales.Order.policy[read fields total]: status != draft || actor.is(crm.Clerk)"""
+
+    def test_allows_permitted_actors(self):
+        self.skipTest("registry task: sales.Order.policy[read fields total]")
+
+    def test_denies_other_actors(self):
+        self.skipTest("registry task: sales.Order.policy[read fields total]")
+
+
+class PlaceOrderPreconditionsTest(TestCase):
+    """sales.PlaceOrder: requires { lines.size() > 0 } else EmptyOrder"""
+
+    def test_precondition_1_is_enforced(self):
+        self.skipTest("registry task: sales.PlaceOrder")
+
+
+class PlaceOrderAnyPolicyTest(TestCase):
+    """sales.PlaceOrder.policy[]: actor.is(Customer) && customer == actor.account"""
+
+    def test_allows_permitted_actors(self):
+        self.skipTest("registry task: sales.PlaceOrder.policy[]")
+
+    def test_denies_other_actors(self):
+        self.skipTest("registry task: sales.PlaceOrder.policy[]")
+
+
+class CancelAnyPolicyTest(TestCase):
+    """sales.Cancel.policy[]: actor.is(crm.Clerk)"""
+
+    def test_allows_permitted_actors(self):
+        self.skipTest("registry task: sales.Cancel.policy[]")
+
+    def test_denies_other_actors(self):
+        self.skipTest("registry task: sales.Cancel.policy[]")
+
+
+class OrderFlowDraftToPlacedTest(TestCase):
+    """sales.OrderFlow.transition[draft->placed]: draft -> placed via PlaceOrder"""
+
+    def test_moves_from_allowed_states(self):
+        self.skipTest("registry task: sales.OrderFlow.transition[draft->placed]")
+
+    def test_refuses_other_states(self):
+        self.skipTest("registry task: sales.OrderFlow.transition[draft->placed]")
+
+
+class OrderFlowPlacedToPaidTest(TestCase):
+    """sales.OrderFlow.transition[placed->paid]: placed -> paid via PaymentReceived"""
+
+    def test_moves_from_allowed_states(self):
+        self.skipTest("registry task: sales.OrderFlow.transition[placed->paid]")
+
+    def test_refuses_other_states(self):
+        self.skipTest("registry task: sales.OrderFlow.transition[placed->paid]")
+
+
+class OrderFlowDraftPlacedToCancelledTest(TestCase):
+    """sales.OrderFlow.transition[draft,placed->cancelled]: draft, placed -> cancelled via Cancel when !has(paid_at)"""
+
+    def test_moves_from_allowed_states(self):
+        self.skipTest("registry task: sales.OrderFlow.transition[draft,placed->cancelled]")
+
+    def test_refuses_other_states(self):
+        self.skipTest("registry task: sales.OrderFlow.transition[draft,placed->cancelled]")
 ",
   "sales/urls.py": "from django.urls import path
 from sales import api

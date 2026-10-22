@@ -2,6 +2,7 @@ import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
 import { annotation, children, pythonFile, task, template } from './files.js';
 import { scope, storedFields } from './models.js';
+import { testSteps } from './tests.js';
 import { appOf, constantOf, lastOf, parentOf, python, q, snake, type PythonScope } from './python.js';
 
 interface Code {
@@ -65,7 +66,14 @@ export function actionSteps(action: GraphNode, context: MapContext): Step[] {
         `def ${snake(lastOf(action.qn))}(${params.join(', ')}) -> None:`,
         ...(code.lines.length ? code.lines : ['pass']).map(l => `    ${l}`)
     ].join('\n');
-    return [template(`${appOf(action.module)}/actions.py`, existing => pythonFile(existing, code.imports, body)), ...code.tasks];
+    const preconditionTests = preconditions.length ? testSteps(action, (action.props.preconditions as string[]).join('; '), preconditions.map((_, i) => `precondition_${i + 1}_is_enforced`), context) : [];
+    return [template(`${appOf(action.module)}/actions.py`, existing => pythonFile(existing, code.imports, body)), ...code.tasks, ...preconditionTests];
+}
+
+export function transitionSteps(transition: GraphNode, context: MapContext): Step[] {
+    const trigger = lastOf((transition.data.action ?? transition.data.event) as string);
+    const rule = `${(transition.data.from as string[]).join(', ')} -> ${transition.data.to} via ${trigger}${transition.props.guard ? ` when ${transition.props.guard}` : ''}`;
+    return testSteps(transition, rule, ['moves_from_allowed_states', 'refuses_other_states'], context);
 }
 
 /** One branch per transition: the current state and guard pick the branch, anything else is an invalid transition. */
