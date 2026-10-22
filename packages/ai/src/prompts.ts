@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs';
 
-/** The registry skill's instructions, without its frontmatter: the one source for the skill and the MCP prompt. */
-export const REGISTRY_PROMPT = readFileSync(new URL('../skills/appling-registry/SKILL.md', import.meta.url), 'utf8').replace(/^---[\s\S]*?---\n+/, '');
+/** A skill's instructions without its frontmatter: the one source for the skill and its MCP prompt. */
+function skill(name: string): string {
+    return readFileSync(new URL(`../skills/${name}/SKILL.md`, import.meta.url), 'utf8').replace(/^---[\s\S]*?---\n+/, '');
+}
+
+export const REGISTRY_PROMPT = skill('appling-registry');
+
+export const REVERSE_PROMPT = skill('appling-reverse');
 
 export const CHAT_SYSTEM = `You help people model their application in Appling, a declarative language that describes a business application in five layers: domain (entities, value types, enums, invariants, policies), behavior (actions, state machines, events, jobs), application (queries, projections, external systems, use cases), interfaces and experience (pages). Cross cutting: modules, roles, actors, tenants, migrations.
 

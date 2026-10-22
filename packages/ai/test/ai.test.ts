@@ -44,7 +44,7 @@ test('the MCP server exposes model and registry tools and the registry prompt', 
     const client = new Client({ name: 'test', version: '1' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await Promise.all([createMcpServer(root).connect(serverTransport), client.connect(clientTransport)]);
-    expect((await client.listTools()).tools.map(t => t.name).sort()).toEqual(['check', 'edit', 'graph_query', 'read_source', 'registry_next', 'registry_update', 'run_tests', 'simulate']);
+    expect((await client.listTools()).tools.map(t => t.name).sort()).toEqual(['check', 'edit', 'graph_query', 'read_source', 'registry_next', 'registry_update', 'run_tests', 'simulate', 'write_model_file']);
     const text = async (name: string, args: Record<string, unknown>) => JSON.parse(((await client.callTool({ name, arguments: args })).content as { text: string }[])[0].text);
     expect(await text('check', {})).toEqual({ errors: [] });
     expect((await text('graph_query', { qn: 'sales.Order' })).contains).toContain('sales.Order.status');
@@ -80,4 +80,18 @@ test('the simulate tool answers behavior questions and reports unknown elements 
     expect(await ask({ question: 'actors', action: 'sales.Cancel' })).toEqual([{ actor: 'sales.Shopper', verdict: 'no' }]);
     expect(await ask({ question: 'run', action: 'sales.Cancel', record: { status: 'draft' }, actor: 'sales.Shopper' })).toMatchObject({ allowed: 'no', outcome: 'refused' });
     expect(await ask({ question: 'risks', action: 'sales.Nope' })).toEqual({ error: 'No element sales.Nope.' });
+});
+
+test('write_model_file writes only files that keep the workspace valid, inside the workspace', async () => {
+    const root = workspace();
+    const client = new Client({ name: 'test', version: '1' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([createMcpServer(root).connect(serverTransport), client.connect(clientTransport)]);
+    const write = async (path: string, source: string) => JSON.parse(((await client.callTool({ name: 'write_model_file', arguments: { path, source } })).content as { text: string }[])[0].text);
+    expect(await write('billing/billing.appling', 'module billing {\n  entity Invoice {\n    number: String unique\n  }\n}\n')).toEqual({ ok: true, written: 'billing/billing.appling' });
+    expect(readFileSync(join(root, 'billing/billing.appling'), 'utf8')).toContain('entity Invoice');
+    expect((await write('broken.appling', 'module broken {\n  entity A {\n    b: Missing\n  }\n}\n')).ok).toBe(false);
+    expect(await write('../outside.appling', 'module x {\n}\n')).toEqual({ ok: false, errors: ['The path must be a .appling file inside the workspace.'] });
+    const prompt = await client.getPrompt({ name: 'derive_model' });
+    expect((prompt.messages[0].content as { text: string }).text).toContain('write_model_file');
 });

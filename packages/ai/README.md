@@ -17,6 +17,7 @@ For example in Claude Code: `claude mcp add appling -- npx appling-mcp .`
 | `graph_query` | One element with its properties, members and references, or elements filtered by kind, module or name |
 | `read_source` | The Appling source of one element |
 | `simulate` | Behavior questions: reachable states, which actors may trigger an action, invariants at risk, or a run of an action on a sample record |
+| `write_model_file` | Creates or replaces one `.appling` file, only when the workspace still validates with it |
 | `edit` | One edit operation (`add`, `rename`, `retype`, `remove`, `set`), validated, written to the files; `dryRun` only checks it |
 | `registry_next` | The next open task of a generated project, with its model context |
 | `registry_update` | Marks a task `done`, or `partial` with a note |
@@ -27,6 +28,10 @@ The prompt `implement_next_task` carries the registry workflow.
 ## Registry skill
 
 `skills/appling-registry/SKILL.md` is an agent skill for working through `.appling/tasks.json` of a project made by `appling generate`: take the next open entry, implement what is missing, run the tests, record the outcome. Entries stop coming back after three attempts, with notes on what is left. Copy the folder into your agent's skills folder (for Claude Code, `.claude/skills/`) next to the MCP server.
+
+## Reverse engineering skill
+
+`skills/appling-reverse/SKILL.md` (also the MCP prompt `derive_model`) is an agent skill for deriving an Appling model from an existing application: survey the code, map it to the five layers, write and validate module by module, compare behavior with `simulate`, and report what the model cannot say exactly.
 
 ## Model adapter and chat
 

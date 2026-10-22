@@ -120,6 +120,15 @@ export const MODEL_TOOLS = {
     })
 };
 
+/** Tools for writing a model from scratch, such as when deriving it from an existing application. */
+export const AUTHORING_TOOLS = {
+    write_model_file: define({
+        description: 'Create or replace one .appling file of the workspace, such as a new module. The file is written only when the whole workspace still validates with it; otherwise the errors come back. Paths are relative to the workspace folder.',
+        input: { path: z.string().describe('Relative path ending in .appling, such as sales/sales.appling'), source: z.string().describe('The complete Appling source of the file') },
+        run: async (context, input) => context.project.writeModelFile(input.path, input.source)
+    })
+};
+
 /** Tools for working through the task registry of a generated project. */
 export const REGISTRY_TOOLS = {
     registry_next: define({

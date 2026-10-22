@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { relative, resolve } from 'node:path';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, relative, resolve, sep } from 'node:path';
 import { AstUtils, URI } from 'langium';
 import { buildSources, type Model, type Workspace } from '@appling/lang';
 import { readConfig, readRegistry, writeRegistry, type Registry, type RegistryEntry, type Status } from '@appling/codegen';
@@ -47,6 +47,19 @@ export class Project {
 
     async edit(operation: EditOperation, sources = this.sources()): Promise<EditResult> {
         return applyEdit(sources, operation, { release: latestRelease(readReleases(this.root)) });
+    }
+
+    /** Writes one model file when the workspace validates with it; paths stay inside the workspace. */
+    async writeModelFile(path: string, source: string): Promise<{ ok: boolean, errors?: string[], written?: string }> {
+        const file = resolve(this.root, path);
+        if (!file.startsWith(this.root + sep) || !file.endsWith('.appling')) return { ok: false, errors: ['The path must be a .appling file inside the workspace.'] };
+        const sources = { ...this.sources(), [URI.file(file).toString()]: source };
+        const before = new Set(await this.check());
+        const errors = (await this.check(sources)).filter(e => !before.has(e));
+        if (errors.length) return { ok: false, errors };
+        mkdirSync(dirname(file), { recursive: true });
+        writeFileSync(file, source);
+        return { ok: true, written: relative(this.root, file) };
     }
 
     write(sources: Sources): string[] {

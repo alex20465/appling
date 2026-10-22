@@ -2,14 +2,14 @@ import { createServer } from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { Project } from './project.js';
-import { REGISTRY_PROMPT } from './prompts.js';
-import { diskContext, MODEL_TOOLS, REGISTRY_TOOLS, type Tools } from './tools.js';
+import { REGISTRY_PROMPT, REVERSE_PROMPT } from './prompts.js';
+import { AUTHORING_TOOLS, diskContext, MODEL_TOOLS, REGISTRY_TOOLS, type Tools } from './tools.js';
 
 /** An MCP server over one workspace folder: model tools, registry tools and the registry prompt. */
 export function createMcpServer(root: string): McpServer {
     const context = diskContext(new Project(root));
     const server = new McpServer({ name: 'appling', version: '0.1.0' });
-    for (const [name, tool] of Object.entries({ ...MODEL_TOOLS, ...REGISTRY_TOOLS } as Tools)) {
+    for (const [name, tool] of Object.entries({ ...MODEL_TOOLS, ...AUTHORING_TOOLS, ...REGISTRY_TOOLS } as Tools)) {
         server.registerTool(name, { description: tool.description, inputSchema: tool.input }, async (input: Record<string, unknown>) => {
             const result = await tool.run(context, input);
             return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
@@ -17,6 +17,9 @@ export function createMcpServer(root: string): McpServer {
     }
     server.registerPrompt('implement_next_task', { description: 'Work through the open tasks of a generated project, one at a time.' }, () => ({
         messages: [{ role: 'user' as const, content: { type: 'text' as const, text: REGISTRY_PROMPT } }]
+    }));
+    server.registerPrompt('derive_model', { description: 'Derive an Appling model from an existing application.' }, () => ({
+        messages: [{ role: 'user' as const, content: { type: 'text' as const, text: REVERSE_PROMPT } }]
     }));
     return server;
 }
