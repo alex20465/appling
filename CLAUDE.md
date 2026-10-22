@@ -8,17 +8,18 @@ Appling: a declarative DSL (`.appling` files) that models a business application
 
 ## Commands
 
-pnpm workspace (`packages/*`), TypeScript 7, Langium 4.4. There is no test suite or linter.
+pnpm workspace (`packages/*`), TypeScript 7, Langium 4.4, vitest 5. There is no linter. Use the pinned pnpm (`corepack pnpm`); a global pnpm 8 cannot install into this workspace.
 
 ```sh
 pnpm install
 pnpm build                  # langium generate + tsc in packages/lang, then tsc in packages/cli
 pnpm check [paths...]       # validate .appling files (default: current dir, recursive)
 pnpm fmt [paths...]         # rewrite files into canonical form
+pnpm test                   # vitest over packages/*/test (run langium generate or build first)
 pnpm --filter @appling/lang build   # rebuild only the language after grammar changes
 ```
 
-`check` and `fmt` run the built CLI (`packages/cli/out/main.js`), so rebuild after any source change. Use `pnpm check examples` to verify changes against the sample models; `examples/sales.appling` and `examples/crm.appling` reference each other across modules.
+`check` and `fmt` run the built CLI (`packages/cli/out/main.js`), so rebuild after any source change. Tests live in `packages/<pkg>/test/`; `packages/lang/test/workspace.ts` builds in memory sources as one workspace. Every validation rule has a negative fixture in `validation.test.ts`; add one with each new rule. Use `pnpm check examples` to verify changes against the sample models; `examples/sales.appling` and `examples/crm.appling` reference each other across modules.
 
 ## Architecture
 
