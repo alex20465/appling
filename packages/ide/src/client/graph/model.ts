@@ -139,7 +139,12 @@ function localName(qn: string, index: GraphIndex): string {
 export function followRenames(layout: Layout, graph: Graph): Layout {
     const renames = graph.nodes.filter(n => n.kind === 'Migration').flatMap(m => ((m.data.steps ?? []) as { $type: string, target: string, newName?: string }[])
         .filter(s => s.$type === 'RenameStep')
-        .map(s => [`${m.module}.${s.target}`, `${m.module}.${s.target.replace(/[^.]+$/, s.newName!)}`]));
+        .map(s => [`${m.module}.${s.target}`, `${m.module}.${s.target.replace(/[^.]+$/, s.newName!)}`] as [string, string]));
+    return moveLayout(layout, renames);
+}
+
+/** Moves the saved positions of renamed elements and everything inside them to their new names. */
+export function moveLayout(layout: Layout, renames: [string, string][]): Layout {
     const positions = Object.fromEntries(Object.entries(layout.positions ?? {}).map(([level, saved]) => {
         const moved = { ...saved };
         for (const [from, to] of renames) {

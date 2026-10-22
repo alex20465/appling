@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { WebSocket } from 'ws';
+import { writeRelease } from '@appling/model';
 import { startIde, type Ide } from '../src/server/server.js';
 
 let ide: Ide;
@@ -59,4 +60,18 @@ test('the language server answers over the websocket', async () => {
     socket.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { processId: null, rootUri: null, capabilities: {} } }));
     expect((await reply).result.capabilities.hoverProvider).toBe(true);
     socket.close();
+});
+
+test('edits are applied to the sent texts and recorded as migration steps after a release', async () => {
+    const snapshot = await (await fetch(`${ide.url}/api/snapshot`)).json();
+    const sources = Object.fromEntries(snapshot.files.map((f: { uri: string, text: string }) => [f.uri, f.text]));
+    expect(await (await fetch(`${ide.url}/api/release`)).json()).toBe(null);
+    writeRelease(root, '1.0.0', snapshot.graph);
+    expect((await (await fetch(`${ide.url}/api/release`)).json()).version).toBe('1.0.0');
+    const result = await (await fetch(`${ide.url}/api/edit`, { method: 'POST', body: JSON.stringify({ sources, operation: { op: 'rename', target: 'crm.Account.email', name: 'mail' } }) })).json();
+    expect(result.ok).toBe(true);
+    const crm = Object.keys(result.sources).find(uri => uri.endsWith('crm.appling'))!;
+    expect(result.sources[crm]).toContain('migration since_v1_0_0 {\n    rename Account.email -> mail\n  }');
+    const rejected = await (await fetch(`${ide.url}/api/edit`, { method: 'POST', body: JSON.stringify({ sources, operation: { op: 'remove', target: 'crm.Account' } }) })).json();
+    expect(rejected.ok).toBe(false);
 });

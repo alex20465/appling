@@ -88,3 +88,17 @@ button:focus-visible { outline: 2px solid var(--leaf); outline-offset: 2px; }
 @media (max-width: 900px) {
   .panes { grid-template-columns: 1fr; grid-template-rows: 40vh 50vh auto; }
 }
+
+.field { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: end; margin: 0 0 10px; }
+.field label { display: grid; gap: 2px; min-width: 0; font-size: 12px; color: var(--ink-muted); }
+.field input, .field textarea { width: 100%; padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--ink); font: 12px/1.5 var(--font-mono); resize: vertical; }
+.field input:focus, .field textarea:focus { outline: 2px solid var(--leaf); outline-offset: 0; border-color: transparent; }
+.button { padding: 5px 10px; border: 1px solid var(--line-strong); border-radius: 4px; font-size: 12px; color: var(--ink); background: var(--surface-elevated); }
+.button:hover:not(:disabled) { background: var(--surface-hover); }
+.button:disabled { opacity: 0.4; cursor: default; }
+.danger { margin: 12px 0; }
+.danger-button { border-color: var(--rust); color: var(--rust); }
+.errors { margin: 0 0 12px; padding: 8px 10px; border: 1px solid var(--rust); border-radius: 4px; list-style: none; font: 12px/1.5 var(--font-mono); color: var(--rust); }
+.release { font: 12px var(--font-mono); color: var(--rust); }
+.release:disabled { color: var(--ink-muted); cursor: default; }
+.graph-problem { position: absolute; bottom: 12px; left: 12px; right: 12px; padding: 8px 12px; border: 1px solid var(--rust); border-radius: 8px; background: var(--surface-raised); color: var(--rust); font: 12px var(--font-mono); cursor: pointer; z-index: 5; }

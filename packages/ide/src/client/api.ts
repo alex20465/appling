@@ -1,3 +1,4 @@
+import type { EditOperation, EditResult } from '@appling/model';
 import type { Layout, Snapshot } from '../shared/snapshot.js';
 
 export async function loadSnapshot(): Promise<Snapshot> {
@@ -25,4 +26,12 @@ export function onSnapshot(callback: (snapshot: Snapshot) => void): () => void {
         if (message.type === 'snapshot') callback(message.snapshot);
     };
     return () => socket.close();
+}
+
+export async function requestEdit(sources: Record<string, string>, operation: EditOperation): Promise<EditResult> {
+    return (await fetch('/api/edit', { method: 'POST', body: JSON.stringify({ sources, operation }) })).json();
+}
+
+export async function loadRelease(): Promise<{ version: string, created: string } | null> {
+    return (await fetch('/api/release')).json();
 }

@@ -8,6 +8,7 @@ import { createConnection } from 'vscode-languageserver/node';
 import { WebSocketMessageReader, WebSocketMessageWriter, type IWebSocket } from 'vscode-ws-jsonrpc';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { createApplingLspServices } from '@appling/lang/lsp';
+import { applyEdit, latestRelease, readReleases, type EditOperation } from '@appling/model';
 import { readLayout, snapshot, writeLayout } from './workspace.js';
 
 const CLIENT = fileURLToPath(new URL('../../dist/client/', import.meta.url));
@@ -73,6 +74,14 @@ async function handle(request: IncomingMessage, response: ServerResponse, root: 
     if (url.pathname === '/api/layout' && request.method === 'PUT') {
         writeLayout(root, JSON.parse(await body(request)));
         return send(response, 204, '');
+    }
+    if (url.pathname === '/api/edit' && request.method === 'POST') {
+        const { sources, operation } = JSON.parse(await body(request)) as { sources: Record<string, string>, operation: EditOperation };
+        return json(response, await applyEdit(sources, operation, { release: latestRelease(readReleases(root)) }));
+    }
+    if (url.pathname === '/api/release' && request.method === 'GET') {
+        const release = latestRelease(readReleases(root));
+        return json(response, release ? { version: release.version, created: release.created } : null);
     }
     if (url.pathname === '/api/file' && request.method === 'PUT') {
         const file = resolve(root, url.searchParams.get('path') ?? '');

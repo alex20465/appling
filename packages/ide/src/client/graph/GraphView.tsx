@@ -7,7 +7,7 @@ import '@xyflow/react/dist/style.css';
 import type { Layout, Level, Position as Point } from '../../shared/snapshot.js';
 import { CARD_WIDTH, layoutView, type Box } from './layout.js';
 import { levelForZoom, shownFor, view, type Card, type GraphIndex } from './model.js';
-import type { Dependency } from '@appling/model';
+import type { Dependency, EditOperation } from '@appling/model';
 
 interface GraphProps {
     index: GraphIndex;
@@ -16,7 +16,11 @@ interface GraphProps {
     selected?: string;
     onSelect(qn: string): void;
     onMoved(level: Level, qn: string, position: Point): void;
+    onEdit(operation: EditOperation): Promise<string[]>;
 }
+
+const HOLDERS = new Set(['Entity', 'ValueType', 'Event']);
+const TYPES = new Set(['Entity', 'Enum', 'ValueType']);
 
 type CardData = { card: Card, selected: boolean, row?: string, onSelect(qn: string): void };
 
@@ -27,7 +31,18 @@ export function GraphView(props: GraphProps) {
     return <ReactFlowProvider><Canvas {...props} /></ReactFlowProvider>;
 }
 
-function Canvas({ index, dependencies, layout, selected, onSelect, onMoved }: GraphProps) {
+function Canvas({ index, dependencies, layout, selected, onSelect, onMoved, onEdit }: GraphProps) {
+    const [problem, setProblem] = useState<string>();
+    const run = async (operation: EditOperation) => setProblem((await onEdit(operation)).join(' '));
+
+    /** Dragging from one declaration to a type adds a field that references the type. */
+    const connect = (from: string | null, to: string | null) => {
+        const [source, target] = [from && index.nodes.get(from), to && index.nodes.get(to)];
+        if (!source || !target || !HOLDERS.has(source.kind) || !TYPES.has(target.kind)) return;
+        const name = target.qn.slice(target.qn.lastIndexOf('.') + 1);
+        const reference = target.module === source.module ? name : target.qn;
+        run({ op: 'add', parent: source.qn, source: `${name[0].toLowerCase()}${name.slice(1)}: ${reference}` });
+    };
     const flow = useReactFlow();
     const [level, setLevel] = useState<Level>('medium');
     const current = useMemo(() => view(index, dependencies, level), [index, dependencies, level]);
@@ -74,6 +89,13 @@ function Canvas({ index, dependencies, layout, selected, onSelect, onMoved }: Gr
                 onNodesChange={onNodesChange}
                 onNodeClick={(_, node) => onSelect(node.id)}
                 onNodeDragStop={(_, node) => onMoved(level, node.id, node.position)}
+                onConnect={connection => connect(connection.source, connection.target)}
+                nodesConnectable={level !== 'out'}
+                deleteKeyCode="Delete"
+                onBeforeDelete={async ({ nodes: removed }) => {
+                    for (const node of removed) await run({ op: 'remove', target: node.id });
+                    return false;
+                }}
                 onMove={(_, viewport) => setLevel(levelForZoom(viewport.zoom))}
                 defaultViewport={{ x: 40, y: 40, zoom: ZOOM.medium }}
                 minZoom={0.1}
@@ -83,6 +105,7 @@ function Canvas({ index, dependencies, layout, selected, onSelect, onMoved }: Gr
                 <Background color="var(--line)" gap={24} />
                 <Controls showInteractive={false} />
             </ReactFlow>
+            {problem && <div className="graph-problem" role="alert" onClick={() => setProblem(undefined)}>{problem}</div>}
             <div className="levels" role="group" aria-label="Zoom level">
                 {(['out', 'medium', 'in'] as Level[]).map(l => (
                     <button key={l} className={l === level ? 'active' : ''} onClick={() => flow.zoomTo(ZOOM[l], { duration: 300 })}>

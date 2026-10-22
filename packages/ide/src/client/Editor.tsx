@@ -17,14 +17,17 @@ interface EditorProps {
     onSave(path: string, text: string): void;
 }
 
-/** Monaco with one model per file. Files on disk replace a model's text only while it has no unsaved changes. */
+/** Monaco with one model per file. A model is dirty while its text differs from the file on disk; disk changes replace clean models only. */
 export function Editor(props: EditorProps) {
     const host = useRef<HTMLDivElement>(null);
     const editor = useRef<monaco.editor.IStandaloneCodeEditor>(null);
     const latest = useRef(props);
     latest.current = props;
-    const saved = useRef(new Map<string, number>());
+    const disk = useRef(new Map<string, string>());
     const [dirty, setDirty] = useState<Set<string>>(new Set());
+    const refreshDirty = () => setDirty(new Set(monaco.editor.getModels()
+        .filter(m => disk.current.has(m.uri.toString()) && m.getValue() !== disk.current.get(m.uri.toString()))
+        .map(m => m.uri.toString())));
 
     useEffect(() => {
         const instance = monaco.editor.create(host.current!, {
@@ -41,8 +44,6 @@ export function Editor(props: EditorProps) {
             const file = model && latest.current.files.find(f => f.uri === model.uri.toString());
             if (!model || !file) return;
             latest.current.onSave(file.path, model.getValue());
-            saved.current.set(file.uri, model.getAlternativeVersionId());
-            setDirty(current => new Set([...current].filter(uri => uri !== file.uri)));
         });
         return () => {
             cursor.dispose();
@@ -55,17 +56,13 @@ export function Editor(props: EditorProps) {
             const uri = monaco.Uri.parse(file.uri);
             const existing = monaco.editor.getModel(uri);
             if (!existing) {
-                const model = monaco.editor.createModel(file.text, 'appling', uri);
-                saved.current.set(file.uri, model.getAlternativeVersionId());
-                model.onDidChangeContent(() => setDirty(current => {
-                    const isDirty = model.getAlternativeVersionId() !== saved.current.get(file.uri);
-                    return isDirty === current.has(file.uri) ? current : isDirty ? new Set([...current, file.uri]) : new Set([...current].filter(u => u !== file.uri));
-                }));
-            } else if (existing.getValue() !== file.text && existing.getAlternativeVersionId() === saved.current.get(file.uri)) {
+                monaco.editor.createModel(file.text, 'appling', uri).onDidChangeContent(refreshDirty);
+            } else if (existing.getValue() !== file.text && existing.getValue() === disk.current.get(file.uri)) {
                 existing.setValue(file.text);
-                saved.current.set(file.uri, existing.getAlternativeVersionId());
             }
+            disk.current.set(file.uri, file.text);
         }
+        refreshDirty();
     }, [props.files]);
 
     useEffect(() => {
