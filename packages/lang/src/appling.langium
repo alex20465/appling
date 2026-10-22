@@ -27,7 +27,8 @@ Role:
 
 Actor:
     'actor' kind=('human' | 'system' | 'service') name=Ident
-    ('roles' roles+=[Role:QualifiedName] (',' roles+=[Role:QualifiedName])*)?;
+    ('roles' roles+=[Role:QualifiedName] (',' roles+=[Role:QualifiedName])*)?
+    ('{' fields+=Field* '}')?;
 
 Tenant:
     'tenant' name=Ident 'on' entity=[Entity:QualifiedName];

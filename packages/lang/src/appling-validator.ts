@@ -5,6 +5,7 @@ import {
     type Policy, type Projection, type RenameStep, type SetEffect
 } from './generated/ast.js';
 import { namedPaths, projectionSourceEntity } from './appling-scope.js';
+import { ExpressionTyper } from './appling-types.js';
 import type { ApplingServices } from './appling-module.js';
 
 export type Layer = 'cross' | 'domain' | 'behavior' | 'application' | 'interface' | 'experience';
@@ -21,7 +22,7 @@ export const LAYER_OF: Record<string, Layer> = {
 export function registerValidationChecks(services: ApplingServices): void {
     const validator = new ApplingValidator(services);
     const checks: ValidationChecks<ApplingAstType> = {
-        Model: validator.checkLayerReferences,
+        Model: [validator.checkLayerReferences, validator.checkTypes],
         Module: validator.checkExports,
         Machine: validator.checkMachine,
         SetEffect: validator.checkSetEffect,
@@ -49,6 +50,12 @@ export class ApplingValidator {
                     { node, property: ref.property, index: ref.index });
             }
         }
+    }
+
+    checkTypes(model: Model, accept: ValidationAcceptor): void {
+        const typer = new ExpressionTyper(this.services);
+        typer.checkModel(model);
+        for (const { node, message, property } of typer.problems) accept('error', message, { node, property });
     }
 
     checkExports(module: Module, accept: ValidationAcceptor): void {

@@ -3,7 +3,9 @@ module sales {
   export Order, OrderSummary, OpenOrders, PlaceOrder
 
   role Customer
-  actor human Shopper roles Customer
+  actor human Shopper roles Customer {
+    account: crm.Account
+  }
 
   // L1 Domain
   enum OrderStatus {
@@ -24,7 +26,9 @@ module sales {
     customer: crm.Account
     lines: Line[] owned
     status: OrderStatus state default draft
+    created_at: DateTime
     placed_at: DateTime?
+    paid_at: DateTime?
     total: Money = sum(lines.map(l, l.amount))
 
     invariant "total never negative" { total >= 0 }

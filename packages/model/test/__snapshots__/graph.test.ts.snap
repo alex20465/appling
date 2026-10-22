@@ -145,8 +145,18 @@ exports[`graph of examples 1`] = `
     },
     {
       "from": "sales.Shopper",
+      "kind": "contains",
+      "to": "sales.Shopper.account",
+    },
+    {
+      "from": "sales.Shopper",
       "kind": "roles",
       "to": "sales.Customer",
+    },
+    {
+      "from": "sales.Shopper.account",
+      "kind": "type",
+      "to": "crm.Account",
     },
     {
       "from": "sales.OrderStatus",
@@ -206,7 +216,17 @@ exports[`graph of examples 1`] = `
     {
       "from": "sales.Order",
       "kind": "contains",
+      "to": "sales.Order.created_at",
+    },
+    {
+      "from": "sales.Order",
+      "kind": "contains",
       "to": "sales.Order.placed_at",
+    },
+    {
+      "from": "sales.Order",
+      "kind": "contains",
+      "to": "sales.Order.paid_at",
     },
     {
       "from": "sales.Order",
@@ -563,6 +583,151 @@ exports[`graph of examples 1`] = `
       "kind": "pages",
       "to": "sales.OrderDetail",
     },
+    {
+      "from": "crm.Account.policy[read]",
+      "kind": "uses",
+      "to": "crm.Clerk",
+    },
+    {
+      "from": "crm.Account.policy[read]",
+      "kind": "uses",
+      "to": "sales.Shopper.account",
+    },
+    {
+      "from": "sales.Order.status",
+      "kind": "uses",
+      "to": "sales.OrderStatus.draft",
+    },
+    {
+      "from": "sales.Order.total",
+      "kind": "uses",
+      "to": "sales.Order.lines",
+    },
+    {
+      "from": "sales.Order.total",
+      "kind": "uses",
+      "to": "sales.Line.amount",
+    },
+    {
+      "from": "sales.Order.invariant["total never negative"]",
+      "kind": "uses",
+      "to": "sales.Order.total",
+    },
+    {
+      "from": "sales.Order.policy[read]",
+      "kind": "uses",
+      "to": "crm.Clerk",
+    },
+    {
+      "from": "sales.Order.policy[read]",
+      "kind": "uses",
+      "to": "sales.Order.customer",
+    },
+    {
+      "from": "sales.Order.policy[read]",
+      "kind": "uses",
+      "to": "sales.Shopper.account",
+    },
+    {
+      "from": "sales.Order.policy[create,update,delete]",
+      "kind": "uses",
+      "to": "crm.Clerk",
+    },
+    {
+      "from": "sales.Order.policy[read fields total]",
+      "kind": "uses",
+      "to": "sales.Order.status",
+    },
+    {
+      "from": "sales.Order.policy[read fields total]",
+      "kind": "uses",
+      "to": "sales.OrderStatus.draft",
+    },
+    {
+      "from": "sales.Order.policy[read fields total]",
+      "kind": "uses",
+      "to": "crm.Clerk",
+    },
+    {
+      "from": "sales.PlaceOrder",
+      "kind": "uses",
+      "to": "sales.Order.lines",
+    },
+    {
+      "from": "sales.PlaceOrder.policy[]",
+      "kind": "uses",
+      "to": "sales.Customer",
+    },
+    {
+      "from": "sales.PlaceOrder.policy[]",
+      "kind": "uses",
+      "to": "sales.Order.customer",
+    },
+    {
+      "from": "sales.PlaceOrder.policy[]",
+      "kind": "uses",
+      "to": "sales.Shopper.account",
+    },
+    {
+      "from": "sales.Cancel.policy[]",
+      "kind": "uses",
+      "to": "crm.Clerk",
+    },
+    {
+      "from": "sales.OrderFlow.transition[draft,placed->cancelled]",
+      "kind": "uses",
+      "to": "sales.Order.paid_at",
+    },
+    {
+      "from": "sales.ExpireDrafts",
+      "kind": "uses",
+      "to": "sales.Order.status",
+    },
+    {
+      "from": "sales.ExpireDrafts",
+      "kind": "uses",
+      "to": "sales.OrderStatus.draft",
+    },
+    {
+      "from": "sales.ExpireDrafts",
+      "kind": "uses",
+      "to": "sales.Order.created_at",
+    },
+    {
+      "from": "sales.OpenOrders",
+      "kind": "uses",
+      "to": "sales.Order.status",
+    },
+    {
+      "from": "sales.OpenOrders",
+      "kind": "uses",
+      "to": "sales.OrderStatus.placed",
+    },
+    {
+      "from": "sales.OpenOrders",
+      "kind": "uses",
+      "to": "sales.OrderStatus.paid",
+    },
+    {
+      "from": "sales.OrderSummary.customer_name",
+      "kind": "uses",
+      "to": "sales.Order.customer",
+    },
+    {
+      "from": "sales.OrderSummary.customer_name",
+      "kind": "uses",
+      "to": "crm.Account.name",
+    },
+    {
+      "from": "sales.Checkout",
+      "kind": "uses",
+      "to": "sales.Checkout.order",
+    },
+    {
+      "from": "sales.Checkout",
+      "kind": "uses",
+      "to": "sales.Order.total",
+    },
   ],
   "nodes": [
     {
@@ -666,6 +831,16 @@ exports[`graph of examples 1`] = `
         "kind": "human",
       },
       "qn": "sales.Shopper",
+    },
+    {
+      "kind": "Field",
+      "layer": "cross",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "type": "crm.Account",
+      },
+      "qn": "sales.Shopper.account",
     },
     {
       "kind": "Enum",
@@ -809,9 +984,29 @@ exports[`graph of examples 1`] = `
       "level": "in",
       "module": "sales",
       "props": {
+        "type": "DateTime",
+      },
+      "qn": "sales.Order.created_at",
+    },
+    {
+      "kind": "Field",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {
         "type": "DateTime?",
       },
       "qn": "sales.Order.placed_at",
+    },
+    {
+      "kind": "Field",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "type": "DateTime?",
+      },
+      "qn": "sales.Order.paid_at",
     },
     {
       "kind": "Field",

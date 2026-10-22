@@ -8,7 +8,7 @@ import { Expr, isModel, reflection } from './generated/ast.js';
 
 const INDENT = '  ';
 const BLOCKS = new Set([
-    'Module', 'Enum', 'ValueType', 'Entity', 'Event', 'Action', 'Machine', 'Query', 'Projection',
+    'Module', 'Actor', 'Enum', 'ValueType', 'Entity', 'Event', 'Action', 'Machine', 'Query', 'Projection',
     'External', 'UseCase', 'Interface', 'Page', 'Navigation', 'NavItem', 'Messages', 'Migration'
 ]);
 const CLAUSES = new Set(['input', 'effect', 'errors', 'consistency', 'where', 'sort', 'paginate', 'auth', 'limit', 'cors']);

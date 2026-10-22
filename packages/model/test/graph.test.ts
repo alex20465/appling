@@ -1,16 +1,17 @@
 import { expect, test } from 'vitest';
 import type { Model } from '@appling/lang';
-import { build, examples } from '../../lang/test/workspace.js';
+import { buildWorkspace, examples } from '../../lang/test/workspace.js';
 import { buildGraph, dependencies } from '../src/index.js';
 
 async function graphOf(sources: Record<string, string>) {
-    return buildGraph((await build(sources)).map(doc => doc.parseResult.value as Model));
+    const { documents, services } = await buildWorkspace(sources);
+    return buildGraph(documents.map(doc => doc.parseResult.value as Model), services);
 }
 
 test('graph of examples', async () => {
     const graph = await graphOf(examples());
     expect(graph).toMatchSnapshot();
-    expect(dependencies(graph)).toEqual([{ from: 'sales', to: 'crm', count: 1 }]);
+    expect(dependencies(graph)).toEqual([{ from: 'sales', to: 'crm', count: 7 }, { from: 'crm', to: 'sales', count: 1 }]);
 });
 
 test('unnamed elements get derived keys, with an ordinal for duplicates', async () => {

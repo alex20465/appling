@@ -26,7 +26,7 @@ Every one of these tools reads the same resolved semantic graph and changes it t
 - [ ] Edit operations: add, rename, retype, remove, set attribute. Each becomes a minimal text edit through the printer and is rejected if the result fails validation.
 - [ ] Releases: `appling release <version>` writes a graph snapshot. Edits to L1 elements that exist in the latest snapshot append migration steps automatically, to one migration block per module named after the release they follow (`since_v1_0_0`).
 - [ ] LSP: `@appling/lang/lsp` export with Langium's LSP services.
-- [ ] Expression typing: resolve every name and type inside expressions, including the implicit `this`, `actor` and `now` and the builtin functions. Needs typed fields on actor declarations. Implementing derived logic and complex preconditions stays a registry task during code generation.
+- [x] Expression typing: resolve every name and type inside expressions, including the implicit `this`, `actor` and `now` and the builtin functions. Needs typed fields on actor declarations. Implementing derived logic and complex preconditions stays a registry task during code generation.
 
 Done when `pnpm test` passes, the CLI can dump the graph of `examples/`, `examples/` type clean, and an edit operation survives `fmt` idempotently.
 

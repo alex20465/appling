@@ -1,7 +1,7 @@
 import { AstUtils, isAstNode, isReference, type AstNode, type Reference, type ReferenceInfo } from 'langium';
 import {
-    LAYER_OF, isCreateEffect, isEmitEffect, isEndpoint, isInvariant, isPolicy, isSetEffect, isTransition, modulePath, print,
-    type Layer, type Model, type Module
+    ExpressionTyper, LAYER_OF, isCreateEffect, isEmitEffect, isEndpoint, isInvariant, isPolicy, isSetEffect, isTransition, modulePath, print,
+    type ApplingServices, type Layer, type Model, type Module
 } from '@appling/lang';
 
 export type Level = 'out' | 'medium' | 'in';
@@ -58,8 +58,11 @@ export function isElement(node: AstNode): boolean {
     return NAMED.has(node.$type) || keyOf(node) !== undefined;
 }
 
-/** Builds the graph of resolved models. Node and edge order follows the documents. */
-export function buildGraph(models: Model[]): Graph {
+/**
+ * Builds the graph of resolved models. Node and edge order follows the documents. Names used inside
+ * expressions become `uses` edges from the element that owns the expression.
+ */
+export function buildGraph(models: Model[], services: ApplingServices): Graph {
     const nodes: GraphNode[] = [];
     const qns = new Map<AstNode, string>();
     const owners: [AstNode, string][] = [];
@@ -102,6 +105,14 @@ export function buildGraph(models: Model[]): Graph {
             const target = referenced && qns.get(referenced);
             if (target) add({ from: qn, to: target, kind: ref.property === 'decl' ? 'type' : ref.property });
         }
+    }
+    const typer = new ExpressionTyper(services);
+    models.forEach(m => typer.checkModel(m));
+    for (const [expr, target] of typer.targets) {
+        let owner: AstNode | undefined = expr;
+        while (owner && !qns.has(owner)) owner = owner.$container;
+        const to = qns.get(target);
+        if (owner && to) add({ from: qns.get(owner)!, to, kind: 'uses' });
     }
     return { nodes, edges };
 }

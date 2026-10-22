@@ -1,5 +1,5 @@
 import {
-    AstUtils, DefaultScopeComputation, DefaultScopeProvider, EMPTY_SCOPE, MultiMap,
+    AstUtils, DefaultScopeComputation, DefaultScopeProvider, EMPTY_SCOPE, MultiMap, MultiMapScope,
     type AstNode, type AstNodeDescription, type LangiumDocument, type ReferenceInfo, type Scope
 } from 'langium';
 import {
@@ -46,6 +46,11 @@ export class ApplingScopeComputation extends DefaultScopeComputation {
 
 export class ApplingScopeProvider extends DefaultScopeProvider {
 
+    /** Resolves a dotted name written inside an expression, the way a reference of the given type would. */
+    lookup(container: AstNode, type: string, name: string): AstNode | undefined {
+        return this.scopeOf(container, type).getElement(name)?.node;
+    }
+
     override getScope(context: ReferenceInfo): Scope {
         const node = context.container;
         if (context.property === 'picks' && (isEndpoint(node) || isListView(node) || isDetailView(node))) {
@@ -62,6 +67,15 @@ export class ApplingScopeProvider extends DefaultScopeProvider {
             return isAction(target) || isExternalOperation(target) ? this.createScopeForNodes(target.errors) : EMPTY_SCOPE;
         }
         return super.getScope(context);
+    }
+
+    private scopeOf(container: AstNode, type: string): Scope {
+        const symbols = AstUtils.getDocument(container).localSymbols;
+        const local: AstNode[] = [];
+        for (let node: AstNode | undefined = container; node; node = node.$container) local.push(node);
+        return local.reverse().reduce<Scope>((outer, node) => symbols?.has(node)
+            ? this.createScope(symbols.getStream(node).filter(d => this.reflection.isSubtype(d.type, type)), outer)
+            : outer, new MultiMapScope(this.indexManager.allElements(type)));
     }
 
     private fieldsOf(entity: Entity | undefined): Scope {

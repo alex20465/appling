@@ -7,13 +7,13 @@ The semantic graph of an Appling model: every element as a node, every reference
 ```ts
 import { buildGraph, dependencies } from '@appling/model';
 
-const graph = buildGraph(models); // resolved Model roots from @appling/lang
+const graph = buildGraph(models, services); // resolved Model roots and the Appling services from @appling/lang
 const deps = dependencies(graph);
 ```
 
 | Export | Purpose |
 |---|---|
-| `buildGraph(models)` | Nodes and edges of resolved models, in document order |
+| `buildGraph(models, services)` | Nodes and edges of resolved models, in document order |
 | `dependencies(graph)` | Module to module dependencies with the number of references behind each |
 | `isElement(node)` | Whether an AST node becomes a graph node |
 | `Graph`, `GraphNode`, `GraphEdge`, `Dependency` | The serializable graph types |
@@ -33,7 +33,7 @@ Unnamed elements get a key derived from their content: `invariant["total never n
 
 ### Edges
 
-`contains` links an element to its children. Every other edge is a reference, named after the referencing property: `type`, `entity`, `action`, `event`, `target`, `projection` and so on.
+`contains` links an element to its children. `uses` links an element to what the names in its expressions stand for, such as a field, an enum value or a role. Every other edge is a reference, named after the referencing property: `type`, `entity`, `action`, `event`, `target`, `projection` and so on.
 
 ## License
 
