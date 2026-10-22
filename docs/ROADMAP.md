@@ -10,24 +10,31 @@ Every one of these tools reads the same resolved semantic graph and changes it t
 - **AI** is provider agnostic. `@appling/ai` is an MCP server usable by any MCP client, plus a model adapter inside the IDE, based on an existing multi provider library (candidate: Vercel AI SDK).
 - **Order:** foundation first, then the IDE track and the code generation track in parallel.
 - **Releases** are graph snapshots written by `appling release <version>` into `.appling/releases/`.
+- **Identity** of unnamed elements (invariants, policies, transitions, endpoints, effects) is a key derived from their content, see `concept.md` section 4.
+- **Expressions** are fully typed in Phase 1. An unresolved name is an error. Actors declare typed fields so `actor.account` has a type.
+- **Tests** use vitest from Phase 1 on.
+- **IDE stack:** React, React Flow with ELK layout, Monaco.
+- **L5 code generation** is out of scope for now. L5 nodes get registry tasks only, so coverage stays complete.
+- **Target libraries** (Django API layer, job runner, value type storage, policies) are chosen when B2 and B3 start.
 
 ## Phase 1: Foundation
 
 `@appling/lang`, `@appling/model`
 
-- [ ] Semantic graph: plain, serializable nodes (qualified name, kind, layer, module, props) and typed edges. Zoom aggregation, such as module to module dependencies, is computed.
+- [ ] Test harness: vitest, a helper that loads several sources into one workspace, `examples/` check and `fmt` idempotency, one negative fixture per validation rule.
+- [ ] Semantic graph: plain, serializable nodes (qualified name, kind, layer, module, props) and typed edges. Zoom aggregation, such as module to module dependencies, is computed. `appling graph` dumps it.
 - [ ] Edit operations: add, rename, retype, remove, set attribute. Each becomes a minimal text edit through the printer and is rejected if the result fails validation.
-- [ ] Releases: `appling release <version>` writes a graph snapshot. Edits to L1 elements that exist in the latest snapshot append migration steps automatically.
+- [ ] Releases: `appling release <version>` writes a graph snapshot. Edits to L1 elements that exist in the latest snapshot append migration steps automatically, to one migration block per module named after the release they follow (`since_v1_0_0`).
 - [ ] LSP: `@appling/lang/lsp` export with Langium's LSP services.
-- [ ] Expression typing: resolve names and types inside expressions where possible. Unresolved expressions become registry tasks during code generation.
+- [ ] Expression typing: resolve every name and type inside expressions, including the implicit `this`, `actor` and `now` and the builtin functions. Needs typed fields on actor declarations. Implementing derived logic and complex preconditions stays a registry task during code generation.
 
-Done when the CLI can dump the graph of `examples/` and an edit operation survives `fmt` idempotently.
+Done when `pnpm test` passes, the CLI can dump the graph of `examples/`, `examples/` type clean, and an edit operation survives `fmt` idempotently.
 
 ## Track A: IDE
 
 `@appling/ide`, `@appling/ai`
 
-- [ ] A1 Read only IDE: `npx @appling/ide` starts a local server on the workspace. Browser UI with a text editor backed by the LSP, the zoomable graph at the three levels of `concept.md` section 4, and selection synced between text and graph. Layout lives in `.appling/layout.json`, outside the model.
+- [ ] A1 Read only IDE: `npx @appling/ide` starts a local server on the workspace. Browser UI (React, React Flow, Monaco) with a text editor backed by the LSP, the zoomable graph at the three levels of `concept.md` section 4, and selection synced between text and graph. Layout lives in `.appling/layout.json`, outside the model.
 - [ ] A2 Editing: edit elements and attributes in the graph through the edit operations. Migration entries appear when a release exists.
 - [ ] A3 AI: MCP server exposing check, graph query, edit operations and the registry. Provider adapter and chat panel in the IDE. AI changes pass validation and are shown as reviewable diffs.
 
@@ -47,7 +54,7 @@ Steps chain per node, for example `entity`: command for the base, template for i
 
 The core reads the graph, asks the map for the steps of every node, orders them by dependency (modules, then entities, then actions), checks the toolchain prerequisites the extension declares, runs the steps and writes the registry. `appling generate --plan` prints the plan without running it.
 
-The registry (`.appling/tasks.json` in the generated project) holds one entry per qualified name: status (`generated`, `partial`, `todo`, `done`), the steps and files that produced it, and what is missing with its model context (expression source, preconditions, errors, related nodes). Every graph node must have an entry, so the registry is also the coverage report and the AI work queue.
+The registry (`.appling/tasks.json` in the generated project) holds one entry per qualified name: status (`generated`, `partial`, `todo`, `done`), the steps and files that produced it, and what is missing with its model context (expression source, preconditions, errors, related nodes). Every graph node must have an entry, so the registry is also the coverage report and the AI work queue. L5 nodes get `todo` entries without generation steps for now.
 
 Extensions are configured in `appling.config.json` by package name. Third party extensions are named `appling-codegen-*` or `@scope/appling-codegen-*`, have a peer dependency on `@appling/codegen` and depend only on `@appling/model` types, never on the Langium AST.
 
@@ -84,3 +91,5 @@ Extensions are configured in `appling.config.json` by package name. Third party 
 - [ ] Appling Sync: regenerate code from the model using the registry
 - [ ] Reverse engineering: AI skill in `@appling/ai` that derives an Appling model from an existing application
 - [ ] More targets (Go, Rust) as extensions
+- [ ] Simulator (`concept.md` section 5): evaluate expressions, preconditions, effects and transitions against sample data and actors
+- [ ] L5 code generation

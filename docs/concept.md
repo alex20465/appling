@@ -27,6 +27,7 @@ These are not layers. They apply across all layers.
 - Actors (human users, systems, services), roles, and tenants.
 - Each policy, wherever it is defined, refers to these concepts.
 - The current actor and tenant are always available in the expression context.
+- Actors declare typed fields, such as the account a human user acts for. In expressions, `actor.is(Role)` tests a role and `actor.field` reads a field declared by at least one actor. The field is null for actors that do not declare it.
 
 **Expression language**
 - A small, typed, side-effect-free language used for constraints, policies, guards, derived fields, and filters.
@@ -136,6 +137,7 @@ Rules:
 - The graph is a projection of the semantic graph, not a separate source of truth.
 - Zoom levels follow the module containment hierarchy. Aggregated nodes and edges, such as module-to-module dependencies, are computed from the model, never drawn by hand.
 - Every model element is identified by its **qualified name**, such as `sales.Order.status`, so graph edits map back to exact AST nodes. Renames are recorded as migration steps, so tools can follow an element to its new name.
+- Elements without a name are identified by a key derived from their content, written in brackets after their kind: `sales.Order.invariant["total never negative"]`, `sales.Order.policy[read fields total]`, `sales.OrderFlow.transition[draft,placed->cancelled]`, `sales.PublicApi.endpoint[GET /orders]`, `sales.PlaceOrder.effect[set placed_at]`. When two siblings share a key, an ordinal is appended, such as `policy[read]#2`.
 - Layout and view state (positions, collapsed groups, saved views) are stored **separately** from the model. They are not part of the truth and do not appear in model diffs.
 
 ## 5. Validation and Simulation
@@ -171,6 +173,7 @@ AI-generated changes pass the same structural validation as human edits, and are
 - The model is versioned with its text representation, for example in git.
 - Changes to Layer 1 that affect persisted data, such as renames, type changes, or removals, are recorded as explicit migration steps in the model.
 - Migration steps target elements by their qualified name as it was before the step, so layout and history can follow renames.
+- Once a release exists, editing a Layer 1 element it contains appends the step automatically. Steps go into one migration block per module, named after the release they follow, such as `since_v1_0_0`.
 
 ## 8. Out of Scope (initial)
 
