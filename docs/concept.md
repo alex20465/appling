@@ -1,4 +1,7 @@
-# Appling: Declarative Application Modeling DSL (v2)
+---
+title: Design concept
+description: The design specification of Appling v2, covering layer ownership, reference rules, narrowing, identity by qualified name, visualization, validation and AI.
+---
 
 ## 1. Vision
 

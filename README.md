@@ -2,7 +2,9 @@
 
 Appling is a declarative language that describes a business or web application as one validated model. The model covers what exists, what can happen, how capabilities are organized and exposed, and how people interact with them.
 
-The text is the canonical source of truth. Parsed and linked, it becomes a semantic graph that tools can validate, visualize with semantic zoom, simulate and edit with AI. Code generation is a possible future feature.
+The text is the canonical source of truth. Parsed and linked, it becomes a semantic graph that tools validate, visualize with semantic zoom, edit with AI and generate draft Django or Ash projects from.
+
+The documentation is at [appling.tools/docs](https://appling.tools/docs/) and in [docs/](docs/index.md).
 
 ```
 module sales {
@@ -41,7 +43,7 @@ module sales {
 
 Each concept is defined once in the layer that owns it. References only point down the layers, interfaces and pages reach data only through projections, and modules only see what other modules export. Every element is identified by its qualified name, such as `sales.Order.status`, and renames are recorded as `migration` steps.
 
-The full design is in [concept.md](docs/concept.md).
+The language is documented in [docs/language](docs/language/overview.md); the full design is in [concept.md](docs/concept.md).
 
 ## Packages
 
@@ -85,6 +87,7 @@ packages/ai       MCP server, chat, registry skill
 packages/codegen* code generation core and the Django and Ash extensions
 packages/cli      the appling command
 examples          sample models that reference each other across modules
+docs              user documentation, rendered at appling.tools/docs
 docs/concept.md   language design and rules
 docs/ROADMAP.md   planned packages and phases
 ```

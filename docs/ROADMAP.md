@@ -1,4 +1,7 @@
-# Roadmap
+---
+title: Roadmap
+description: The phases, tracks and decisions that built Appling, what has shipped and what comes later.
+---
 
 The goal: an Appling IDE that visualizes the application model at every zoom level, edits it visually, in text and through AI, records migrations once a release exists, and generates a draft project for a target framework through installable extensions.
 
@@ -88,8 +91,8 @@ Extensions are configured in `appling.config.json` by package name. Third party 
 ## Later
 
 - [x] VS Code extension on top of `@appling/lang/lsp`
-- [ ] Appling Sync: regenerate code from the model using the registry
-- [ ] Reverse engineering: AI skill in `@appling/ai` that derives an Appling model from an existing application
-- [ ] More targets (Go, Rust) as extensions
+- [x] Appling Sync: regenerate code from the model using the registry
+- [x] Reverse engineering: AI skill in `@appling/ai` that derives an Appling model from an existing application
+- [x] More targets (Go, Rust) as extensions
 - [x] Simulator (`concept.md` section 5): evaluate expressions, preconditions, effects and transitions against sample data and actors
-- [ ] L5 code generation
+- [x] L5 code generation

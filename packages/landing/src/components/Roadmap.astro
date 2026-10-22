@@ -4,7 +4,7 @@ const foundation = [
   { title: "Edit operations", text: "Add, rename, retype, remove and set attribute, each a minimal text edit that is rejected if it fails validation." },
   { title: "Releases", text: "appling release writes a graph snapshot. Edits to released L1 elements append migration steps automatically." },
   { title: "Language server", text: "Langium's LSP services, exported as @appling/lang/lsp." },
-  { title: "Expression typing", text: "Names and types resolved inside expressions where possible." },
+  { title: "Expression typing", text: "Every name and type inside expressions resolved, including this, actor and now. An unresolved name is an error." },
 ];
 
 const tracks = [
@@ -40,11 +40,15 @@ const stages = [
 ];
 
 const later = [
-  { title: "VS Code extension", text: "Built on @appling/lang/lsp." },
-  { title: "Appling Sync", text: "Regenerate code from the model using the registry." },
-  { title: "Reverse engineering", text: "Derive an Appling model from an existing application." },
-  { title: "More targets", text: "Go and Rust as extensions." },
+  { title: "VS Code extension", text: "Highlighting, diagnostics and navigation from the bundled language server." },
+  { title: "Appling Sync", text: "appling generate --sync merges a fresh generation into the project three ways and keeps your changes." },
+  { title: "Reverse engineering", text: "An AI skill derives an Appling model from an existing application." },
+  { title: "More targets", text: "Go and Rust extensions for the domain and behavior layers." },
+  { title: "Simulator", text: "Reachable states, permitted actors, risks and action runs against sample data." },
+  { title: "Experience generation", text: "Pages, navigation and labels as Django views and Phoenix LiveViews." },
 ];
+
+const shipped = "inline-flex items-center gap-1.5 rounded-full border border-leaf-line px-2 font-mono text-[10.5px] leading-[18px] font-semibold tracking-[0.06em] text-leaf uppercase";
 ---
 
 <section id="roadmap" class="border-t border-line px-4 py-16 sm:px-8">
@@ -52,7 +56,7 @@ const later = [
     <div class="flex max-w-[640px] flex-col gap-3">
       <span class="eyebrow">Roadmap</span>
       <h2 class="text-h1">One graph, every tool on top</h2>
-      <p class="text-ink-soft">Every tool reads the same resolved semantic graph and changes it through the same edit operations. The graph comes first, then the IDE and code generation grow from it in parallel.</p>
+      <p class="text-ink-soft">Every tool reads the same resolved semantic graph and changes it through the same edit operations. The graph came first, then the IDE and code generation grew from it in parallel. Every stage below has shipped.</p>
     </div>
 
     <div class="grid gap-x-6 gap-y-6 md:grid-cols-[88px_1fr_1fr] md:gap-y-8">
@@ -67,7 +71,10 @@ const later = [
       <span class="eyebrow md:pt-6">Stage 1</span>
       <article class="flex flex-col gap-5 rounded-sm border border-leaf-line bg-leaf-soft p-6 md:col-span-2">
         <div class="flex flex-col gap-0.5">
-          <h3 class="text-[17px] leading-6 font-semibold">Foundation</h3>
+          <div class="flex flex-wrap items-center gap-3">
+            <h3 class="text-[17px] leading-6 font-semibold">Foundation</h3>
+            <span class={shipped}>Shipped</span>
+          </div>
           <code class="text-code text-ink-muted">@appling/lang, @appling/model</code>
         </div>
         <ul class="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -78,7 +85,7 @@ const later = [
             </li>
           ))}
         </ul>
-        <p class="border-t border-leaf-line pt-4 text-sm leading-[22px] text-ink-soft">Done when the CLI can dump the graph of the examples and an edit operation survives fmt unchanged.</p>
+        <p class="border-t border-leaf-line pt-4 text-sm leading-[22px] text-ink-soft">Done: the CLI dumps the graph of the examples and an edit operation survives fmt unchanged.</p>
       </article>
 
       {stages.map((stage, i) => (
@@ -90,6 +97,7 @@ const later = [
                 <article class="step flex flex-col gap-2 rounded-sm border border-line bg-surface-raised p-5">
                   <div class="flex items-center gap-3">
                     <span class="eyebrow">{item.id}</span>
+                    <span class={shipped}>Shipped</span>
                     <span class="font-mono text-xs leading-[18px] text-ink-muted md:hidden">{track.title}</span>
                   </div>
                   <h4 class="text-[17px] leading-6 font-semibold">{item.title}</h4>
@@ -101,11 +109,14 @@ const later = [
         </>
       ))}
 
-      <span class="eyebrow md:pt-5">Later</span>
-      <ul class="grid gap-2 sm:grid-cols-2 md:col-span-2 lg:grid-cols-4">
+      <span class="eyebrow md:pt-5">Stage {stages.length + 2}</span>
+      <ul class="grid gap-2 sm:grid-cols-2 md:col-span-2 lg:grid-cols-3">
         {later.map((item) => (
-          <li class="flex flex-col gap-1 rounded-sm border border-dashed border-line-strong p-5">
-            <span class="text-sm leading-[22px] font-semibold">{item.title}</span>
+          <li class="flex flex-col gap-1 rounded-sm border border-line bg-surface-raised p-5">
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="text-sm leading-[22px] font-semibold">{item.title}</span>
+              <span class={shipped}>Shipped</span>
+            </div>
             <span class="text-sm leading-[22px] text-ink-muted">{item.text}</span>
           </li>
         ))}

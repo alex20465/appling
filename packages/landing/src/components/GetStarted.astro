@@ -1,23 +1,46 @@
+---
+const commands = [
+  { name: "check", text: "validates every .appling file and exits with 1 when it finds errors." },
+  { name: "fmt", text: "rewrites files into canonical form. A second run changes nothing." },
+  { name: "@appling/ide", text: "opens the text and the graph side by side in your browser." },
+  { name: "generate", text: "writes a draft project for every target in appling.config.json." },
+];
+
+const lines = [
+  { comment: "add the CLI to your project", command: "npm i -D @appling/cli" },
+  { comment: "validate every model", command: "npx appling check models" },
+  { comment: "open the IDE on http://127.0.0.1:4410", command: "npx @appling/ide models" },
+  { comment: "preview the generated project", command: "npx appling generate --plan models" },
+];
+---
+
 <section id="cli" class="border-t border-line px-4 py-16 sm:px-8">
   <div id="start" class="mx-auto flex max-w-[1200px] flex-wrap items-start gap-12">
     <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-3">
       <span class="eyebrow">Get started</span>
-      <h2 class="text-h1">Install, check, format</h2>
-      <p class="text-ink-soft">The appling command checks your models and writes them in canonical form. Point it at a folder; files that reference each other load as one workspace.</p>
+      <h2 class="text-h1">Install, check, open, generate</h2>
+      <p class="text-ink-soft">Point the tools at a folder; files that reference each other load as one workspace.</p>
       <div class="flex flex-col gap-2 pt-2">
-        <p class="text-sm leading-[22px] text-ink-muted"><code class="rounded-sm border border-line bg-surface-elevated px-1.5 font-mono text-xs text-ink">check</code> validates every .appling file and exits with 1 when it finds errors.</p>
-        <p class="text-sm leading-[22px] text-ink-muted"><code class="rounded-sm border border-line bg-surface-elevated px-1.5 font-mono text-xs text-ink">fmt</code> rewrites files into canonical form. A second run changes nothing.</p>
+        {commands.map((command) => (
+          <p class="text-sm leading-[22px] text-ink-muted">
+            <code class="rounded-sm border border-line bg-surface-elevated px-1.5 font-mono text-xs text-ink">{command.name}</code>{" "}{command.text}
+          </p>
+        ))}
       </div>
+      <a href="/docs/getting-started/first-model/" class="pt-2 font-mono text-[13px] leading-5 font-semibold">Write your first model →</a>
     </div>
     <div class="min-w-0 flex-[1_1_520px] overflow-hidden rounded-sm border border-line bg-surface-raised">
       <div class="border-b border-line px-4 py-2 font-mono text-xs leading-5 text-ink-muted">terminal</div>
       <div class="flex flex-col gap-3 overflow-x-auto p-6 text-code">
-        <span class="text-ink-muted"># add the CLI to your project</span>
-        <span class="type whitespace-nowrap" style="animation-delay: .2s"><span class="text-leaf">$ </span>npm i -D @appling/cli</span>
-        <span class="text-ink-muted"># validate every model</span>
-        <span class="type whitespace-nowrap" style="animation-delay: 1.4s"><span class="text-leaf">$ </span>npx @appling/cli check models</span>
-        <span class="text-ink-muted"># write canonical form</span>
-        <span class="whitespace-nowrap"><span class="type inline-block" style="animation-delay: 2.6s"><span class="text-leaf">$ </span>npx @appling/cli fmt models</span><span class="cursor"></span></span>
+        {lines.map((line, i) => (
+          <>
+            <span class="text-ink-muted"># {line.comment}</span>
+            <span class="whitespace-nowrap">
+              <span class="type inline-block" style={`animation-delay: ${0.2 + i * 1.2}s`}><span class="text-leaf">$ </span>{line.command}</span>
+              {i === lines.length - 1 && <span class="cursor"></span>}
+            </span>
+          </>
+        ))}
       </div>
     </div>
   </div>

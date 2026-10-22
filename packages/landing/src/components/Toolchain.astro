@@ -1,0 +1,68 @@
+---
+const tools = [
+  {
+    title: "CLI",
+    pkg: "@appling/cli",
+    text: "Check, format, dump the graph, cut releases and generate projects. Exit codes made for CI.",
+    command: "npx appling check models",
+    href: "/docs/tools/cli/",
+  },
+  {
+    title: "IDE",
+    pkg: "@appling/ide",
+    text: "The text and the zoomable graph side by side. Edit in either; every edit is validated and lands as one undoable step.",
+    command: "npx @appling/ide models",
+    href: "/docs/tools/ide/",
+  },
+  {
+    title: "AI",
+    pkg: "@appling/ai",
+    text: "An MCP server for any client and a chat in the IDE. AI changes pass validation and arrive as proposals you review.",
+    command: "npx appling-mcp models",
+    href: "/docs/tools/ai/",
+  },
+  {
+    title: "Code generation",
+    pkg: "@appling/codegen-django, @appling/codegen-ash",
+    text: "A draft Django or Ash project from the model, plus a task registry of everything left for you or an AI to write.",
+    command: "npx appling generate --plan",
+    href: "/docs/codegen/overview/",
+    highlight: true,
+  },
+  {
+    title: "Releases and migrations",
+    pkg: "@appling/model",
+    text: "A release snapshots the graph. Later renames and type changes become migration steps that generated projects apply without losing data.",
+    command: "npx appling release 1.0.0",
+    href: "/docs/language/migrations/",
+  },
+  {
+    title: "Language server",
+    pkg: "@appling/lang",
+    text: "Diagnostics, completion, go to definition, rename, hover and canonical formatting in any editor that speaks LSP.",
+    command: "appling-language-server --stdio",
+    href: "/docs/tools/editors/",
+  },
+];
+---
+
+<section id="tools" class="border-t border-line px-4 py-16 sm:px-8">
+  <div class="mx-auto flex max-w-[1200px] flex-col gap-8">
+    <div class="flex max-w-[640px] flex-col gap-3">
+      <span class="eyebrow">Toolchain</span>
+      <h2 class="text-h1">Every tool reads the same graph</h2>
+      <p class="text-ink-soft">The command line, the IDE, the AI and the generators all work on one validated model and change it through the same edit operations.</p>
+    </div>
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-px border border-line bg-line">
+      {tools.map((tool) => (
+        <a href={tool.href} class:list={["step flex min-w-0 flex-col gap-3 p-6 text-ink no-underline hover:text-ink", tool.highlight ? "bg-leaf-soft" : "bg-surface-raised hover:bg-surface-elevated"]}>
+          <code class="text-code text-ink-muted">{tool.pkg}</code>
+          <h3 class="text-[17px] leading-6 font-semibold">{tool.title}</h3>
+          <p class="text-sm leading-[22px] text-ink-muted">{tool.text}</p>
+          <code class="mt-auto overflow-x-auto rounded-sm border border-line bg-surface px-3 py-2 text-code whitespace-nowrap text-ink-soft"><span class="text-leaf">$ </span>{tool.command}</code>
+          <span class="font-mono text-xs leading-5 text-leaf">Read the docs →</span>
+        </a>
+      ))}
+    </div>
+  </div>
+</section>

@@ -1,0 +1,134 @@
+---
+import { getCollection, render, type CollectionEntry } from "astro:content";
+import Layout from "../../layouts/Layout.astro";
+import DocsNav from "../../components/DocsNav.astro";
+import { PAGES, docHref, sectionOf } from "../../docs";
+import { GITHUB_URL } from "../../links";
+
+export async function getStaticPaths() {
+  const entries = await getCollection("docs");
+  const ids = entries.map((entry) => entry.id);
+  const unlisted = ids.filter((id) => !PAGES.includes(id));
+  const missing = PAGES.filter((id) => !ids.includes(id));
+  if (unlisted.length || missing.length) {
+    throw new Error(`Docs sidebar out of sync with docs/: not in SECTIONS (src/docs.ts): ${unlisted.join(", ") || "none"}; no such page: ${missing.join(", ") || "none"}`);
+  }
+  const titles = new Map(entries.map((entry) => [entry.id, entry.data.title]));
+  return entries.map((entry) => ({ params: { slug: entry.id === "index" ? undefined : entry.id }, props: { entry, titles } }));
+}
+
+interface Props {
+  entry: CollectionEntry<"docs">;
+  titles: Map<string, string>;
+}
+
+const { entry, titles } = Astro.props;
+const { Content, headings } = await render(entry);
+const toc = headings.filter((heading) => heading.depth === 2 || heading.depth === 3);
+const position = PAGES.indexOf(entry.id);
+const neighbours = [
+  { id: PAGES[position - 1], label: "Previous" },
+  { id: PAGES[position + 1], label: "Next" },
+];
+const source = entry.filePath!.replace(/^(\.\.\/)+/, "");
+---
+
+<Layout title={`${entry.data.title} · Appling docs`} description={entry.data.description}>
+  <div class="grid lg:grid-cols-[256px_minmax(0,1fr)] xl:grid-cols-[256px_minmax(0,1fr)_216px]">
+    <aside class="border-line max-lg:border-b lg:border-r">
+      <details class="group px-4 py-3 sm:px-8 lg:hidden">
+        <summary class="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 font-mono text-xs leading-[19px] font-semibold text-ink-muted [&::-webkit-details-marker]:hidden">
+          <span>{sectionOf(entry.id)} / <span class="text-ink">{entry.data.title}</span></span>
+          <span aria-hidden="true" class="transition-transform group-open:rotate-90">→</span>
+        </summary>
+        <div class="pt-4 pb-3">
+          <DocsNav current={entry.id} titles={titles} />
+        </div>
+      </details>
+      <div class="docs-scroll sticky top-0 max-h-dvh overflow-y-auto px-6 py-10 max-lg:hidden">
+        <DocsNav current={entry.id} titles={titles} />
+      </div>
+    </aside>
+
+    <article class="min-w-0 px-4 py-12 sm:px-8 lg:px-12">
+      <header class="flex flex-col gap-3 border-b border-line pb-8">
+        <span class="eyebrow">{sectionOf(entry.id)}</span>
+        <h1 class="text-[clamp(32px,4vw,40px)] leading-[1.15] font-semibold tracking-[-0.025em] text-balance">{entry.data.title}</h1>
+        <p class="max-w-[640px] text-ink-soft">{entry.data.description}</p>
+      </header>
+
+      <div class="docs-prose prose max-w-[760px] pt-4">
+        <Content />
+      </div>
+
+      <footer class="mt-16 flex max-w-[760px] flex-col gap-6 border-t border-line pt-8">
+        <div class="grid gap-px border border-line bg-line sm:grid-cols-2">
+          {neighbours.map(({ id, label }) =>
+            id ? (
+              <a href={docHref(id)} class:list={["flex flex-col gap-1 bg-surface-raised p-5 no-underline hover:bg-surface-hover", label === "Next" && "sm:items-end sm:text-right"]}>
+                <span class="eyebrow">{label}</span>
+                <span class="font-semibold text-ink">{titles.get(id)}</span>
+              </a>
+            ) : (
+              <div class="bg-surface-raised max-sm:hidden"></div>
+            ),
+          )}
+        </div>
+        <a href={`${GITHUB_URL}/edit/main/${source}`} class="font-mono text-xs leading-[19px] text-ink-muted hover:text-ink">Edit this page on GitHub →</a>
+      </footer>
+    </article>
+
+    {toc.length > 0 && (
+      <aside class="border-l border-line max-xl:hidden">
+        <nav aria-label="On this page" class="docs-scroll sticky top-0 max-h-dvh overflow-y-auto px-6 py-10">
+          <span class="eyebrow">On this page</span>
+          <ul class="mt-3 flex flex-col gap-1.5">
+            {toc.map((heading) => (
+              <li class:list={[heading.depth === 3 && "pl-3"]}>
+                <a href={`#${heading.slug}`} class="block text-[13px] leading-5 text-ink-muted no-underline hover:text-ink">{heading.text}</a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </aside>
+    )}
+  </div>
+</Layout>
+
+<script>
+  const diagrams = [...document.querySelectorAll<HTMLElement>("pre.mermaid")];
+  if (diagrams.length) {
+    const { default: mermaid } = await import("mermaid");
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: "base",
+      fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+      flowchart: { htmlLabels: true, curve: "basis" },
+      themeVariables: {
+        darkMode: true,
+        fontSize: "13px",
+        background: "#14110d",
+        primaryColor: "#1b1712",
+        primaryTextColor: "#f7f2ea",
+        primaryBorderColor: "#7a6e5e",
+        secondaryColor: "#241f18",
+        tertiaryColor: "#14110d",
+        lineColor: "#7a6e5e",
+        textColor: "#d9d0c3",
+        clusterBkg: "#0c0a08",
+        clusterBorder: "#2e2820",
+        edgeLabelBackground: "#0c0a08",
+        noteBkgColor: "#241f18",
+        noteTextColor: "#f7f2ea",
+        noteBorderColor: "#7a6e5e",
+        actorBkg: "#1b1712",
+        actorBorder: "#7a6e5e",
+        actorTextColor: "#f7f2ea",
+        signalColor: "#d9d0c3",
+        signalTextColor: "#d9d0c3",
+        labelBoxBkgColor: "#1b1712",
+      },
+    });
+    await mermaid.run({ nodes: diagrams });
+  }
+</script>

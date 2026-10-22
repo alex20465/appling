@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 @font-face {
   font-family: "Switzer";
@@ -226,3 +227,58 @@
 }
 
 html:has(.menu:popover-open) { overflow: hidden; }
+
+/* Documentation, unlayered so it wins over the typography plugin's utilities: its colors from the tokens, plus alerts and model graphs */
+.docs-prose {
+  --tw-prose-body: var(--color-ink-soft);
+  --tw-prose-headings: var(--color-ink);
+  --tw-prose-lead: var(--color-ink-soft);
+  --tw-prose-links: var(--color-leaf);
+  --tw-prose-bold: var(--color-ink);
+  --tw-prose-counters: var(--color-ink-muted);
+  --tw-prose-bullets: var(--color-line-strong);
+  --tw-prose-hr: var(--color-line);
+  --tw-prose-quotes: var(--color-ink-soft);
+  --tw-prose-quote-borders: var(--color-line-strong);
+  --tw-prose-captions: var(--color-ink-muted);
+  --tw-prose-code: var(--color-ink);
+  --tw-prose-pre-code: var(--color-ink-soft);
+  --tw-prose-pre-bg: var(--color-surface-raised);
+  --tw-prose-th-borders: var(--color-line-strong);
+  --tw-prose-td-borders: var(--color-line);
+  font-size: 16px;
+  line-height: 1.7;
+}
+.docs-prose :where(h2, h3, h4) { scroll-margin-top: 24px; letter-spacing: -0.015em; font-weight: 600; }
+.docs-prose :where(h2) { padding-top: 24px; border-top: 1px solid var(--color-line); }
+.docs-prose :where(a) { text-underline-offset: 3px; }
+.docs-prose :where(code):not(:where(pre *)) { overflow-wrap: anywhere; padding: 1px 6px; border: 1px solid var(--color-line); border-radius: var(--radius-sm); background: var(--color-surface-elevated); font-size: 0.85em; font-weight: 500; }
+.docs-prose :where(code):not(:where(pre *))::before, .docs-prose :where(code):not(:where(pre *))::after { content: none; }
+.docs-prose :where(pre) { border: 1px solid var(--color-line); border-radius: var(--radius-sm); font-size: 13px; line-height: 21px; }
+/* Code reads as typed: no ligatures turning != or -> into single glyphs */
+.docs-prose :where(code, pre) { font-variant-ligatures: none; }
+.docs-scroll { scrollbar-width: thin; scrollbar-color: var(--color-line) transparent; }
+.docs-prose :where(table) { font-size: 14px; }
+/* Wide tables scroll inside the column on phones instead of widening the page */
+@media (max-width: 48rem) { .docs-prose :where(table) { display: block; overflow-x: auto; scrollbar-width: thin; } }
+.docs-prose :where(th) { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; }
+
+.markdown-alert { --alert: var(--color-line-strong); margin-block: 1.5em; padding: 12px 16px; border-left: 3px solid var(--alert); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: color-mix(in srgb, var(--alert) 10%, transparent); }
+.markdown-alert > :first-child { margin-top: 0; }
+.markdown-alert > :last-child { margin-bottom: 0; }
+.markdown-alert-title { display: flex; align-items: center; gap: 8px; color: var(--alert); font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.markdown-alert-title svg { fill: currentColor; }
+.markdown-alert-tip { --alert: var(--color-leaf); }
+.markdown-alert-important { --alert: var(--color-sprout); }
+.markdown-alert-warning { --alert: var(--color-rust); }
+.markdown-alert-caution { --alert: var(--color-amber); }
+
+.docs-prose pre.mermaid { display: flex; justify-content: center; border: 0; background: none; opacity: 0; transition: opacity .3s ease; }
+.docs-prose pre.mermaid[data-processed] { opacity: 1; }
+.docs-prose :where(pre.mermaid):not(.model-graph *) { padding: 24px; border: 1px solid var(--color-line); background: var(--color-surface-raised); }
+.model-graph { margin-top: -0.75em; padding: 16px; border: 1px solid var(--color-line); border-radius: var(--radius-sm); background: radial-gradient(circle at 2px 2px, var(--color-line) 1px, transparent 1.4px) 0 0 / 16px 16px, var(--color-surface); }
+.model-graph pre.mermaid { margin: 0; }
+.model-graph figcaption { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; font-family: var(--font-mono); font-size: 12px; }
+.model-graph figcaption > span:first-child { margin-right: auto; }
+.layer-chip { display: inline-flex; align-items: center; gap: 6px; color: var(--color-ink-muted); }
+.layer-chip::before { content: ""; width: 10px; height: 10px; border-radius: 2px; background: var(--chip); outline: 1px solid var(--color-line-strong); }

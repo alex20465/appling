@@ -5,9 +5,10 @@ import { GITHUB_URL, NPM_URL } from "../links";
 const sections = [
   { href: "/#layers", label: "Layers" },
   { href: "/#how", label: "How it works" },
+  { href: "/#tools", label: "Toolchain" },
   { href: "/#example", label: "Example" },
   { href: "/#roadmap", label: "Roadmap" },
-  { href: "/#cli", label: "CLI" },
+  { href: "/docs/", label: "Docs" },
 ];
 const links = [...sections, { href: GITHUB_URL, label: "GitHub" }];
 
@@ -24,15 +25,15 @@ const toggle = "burger inline-flex min-h-11 cursor-pointer items-center gap-3 fo
       <img src="/appling-icon.svg" alt="" class="sprout size-7" />
       <span class="intro text-[17px] leading-6 font-semibold" style="animation-delay: 500ms">Appling</span>
     </a>
-    <div class="flex items-center gap-6 max-md:hidden">
+    <div class="flex items-center gap-6 max-lg:hidden">
       {links.map((link) => <a href={link.href} class="font-mono text-xs leading-[19px] font-medium text-ink-muted no-underline hover:text-ink">{link.label}</a>)}
       <a href="/#start" class={cta}>Get started</a>
     </div>
-    <button type="button" popovertarget="menu" class={`${toggle} md:hidden`}>Menu<span class="knob" aria-hidden="true"><span class="bars"><span></span><span></span><span></span></span></span></button>
+    <button type="button" popovertarget="menu" class={`${toggle} lg:hidden`}>Menu<span class="knob" aria-hidden="true"><span class="bars"><span></span><span></span><span></span></span></span></button>
   </nav>
 </header>
 
-<div id="menu" popover aria-label="Menu" class="menu fixed inset-0 m-0 size-full max-h-none max-w-none overflow-y-auto border-0 p-0 text-ink md:hidden">
+<div id="menu" popover aria-label="Menu" class="menu fixed inset-0 m-0 size-full max-h-none max-w-none overflow-y-auto border-0 p-0 text-ink lg:hidden">
   <div class="flex min-h-full flex-col">
     <div class="hazard" aria-hidden="true"></div>
     <div class="border-b border-line px-4">
@@ -87,5 +88,5 @@ const toggle = "burger inline-flex min-h-11 cursor-pointer items-center gap-3 fo
   for (const link of menu.querySelectorAll("a")) {
     link.addEventListener("click", () => menu.hidePopover());
   }
-  matchMedia("(min-width: 48rem)").addEventListener("change", () => menu.hidePopover());
+  matchMedia("(min-width: 64rem)").addEventListener("change", () => menu.hidePopover());
 </script>

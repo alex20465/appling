@@ -30,14 +30,17 @@ const bots = [
   // Share of the remaining distance covered per frame; lower feels floatier
   const EASE = still ? 1 : 0.07;
 
-  const bots = [...document.querySelectorAll<HTMLElement>(".bot")].map((el) => ({
-    el,
-    section: document.querySelector<HTMLElement>(el.dataset.anchor!)!,
-    away: el.dataset.side === "left" ? -1 : 1,
-    shown: 0,
-    y: 0,
-    tilt: 0,
-  }));
+  // Pages without a bot's anchor section, such as the docs, leave that bot hidden
+  const bots = [...document.querySelectorAll<HTMLElement>(".bot")]
+    .map((el) => ({
+      el,
+      section: document.querySelector<HTMLElement>(el.dataset.anchor!)!,
+      away: el.dataset.side === "left" ? -1 : 1,
+      shown: 0,
+      y: 0,
+      tilt: 0,
+    }))
+    .filter((bot) => bot.section);
 
   let target: { x: number; y: number } | null = null;
   let lastScroll = scrollY;

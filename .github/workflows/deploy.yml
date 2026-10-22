@@ -25,7 +25,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm --filter @appling/landing build
+      # The docs validate their examples with @appling/lang and @appling/model, so build those first
+      - run: pnpm --filter @appling/landing... build
 
       - run: pnpm --filter @appling/landing bunny:move
         env:

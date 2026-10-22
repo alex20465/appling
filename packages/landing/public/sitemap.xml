@@ -1,4 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://appling.tools/</loc></url>
+  <url><loc>https://appling.tools/docs/</loc></url>
+  <url><loc>https://appling.tools/docs/getting-started/installation/</loc></url>
+  <url><loc>https://appling.tools/docs/getting-started/first-model/</loc></url>
+  <url><loc>https://appling.tools/docs/getting-started/workspace/</loc></url>
+  <url><loc>https://appling.tools/docs/language/overview/</loc></url>
+  <url><loc>https://appling.tools/docs/language/modules/</loc></url>
+  <url><loc>https://appling.tools/docs/language/access/</loc></url>
+  <url><loc>https://appling.tools/docs/language/domain/</loc></url>
+  <url><loc>https://appling.tools/docs/language/behavior/</loc></url>
+  <url><loc>https://appling.tools/docs/language/application/</loc></url>
+  <url><loc>https://appling.tools/docs/language/interfaces/</loc></url>
+  <url><loc>https://appling.tools/docs/language/experience/</loc></url>
+  <url><loc>https://appling.tools/docs/language/expressions/</loc></url>
+  <url><loc>https://appling.tools/docs/language/migrations/</loc></url>
+  <url><loc>https://appling.tools/docs/language/validation/</loc></url>
+  <url><loc>https://appling.tools/docs/tools/cli/</loc></url>
+  <url><loc>https://appling.tools/docs/tools/ide/</loc></url>
+  <url><loc>https://appling.tools/docs/tools/editors/</loc></url>
+  <url><loc>https://appling.tools/docs/tools/ai/</loc></url>
+  <url><loc>https://appling.tools/docs/tools/simulator/</loc></url>
+  <url><loc>https://appling.tools/docs/codegen/overview/</loc></url>
+  <url><loc>https://appling.tools/docs/codegen/registry/</loc></url>
+  <url><loc>https://appling.tools/docs/codegen/migrations/</loc></url>
+  <url><loc>https://appling.tools/docs/codegen/django/</loc></url>
+  <url><loc>https://appling.tools/docs/codegen/ash/</loc></url>
+  <url><loc>https://appling.tools/docs/codegen/extensions/</loc></url>
+  <url><loc>https://appling.tools/docs/reference/configuration/</loc></url>
+  <url><loc>https://appling.tools/docs/reference/graph/</loc></url>
+  <url><loc>https://appling.tools/docs/reference/edit-operations/</loc></url>
+  <url><loc>https://appling.tools/docs/reference/api/</loc></url>
+  <url><loc>https://appling.tools/docs/contributing/development/</loc></url>
+  <url><loc>https://appling.tools/docs/contributing/architecture/</loc></url>
+  <url><loc>https://appling.tools/docs/contributing/documentation/</loc></url>
+  <url><loc>https://appling.tools/docs/concept/</loc></url>
+  <url><loc>https://appling.tools/docs/roadmap/</loc></url>
 </urlset>
