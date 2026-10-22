@@ -1,34 +1,24 @@
 ---
-// Eyes are [x, y, radius] in pixels of each artwork, where the painted eyes were removed.
-// reach is how far they may travel inside that visor. Each bot glides in beside its anchor
+import Bot from "./Bot.astro";
+import { BOTS } from "../bots";
+
+// reach is how far the eyes may travel inside the visor. Each bot glides in beside its anchor
 // section while that section passes the middle of the viewport.
 const bots = [
-  { name: "sprout", w: 474, h: 560, eyes: [[262, 191, 11], [322, 189, 11]], reach: 8, side: "left", anchor: "#top", delay: "0s" },
-  { name: "inspect", w: 429, h: 560, eyes: [[216, 193, 15], [262, 196, 15]], reach: 8, side: "right", anchor: "#example", delay: "-2.4s" },
-];
+  { name: "sprout", reach: 8, side: "left", anchor: "#top", delay: "0s" },
+  { name: "inspect", reach: 8, side: "right", anchor: "#example", delay: "-2.4s" },
+] as const;
 ---
 
 <div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10 overflow-hidden max-xl:hidden">
   {bots.map((bot) => {
-    const cx = bot.eyes.reduce((sum, [x]) => sum + x, 0) / bot.eyes.length / bot.w;
-    const cy = bot.eyes.reduce((sum, [, y]) => sum + y, 0) / bot.eyes.length / bot.h;
+    const { w, h, eyes } = BOTS[bot.name];
+    const cx = eyes.reduce((sum, [x]) => sum + x, 0) / eyes.length / w;
+    const cy = eyes.reduce((sum, [, y]) => sum + y, 0) / eyes.length / h;
     return (
       <div class="bot absolute top-1/2 w-[300px] -translate-y-1/2 opacity-0" data-cx={cx} data-cy={cy} data-reach={bot.reach} data-side={bot.side} data-anchor={bot.anchor} style={`${bot.side}: max(-60px, calc((100% - 1264px) / 4 - 150px))`}>
         <div class="drift relative" style={`animation-delay: ${bot.delay}`}>
-          <img src={`/appling-bot-${bot.name}.webp`} alt="" width={bot.w} height={bot.h} class="block h-auto w-full" />
-          <svg viewBox={`0 0 ${bot.w} ${bot.h}`} class="absolute inset-0 size-full">
-            <g class="eyes">
-              <g class="wink" style={`animation-delay: ${bot.delay}`}>
-                {bot.eyes.map(([x, y, r]) => (
-                  <>
-                    <circle cx={x} cy={y} r={r * 1.5} fill="#7fd13b" opacity=".35"></circle>
-                    <circle cx={x} cy={y} r={r * 1.2} fill="none" stroke="#5cbf63" stroke-width={r * 0.25} opacity=".7"></circle>
-                    <circle cx={x} cy={y} r={r} fill="#dcf53c"></circle>
-                  </>
-                ))}
-              </g>
-            </g>
-          </svg>
+          <Bot name={bot.name} delay={bot.delay} />
         </div>
       </div>
     );

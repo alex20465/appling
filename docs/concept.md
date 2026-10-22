@@ -8,7 +8,7 @@ Create a declarative Domain-Specific Language (DSL) that describes the structura
 
 The model is the **single source of truth**. It has a canonical text syntax that round-trips losslessly to an Abstract Syntax Tree (AST). After reference resolution, the AST becomes a semantic graph. All tools (visualization, AI, validation) work on that graph.
 
-The primary goal is an **interactive, zoomable visualization** that both humans and AI can explore, construct, and modify, backed by a model that can be **validated structurally and simulated behaviorally**. Code generation is a possible future feature.
+The primary goal is an **interactive, zoomable visualization** that both humans and AI can explore, construct, and modify, backed by a model that can be **validated structurally and simulated behaviorally**. Code generation produces a draft project for a target framework (Django and Ash first) through installable extensions; work it cannot complete is recorded as tasks for AI or humans.
 
 **Differentiator:** layered application modeling exists already (WebML/IFML, MDA, Ash, Mendix). This project's distinct contribution is AI-native editing plus semantic-zoom exploration of one validated model.
 
@@ -174,7 +174,7 @@ AI-generated changes pass the same structural validation as human edits, and are
 
 ## 8. Out of Scope (initial)
 
-- Production runtime
+- Production runtime (code generation produces a draft project, not a runtime)
 - Deployment, infrastructure, environments
 - Performance, scaling, and SLAs
 - Visual design system and styling details

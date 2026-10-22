@@ -1,0 +1,70 @@
+---
+import Bot from "./Bot.astro";
+
+const button = "inline-flex min-h-11 cursor-pointer items-center justify-center rounded-md px-3 font-mono text-[13px] leading-4 font-semibold";
+
+// The peeking bot's rightmost edge lines up with the card's content edge; the stripes on its chest stay hidden behind the card
+---
+
+<div id="consent" role="dialog" aria-labelledby="consent-title" aria-describedby="consent-text" hidden class="consent fixed right-4 bottom-4 left-4 z-50 max-w-[400px] sm:bottom-6 sm:left-6">
+  <div class="peek absolute -top-[106px] right-[18px] w-[128px] sm:right-[22px] [@media(max-height:480px)]:hidden" aria-hidden="true">
+    <div class="peekup relative">
+      <Bot name="inspect" />
+    </div>
+  </div>
+  <div class="intro relative overflow-hidden rounded-lg border border-line bg-surface-elevated shadow-2xl shadow-black/60">
+    <div class="hazard"></div>
+    <div class="@container flex flex-col p-5 sm:p-6">
+      <span class="eyebrow">Cookie inspection</span>
+      <h2 id="consent-title" class="mt-2 text-lg leading-6 font-semibold text-balance">Beep boop. Mind if I count you?</h2>
+      <p id="consent-text" class="mt-2 text-sm leading-[22px] text-ink-soft">
+        I searched everywhere and found no cookies, just crumbs. With your OK I tally page visits with Umami: cookieless, privacy friendly, no ads and no tracking across sites.
+      </p>
+      <div class="mt-5 grid gap-2 @min-[276px]:grid-cols-2">
+        <button type="button" data-consent="granted" class={`${button} bg-leaf text-on-leaf hover:bg-leaf-hover`}>Sure, count me</button>
+        <button type="button" data-consent="denied" class={`${button} border border-line-strong text-ink hover:bg-surface-hover`}>No thanks</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const KEY = "appling-consent";
+  const dialog = document.getElementById("consent")!;
+
+  function load() {
+    if (document.getElementById("umami")) return;
+    const script = document.createElement("script");
+    script.id = "umami";
+    script.defer = true;
+    script.src = "https://analytics.techthos.systems/script.js";
+    script.dataset.websiteId = "a090bce2-6782-4895-8a12-577a510bf77b";
+    document.head.append(script);
+  }
+
+  let choice = null;
+  try {
+    choice = localStorage.getItem(KEY);
+  } catch {}
+  if (choice === "granted") load();
+  dialog.hidden = choice !== null;
+
+  for (const button of dialog.querySelectorAll<HTMLButtonElement>("[data-consent]")) {
+    button.addEventListener("click", () => {
+      const value = button.dataset.consent!;
+      try {
+        localStorage.setItem(KEY, value);
+      } catch {}
+      // Withdrawn after Umami already loaded: reload so it stops counting this visit
+      if (value === "denied" && document.getElementById("umami")) location.reload();
+      if (value === "granted") load();
+      dialog.hidden = true;
+    });
+  }
+
+  for (const opener of document.querySelectorAll("[data-consent-open]")) {
+    opener.addEventListener("click", () => {
+      dialog.hidden = false;
+    });
+  }
+</script>

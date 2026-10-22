@@ -1,0 +1,115 @@
+---
+const foundation = [
+  { title: "Semantic graph", text: "Plain, serializable nodes and typed edges. Zoom aggregation, such as module to module dependencies, is computed." },
+  { title: "Edit operations", text: "Add, rename, retype, remove and set attribute, each a minimal text edit that is rejected if it fails validation." },
+  { title: "Releases", text: "appling release writes a graph snapshot. Edits to released L1 elements append migration steps automatically." },
+  { title: "Language server", text: "Langium's LSP services, exported as @appling/lang/lsp." },
+  { title: "Expression typing", text: "Names and types resolved inside expressions where possible." },
+];
+
+const tracks = [
+  { key: "a", title: "IDE", packages: "@appling/ide, @appling/ai" },
+  { key: "b", title: "Code generation", packages: "@appling/codegen, codegen-django, codegen-ash" },
+] as const;
+
+const stages = [
+  {
+    a: [{ id: "A1", title: "Read only IDE", text: "npx @appling/ide opens the workspace in the browser: an LSP backed editor and the zoomable graph, with selection synced between them." }],
+    b: [
+      { id: "B1", title: "Core", text: "Plan, step runner, map contract, task registry and prerequisite checks behind appling generate." },
+      { id: "B2", title: "Domain maps", text: "Django and Ash maps for entities, enums, value types, invariants and policies." },
+    ],
+  },
+  {
+    a: [
+      { id: "A2", title: "Editing", text: "Edit elements and attributes in the graph. Migration entries appear once a release exists." },
+      { id: "A3", title: "AI", text: "An MCP server for any client plus a chat panel. AI changes pass validation and arrive as reviewable diffs." },
+    ],
+    b: [
+      { id: "B3", title: "Behavior to interface maps", text: "Actions, state machines, events, jobs, queries, projections, use cases and interfaces." },
+      { id: "B4", title: "Tests", text: "Test skeletons for invariants, preconditions, transitions and policies." },
+    ],
+  },
+  {
+    a: [],
+    b: [
+      { id: "B5", title: "Registry skill", text: "AI picks open registry entries, implements them, runs the related tests and marks them done." },
+      { id: "B6", title: "Migrations", text: "makemigrations and mix ash.codegen, fed with Appling rename and retype steps so nothing is guessed as remove plus add." },
+    ],
+  },
+];
+
+const later = [
+  { title: "VS Code extension", text: "Built on @appling/lang/lsp." },
+  { title: "Appling Sync", text: "Regenerate code from the model using the registry." },
+  { title: "Reverse engineering", text: "Derive an Appling model from an existing application." },
+  { title: "More targets", text: "Go and Rust as extensions." },
+];
+---
+
+<section id="roadmap" class="border-t border-line px-4 py-16 sm:px-8">
+  <div class="mx-auto flex max-w-[1200px] flex-col gap-8">
+    <div class="flex max-w-[640px] flex-col gap-3">
+      <span class="eyebrow">Roadmap</span>
+      <h2 class="text-h1">One graph, every tool on top</h2>
+      <p class="text-ink-soft">Every tool reads the same resolved semantic graph and changes it through the same edit operations. The graph comes first, then the IDE and code generation grow from it in parallel.</p>
+    </div>
+
+    <div class="grid gap-x-6 gap-y-6 md:grid-cols-[88px_1fr_1fr] md:gap-y-8">
+      <div class="max-md:hidden"></div>
+      {tracks.map((track) => (
+        <div class="flex flex-col gap-0.5 max-md:hidden">
+          <h3 class="text-[17px] leading-6 font-semibold">{track.title}</h3>
+          <code class="text-code text-ink-muted">{track.packages}</code>
+        </div>
+      ))}
+
+      <span class="eyebrow md:pt-6">Stage 1</span>
+      <article class="flex flex-col gap-5 rounded-sm border border-leaf-line bg-leaf-soft p-6 md:col-span-2">
+        <div class="flex flex-col gap-0.5">
+          <h3 class="text-[17px] leading-6 font-semibold">Foundation</h3>
+          <code class="text-code text-ink-muted">@appling/lang, @appling/model</code>
+        </div>
+        <ul class="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+          {foundation.map((item) => (
+            <li class="flex flex-col gap-1">
+              <span class="text-sm leading-[22px] font-semibold">{item.title}</span>
+              <span class="text-sm leading-[22px] text-ink-muted">{item.text}</span>
+            </li>
+          ))}
+        </ul>
+        <p class="border-t border-leaf-line pt-4 text-sm leading-[22px] text-ink-soft">Done when the CLI can dump the graph of the examples and an edit operation survives fmt unchanged.</p>
+      </article>
+
+      {stages.map((stage, i) => (
+        <>
+          <span class="eyebrow md:pt-5">Stage {i + 2}</span>
+          {tracks.map((track) => (
+            <div class:list={["flex flex-col gap-2", stage[track.key].length === 0 && "max-md:hidden"]}>
+              {stage[track.key].map((item) => (
+                <article class="step flex flex-col gap-2 rounded-sm border border-line bg-surface-raised p-5">
+                  <div class="flex items-center gap-3">
+                    <span class="eyebrow">{item.id}</span>
+                    <span class="font-mono text-xs leading-[18px] text-ink-muted md:hidden">{track.title}</span>
+                  </div>
+                  <h4 class="text-[17px] leading-6 font-semibold">{item.title}</h4>
+                  <p class="text-sm leading-[22px] text-ink-muted">{item.text}</p>
+                </article>
+              ))}
+            </div>
+          ))}
+        </>
+      ))}
+
+      <span class="eyebrow md:pt-5">Later</span>
+      <ul class="grid gap-2 sm:grid-cols-2 md:col-span-2 lg:grid-cols-4">
+        {later.map((item) => (
+          <li class="flex flex-col gap-1 rounded-sm border border-dashed border-line-strong p-5">
+            <span class="text-sm leading-[22px] font-semibold">{item.title}</span>
+            <span class="text-sm leading-[22px] text-ink-muted">{item.text}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </div>
+</section>

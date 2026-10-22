@@ -23,25 +23,22 @@ const source = `<span class="kw">module</span> sales <span class="pu">{</span>
   <span class="pu">}</span>
 <span class="pu">}</span>`;
 
+// Symmetric layout in a 336 x 284 viewBox: Behavior (L2) on top, Domain (L1) below, every node 132 x 56
+const W = 132;
+const H = 56;
 const nodes = [
-  { left: 16, top: 24, height: 64, kind: "L1 · enum", name: "OrderStatus", delay: 0.1 },
-  { left: 288, top: 24, height: 64, kind: "L2 · action", name: "PlaceOrder", delay: 0.2 },
-  { left: 152, top: 148, height: 72, kind: "L1 · entity · exported", name: "sales.Order", delay: 0, highlight: true },
-  { left: 152, top: 280, height: 64, kind: "L2 · machine", name: "OrderFlow", delay: 0.3 },
+  { x: 8, y: 20, kind: "L2 · ACTION", name: "PlaceOrder", delay: 0.2 },
+  { x: 196, y: 20, kind: "L2 · MACHINE", name: "OrderFlow", delay: 0.3 },
+  { x: 102, y: 120, kind: "L1 · ENTITY", name: "sales.Order", delay: 0, highlight: true },
+  { x: 102, y: 220, kind: "L1 · ENUM", name: "OrderStatus", delay: 0.1 },
 ];
 
+// Each edge starts on a port at its source border and ends where the arrow tip touches the target
 const edges = [
-  { d: "M200 148 C200 118 104 122 104 94", delay: 0.6 },
-  { d: "M376 88 C376 120 280 118 280 144", delay: 0.8 },
-  { d: "M240 280 L240 226", delay: 1 },
-  { d: "M328 312 C420 312 440 200 440 94", delay: 1.2 },
-];
-
-const edgeLabels = [
-  { left: 112, top: 104, text: "status" },
-  { left: 334, top: 104, text: "on" },
-  { left: 248, top: 240, text: "on status" },
-  { left: 412, top: 196, text: "via" },
+  { from: [74, 76], d: "M74 76 C74 100 138 96 138 119", delay: 0.6, label: { x: 100, y: 98, text: "on", anchor: "end" } },
+  { from: [262, 76], d: "M262 76 C262 100 198 96 198 119", delay: 0.8, label: { x: 236, y: 98, text: "on status", anchor: "start" } },
+  { from: [196, 48], d: "M196 48 L141 48", delay: 1, label: { x: 168, y: 48, text: "via", anchor: "middle" } },
+  { from: [168, 176], d: "M168 176 L168 219", delay: 1.2, label: { x: 176, y: 198, text: "status", anchor: "start" } },
 ];
 
 const quotes = [
@@ -67,29 +64,32 @@ const quotes = [
       </div>
       <div class="flex min-w-0 flex-col gap-4 bg-surface-raised p-6">
         <span class="eyebrow">The graph</span>
-        <div class="overflow-x-auto">
-          <div class="relative mx-auto h-[360px] w-[480px]">
-            <svg viewBox="0 0 480 360" aria-hidden="true" class="absolute inset-0 h-[360px] w-[480px]">
-              <defs>
-                <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#7a6e5e"></path></marker>
-              </defs>
-              {edges.map((edge) => (
+        <div class="grid flex-1 place-items-center">
+          <svg viewBox="0 0 336 284" aria-hidden="true" class="block w-full max-w-[400px]">
+            <defs>
+              <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#7a6e5e"></path></marker>
+            </defs>
+            {edges.map((edge) => (
+              <g>
                 <path class="sr ref edge" d={edge.d} stroke="#7a6e5e" stroke-width="1.5" style={`animation-delay: 0s, ${edge.delay}s`}></path>
-              ))}
-            </svg>
+                <circle class="appear" cx={edge.from[0]} cy={edge.from[1]} r="2.5" fill="#7a6e5e" style={`animation-delay: ${edge.delay}s`}></circle>
+                <text class="edgelabel appear fill-ink-muted font-mono text-[10.5px]" x={edge.label.x} y={edge.label.y} text-anchor={edge.label.anchor} dominant-baseline="central" style={`animation-delay: ${edge.delay}s`}>{edge.label.text}</text>
+              </g>
+            ))}
             {nodes.map((node) => (
-              <div
-                class:list={["node absolute box-border flex w-44 flex-col justify-center rounded-sm border px-3.5 py-2", node.highlight ? "border-leaf-line bg-[#142215]" : "border-line-strong bg-surface-elevated"]}
-                style={`left: ${node.left}px; top: ${node.top}px; height: ${node.height}px; animation-delay: ${node.delay}s`}
-              >
-                <span class:list={["eyebrow", !node.highlight && "text-ink-muted"]}>{node.kind}</span>
-                <code class="text-code text-ink">{node.name}</code>
-              </div>
+              <g class="node" style={`animation-delay: ${node.delay}s`}>
+                <rect x={node.x} y={node.y} width={W} height={H} rx="4" fill={node.highlight ? "#142215" : "#1b1712"} stroke={node.highlight ? "#5cbf6366" : "#7a6e5e"} vector-effect="non-scaling-stroke"></rect>
+                <text x={node.x + 12} y={node.y + 22} class:list={["font-mono text-[10px] font-semibold tracking-[0.1em]", node.highlight ? "fill-rust" : "fill-ink-muted"]}>{node.kind}</text>
+                <text x={node.x + 12} y={node.y + 40} class="fill-ink font-mono text-[13px]">{node.name}</text>
+                {node.highlight && (
+                  <g>
+                    <rect x={node.x + W - 52} y={node.y + H - 7} width="40" height="14" rx="7" fill="#5cbf63"></rect>
+                    <text x={node.x + W - 32} y={node.y + H} text-anchor="middle" dominant-baseline="central" class="fill-on-leaf font-mono text-[8px] font-semibold tracking-[0.06em]">EXPORT</text>
+                  </g>
+                )}
+              </g>
             ))}
-            {edgeLabels.map((label) => (
-              <span class="absolute bg-surface-raised px-1.5 font-mono text-xs leading-[18px] text-ink-muted" style={`left: ${label.left}px; top: ${label.top}px`}>{label.text}</span>
-            ))}
-          </div>
+          </svg>
         </div>
       </div>
     </div>

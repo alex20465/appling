@@ -41,7 +41,7 @@ module sales {
 
 Each concept is defined once in the layer that owns it. References only point down the layers, interfaces and pages reach data only through projections, and modules only see what other modules export. Every element is identified by its qualified name, such as `sales.Order.status`, and renames are recorded as `migration` steps.
 
-The full design is in [concept.md](concept.md).
+The full design is in [concept.md](docs/concept.md).
 
 ## Packages
 
@@ -72,13 +72,13 @@ pnpm fmt examples     # canonical formatting
 packages/lang     grammar (src/appling.langium), scoping, validator, printer
 packages/cli      the appling command
 examples          sample models that reference each other across modules
-concept.md        language design and rules
-TODO.md           planned tooling
+docs/concept.md   language design and rules
+docs/ROADMAP.md   planned packages and phases
 ```
 
 ## Roadmap
 
-Planned tooling, such as reverse engineering, an editor with AI support, a changelog for migrations, sync with implementations and IDE support, is listed in [TODO.md](TODO.md).
+The IDE with semantic zoom and AI editing, release based migrations and framework code generation through installable extensions are planned in [ROADMAP.md](docs/ROADMAP.md).
 
 ## License
 

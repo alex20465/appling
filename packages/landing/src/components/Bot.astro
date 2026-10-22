@@ -1,0 +1,26 @@
+---
+import { BOTS, type BotName } from "../bots";
+
+interface Props {
+  name: BotName;
+  delay?: string;
+}
+
+const { name, delay = "0s" } = Astro.props;
+const { w, h, eyes } = BOTS[name];
+---
+
+<img src={`/appling-bot-${name}.webp`} alt="" width={w} height={h} class="block h-auto w-full" />
+<svg viewBox={`0 0 ${w} ${h}`} class="absolute inset-0 size-full">
+  <g class="eyes">
+    <g class="wink" style={`animation-delay: ${delay}`}>
+      {eyes.map(([x, y, r]) => (
+        <>
+          <circle cx={x} cy={y} r={r * 1.5} fill="#7fd13b" opacity=".35"></circle>
+          <circle cx={x} cy={y} r={r * 1.2} fill="none" stroke="#5cbf63" stroke-width={r * 0.25} opacity=".7"></circle>
+          <circle cx={x} cy={y} r={r} fill="#dcf53c"></circle>
+        </>
+      ))}
+    </g>
+  </g>
+</svg>
