@@ -32,7 +32,8 @@ const deps = dependencies(graph);
 | `layer` | `cross`, `domain`, `behavior`, `application`, `interface` or `experience` |
 | `level` | Zoom level: `out` for modules and use cases, `medium` for other top level declarations, `in` for nested elements |
 | `module` | Qualified name of the owning module |
-| `props` | Scalar properties, plus nested non element parts (types, expressions, preconditions, steps) as canonical text |
+| `props` | For display: scalar properties, plus nested non element parts (types, expressions, preconditions, steps) as canonical text |
+| `data` | For tools: the same properties with references as qualified names and nested parts as objects with `$type`; expressions also carry their `type` and, for names, the `target` they stand for |
 
 Unnamed elements get a key derived from their content: `invariant["total never negative"]`, `policy[read fields total]`, `transition[draft,placed->cancelled]`, `endpoint[GET /orders]`, `effect[set placed_at]`. Duplicate keys among siblings get an ordinal, such as `policy[read]#2`.
 

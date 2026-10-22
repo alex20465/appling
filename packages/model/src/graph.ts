@@ -1,6 +1,6 @@
 import { AstUtils, isAstNode, isReference, type AstNode, type Reference, type ReferenceInfo } from 'langium';
 import {
-    ExpressionTyper, LAYER_OF, isCreateEffect, isEmitEffect, isEndpoint, isInvariant, isPolicy, isSetEffect, isTransition, modulePath, print,
+    ExpressionTyper, LAYER_OF, isCreateEffect, isExpr, show, isEmitEffect, isEndpoint, isInvariant, isPolicy, isSetEffect, isTransition, modulePath, print,
     type ApplingServices, type Layer, type Model, type Module
 } from '@appling/lang';
 
@@ -12,7 +12,10 @@ export interface GraphNode {
     layer: Layer;
     level: Level;
     module: string;
+    /** Properties for display: scalars, plus nested parts such as types and expressions as canonical text. */
     props: Record<string, unknown>;
+    /** The same properties for tools: references as qualified names, nested parts as objects with `$type`, expressions with their `type` and `target`. */
+    data: Record<string, unknown>;
 }
 
 export interface GraphEdge {
@@ -64,6 +67,8 @@ export function isElement(node: AstNode): boolean {
  */
 export function buildGraph(models: Model[], services: ApplingServices): Graph {
     const qns = qualifiedNames(models);
+    const typer = new ExpressionTyper(services);
+    models.forEach(m => typer.checkModel(m));
     const byNode = new Map<AstNode, GraphNode>();
     for (const [node, qn] of qns) {
         const parent = byNode.get(parentElement(node, qns)!);
@@ -75,7 +80,8 @@ export function buildGraph(models: Model[], services: ApplingServices): Graph {
             layer: isModule ? 'cross' : topLevel ? LAYER_OF[node.$type] : parent!.layer,
             level: isModule || node.$type === 'UseCase' ? 'out' : topLevel ? 'medium' : 'in',
             module: isModule ? (parent?.qn ?? '') : topLevel ? parent!.qn : parent!.module,
-            props: props(node)
+            props: props(node),
+            data: data(node, qns, typer)
         });
     }
     const nodes = [...byNode.values()];
@@ -97,8 +103,6 @@ export function buildGraph(models: Model[], services: ApplingServices): Graph {
             if (target) add({ from: qn, to: target, kind: ref.property === 'decl' ? 'type' : ref.property });
         }
     }
-    const typer = new ExpressionTyper(services);
-    models.forEach(m => typer.checkModel(m));
     for (const [expr, target] of typer.targets) {
         const owner = parentElement(expr, qns);
         const to = qns.get(target);
@@ -179,6 +183,35 @@ function props(node: AstNode): Record<string, unknown> {
         result[key] = Array.isArray(value) ? shown : shown[0];
     }
     return result;
+}
+
+function data(node: AstNode, qns: Map<AstNode, string>, typer: ExpressionTyper): Record<string, unknown> {
+    const serialize = (value: unknown): unknown => {
+        if (isReference(value)) {
+            const target = AstUtils.getReferenceNodes(value)[0];
+            return (target && qns.get(target)) ?? null;
+        }
+        if (Array.isArray(value)) return value.map(serialize).filter(v => v !== undefined);
+        if (!isAstNode(value)) return value;
+        if (isElement(value)) return undefined;
+        const result: Record<string, unknown> = { $type: value.$type, ...fields(value, true) };
+        if (isExpr(value)) {
+            result.type = show(typer.types.get(value) ?? { kind: 'error' });
+            const target = typer.targets.get(value);
+            if (target && qns.has(target)) result.target = qns.get(target);
+        }
+        return result;
+    };
+    const fields = (owner: AstNode, withName: boolean): Record<string, unknown> => {
+        const result: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(owner)) {
+            if (key.startsWith('$') || (key === 'name' && !withName) || value === false) continue;
+            const serialized = serialize(value);
+            if (serialized !== undefined && !(Array.isArray(serialized) && serialized.length === 0)) result[key] = serialized;
+        }
+        return result;
+    };
+    return fields(node, false);
 }
 
 function refText(ref: Reference): string {

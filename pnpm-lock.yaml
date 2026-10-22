@@ -175,6 +175,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@appling/codegen':
+        specifier: workspace:*
+        version: link:../codegen
       '@appling/lang':
         specifier: workspace:*
         version: link:../lang
@@ -184,6 +187,19 @@ importers:
       langium:
         specifier: 4.4.0
         version: 4.4.0
+    devDependencies:
+      '@types/node':
+        specifier: ^24.19.2
+        version: 24.19.2
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+
+  packages/codegen:
+    dependencies:
+      '@appling/model':
+        specifier: workspace:*
+        version: link:../model
     devDependencies:
       '@types/node':
         specifier: ^24.19.2

@@ -1,7 +1,7 @@
 {
   "name": "@appling/cli",
   "version": "0.1.1",
-  "description": "Command line tool to check, format and inspect Appling models",
+  "description": "Command line tool to check, format, inspect, release and generate Appling models",
   "type": "module",
   "bin": {
     "appling": "./out/main.js"
@@ -13,6 +13,7 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@appling/codegen": "workspace:*",
     "@appling/lang": "workspace:*",
     "@appling/model": "workspace:*",
     "langium": "4.4.0"

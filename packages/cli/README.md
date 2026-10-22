@@ -23,6 +23,7 @@ appling check [files or folders...]
 appling fmt   [files or folders...]
 appling graph [files or folders...]
 appling release <version> [files or folders...]
+appling generate [--plan] [files or folders...]
 ```
 
 Folders are searched recursively for `.appling` files. Hidden folders and `node_modules` are skipped. Without a path, the current folder is used.
@@ -67,12 +68,18 @@ Writes a snapshot of the semantic graph to `.appling/releases/<version>.json` in
 
 Once a release exists, tools that edit the model (the IDE, the AI) record renames, type changes and removals of released domain elements as migration steps, in one block per module named after the release, such as `migration since_v1_0_0`.
 
+### generate
+
+Generates a draft project for every target in `appling.config.json` through its code generation extension, and writes the task registry `.appling/tasks.json` into it. See [`@appling/codegen`](https://www.npmjs.com/package/@appling/codegen) for the configuration. With `--plan`, it prints the steps without running them.
+
+Generation checks the tools the extension needs first and refuses to write into a folder that is not empty.
+
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
 | 0 | No errors |
-| 1 | `check`, `graph` or `release` found errors, `release` found an invalid or existing version, or `fmt` skipped a file with syntax errors |
+| 1 | `check`, `graph`, `release` or `generate` found errors, `release` found an invalid or existing version, `generate` failed, or `fmt` skipped a file with syntax errors |
 | 2 | Unknown command, or `release` without a version |
 
 ## License

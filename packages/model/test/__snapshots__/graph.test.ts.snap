@@ -736,6 +736,17 @@ exports[`graph of examples 1`] = `
   ],
   "nodes": [
     {
+      "data": {
+        "exports": [
+          {
+            "$type": "Export",
+            "names": [
+              "Account",
+              "Clerk",
+            ],
+          },
+        ],
+      },
       "kind": "Module",
       "layer": "cross",
       "level": "out",
@@ -748,6 +759,7 @@ exports[`graph of examples 1`] = `
       "qn": "crm",
     },
     {
+      "data": {},
       "kind": "Role",
       "layer": "cross",
       "level": "medium",
@@ -756,6 +768,7 @@ exports[`graph of examples 1`] = `
       "qn": "crm.Clerk",
     },
     {
+      "data": {},
       "kind": "Entity",
       "layer": "domain",
       "level": "medium",
@@ -764,6 +777,15 @@ exports[`graph of examples 1`] = `
       "qn": "crm.Account",
     },
     {
+      "data": {
+        "modifiers": [
+          "unique",
+        ],
+        "type": {
+          "$type": "TypeRef",
+          "primitive": "String",
+        },
+      },
       "kind": "Field",
       "layer": "domain",
       "level": "in",
@@ -777,6 +799,12 @@ exports[`graph of examples 1`] = `
       "qn": "crm.Account.name",
     },
     {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "primitive": "String",
+        },
+      },
       "kind": "Field",
       "layer": "domain",
       "level": "in",
@@ -787,6 +815,56 @@ exports[`graph of examples 1`] = `
       "qn": "crm.Account.email",
     },
     {
+      "data": {
+        "condition": {
+          "$type": "BinaryExpr",
+          "left": {
+            "$type": "MemberExpr",
+            "args": [
+              {
+                "$type": "NameExpr",
+                "name": "Clerk",
+                "target": "crm.Clerk",
+                "type": "unknown",
+              },
+            ],
+            "call": true,
+            "member": "is",
+            "receiver": {
+              "$type": "NameExpr",
+              "name": "actor",
+              "type": "actor",
+            },
+            "type": "Bool",
+          },
+          "op": "||",
+          "right": {
+            "$type": "BinaryExpr",
+            "left": {
+              "$type": "MemberExpr",
+              "member": "account",
+              "receiver": {
+                "$type": "NameExpr",
+                "name": "actor",
+                "type": "actor",
+              },
+              "target": "sales.Shopper.account",
+              "type": "Account",
+            },
+            "op": "==",
+            "right": {
+              "$type": "NameExpr",
+              "name": "this",
+              "type": "Account",
+            },
+            "type": "Bool",
+          },
+          "type": "Bool",
+        },
+        "operations": [
+          "read",
+        ],
+      },
       "kind": "Policy",
       "layer": "domain",
       "level": "in",
@@ -800,6 +878,9 @@ exports[`graph of examples 1`] = `
       "qn": "crm.Account.policy[read]",
     },
     {
+      "data": {
+        "entity": "crm.Account",
+      },
       "kind": "Tenant",
       "layer": "cross",
       "level": "medium",
@@ -808,6 +889,19 @@ exports[`graph of examples 1`] = `
       "qn": "crm.Company",
     },
     {
+      "data": {
+        "exports": [
+          {
+            "$type": "Export",
+            "names": [
+              "Order",
+              "OrderSummary",
+              "OpenOrders",
+              "PlaceOrder",
+            ],
+          },
+        ],
+      },
       "kind": "Module",
       "layer": "cross",
       "level": "out",
@@ -820,6 +914,7 @@ exports[`graph of examples 1`] = `
       "qn": "sales",
     },
     {
+      "data": {},
       "kind": "Role",
       "layer": "cross",
       "level": "medium",
@@ -828,6 +923,12 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Customer",
     },
     {
+      "data": {
+        "kind": "human",
+        "roles": [
+          "sales.Customer",
+        ],
+      },
       "kind": "Actor",
       "layer": "cross",
       "level": "medium",
@@ -838,6 +939,12 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Shopper",
     },
     {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "decl": "crm.Account",
+        },
+      },
       "kind": "Field",
       "layer": "cross",
       "level": "in",
@@ -848,6 +955,7 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Shopper.account",
     },
     {
+      "data": {},
       "kind": "Enum",
       "layer": "domain",
       "level": "medium",
@@ -856,6 +964,7 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderStatus",
     },
     {
+      "data": {},
       "kind": "EnumLiteral",
       "layer": "domain",
       "level": "in",
@@ -864,6 +973,7 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderStatus.draft",
     },
     {
+      "data": {},
       "kind": "EnumLiteral",
       "layer": "domain",
       "level": "in",
@@ -872,6 +982,7 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderStatus.placed",
     },
     {
+      "data": {},
       "kind": "EnumLiteral",
       "layer": "domain",
       "level": "in",
@@ -880,6 +991,7 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderStatus.paid",
     },
     {
+      "data": {},
       "kind": "EnumLiteral",
       "layer": "domain",
       "level": "in",
@@ -888,6 +1000,7 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderStatus.cancelled",
     },
     {
+      "data": {},
       "kind": "ValueType",
       "layer": "domain",
       "level": "medium",
@@ -896,6 +1009,12 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Line",
     },
     {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "primitive": "String",
+        },
+      },
       "kind": "Field",
       "layer": "domain",
       "level": "in",
@@ -906,6 +1025,12 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Line.product",
     },
     {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "primitive": "Int",
+        },
+      },
       "kind": "Field",
       "layer": "domain",
       "level": "in",
@@ -916,6 +1041,12 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Line.quantity",
     },
     {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "primitive": "Money",
+        },
+      },
       "kind": "Field",
       "layer": "domain",
       "level": "in",
@@ -926,6 +1057,7 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Line.amount",
     },
     {
+      "data": {},
       "kind": "Entity",
       "layer": "domain",
       "level": "medium",
@@ -934,6 +1066,15 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Order",
     },
     {
+      "data": {
+        "modifiers": [
+          "unique",
+        ],
+        "type": {
+          "$type": "TypeRef",
+          "primitive": "String",
+        },
+      },
       "kind": "Field",
       "layer": "domain",
       "level": "in",
@@ -947,6 +1088,12 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Order.reference",
     },
     {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "decl": "crm.Account",
+        },
+      },
       "kind": "Field",
       "layer": "domain",
       "level": "in",
@@ -957,6 +1104,16 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Order.customer",
     },
     {
+      "data": {
+        "modifiers": [
+          "owned",
+        ],
+        "type": {
+          "$type": "TypeRef",
+          "decl": "sales.Line",
+          "many": true,
+        },
+      },
       "kind": "Field",
       "layer": "domain",
       "level": "in",
@@ -970,6 +1127,21 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Order.lines",
     },
     {
+      "data": {
+        "default": {
+          "$type": "NameExpr",
+          "name": "draft",
+          "target": "sales.OrderStatus.draft",
+          "type": "OrderStatus",
+        },
+        "modifiers": [
+          "state",
+        ],
+        "type": {
+          "$type": "TypeRef",
+          "decl": "sales.OrderStatus",
+        },
+      },
       "kind": "Field",
       "layer": "domain",
       "level": "in",
@@ -984,6 +1156,12 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Order.status",
     },
     {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "primitive": "DateTime",
+        },
+      },
       "kind": "Field",
       "layer": "domain",
       "level": "in",
@@ -994,6 +1172,13 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Order.created_at",
     },
     {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "optional": true,
+          "primitive": "DateTime",
+        },
+      },
       "kind": "Field",
       "layer": "domain",
       "level": "in",
@@ -1004,6 +1189,13 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Order.placed_at",
     },
     {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "optional": true,
+          "primitive": "DateTime",
+        },
+      },
       "kind": "Field",
       "layer": "domain",
       "level": "in",
@@ -1014,6 +1206,50 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Order.paid_at",
     },
     {
+      "data": {
+        "derived": {
+          "$type": "NameExpr",
+          "args": [
+            {
+              "$type": "MemberExpr",
+              "args": [
+                {
+                  "$type": "NameExpr",
+                  "name": "l",
+                  "type": "unknown",
+                },
+                {
+                  "$type": "MemberExpr",
+                  "member": "amount",
+                  "receiver": {
+                    "$type": "NameExpr",
+                    "name": "l",
+                    "type": "Line",
+                  },
+                  "target": "sales.Line.amount",
+                  "type": "Money",
+                },
+              ],
+              "call": true,
+              "member": "map",
+              "receiver": {
+                "$type": "NameExpr",
+                "name": "lines",
+                "target": "sales.Order.lines",
+                "type": "Line[]",
+              },
+              "type": "Money[]",
+            },
+          ],
+          "call": true,
+          "name": "sum",
+          "type": "Money",
+        },
+        "type": {
+          "$type": "TypeRef",
+          "primitive": "Money",
+        },
+      },
       "kind": "Field",
       "layer": "domain",
       "level": "in",
@@ -1025,6 +1261,25 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Order.total",
     },
     {
+      "data": {
+        "condition": {
+          "$type": "BinaryExpr",
+          "left": {
+            "$type": "NameExpr",
+            "name": "total",
+            "target": "sales.Order.total",
+            "type": "Money",
+          },
+          "op": ">=",
+          "right": {
+            "$type": "NumberExpr",
+            "type": "Int",
+            "value": 0,
+          },
+          "type": "Bool",
+        },
+        "label": "total never negative",
+      },
       "kind": "Invariant",
       "layer": "domain",
       "level": "in",
@@ -1036,6 +1291,62 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Order.invariant["total never negative"]",
     },
     {
+      "data": {
+        "condition": {
+          "$type": "BinaryExpr",
+          "left": {
+            "$type": "MemberExpr",
+            "args": [
+              {
+                "$type": "MemberExpr",
+                "member": "Clerk",
+                "receiver": {
+                  "$type": "NameExpr",
+                  "name": "crm",
+                  "type": "unknown",
+                },
+                "target": "crm.Clerk",
+                "type": "unknown",
+              },
+            ],
+            "call": true,
+            "member": "is",
+            "receiver": {
+              "$type": "NameExpr",
+              "name": "actor",
+              "type": "actor",
+            },
+            "type": "Bool",
+          },
+          "op": "||",
+          "right": {
+            "$type": "BinaryExpr",
+            "left": {
+              "$type": "NameExpr",
+              "name": "customer",
+              "target": "sales.Order.customer",
+              "type": "Account",
+            },
+            "op": "==",
+            "right": {
+              "$type": "MemberExpr",
+              "member": "account",
+              "receiver": {
+                "$type": "NameExpr",
+                "name": "actor",
+                "type": "actor",
+              },
+              "target": "sales.Shopper.account",
+              "type": "Account",
+            },
+            "type": "Bool",
+          },
+          "type": "Bool",
+        },
+        "operations": [
+          "read",
+        ],
+      },
       "kind": "Policy",
       "layer": "domain",
       "level": "in",
@@ -1049,6 +1360,37 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Order.policy[read]",
     },
     {
+      "data": {
+        "condition": {
+          "$type": "MemberExpr",
+          "args": [
+            {
+              "$type": "MemberExpr",
+              "member": "Clerk",
+              "receiver": {
+                "$type": "NameExpr",
+                "name": "crm",
+                "type": "unknown",
+              },
+              "target": "crm.Clerk",
+              "type": "unknown",
+            },
+          ],
+          "call": true,
+          "member": "is",
+          "receiver": {
+            "$type": "NameExpr",
+            "name": "actor",
+            "type": "actor",
+          },
+          "type": "Bool",
+        },
+        "operations": [
+          "create",
+          "update",
+          "delete",
+        ],
+      },
       "kind": "Policy",
       "layer": "domain",
       "level": "in",
@@ -1064,6 +1406,60 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Order.policy[create,update,delete]",
     },
     {
+      "data": {
+        "condition": {
+          "$type": "BinaryExpr",
+          "left": {
+            "$type": "BinaryExpr",
+            "left": {
+              "$type": "NameExpr",
+              "name": "status",
+              "target": "sales.Order.status",
+              "type": "OrderStatus",
+            },
+            "op": "!=",
+            "right": {
+              "$type": "NameExpr",
+              "name": "draft",
+              "target": "sales.OrderStatus.draft",
+              "type": "OrderStatus",
+            },
+            "type": "Bool",
+          },
+          "op": "||",
+          "right": {
+            "$type": "MemberExpr",
+            "args": [
+              {
+                "$type": "MemberExpr",
+                "member": "Clerk",
+                "receiver": {
+                  "$type": "NameExpr",
+                  "name": "crm",
+                  "type": "unknown",
+                },
+                "target": "crm.Clerk",
+                "type": "unknown",
+              },
+            ],
+            "call": true,
+            "member": "is",
+            "receiver": {
+              "$type": "NameExpr",
+              "name": "actor",
+              "type": "actor",
+            },
+            "type": "Bool",
+          },
+          "type": "Bool",
+        },
+        "fields": [
+          "sales.Order.total",
+        ],
+        "operations": [
+          "read",
+        ],
+      },
       "kind": "Policy",
       "layer": "domain",
       "level": "in",
@@ -1077,6 +1473,7 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Order.policy[read fields total]",
     },
     {
+      "data": {},
       "kind": "Event",
       "layer": "behavior",
       "level": "medium",
@@ -1085,6 +1482,12 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderPlaced",
     },
     {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "decl": "sales.Order",
+        },
+      },
       "kind": "Field",
       "layer": "behavior",
       "level": "in",
@@ -1095,6 +1498,7 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderPlaced.order",
     },
     {
+      "data": {},
       "kind": "Event",
       "layer": "behavior",
       "level": "medium",
@@ -1103,6 +1507,12 @@ exports[`graph of examples 1`] = `
       "qn": "sales.PaymentReceived",
     },
     {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "decl": "sales.Order",
+        },
+      },
       "kind": "Field",
       "layer": "behavior",
       "level": "in",
@@ -1113,6 +1523,37 @@ exports[`graph of examples 1`] = `
       "qn": "sales.PaymentReceived.order",
     },
     {
+      "data": {
+        "entity": "sales.Order",
+        "preconditions": [
+          {
+            "$type": "Precondition",
+            "condition": {
+              "$type": "BinaryExpr",
+              "left": {
+                "$type": "MemberExpr",
+                "call": true,
+                "member": "size",
+                "receiver": {
+                  "$type": "NameExpr",
+                  "name": "lines",
+                  "target": "sales.Order.lines",
+                  "type": "Line[]",
+                },
+                "type": "Int",
+              },
+              "op": ">",
+              "right": {
+                "$type": "NumberExpr",
+                "type": "Int",
+                "value": 0,
+              },
+              "type": "Bool",
+            },
+            "error": "sales.PlaceOrder.EmptyOrder",
+          },
+        ],
+      },
       "kind": "Action",
       "layer": "behavior",
       "level": "medium",
@@ -1125,6 +1566,14 @@ exports[`graph of examples 1`] = `
       "qn": "sales.PlaceOrder",
     },
     {
+      "data": {
+        "field": "sales.Order.placed_at",
+        "value": {
+          "$type": "NameExpr",
+          "name": "now",
+          "type": "DateTime",
+        },
+      },
       "kind": "SetEffect",
       "layer": "behavior",
       "level": "in",
@@ -1135,6 +1584,7 @@ exports[`graph of examples 1`] = `
       "qn": "sales.PlaceOrder.effect[set placed_at]",
     },
     {
+      "data": {},
       "kind": "ErrorDecl",
       "layer": "behavior",
       "level": "in",
@@ -1143,6 +1593,54 @@ exports[`graph of examples 1`] = `
       "qn": "sales.PlaceOrder.EmptyOrder",
     },
     {
+      "data": {
+        "condition": {
+          "$type": "BinaryExpr",
+          "left": {
+            "$type": "MemberExpr",
+            "args": [
+              {
+                "$type": "NameExpr",
+                "name": "Customer",
+                "target": "sales.Customer",
+                "type": "unknown",
+              },
+            ],
+            "call": true,
+            "member": "is",
+            "receiver": {
+              "$type": "NameExpr",
+              "name": "actor",
+              "type": "actor",
+            },
+            "type": "Bool",
+          },
+          "op": "&&",
+          "right": {
+            "$type": "BinaryExpr",
+            "left": {
+              "$type": "NameExpr",
+              "name": "customer",
+              "target": "sales.Order.customer",
+              "type": "Account",
+            },
+            "op": "==",
+            "right": {
+              "$type": "MemberExpr",
+              "member": "account",
+              "receiver": {
+                "$type": "NameExpr",
+                "name": "actor",
+                "type": "actor",
+              },
+              "target": "sales.Shopper.account",
+              "type": "Account",
+            },
+            "type": "Bool",
+          },
+          "type": "Bool",
+        },
+      },
       "kind": "Policy",
       "layer": "behavior",
       "level": "in",
@@ -1153,6 +1651,9 @@ exports[`graph of examples 1`] = `
       "qn": "sales.PlaceOrder.policy[]",
     },
     {
+      "data": {
+        "entity": "sales.Order",
+      },
       "kind": "Action",
       "layer": "behavior",
       "level": "medium",
@@ -1161,6 +1662,13 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Cancel",
     },
     {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "optional": true,
+          "primitive": "String",
+        },
+      },
       "kind": "Param",
       "layer": "behavior",
       "level": "in",
@@ -1171,6 +1679,32 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Cancel.reason",
     },
     {
+      "data": {
+        "condition": {
+          "$type": "MemberExpr",
+          "args": [
+            {
+              "$type": "MemberExpr",
+              "member": "Clerk",
+              "receiver": {
+                "$type": "NameExpr",
+                "name": "crm",
+                "type": "unknown",
+              },
+              "target": "crm.Clerk",
+              "type": "unknown",
+            },
+          ],
+          "call": true,
+          "member": "is",
+          "receiver": {
+            "$type": "NameExpr",
+            "name": "actor",
+            "type": "actor",
+          },
+          "type": "Bool",
+        },
+      },
       "kind": "Policy",
       "layer": "behavior",
       "level": "in",
@@ -1181,6 +1715,9 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Cancel.policy[]",
     },
     {
+      "data": {
+        "field": "sales.Order.status",
+      },
       "kind": "Machine",
       "layer": "behavior",
       "level": "medium",
@@ -1189,6 +1726,13 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderFlow",
     },
     {
+      "data": {
+        "action": "sales.PlaceOrder",
+        "from": [
+          "draft",
+        ],
+        "to": "placed",
+      },
       "kind": "Transition",
       "layer": "behavior",
       "level": "in",
@@ -1202,6 +1746,20 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderFlow.transition[draft->placed]",
     },
     {
+      "data": {
+        "assignments": [
+          {
+            "$type": "Assignment",
+            "name": "order",
+            "value": {
+              "$type": "NameExpr",
+              "name": "this",
+              "type": "Order",
+            },
+          },
+        ],
+        "event": "sales.OrderPlaced",
+      },
       "kind": "EmitEffect",
       "layer": "behavior",
       "level": "in",
@@ -1214,6 +1772,13 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderFlow.transition[draft->placed].effect[emit OrderPlaced]",
     },
     {
+      "data": {
+        "event": "sales.PaymentReceived",
+        "from": [
+          "placed",
+        ],
+        "to": "paid",
+      },
       "kind": "Transition",
       "layer": "behavior",
       "level": "in",
@@ -1227,6 +1792,33 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderFlow.transition[placed->paid]",
     },
     {
+      "data": {
+        "action": "sales.Cancel",
+        "from": [
+          "draft",
+          "placed",
+        ],
+        "guard": {
+          "$type": "UnaryExpr",
+          "op": "!",
+          "operand": {
+            "$type": "NameExpr",
+            "args": [
+              {
+                "$type": "NameExpr",
+                "name": "paid_at",
+                "target": "sales.Order.paid_at",
+                "type": "DateTime?",
+              },
+            ],
+            "call": true,
+            "name": "has",
+            "type": "Bool",
+          },
+          "type": "Bool",
+        },
+        "to": "cancelled",
+      },
       "kind": "Transition",
       "layer": "behavior",
       "level": "in",
@@ -1242,6 +1834,66 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderFlow.transition[draft,placed->cancelled]",
     },
     {
+      "data": {
+        "action": "sales.Cancel",
+        "filter": {
+          "$type": "BinaryExpr",
+          "left": {
+            "$type": "BinaryExpr",
+            "left": {
+              "$type": "NameExpr",
+              "name": "status",
+              "target": "sales.Order.status",
+              "type": "OrderStatus",
+            },
+            "op": "==",
+            "right": {
+              "$type": "NameExpr",
+              "name": "draft",
+              "target": "sales.OrderStatus.draft",
+              "type": "OrderStatus",
+            },
+            "type": "Bool",
+          },
+          "op": "&&",
+          "right": {
+            "$type": "BinaryExpr",
+            "left": {
+              "$type": "NameExpr",
+              "name": "created_at",
+              "target": "sales.Order.created_at",
+              "type": "DateTime",
+            },
+            "op": "<",
+            "right": {
+              "$type": "BinaryExpr",
+              "left": {
+                "$type": "NameExpr",
+                "name": "now",
+                "type": "DateTime",
+              },
+              "op": "-",
+              "right": {
+                "$type": "NameExpr",
+                "args": [
+                  {
+                    "$type": "StringExpr",
+                    "type": "String",
+                    "value": "720h",
+                  },
+                ],
+                "call": true,
+                "name": "duration",
+                "type": "Duration",
+              },
+              "type": "DateTime",
+            },
+            "type": "Bool",
+          },
+          "type": "Bool",
+        },
+        "schedule": "0 3 * * *",
+      },
       "kind": "Job",
       "layer": "behavior",
       "level": "medium",
@@ -1253,6 +1905,46 @@ exports[`graph of examples 1`] = `
       "qn": "sales.ExpireDrafts",
     },
     {
+      "data": {
+        "entity": "sales.Order",
+        "filter": {
+          "$type": "BinaryExpr",
+          "left": {
+            "$type": "NameExpr",
+            "name": "status",
+            "target": "sales.Order.status",
+            "type": "OrderStatus",
+          },
+          "op": "in",
+          "right": {
+            "$type": "ListExpr",
+            "items": [
+              {
+                "$type": "NameExpr",
+                "name": "placed",
+                "target": "sales.OrderStatus.placed",
+                "type": "OrderStatus",
+              },
+              {
+                "$type": "NameExpr",
+                "name": "paid",
+                "target": "sales.OrderStatus.paid",
+                "type": "OrderStatus",
+              },
+            ],
+            "type": "OrderStatus[]",
+          },
+          "type": "Bool",
+        },
+        "pageSize": 50,
+        "sorts": [
+          {
+            "$type": "Sort",
+            "direction": "desc",
+            "field": "sales.Order.placed_at",
+          },
+        ],
+      },
       "kind": "Query",
       "layer": "application",
       "level": "medium",
@@ -1267,6 +1959,9 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OpenOrders",
     },
     {
+      "data": {
+        "source": "sales.Order",
+      },
       "kind": "Projection",
       "layer": "application",
       "level": "medium",
@@ -1275,6 +1970,7 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderSummary",
     },
     {
+      "data": {},
       "kind": "ProjectionField",
       "layer": "application",
       "level": "in",
@@ -1283,6 +1979,7 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderSummary.reference",
     },
     {
+      "data": {},
       "kind": "ProjectionField",
       "layer": "application",
       "level": "in",
@@ -1291,6 +1988,7 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderSummary.status",
     },
     {
+      "data": {},
       "kind": "ProjectionField",
       "layer": "application",
       "level": "in",
@@ -1299,6 +1997,20 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderSummary.total",
     },
     {
+      "data": {
+        "value": {
+          "$type": "MemberExpr",
+          "member": "name",
+          "receiver": {
+            "$type": "NameExpr",
+            "name": "customer",
+            "target": "sales.Order.customer",
+            "type": "Account",
+          },
+          "target": "crm.Account.name",
+          "type": "String",
+        },
+      },
       "kind": "ProjectionField",
       "layer": "application",
       "level": "in",
@@ -1309,6 +2021,7 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderSummary.customer_name",
     },
     {
+      "data": {},
       "kind": "External",
       "layer": "application",
       "level": "medium",
@@ -1317,6 +2030,12 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Payments",
     },
     {
+      "data": {
+        "returns": {
+          "$type": "TypeRef",
+          "primitive": "String",
+        },
+      },
       "kind": "ExternalOperation",
       "layer": "application",
       "level": "in",
@@ -1327,6 +2046,12 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Payments.Charge",
     },
     {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "primitive": "Money",
+        },
+      },
       "kind": "Param",
       "layer": "application",
       "level": "in",
@@ -1337,6 +2062,7 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Payments.Charge.amount",
     },
     {
+      "data": {},
       "kind": "ErrorDecl",
       "layer": "application",
       "level": "in",
@@ -1345,6 +2071,81 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Payments.Charge.Declined",
     },
     {
+      "data": {
+        "steps": [
+          {
+            "$type": "CallStep",
+            "call": {
+              "$type": "Call",
+              "args": [
+                {
+                  "$type": "NameExpr",
+                  "name": "order",
+                  "target": "sales.Checkout.order",
+                  "type": "Order",
+                },
+              ],
+              "target": "sales.PlaceOrder",
+            },
+          },
+          {
+            "$type": "CallStep",
+            "call": {
+              "$type": "Call",
+              "args": [
+                {
+                  "$type": "MemberExpr",
+                  "member": "total",
+                  "receiver": {
+                    "$type": "NameExpr",
+                    "name": "order",
+                    "target": "sales.Checkout.order",
+                    "type": "Order",
+                  },
+                  "target": "sales.Order.total",
+                  "type": "Money",
+                },
+              ],
+              "target": "sales.Payments.Charge",
+            },
+            "handlers": [
+              {
+                "$type": "Handler",
+                "call": {
+                  "$type": "Call",
+                  "args": [
+                    {
+                      "$type": "NameExpr",
+                      "name": "order",
+                      "target": "sales.Checkout.order",
+                      "type": "Order",
+                    },
+                  ],
+                  "target": "sales.Cancel",
+                },
+                "error": "sales.Payments.Charge.Declined",
+              },
+            ],
+          },
+          {
+            "$type": "AwaitStep",
+            "call": {
+              "$type": "Call",
+              "args": [
+                {
+                  "$type": "NameExpr",
+                  "name": "order",
+                  "target": "sales.Checkout.order",
+                  "type": "Order",
+                },
+              ],
+              "target": "sales.Cancel",
+            },
+            "event": "sales.PaymentReceived",
+            "timeout": "24h",
+          },
+        ],
+      },
       "kind": "UseCase",
       "layer": "application",
       "level": "out",
@@ -1359,6 +2160,12 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Checkout",
     },
     {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "decl": "sales.Order",
+        },
+      },
       "kind": "Param",
       "layer": "application",
       "level": "in",
@@ -1369,6 +2176,12 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Checkout.order",
     },
     {
+      "data": {
+        "auth": "bearer",
+        "protocol": "rest",
+        "rateLimit": 100,
+        "rateUnit": "minute",
+      },
       "kind": "Interface",
       "layer": "interface",
       "level": "medium",
@@ -1382,6 +2195,17 @@ exports[`graph of examples 1`] = `
       "qn": "sales.PublicApi",
     },
     {
+      "data": {
+        "path": "/orders",
+        "picks": [
+          "sales.OrderSummary.reference",
+          "sales.OrderSummary.status",
+          "sales.OrderSummary.total",
+        ],
+        "projection": "sales.OrderSummary",
+        "target": "sales.OpenOrders",
+        "verb": "GET",
+      },
       "kind": "Endpoint",
       "layer": "interface",
       "level": "in",
@@ -1393,6 +2217,11 @@ exports[`graph of examples 1`] = `
       "qn": "sales.PublicApi.endpoint[GET /orders]",
     },
     {
+      "data": {
+        "path": "/orders/{id}/place",
+        "target": "sales.PlaceOrder",
+        "verb": "POST",
+      },
       "kind": "Endpoint",
       "layer": "interface",
       "level": "in",
@@ -1404,6 +2233,24 @@ exports[`graph of examples 1`] = `
       "qn": "sales.PublicApi.endpoint[POST /orders/{id}/place]",
     },
     {
+      "data": {
+        "components": [
+          {
+            "$type": "ListView",
+            "actions": [
+              "sales.Cancel",
+            ],
+            "picks": [
+              "sales.OrderSummary.reference",
+              "sales.OrderSummary.status",
+              "sales.OrderSummary.total",
+            ],
+            "projection": "sales.OrderSummary",
+            "query": "sales.OpenOrders",
+          },
+        ],
+        "route": "/orders",
+      },
       "kind": "Page",
       "layer": "experience",
       "level": "medium",
@@ -1417,6 +2264,23 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Orders",
     },
     {
+      "data": {
+        "components": [
+          {
+            "$type": "DetailView",
+            "actions": [
+              "sales.PlaceOrder",
+              "sales.Cancel",
+            ],
+            "projection": "sales.OrderSummary",
+          },
+          {
+            "$type": "FormView",
+            "submits": "sales.Cancel",
+          },
+        ],
+        "route": "/orders/{id}",
+      },
       "kind": "Page",
       "layer": "experience",
       "level": "medium",
@@ -1431,6 +2295,15 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderDetail",
     },
     {
+      "data": {
+        "items": [
+          {
+            "$type": "NavItem",
+            "label": "Orders",
+            "page": "sales.Orders",
+          },
+        ],
+      },
       "kind": "Navigation",
       "layer": "experience",
       "level": "medium",
@@ -1443,6 +2316,13 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Main",
     },
     {
+      "data": {
+        "pages": [
+          "sales.Orders",
+          "sales.OrderDetail",
+        ],
+        "usecase": "sales.Checkout",
+      },
       "kind": "Flow",
       "layer": "experience",
       "level": "medium",
@@ -1451,6 +2331,15 @@ exports[`graph of examples 1`] = `
       "qn": "sales.CheckoutFlow",
     },
     {
+      "data": {
+        "entries": [
+          {
+            "$type": "Message",
+            "key": "OrderSummary.total",
+            "text": "Total",
+          },
+        ],
+      },
       "kind": "Messages",
       "layer": "experience",
       "level": "medium",

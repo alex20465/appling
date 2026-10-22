@@ -58,7 +58,7 @@ The registry (`.appling/tasks.json` in the generated project) holds one entry pe
 
 Extensions are configured in `appling.config.json` by package name. Third party extensions are named `appling-codegen-*` or `@scope/appling-codegen-*`, have a peer dependency on `@appling/codegen` and depend only on `@appling/model` types, never on the Langium AST.
 
-- [ ] B1 Core: plan, step runner, map contract, registry, prerequisite checks, `appling generate`.
+- [x] B1 Core: plan, step runner, map contract, registry, prerequisite checks, `appling generate`.
 - [ ] B2 Django and Ash maps for L1: entities, enums, value types, invariants, policies.
 - [ ] B3 Django and Ash maps for L2 to L4: actions, state machines, events, jobs, queries, projections, use cases, interfaces.
 - [ ] B4 Tests: test skeletons for invariants, preconditions, transitions and policies; test bodies are registry tasks.
