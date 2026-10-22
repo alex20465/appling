@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type { Prerequisite } from './contract.js';
-import { describe, type Plan, type RegistryEntry } from './plan.js';
+import { describe, type Plan, type PlannedStep, type RegistryEntry } from './plan.js';
 
 export interface Registry {
     extension: string;
@@ -26,12 +26,20 @@ export function checkPrerequisites(prerequisites: Prerequisite[]): string[] {
 /** Runs the planned steps in order into the output folder and writes the registry. Stops at the first failing command. */
 export function runPlan(plan: Plan, out: string, log: (line: string) => void = () => { }): Registry {
     const root = resolve(out);
-    for (const { node, step } of plan.steps) {
+    runSteps(plan.steps, out, log);
+    const registry: Registry = { extension: plan.extension, test: plan.test, entries: Object.fromEntries(plan.entries.map(e => [e.qn, e])) };
+    writeRegistry(root, registry);
+    return registry;
+}
+
+export function runSteps(steps: PlannedStep[], out: string, log: (line: string) => void = () => { }): void {
+    const root = resolve(out);
+    for (const { node, step } of steps) {
         log(`${node}: ${describe(step)}`);
         if (step.kind === 'command') {
             const cwd = resolve(root, step.cwd ?? '.');
             mkdirSync(cwd, { recursive: true });
-            const result = spawnSync(step.run[0], step.run.slice(1), { cwd, encoding: 'utf8' });
+            const result = spawnSync(step.run[0], step.run.slice(1), { cwd, encoding: 'utf8', input: step.input });
             if (result.error || result.status !== 0) {
                 throw new Error(`${step.run.join(' ')} failed: ${result.error?.message ?? (result.stderr || result.stdout)}`);
             }
@@ -41,9 +49,6 @@ export function runPlan(plan: Plan, out: string, log: (line: string) => void = (
             writeFileSync(file, step.write(existsSync(file) ? readFileSync(file, 'utf8') : undefined));
         }
     }
-    const registry: Registry = { extension: plan.extension, test: plan.test, entries: Object.fromEntries(plan.entries.map(e => [e.qn, e])) };
-    writeRegistry(root, registry);
-    return registry;
 }
 
 export function readRegistry(out: string): Registry | undefined {

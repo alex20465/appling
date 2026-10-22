@@ -212,5 +212,6 @@ exports[`examples plan domains, enums, embedded resources, resources and relatio
   "sales.PublicApi: lib/shop/sales.ex",
   "sales.PublicApi: lib/shop/api_router.ex",
   "sales.PublicApi: lib/shop/application.ex",
+  "(project): mix ash.codegen initial_resources",
 ]
 `;

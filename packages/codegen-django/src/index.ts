@@ -1,5 +1,6 @@
 import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
 import { interfaceSteps } from './api.js';
+import { migrationSteps } from './migrations.js';
 import { externalSteps, projectionFieldSteps, projectionSteps, querySteps, useCaseSteps } from './application.js';
 import { actionSteps, errorSteps, eventSteps, jobSteps, machineSteps, transitionSteps } from './behavior.js';
 import { hasKind, task } from './files.js';
@@ -13,6 +14,7 @@ const extension: CodegenExtension = {
     test: ['uv', 'run', 'python', 'manage.py', 'test'],
     prerequisites: [{ name: 'uv', command: ['uv', '--version'], expect: /^uv \d+\.\d+/, hint: 'install uv (https://docs.astral.sh/uv/) to manage the Python project' }],
     setup,
+    migrate: migrationSteps,
 
     steps(node, context) {
         switch (node.kind) {
@@ -57,6 +59,7 @@ function setup(context: MapContext): Step[] {
         { kind: 'command', run: ['uv', 'init', '--bare', '--name', context.name], creates: ['pyproject.toml'] },
         { kind: 'command', run: ['uv', 'add', DJANGO, ...(api ? [REST_FRAMEWORK] : [])], creates: ['uv.lock'] },
         { kind: 'command', run: ['uv', 'run', 'django-admin', 'startproject', 'config', '.'], creates: ['manage.py', 'config/'] },
-        ...(api ? [installApp('rest_framework')] : [])
+        ...(api ? [installApp('rest_framework')] : []),
+        { kind: 'command', run: ['uv', 'run', 'python', 'manage.py', 'makemigrations'], phase: 3 }
     ];
 }

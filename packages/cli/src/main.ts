@@ -4,13 +4,15 @@ import { basename, relative, resolve } from 'node:path';
 import { URI, type LangiumDocument } from 'langium';
 import { NodeFileSystem } from 'langium/node';
 import { createApplingServices, print, type ApplingServices, type Model } from '@appling/lang';
-import { checkPrerequisites, describe, loadExtension, plan, readConfig, runPlan, type Plan } from '@appling/codegen';
+import {
+    checkPrerequisites, describe, loadExtension, pendingChanges, plan, planMigrations, readApplied, readConfig, readRegistry, runMigrations, runPlan, type Plan
+} from '@appling/codegen';
 import { buildGraph, dependencies, findApplingFiles, writeRelease, type Graph } from '@appling/model';
 
 const USAGE = [
     'Usage: appling <check|fmt|graph> [files or folders...]',
     '       appling release <version> [files or folders...]',
-    '       appling generate [--plan] [files or folders...]'
+    '       appling generate [--plan | --migrate] [files or folders...]'
 ].join('\n');
 
 async function main([command, ...args]: string[]): Promise<number> {
@@ -18,8 +20,8 @@ async function main([command, ...args]: string[]): Promise<number> {
         console.error(USAGE);
         return 2;
     }
-    const onlyPlan = command === 'generate' && args[0] === '--plan';
-    const [version, paths] = command === 'release' ? [args[0], args.slice(1)] : ['', args.slice(onlyPlan ? 1 : 0)];
+    const mode = command === 'generate' && (args[0] === '--plan' || args[0] === '--migrate') ? args[0] : undefined;
+    const [version, paths] = command === 'release' ? [args[0], args.slice(1)] : ['', args.slice(mode ? 1 : 0)];
     const files = (paths.length ? paths : ['.']).flatMap(p => findApplingFiles(resolve(p)));
     const { shared, Appling } = createApplingServices(NodeFileSystem);
     const documents = await Promise.all(files.map(f => shared.workspace.LangiumDocuments.getOrCreateDocument(URI.file(f))));
@@ -27,13 +29,13 @@ async function main([command, ...args]: string[]): Promise<number> {
     if (command === 'fmt') return format(documents);
     if (command === 'graph') return graph(documents, Appling);
     if (command === 'release') return release(documents, Appling, version);
-    if (command === 'generate') return generate(documents, Appling, onlyPlan);
+    if (command === 'generate') return generate(documents, Appling, mode);
     const errors = report(documents, console.log);
     console.log(`${documents.length} file(s), ${errors} error(s)`);
     return errors ? 1 : 0;
 }
 
-async function generate(documents: LangiumDocument[], services: ApplingServices, onlyPlan: boolean): Promise<number> {
+async function generate(documents: LangiumDocument[], services: ApplingServices, mode: string | undefined): Promise<number> {
     if (report(documents, console.error)) return 1;
     const targets = readConfig('.').generate ?? [];
     if (!targets.length) {
@@ -42,9 +44,36 @@ async function generate(documents: LangiumDocument[], services: ApplingServices,
     }
     const graph = buildGraph(documents.map(doc => doc.parseResult.value as Model), services);
     for (const target of targets) {
-        if (await generateTarget(graph, target.extension, target.out, target.options ?? {}, onlyPlan)) return 1;
+        const failed = mode === '--migrate'
+            ? await migrateTarget(graph, target.extension, target.out, target.options ?? {})
+            : await generateTarget(graph, target.extension, target.out, target.options ?? {}, mode === '--plan');
+        if (failed) return 1;
     }
     return 0;
+}
+
+/** Carries the model's migration steps that a generated project has not applied yet into it. Returns true when it failed. */
+async function migrateTarget(graph: Graph, name: string, out: string, options: Record<string, unknown>): Promise<boolean> {
+    if (!readRegistry(out)) {
+        console.error(`${out} was not generated yet. Run "appling generate" first.`);
+        return true;
+    }
+    const extension = await loadExtension(name, '.');
+    const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
+    const changes = pendingChanges(graph, readApplied(out), stamp);
+    if (!changes.length) {
+        console.log(`${out}: no pending migration steps`);
+        return false;
+    }
+    try {
+        const plan = planMigrations(graph, extension, String(options.name ?? basename(resolve(out))), options, out, changes);
+        runMigrations(out, plan, changes, line => console.log(line));
+        console.log(`${out}: ${changes.length} migration step(s) applied, ${plan.tasks.length} task(s) added to the registry`);
+        return false;
+    } catch (error) {
+        console.error((error as Error).message);
+        return true;
+    }
 }
 
 /** Returns true when the target failed. */

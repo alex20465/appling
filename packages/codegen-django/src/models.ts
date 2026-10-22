@@ -96,7 +96,7 @@ function modelClass(entity: GraphNode, context: MapContext, imports: Set<string>
     return [`class ${name}(models.Model):`, ...(lines.length ? lines : ['    pass'])].join('\n');
 }
 
-function djangoField(field: GraphNode, context: MapContext, imports: Set<string>): string {
+export function djangoField(field: GraphNode, context: MapContext, imports: Set<string>): string {
     const type = field.data.type as TypeData;
     const modifiers = (field.data.modifiers ?? []) as string[];
     const options: string[] = [];

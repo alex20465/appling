@@ -47,6 +47,8 @@ export default extension;
 | `template` | Writes or patches a file; `write` gets the current content |
 | `task` | Records open work in the registry |
 
+An extension may also implement `migrate(change, context, files)`, which turns one Appling migration step (`rename`, `retype`, `remove`, with the element's qualified name before and now) into steps for an already generated project; `files` reads the project, for example to continue its migration history.
+
 Returning `undefined` marks the node kind as not supported (a `todo` entry); an empty list means a parent's steps already cover the node. Nodes are planned in dependency order: modules, then domain, cross cutting, behavior, application, interfaces, experience.
 
 Third party extensions are named `appling-codegen-*` or `@scope/appling-codegen-*`, have a peer dependency on `@appling/codegen` and export the extension as default.
@@ -72,6 +74,7 @@ Every graph node has an entry, so the registry is also the coverage report and t
 | `checkPrerequisites(prerequisites)` | Messages for missing tools |
 | `readConfig(root)`, `loadExtension(name, root)` | Configuration and extension loading |
 | `describe(step)` | A one line description of a step |
+| `pendingChanges(graph, applied, stamp)`, `planMigrations(...)`, `runMigrations(...)`, `readApplied(out)` | Migration steps not yet applied to a generated project, and carrying them into it |
 
 ## License
 

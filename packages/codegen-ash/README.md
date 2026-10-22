@@ -36,6 +36,10 @@ Requires Elixir 1.17 or later and the `igniter_new` archive (`mix archive.instal
 | `interface rest` | AshJsonApi routes on the domain (`index` for queries with `default_fields` from picks, `patch` for update actions), a JSON:API router, and Bandit started by the application on port 4000, without Phoenix |
 | rules | skipped ExUnit tests in `test/<app>/<module>/<resource>_test.exs` for invariants, policies, transitions and preconditions; writing their bodies is a registry task |
 
+The project ends with `mix ash.codegen initial_resources`, so migrations and resource snapshots start with the generated resources.
+
+`appling generate --migrate` changes the attribute in the resource, writes an Ecto migration that renames, modifies or removes the column, and updates the resource snapshots with `mix ash_postgres.generate_migrations --snapshots-only`, so later `mix ash.codegen` runs do not see a rename as a drop and an add. Renamed entities and enum values become registry tasks.
+
 Machines, scheduled jobs and REST interfaces add `ash_state_machine`, `ash_oban`, and `ash_json_api` with `bandit` to the project.
 
 What cannot be translated becomes a registry task: many to many relationships, calculations over embedded lists, invariants and preconditions over calculations or other resources, policies, events (Ash notifiers), externals and use cases (generic actions or Reactor), effects that create rows or emit events, jobs on events, authentication, rate limits and CORS.

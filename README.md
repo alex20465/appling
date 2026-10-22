@@ -47,12 +47,20 @@ The full design is in [concept.md](docs/concept.md).
 
 | Package | Purpose |
 |---|---|
-| [`@appling/cli`](packages/cli) | The `appling` command: `check` validates models, `fmt` writes the canonical form |
-| [`@appling/lang`](packages/lang) | The language: grammar, scoping, validation and canonical printer, built on [Langium](https://langium.org) |
+| [`@appling/cli`](packages/cli) | The `appling` command: `check`, `fmt`, `graph`, `release`, `generate` |
+| [`@appling/lang`](packages/lang) | The language: grammar, scoping, validation, expression typing, canonical printer and language server, built on [Langium](https://langium.org) |
+| [`@appling/model`](packages/model) | The semantic graph, edit operations and releases with automatic migration steps |
+| [`@appling/ide`](packages/ide) | A local IDE: text and zoomable graph side by side, editing in both, AI chat with reviewable proposals |
+| [`@appling/ai`](packages/ai) | MCP server, model adapter and the skill that works through a generated project's task registry |
+| [`@appling/codegen`](packages/codegen) | Code generation core: plan, step runner, extension contract, task registry, migrations |
+| [`@appling/codegen-django`](packages/codegen-django) | Django extension |
+| [`@appling/codegen-ash`](packages/codegen-ash) | Ash extension |
 
 ```sh
 npx @appling/cli check models
 npx @appling/cli fmt models
+npx @appling/ide models
+npx @appling/cli generate --plan models
 ```
 
 ## Development
@@ -61,7 +69,8 @@ Developed with Node.js 24. pnpm is pinned through `packageManager` in `package.j
 
 ```sh
 pnpm install
-pnpm build            # generates the parser, then compiles both packages
+pnpm build            # generates the parser, then compiles every package
+pnpm test             # vitest over every package
 pnpm check examples   # validates the sample models
 pnpm fmt examples     # canonical formatting
 ```
@@ -69,7 +78,11 @@ pnpm fmt examples     # canonical formatting
 `check` and `fmt` run the built CLI, so rebuild after changing the grammar or sources.
 
 ```
-packages/lang     grammar (src/appling.langium), scoping, validator, printer
+packages/lang     grammar (src/appling.langium), scoping, validator, expression typing, printer, language server
+packages/model    semantic graph, edit operations, releases
+packages/ide      local web IDE (server and React client)
+packages/ai       MCP server, chat, registry skill
+packages/codegen* code generation core and the Django and Ash extensions
 packages/cli      the appling command
 examples          sample models that reference each other across modules
 docs/concept.md   language design and rules
@@ -78,7 +91,7 @@ docs/ROADMAP.md   planned packages and phases
 
 ## Roadmap
 
-The IDE with semantic zoom and AI editing, release based migrations and framework code generation through installable extensions are planned in [ROADMAP.md](docs/ROADMAP.md).
+What is done and what comes later is in [ROADMAP.md](docs/ROADMAP.md).
 
 ## License
 

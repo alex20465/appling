@@ -1,4 +1,5 @@
 import type { Graph, GraphEdge, GraphNode } from '@appling/model';
+import type { MigrationChange, ProjectFiles } from './migrate.js';
 
 interface StepOrder {
     /** Steps run by phase, then in plan order. Use a later phase for work that needs every element of an earlier one, such as relationships. */
@@ -11,6 +12,8 @@ export interface CommandStep extends StepOrder {
     run: string[];
     cwd?: string;
     creates?: string[];
+    /** Text fed to the command's standard input. */
+    input?: string;
 }
 
 /** Writes or patches one file, relative to the output folder. `write` gets the current content when the file exists. */
@@ -58,4 +61,6 @@ export interface CodegenExtension {
     /** Steps that run once, before any element, such as creating the project. */
     setup?(context: MapContext): Step[];
     steps(node: GraphNode, context: MapContext): Step[] | undefined;
+    /** Steps that carry one Appling migration step into an already generated project. */
+    migrate?(change: MigrationChange, context: MapContext, files: ProjectFiles): Step[];
 }

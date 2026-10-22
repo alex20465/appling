@@ -4,12 +4,14 @@ import { interfaceSteps } from './api.js';
 import { projectionFieldSteps, querySteps } from './application.js';
 import { actionSteps, jobSteps, machineSteps } from './behavior.js';
 import { ashExpr, constant, lastOf, parentOf, validation } from './elixir.js';
+import { migrationSteps } from './migrations.js';
 import { testSteps } from './tests.js';
 import { app, attributeType, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, storedAttributes, task, typeModule } from './naming.js';
 
 const extension: CodegenExtension = {
     name: '@appling/codegen-ash',
     test: ['mix', 'test'],
+    migrate: migrationSteps,
     prerequisites: [
         { name: 'Elixir', command: ['mix', '--version'], expect: /Mix 1\.(1[7-9]|[2-9]\d)/, hint: 'install Elixir 1.17 or later' },
         { name: 'igniter_new', command: ['mix', 'help', 'igniter.new'], hint: 'run "mix archive.install hex igniter_new"' }
@@ -20,7 +22,8 @@ const extension: CodegenExtension = {
         const install = ['ash', 'ash_postgres', ...(has('Machine') ? ['ash_state_machine'] : []), ...(has('Job', j => !!j.data.schedule) ? ['ash_oban'] : [])];
         return [
             { kind: 'command', run: ['mix', 'igniter.new', app(context), '--install', install.join(','), '--yes', '--no-git'], cwd: '..', creates: ['mix.exs', 'lib/'] },
-            ...(has('Interface', i => i.data.protocol === 'rest') ? [mix(['igniter.install', 'ash_json_api,bandit'])] : [])
+            ...(has('Interface', i => i.data.protocol === 'rest') ? [mix(['igniter.install', 'ash_json_api,bandit'])] : []),
+            { kind: 'command', run: ['mix', 'ash.codegen', 'initial_resources'], phase: 3 }
         ];
     },
 
