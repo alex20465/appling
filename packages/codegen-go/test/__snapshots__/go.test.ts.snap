@@ -1,0 +1,261 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`examples generate Go packages for the domain and behavior layers 1`] = `
+{
+  "internal/crm/crm_test.go": "package crm
+
+import (
+	"testing"
+)
+
+
+func TestAccountPolicyRead(t *testing.T) {
+	t.Skip("registry task: crm.Account.policy[read]")
+}
+",
+  "internal/crm/doc.go": "package crm
+
+
+// Package crm holds the crm module of the model.
+",
+  "internal/crm/support.go": "package crm
+
+
+// ptr returns a pointer to a copy of v, for optional fields.
+func ptr[T any](v T) *T { return &v }
+",
+  "internal/crm/types.go": "package crm
+
+import (
+	"errors"
+)
+
+
+// Account is the entity crm.Account.
+type Account struct {
+	ID int64 \`json:"id"\`
+	Name string \`json:"name"\`
+	Email string \`json:"email"\`
+}
+
+// NewAccount returns a new Account with the defaults of the model.
+func NewAccount() *Account {
+	return &Account{
+	}
+}
+
+// Validate checks the invariants of Account.
+func (a *Account) Validate() error {
+	var errs []error
+	return errors.Join(errs...)
+}
+",
+  "internal/sales/actions.go": "package sales
+
+import (
+	"fmt"
+	"time"
+)
+
+
+// PlaceOrder is the action sales.PlaceOrder. It returns the events it emits.
+func PlaceOrder(order *Order) ([]any, error) {
+	var events []any
+	if !(int64(len(order.Lines)) > 0) {
+		return nil, ErrEmptyOrder
+	}
+	switch {
+	case order.Status == OrderStatusDraft:
+		events = append(events, OrderPlaced{Order: order})
+		order.Status = OrderStatusPlaced
+	default:
+		return nil, fmt.Errorf("%w: PlaceOrder from %s", ErrInvalidTransition, order.Status)
+	}
+	order.PlacedAt = ptr(time.Now())
+	return events, nil
+}
+
+// Cancel is the action sales.Cancel. It returns the events it emits.
+func Cancel(order *Order, reason *string) ([]any, error) {
+	var events []any
+	switch {
+	case (order.Status == OrderStatusDraft || order.Status == OrderStatusPlaced) && (!(order.PaidAt != nil)):
+		order.Status = OrderStatusCancelled
+	default:
+		return nil, fmt.Errorf("%w: Cancel from %s", ErrInvalidTransition, order.Status)
+	}
+	return events, nil
+}
+",
+  "internal/sales/doc.go": "package sales
+
+
+// Package sales holds the sales module of the model.
+",
+  "internal/sales/errors.go": "package sales
+
+import (
+	"errors"
+)
+
+
+// ErrEmptyOrder is the declared error sales.PlaceOrder.EmptyOrder.
+var ErrEmptyOrder = errors.New("EmptyOrder")
+
+// ErrInvalidTransition is returned when the state does not allow an action.
+var ErrInvalidTransition = errors.New("invalid transition")
+
+// ErrDeclined is the declared error sales.Payments.Charge.Declined.
+var ErrDeclined = errors.New("Declined")
+",
+  "internal/sales/events.go": "package sales
+
+
+// OrderPlaced is the event sales.OrderPlaced.
+type OrderPlaced struct {
+	Order *Order \`json:"order"\`
+}
+
+// PaymentReceived is the event sales.PaymentReceived.
+type PaymentReceived struct {
+	Order *Order \`json:"order"\`
+}
+",
+  "internal/sales/machines.go": "package sales
+
+import (
+	"fmt"
+)
+
+
+// OrderFlowOnPaymentReceived applies the transitions of sales.OrderFlow that PaymentReceived triggers.
+func OrderFlowOnPaymentReceived(event PaymentReceived) ([]any, error) {
+	var events []any
+	switch {
+	case event.Order.Status == OrderStatusPlaced:
+		event.Order.Status = OrderStatusPaid
+	default:
+		return nil, fmt.Errorf("%w: PaymentReceived from %s", ErrInvalidTransition, event.Order.Status)
+	}
+	return events, nil
+}
+",
+  "internal/sales/sales_test.go": "package sales
+
+import (
+	"testing"
+)
+
+
+func TestOrderTotalNeverNegative(t *testing.T) {
+	t.Skip("registry task: sales.Order.invariant[\\"total never negative\\"]")
+}
+
+func TestOrderPolicyRead(t *testing.T) {
+	t.Skip("registry task: sales.Order.policy[read]")
+}
+
+func TestOrderPolicyCreateUpdateDelete(t *testing.T) {
+	t.Skip("registry task: sales.Order.policy[create,update,delete]")
+}
+
+func TestOrderPolicyReadFieldsTotal(t *testing.T) {
+	t.Skip("registry task: sales.Order.policy[read fields total]")
+}
+
+func TestSalesPlaceOrder(t *testing.T) {
+	t.Skip("registry task: sales.PlaceOrder")
+}
+
+func TestPlaceOrderPolicy(t *testing.T) {
+	t.Skip("registry task: sales.PlaceOrder.policy[]")
+}
+
+func TestSalesCancel(t *testing.T) {
+	t.Skip("registry task: sales.Cancel")
+}
+
+func TestCancelPolicy(t *testing.T) {
+	t.Skip("registry task: sales.Cancel.policy[]")
+}
+
+func TestOrderFlowTransitionDraftPlaced(t *testing.T) {
+	t.Skip("registry task: sales.OrderFlow.transition[draft->placed]")
+}
+
+func TestOrderFlowTransitionPlacedPaid(t *testing.T) {
+	t.Skip("registry task: sales.OrderFlow.transition[placed->paid]")
+}
+
+func TestOrderFlowTransitionDraftPlacedCancelled(t *testing.T) {
+	t.Skip("registry task: sales.OrderFlow.transition[draft,placed->cancelled]")
+}
+",
+  "internal/sales/support.go": "package sales
+
+
+// ptr returns a pointer to a copy of v, for optional fields.
+func ptr[T any](v T) *T { return &v }
+",
+  "internal/sales/types.go": "package sales
+
+import (
+	"errors"
+	"shop/internal/crm"
+	"time"
+	"github.com/shopspring/decimal"
+)
+
+
+// OrderStatus is the enum sales.OrderStatus.
+type OrderStatus string
+
+const (
+	OrderStatusDraft OrderStatus = "draft"
+	OrderStatusPlaced OrderStatus = "placed"
+	OrderStatusPaid OrderStatus = "paid"
+	OrderStatusCancelled OrderStatus = "cancelled"
+)
+
+// Line is the value type sales.Line.
+type Line struct {
+	Product string \`json:"product"\`
+	Quantity int64 \`json:"quantity"\`
+	Amount decimal.Decimal \`json:"amount"\`
+}
+
+// Order is the entity sales.Order.
+type Order struct {
+	ID int64 \`json:"id"\`
+	Reference string \`json:"reference"\`
+	Customer *crm.Account \`json:"customer"\`
+	Lines []Line \`json:"lines"\`
+	Status OrderStatus \`json:"status"\`
+	CreatedAt time.Time \`json:"created_at"\`
+	PlacedAt *time.Time \`json:"placed_at"\`
+	PaidAt *time.Time \`json:"paid_at"\`
+}
+
+// NewOrder returns a new Order with the defaults of the model.
+func NewOrder() *Order {
+	return &Order{
+		Status: OrderStatusDraft,
+	}
+}
+
+// Total is the derived field sales.Order.total.
+func (o *Order) Total() decimal.Decimal {
+	return func() decimal.Decimal { total := decimal.Zero; for _, l := range o.Lines { total = total.Add(l.Amount) }; return total }()
+}
+
+// Validate checks the invariants of Order.
+func (o *Order) Validate() error {
+	var errs []error
+	if !(o.Total().GreaterThanOrEqual(decimal.NewFromInt(0))) {
+		errs = append(errs, errors.New("total never negative"))
+	}
+	return errors.Join(errs...)
+}
+",
+}
+`;

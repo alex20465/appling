@@ -1,0 +1,33 @@
+{
+  "name": "@appling/codegen-go",
+  "version": "0.1.0",
+  "description": "Appling code generation extension for Go",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./out/index.d.ts",
+      "default": "./out/index.js"
+    }
+  },
+  "files": [
+    "out"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@appling/model": "workspace:*"
+  },
+  "peerDependencies": {
+    "@appling/codegen": "workspace:*"
+  },
+  "devDependencies": {
+    "@appling/codegen": "workspace:*",
+    "@types/node": "^24.19.2",
+    "typescript": "7.0.2"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}
