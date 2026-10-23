@@ -1,0 +1,16 @@
+"@appling/cli@0.2.0":
+  dir: packages/cli
+  intents:
+    - cool-clocks-sell
+    - cool-cows-behave
+    - quiet-shirts-tan
+    - rare-forks-guess
+    - spicy-rabbits-roll
+"@appling/lang@0.2.0":
+  dir: packages/lang
+  intents:
+    - cool-cows-behave
+    - dry-apes-complain
+    - shiny-mugs-pretend
+    - strong-jokes-dream
+    - warm-falcons-wait

@@ -1,6 +1,6 @@
 {
   "name": "@appling/cli",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Command line tool to check, format, inspect, release and generate Appling models",
   "type": "module",
   "bin": {
