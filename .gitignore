@@ -5,3 +5,4 @@ out/
 dist/
 .astro/
 **/.appling/layout.json
+packages/ai/language/

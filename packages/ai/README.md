@@ -17,6 +17,7 @@ For example in Claude Code: `claude mcp add appling -- npx appling-mcp .`
 | `graph_query` | One element with its properties, members and references, or elements filtered by kind, module or name |
 | `read_source` | The Appling source of one element |
 | `simulate` | Behavior questions: reachable states, which actors may trigger an action, invariants at risk, or a run of an action on a sample record |
+| `language_reference` | The complete language documentation: the list of pages, or one page as Markdown |
 | `write_model_file` | Creates or replaces one `.appling` file, only when the workspace still validates with it |
 | `edit` | One edit operation (`add`, `rename`, `retype`, `remove`, `set`), validated, written to the files; `dryRun` only checks it |
 | `registry_next` | The next open task of a generated project, with its model context |

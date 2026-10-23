@@ -65,7 +65,7 @@ Use an absolute folder here, since the client decides the working directory.
 
 ## Tools
 
-The server registers nine tools. Each returns its result as JSON text.
+The server registers ten tools. Each returns its result as JSON text.
 
 ### Model tools
 
@@ -97,13 +97,14 @@ An example call of `edit`:
 
 Edits are release aware: once the workspace has a release, renaming, retyping or removing a released domain element also appends a migration step. See [Edit operations](../reference/edit-operations.md#release-aware-edits).
 
-### Authoring tool
+### Authoring tools
 
 | Tool | Input | Returns |
 |---|---|---|
+| `language_reference` | `page?` (string) | Without `page`: `{ pages }`, each with `page`, `title` and `description`. With `page`: `{ page, markdown }`, the full text of that page of the [language documentation](../language/overview.md); `{ error }` with the page names for an unknown page |
 | `write_model_file` | `path`: a `.appling` path relative to the workspace; `source`: the complete file | `{ ok: true, written }`, or `{ ok: false, errors }` with the errors the file would add. A file is written only when the whole workspace still validates with it, and only inside the workspace |
 
-It creates new modules, which the edit operations cannot, for example when [deriving a model](#reverse-engineering-skill) from an existing application.
+`language_reference` serves the pages of this documentation's language section, shipped inside the package, so an assistant that has never seen Appling can learn the syntax before it writes any. `write_model_file` creates new modules, which the edit operations cannot, for example when [deriving a model](#reverse-engineering-skill) from an existing application.
 
 ### Registry tools
 
@@ -123,7 +124,7 @@ The server also registers the MCP prompt `implement_next_task`. It carries the t
 
 ## Reverse engineering skill
 
-`skills/appling-reverse/SKILL.md` guides an agent from an existing application to an Appling model: survey where the code keeps its data model, rules, behavior, reads, access checks, interfaces and pages; map each to its Appling construct; write one module per file with `write_model_file`, checking after each; compare the model's behavior with the code through `simulate`; and report what the model cannot say exactly, with comments that name the source files. The MCP prompt `derive_model` carries the same instructions. Install it like the registry skill, next to the MCP server pointed at the folder for the new model.
+`skills/appling-reverse/SKILL.md` guides an agent from an existing application to an Appling model: learn the language through `language_reference`; survey where the code keeps its data model, rules, behavior, reads, access checks, interfaces and pages; map each to its Appling construct; write one module per file with `write_model_file`, checking after each; compare the model's behavior with the code through `simulate`; and report what the model cannot say exactly, with comments that name the source files. The MCP prompt `derive_model` carries the same instructions. Install it like the registry skill, next to the MCP server pointed at the folder for the new model.
 
 ## Registry skill
 

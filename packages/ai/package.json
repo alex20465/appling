@@ -14,10 +14,11 @@
   },
   "files": [
     "out",
-    "skills"
+    "skills",
+    "language"
   ],
   "scripts": {
-    "build": "tsc"
+    "build": "tsc && rm -rf language && cp -r ../../docs/language language"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.86",

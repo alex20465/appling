@@ -44,7 +44,7 @@ Group what you find into modules by bounded context: the apps, packages or domai
 | screens | `page` with `list`, `detail` and `form`; menus as `navigation` |
 | permission check | `policy` on the entity, action, query or use case it protects |
 
-Keep each concept in the layer that owns it, reference other modules only through what they `export`, and write expressions in Appling's CEL subset. Read the language docs in `docs/language/` of the Appling repository when unsure.
+Keep each concept in the layer that owns it, reference other modules only through what they `export`, and write expressions in Appling's CEL subset. Appling is a new language, so do not write it from memory: call `language_reference` for the list of pages, read `overview` first, then the page of each layer before you write it (`domain`, `behavior`, `application`, `interfaces`, `experience`, `access`, `expressions`, `modules`).
 
 ## 3. Write and validate
 

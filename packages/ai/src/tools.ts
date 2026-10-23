@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Simulator, UNKNOWN, type EditOperation } from '@appling/model';
 import { Project, queryGraph, type Sources } from './project.js';
+import { languageReference } from './prompts.js';
 
 export const operationSchema = z.discriminatedUnion('op', [
     z.object({ op: z.literal('add'), parent: z.string().describe('Qualified name of the element to add to, such as sales.Order'), source: z.string().describe('Appling source of the new member, such as "note: Text?"') }),
@@ -122,6 +123,11 @@ export const MODEL_TOOLS = {
 
 /** Tools for writing a model from scratch, such as when deriving it from an existing application. */
 export const AUTHORING_TOOLS = {
+    language_reference: define({
+        description: 'The complete Appling language documentation: syntax, every keyword of the five layers, expressions, access, modules, migrations and the validation rules, with examples. Without page: the list of pages with their titles and descriptions. With page: that page as Markdown. Read overview first, then the pages for what you write, before writing or editing Appling source.',
+        input: { page: z.string().optional().describe('Page name from the list, such as overview, domain or expressions') },
+        run: async (_, input) => languageReference(input.page)
+    }),
     write_model_file: define({
         description: 'Create or replace one .appling file of the workspace, such as a new module. The file is written only when the whole workspace still validates with it; otherwise the errors come back. Paths are relative to the workspace folder.',
         input: { path: z.string().describe('Relative path ending in .appling, such as sales/sales.appling'), source: z.string().describe('The complete Appling source of the file') },
