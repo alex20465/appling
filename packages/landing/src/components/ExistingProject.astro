@@ -1,0 +1,45 @@
+---
+const steps = [
+  { name: "Install", text: "the CLI, the AI package and an empty folder for the model." },
+  { name: "Connect", text: "your AI agent to the Appling MCP server. It teaches the agent the language." },
+  { name: "Derive", text: "the model: the agent maps your models, rules, operations, queries, routes and screens to the five layers, one validated file at a time." },
+  { name: "Review", text: "it in the IDE and read what the agent could not model exactly; each place names its source file." },
+];
+
+const lines = [
+  { comment: "in your project: install the tools", prompt: "$", command: "npm i -D @appling/cli @appling/ai && mkdir models" },
+  { comment: "connect your AI agent, here Claude Code", prompt: "$", command: "claude mcp add appling -- npx appling-mcp models" },
+  { comment: "in Claude Code: derive the model from your code", prompt: ">", command: "/mcp__appling__derive_model" },
+  { comment: "check the result and open the graph", prompt: "$", command: "npx appling check models && npx @appling/ide models" },
+];
+---
+
+<section id="existing" class="border-t border-line px-4 py-16 sm:px-8">
+  <div class="mx-auto flex max-w-[1200px] flex-wrap items-start gap-12">
+    <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-3">
+      <span class="eyebrow">Existing projects</span>
+      <h2 class="text-h1">Start from the project you already have</h2>
+      <p class="text-ink-soft">An AI agent reads your code, whether it is Django, Ash, Rails, Spring, Express or any other codebase with a data model, and writes the Appling model for it. It never leaves the model invalid, and asks you when the code allows two readings.</p>
+      <ol class="flex flex-col gap-2 pt-2">
+        {steps.map((step, i) => (
+          <li class="text-sm leading-[22px] text-ink-muted">
+            <span class="font-mono text-xs text-leaf">{String(i + 1).padStart(2, "0")}</span>{" "}
+            <span class="font-semibold text-ink">{step.name}</span>{" "}{step.text}
+          </li>
+        ))}
+      </ol>
+      <a href="/docs/getting-started/existing-project/" class="pt-2 font-mono text-[13px] leading-5 font-semibold">Read the guide →</a>
+    </div>
+    <div class="min-w-0 flex-[1_1_520px] overflow-hidden rounded-sm border border-line bg-surface-raised">
+      <div class="border-b border-line px-4 py-2 font-mono text-xs leading-5 text-ink-muted">terminal</div>
+      <div class="flex flex-col gap-3 overflow-x-auto p-6 text-code">
+        {lines.map((line) => (
+          <>
+            <span class="text-ink-muted"># {line.comment}</span>
+            <span class="whitespace-nowrap"><span class="text-leaf">{line.prompt} </span>{line.command}</span>
+          </>
+        ))}
+      </div>
+    </div>
+  </div>
+</section>

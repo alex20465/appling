@@ -1,7 +1,7 @@
 // The docs sidebar in reading order. Every page in the repository's docs/ folder must be listed here, by its id:
 // the path under docs/ without .md, lowercased.
 export const SECTIONS = [
-  { label: "Start here", pages: ["index", "getting-started/installation", "getting-started/first-model", "getting-started/workspace"] },
+  { label: "Start here", pages: ["index", "getting-started/installation", "getting-started/first-model", "getting-started/existing-project", "getting-started/workspace"] },
   {
     label: "Language",
     pages: [

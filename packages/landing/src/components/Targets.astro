@@ -1,0 +1,65 @@
+---
+const targets = [
+  {
+    title: "Django",
+    language: "Python",
+    pkg: "@appling/codegen-django",
+    text: "A Django 6.1 project managed by uv: one app per module, models, behavior as functions and signals, a REST framework API and pages.",
+    coverage: "All five layers",
+    href: "/docs/codegen/django/",
+  },
+  {
+    title: "Ash",
+    language: "Elixir",
+    pkg: "@appling/codegen-ash",
+    text: "An Ash 3 project on AshPostgres, built with Ash's own generators: resources, actions, state machines, background jobs, a JSON:API and Phoenix LiveView pages.",
+    coverage: "All five layers",
+    href: "/docs/codegen/ash/",
+  },
+  {
+    title: "Go",
+    language: "Go",
+    pkg: "@appling/codegen-go",
+    text: "Plain Go packages, one per module, without a framework: types, invariants, derived fields, actions with their state transitions, errors and events.",
+    coverage: "Domain and behavior",
+    href: "/docs/codegen/go/",
+  },
+  {
+    title: "Rust",
+    language: "Rust",
+    pkg: "@appling/codegen-rust",
+    text: "A library crate with one module per Appling module, using serde, rust_decimal and chrono, with the same coverage as Go.",
+    coverage: "Domain and behavior",
+    href: "/docs/codegen/rust/",
+  },
+];
+---
+
+<section id="targets" class="border-t border-line px-4 py-16 sm:px-8">
+  <div class="mx-auto flex max-w-[1200px] flex-col gap-8">
+    <div class="flex max-w-[640px] flex-col gap-3">
+      <span class="eyebrow">Targets</span>
+      <h2 class="text-h1">Your model, in your stack</h2>
+      <p class="text-ink-soft">Each target is an installable extension that turns the same model into a draft project. What a generator cannot write becomes a task in a registry, for you or an AI to finish.</p>
+    </div>
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-px border border-line bg-line">
+      {targets.map((target) => (
+        <a href={target.href} class="step flex min-w-0 flex-col gap-3 bg-surface-raised p-6 text-ink no-underline hover:bg-surface-elevated hover:text-ink">
+          <div class="flex items-baseline justify-between gap-4">
+            <h3 class="text-[21.6px] leading-[26px] font-semibold tracking-[-0.015em]">{target.title}</h3>
+            <span class="eyebrow">{target.language}</span>
+          </div>
+          <code class="text-code text-ink-muted">{target.pkg}</code>
+          <p class="text-sm leading-[22px] text-ink-muted">{target.text}</p>
+          <span class="mt-auto inline-flex w-fit items-center gap-2 rounded-full border border-leaf-line bg-leaf-soft px-3 py-1 font-mono text-xs leading-5 text-ink">
+            <span class="size-1.5 rounded-full bg-leaf"></span>{target.coverage}
+          </span>
+          <span class="font-mono text-xs leading-5 text-leaf">Read the docs →</span>
+        </a>
+      ))}
+    </div>
+    <p class="text-sm leading-[22px] text-ink-muted">
+      Another framework? Code generation runs through extensions; <a href="/docs/codegen/extensions/">write your own</a> against the same graph.
+    </p>
+  </div>
+</section>

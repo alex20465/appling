@@ -65,7 +65,7 @@ Each concept is defined once, in the layer that owns it. References only point d
 - **Validate** the whole model on every build: references, types, layer rules, exports and migrations. See [the CLI](tools/cli.md).
 - **Explore and edit** it in [the IDE](tools/ide.md): the text with a language server next to the graph, at three zoom levels.
 - **Work with AI** through [the MCP server or the IDE chat](tools/ai.md). AI changes pass the same validation and arrive as reviewable diffs.
-- **Generate** a draft [Django](codegen/django.md) or [Ash](codegen/ash.md) project. What the generator cannot write becomes a task in a [registry](codegen/registry.md) for you or an AI.
+- **Generate** a draft [Django](codegen/django.md) or [Ash](codegen/ash.md) project, or the domain and behavior layers as [Go](codegen/go.md) packages or a [Rust](codegen/rust.md) crate. What the generator cannot write becomes a task in a [registry](codegen/registry.md) for you or an AI.
 - **Evolve** it safely: once you cut a [release](language/migrations.md), renames and type changes of stored data are recorded as migration steps and [carried into generated projects](codegen/migrations.md).
 
 ## Where to go next
@@ -74,6 +74,7 @@ Each concept is defined once, in the layer that owns it. References only point d
 |---|---|
 | Install the tools | [Installation](getting-started/installation.md) |
 | Write and check a first model in ten minutes | [Your first model](getting-started/first-model.md) |
+| Derive a model from an application you already have | [Start from an existing project](getting-started/existing-project.md) |
 | Learn the language | [Language overview](language/overview.md) |
 | Generate a project | [Code generation](codegen/overview.md) |
 | Look something up | [CLI](tools/cli.md), [configuration](reference/configuration.md), [semantic graph](reference/graph.md) |
