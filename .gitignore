@@ -4,3 +4,4 @@ out/
 **/src/syntaxes/
 dist/
 .astro/
+**/.appling/layout.json
