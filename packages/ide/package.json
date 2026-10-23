@@ -1,6 +1,6 @@
 {
   "name": "@appling/ide",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Appling IDE: the model as zoomable graph and text, in the browser",
   "type": "module",
   "bin": {
@@ -15,9 +15,9 @@
   },
   "dependencies": {
     "@appling/ai": "workspace:*",
-    "ai": "7.0.149",
     "@appling/lang": "workspace:*",
     "@appling/model": "workspace:*",
+    "ai": "7.0.149",
     "langium": "4.4.0",
     "vscode-languageserver": "~10.1.0",
     "vscode-ws-jsonrpc": "4.0.3",
