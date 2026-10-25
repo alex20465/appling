@@ -44,7 +44,7 @@ module sales {
 | Layer | Declarations |
 |---|---|
 | Cross cutting | `module`, `export`, `role`, `actor`, `tenant`, `migration` |
-| L1 Domain | `enum`, `value`, `entity` with fields, `invariant`, `policy` |
+| L1 Domain | `enum`, `value`, `entity` (or `entity link` for a secondary entity such as a join record) with fields, `invariant`, `policy` |
 | L2 Behavior | `event`, `action`, `machine`, `job` |
 | L3 Application | `query`, `projection`, `external`, `usecase` |
 | L4 Interfaces | `interface <protocol>` with endpoints |

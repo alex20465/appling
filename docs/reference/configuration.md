@@ -3,7 +3,7 @@ title: Configuration
 description: The appling.config.json file and every file Appling writes into .appling folders, with their exact shapes.
 ---
 
-Appling keeps the model in `.appling` files and everything else out of them. Project settings live in `appling.config.json`. Tools write their own state into hidden `.appling` folders: one in your workspace (layout and releases) and one in each generated project (task registry and applied migrations). Hidden folders are never searched for model files.
+Appling keeps the model in `.appling` files and everything else out of them. Project settings live in `appling.config.json`. Tools write their own state into hidden `.appling` folders: one in your workspace (view settings and releases) and one in each generated project (task registry and applied migrations). Hidden folders are never searched for model files.
 
 ## appling.config.json
 
@@ -69,36 +69,36 @@ Next to your models, in the workspace folder:
 
 ```
 .appling/
-  layout.json
+  view.json
   releases/
     1.0.0.json
 ```
 
-### Layout
+### View
 
-`.appling/layout.json` holds the IDE's view state: card positions and the layers the graph shows. The IDE creates it when you move a card or change the layers. It never affects the model.
+`.appling/view.json` holds the options of the IDE's entity view. The IDE writes it whenever you change an option. It never affects the model. Missing keys take their default.
 
 ```json
 {
-  "positions": {
-    "medium": {
-      "sales.Order": { "x": 0, "y": 6.67 },
-      "sales.OrderFlow": { "x": 17.14, "y": 167.2 }
-    },
-    "in": {
-      "sales.Order": { "x": 0, "y": 6.67 }
-    }
-  },
-  "layers": ["domain", "behavior"]
+  "linkEntities": false,
+  "emptyModules": false,
+  "labels": true,
+  "actionCounts": true,
+  "focus": true,
+  "direction": "RIGHT",
+  "edges": "default"
 }
 ```
 
-| Key | Meaning |
-|---|---|
-| `positions` | Per zoom level (`out`, `medium`, `in`), a map from qualified name to `{ x, y }`, relative to the module that contains the card. Only cards you moved are listed |
-| `layers` | The layers shown at the declaration and member levels: any of `domain`, `behavior`, `application`, `interface`, `experience`, `cross`. Missing means `["domain"]` |
-
-Positions follow renames made in the IDE and renames recorded as migration steps.
+| Key | Default | Meaning |
+|---|---|---|
+| `linkEntities` | `false` | Show link entities, grayed out |
+| `emptyModules` | `false` | Show modules without shown entities |
+| `labels` | `true` | Field names on association arrows |
+| `actionCounts` | `true` | The number of actions on each entity |
+| `focus` | `true` | Fade what is not associated with the selected entity |
+| `direction` | `RIGHT` | Layout direction: `RIGHT` or `DOWN` |
+| `edges` | `default` | Arrow shape: `default` (curved), `smoothstep` (right angled) or `straight` |
 
 ### Releases
 

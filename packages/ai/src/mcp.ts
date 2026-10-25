@@ -2,14 +2,28 @@ import { createServer } from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { Project } from './project.js';
-import { REGISTRY_PROMPT, REVERSE_PROMPT } from './prompts.js';
+import { MCP_INSTRUCTIONS, REGISTRY_PROMPT, REVERSE_PROMPT } from './prompts.js';
 import { AUTHORING_TOOLS, diskContext, MODEL_TOOLS, REGISTRY_TOOLS, type Tools } from './tools.js';
+import { VISUAL_INSTRUCTIONS, visualTools, type VisualHost } from './visual.js';
 
-/** An MCP server over one workspace folder: model tools, registry tools and the registry prompt. */
-export function createMcpServer(root: string): McpServer {
+/**
+ * An MCP server over one workspace folder: model tools, registry tools, the prompts, and instructions that make the
+ * model the source of truth for business logic. With a visualizer it also drives the floating window and is a
+ * Claude Code channel, so questions typed there reach the session.
+ */
+export function createMcpServer(root: string, options: { visualizer?: VisualHost } = {}): McpServer {
     const context = diskContext(new Project(root));
-    const server = new McpServer({ name: 'appling', version: '0.1.0' });
-    for (const [name, tool] of Object.entries({ ...MODEL_TOOLS, ...AUTHORING_TOOLS, ...REGISTRY_TOOLS } as Tools)) {
+    const { visualizer } = options;
+    const server = new McpServer({ name: 'appling', version: '0.1.0' }, {
+        capabilities: visualizer && { experimental: { 'claude/channel': {} } },
+        instructions: visualizer ? `${MCP_INSTRUCTIONS}\n\n${VISUAL_INSTRUCTIONS}` : MCP_INSTRUCTIONS
+    });
+    visualizer?.onAsk(ask => server.server.notification({
+        method: 'notifications/claude/channel',
+        params: { content: ask.text, meta: { ask_id: ask.id, selected: ask.selected ?? '', view: ask.view ? `${ask.view.view} ${ask.view.focus.join(' ')}` : '' } }
+    }).catch(error => console.error(error)));
+    const visual = visualizer ? visualTools(visualizer) : {};
+    for (const [name, tool] of Object.entries({ ...MODEL_TOOLS, ...AUTHORING_TOOLS, ...REGISTRY_TOOLS, ...visual } as Tools)) {
         server.registerTool(name, { description: tool.description, inputSchema: tool.input }, async (input: Record<string, unknown>) => {
             const result = await tool.run(context, input);
             return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };

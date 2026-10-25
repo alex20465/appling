@@ -26,6 +26,23 @@ test('actors are judged by action and entity update policies', async () => {
     expect(sim.actors('sales.PlaceOrder')).toEqual([{ actor: 'sales.Shopper', verdict: 'no' }]);
 });
 
+test('access lists what one actor may do, with policies added up along the reference path', async () => {
+    const sim = await simulator(examples());
+    const access = Object.fromEntries(sim.access('sales.Shopper').map(a => [`${a.target}${a.operation ? ` ${a.operation}` : ''}${a.fields ? ` ${a.fields}` : ''}`, `${a.verdict} ${a.policies.join(' & ')}`.trim()]));
+    expect(access).toMatchObject({
+        'crm.Account read': 'depends crm.Account.policy[read]',
+        'crm.Account delete': 'yes',
+        'sales.Order read': 'depends sales.Order.policy[read]',
+        'sales.Order read total': 'depends sales.Order.policy[read] & sales.Order.policy[read fields total]',
+        'sales.Order update': 'no sales.Order.policy[create,update,delete]',
+        'sales.PlaceOrder': 'no sales.PlaceOrder.policy[] & sales.Order.policy[create,update,delete]',
+        'sales.OpenOrders': 'depends sales.Order.policy[read]',
+        'sales.Checkout': 'no sales.PlaceOrder.policy[] & sales.Order.policy[create,update,delete] & sales.Cancel.policy[]',
+        'sales.Orders': 'depends sales.Order.policy[read]',
+        'sales.OrderDetail': 'depends sales.Order.policy[read]'
+    });
+});
+
 const SHOP = `module shop {
   role Clerk
   role Buyer

@@ -31,12 +31,26 @@ export interface RunResult {
     violated: string[];
 }
 
+/** One thing an actor may try, with the verdict of the policies that guard it. */
+export interface Access {
+    /** The qualified name of an entity, action, query, use case or page. */
+    target: string;
+    /** For an entity: the operation, and the fields when a policy guards only some of them. */
+    operation?: 'read' | 'create' | 'update' | 'delete';
+    fields?: string[];
+    verdict: Verdict;
+    /** The qualified names of the deciding policies; none means nothing guards the target. */
+    policies: string[];
+}
+
+const OPERATIONS = ['read', 'create', 'update', 'delete'] as const;
+
 const MS: { [unit: string]: number } = { ms: 1, s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
 
 /**
  * Evaluates the behavior of a model against sample data and actors, as described in concept.md section 5:
- * which states a machine can reach, which actors may trigger an action, which invariants an action puts at
- * risk, and what running an action on a record does.
+ * which states a machine can reach, which actors may trigger an action, what one actor may do, which invariants
+ * an action puts at risk, and what running an action on a record does.
  */
 export class Simulator {
 
@@ -80,6 +94,31 @@ export class Simulator {
             actor: actor.qn,
             verdict: this.permitted(action, { actor: actor.qn }, undefined)
         }));
+    }
+
+    /**
+     * What an actor may do: every entity operation, action, query, use case and page with the verdict of its
+     * policies. Policies add up along the reference path (concept.md section 3): an action also needs its entity's
+     * update policies, a query its entity's read policies, a use case the policies of everything its steps call,
+     * and a page the policies of the queries and projections it shows. The actions a page offers keep their own.
+     */
+    access(actor: string): Access[] {
+        const verdict = (policies: GraphNode[]): Verdict => this.verdict(policies, { actor }, undefined, {});
+        const result: Access[] = [];
+        for (const entity of this.graph.nodes.filter(n => n.kind === 'Entity')) {
+            for (const operation of OPERATIONS) {
+                const whole = this.entityPolicies(entity.qn, operation);
+                result.push({ target: entity.qn, operation, verdict: verdict(whole), policies: whole.map(p => p.qn) });
+                for (const partial of this.kids(entity, 'Policy').filter(p => fieldsOf(p).length && covers(p, operation))) {
+                    result.push({ target: entity.qn, operation, fields: fieldsOf(partial).map(last), verdict: verdict([...whole, partial]), policies: [...whole, partial].map(p => p.qn) });
+                }
+            }
+        }
+        for (const node of this.graph.nodes.filter(n => ['Action', 'Query', 'UseCase', 'Page'].includes(n.kind))) {
+            const policies = [...new Set(this.guards(node.qn))];
+            result.push({ target: node.qn, verdict: verdict(policies), policies: policies.map(p => p.qn) });
+        }
+        return result;
     }
 
     /** The invariants of the action's entity that read a field the action changes, directly or through derived fields. */
@@ -161,15 +200,42 @@ export class Simulator {
     }
 
     private permitted(action: string, actor: Actor, record: Record | undefined, inputs: { [name: string]: Value } = {}): Verdict {
-        const node = this.node(action);
-        const entity = node.data.entity as string | undefined;
-        const policies = [
-            ...this.kids(node, 'Policy'),
-            ...(entity ? this.kids(this.node(entity), 'Policy').filter(p => !(p.data.fields as string[] | undefined)?.length && (!(p.data.operations as string[] | undefined)?.length || (p.data.operations as string[]).includes('update'))) : [])
-        ];
+        return this.verdict(this.guards(action), actor, record, inputs);
+    }
+
+    private verdict(policies: GraphNode[], actor: Actor, record: Record | undefined, inputs: { [name: string]: Value }): Verdict {
         const verdicts = policies.map(p => this.evaluate(p.data.condition as ExprData, { self: record, actor, inputs }));
         if (verdicts.some(v => v === false)) return 'no';
         return verdicts.every(v => v === true) ? 'yes' : 'depends';
+    }
+
+    /** The policies an action, query, use case, projection or page needs, its own and those along the reference path. */
+    private guards(qn: string, seen = new Set<string>()): GraphNode[] {
+        if (seen.has(qn)) return [];
+        seen.add(qn);
+        const node = this.node(qn);
+        const own = this.kids(node, 'Policy');
+        const along = (targets: (string | undefined)[]) => targets.filter(t => t).flatMap(t => this.guards(t!, seen));
+        switch (node.kind) {
+            case 'Action': return [...own, ...this.entityPolicies(node.data.entity as string | undefined, 'update')];
+            case 'Query': return [...own, ...this.entityPolicies(node.data.entity as string, 'read')];
+            case 'Entity': return this.entityPolicies(qn, 'read');
+            case 'Projection': return along([node.data.source as string]);
+            case 'UseCase': {
+                const steps = (node.data.steps ?? []) as { call?: { target: string }, handlers?: { call: { target: string } }[] }[];
+                return [...own, ...along(steps.flatMap(s => [s.call, ...(s.handlers ?? []).map(h => h.call)]).map(c => c?.target))];
+            }
+            case 'Page': {
+                const components = (node.data.components ?? []) as { query?: string, projection?: string }[];
+                return along(components.flatMap(c => [c.query, c.projection]));
+            }
+            default: return own;
+        }
+    }
+
+    /** The policies of an entity that guard a whole record for an operation. */
+    private entityPolicies(entity: string | undefined, operation: string): GraphNode[] {
+        return entity ? this.kids(this.node(entity), 'Policy').filter(p => !fieldsOf(p).length && covers(p, operation)) : [];
     }
 
     private apply(effect: GraphNode, record: Record, scope: { self?: Record, actor?: Actor, inputs?: { [name: string]: Value } }, result: RunResult): void {
@@ -292,6 +358,16 @@ export class Simulator {
     private parentOf(qn: string): string {
         return this.graph.edges.find(e => e.kind === 'contains' && e.to === qn)!.from;
     }
+}
+
+function fieldsOf(policy: GraphNode): string[] {
+    return (policy.data.fields as string[] | undefined) ?? [];
+}
+
+/** A policy without operations covers every operation. */
+function covers(policy: GraphNode, operation: string): boolean {
+    const operations = (policy.data.operations as string[] | undefined) ?? [];
+    return !operations.length || operations.includes(operation);
 }
 
 function last(qn: string): string {

@@ -1,14 +1,15 @@
 ---
 title: Simulator
-description: "Ask the model how it behaves: reachable states, who may trigger an action, which invariants an action puts at risk, and what running an action does."
+description: "Ask the model how it behaves: reachable states, who may trigger an action, what one actor may do, which invariants an action puts at risk, and what running an action does."
 ---
 
-The simulator evaluates the behavior a model describes against sample data and actors, without generating code. It answers four questions:
+The simulator evaluates the behavior a model describes against sample data and actors, without generating code. It answers five questions:
 
 | Question | Answer |
 |---|---|
 | Can a machine reach a state? | The shortest path of transitions from the initial state, or that the state is unreachable |
 | Which actors may trigger an action? | For every declared actor `yes`, `no`, or `depends` on the data |
+| What may one actor do? | For every entity operation, action, query, use case and page the verdict and the policies that decide it |
 | Which invariants does an action put at risk? | The invariants of its entity that read a field the action changes, directly or through derived fields |
 | What does running an action do? | Policies, preconditions, the transition taken, the effects, emitted events and violated invariants |
 
@@ -91,6 +92,18 @@ A customer may close a cart only when it is theirs, which depends on the cart's 
 
 **Who may trigger an action.** An action is allowed when its own policies and the policies of its entity that cover `update` (or every operation) hold. Following the [concept](../concept.md), the effective policy is the conjunction of all policies along the way, so an entity that only lets clerks update it also keeps other actors from its actions. An actor holds the roles listed in its declaration, and `actor.is(...)` is true for those roles and for the actor itself.
 
+**What one actor may do.** `access` judges the same way, for one actor and every target, with the policies that add up along the reference path:
+
+| Target | Policies |
+|---|---|
+| Entity, per operation | The entity's policies that cover the operation and name no fields; a policy with `fields` gives one more entry for those fields, on top of the others |
+| Action | Its own, and its entity's policies that cover `update` |
+| Query | Its own, and its entity's policies that cover `read` |
+| Use case | Its own, and those of every action, query, use case and external operation its steps and error handlers call |
+| Page | Those of the queries its lists show and of the projections it shows (a projection needs what its source needs). The actions a page offers are judged on their own |
+
+A target without any policy is open: `yes`, with no deciding policy.
+
 **Unknown data.** Expressions are evaluated with three valued logic. A value that needs data you did not give, such as a field of a record or an actor's field, is unknown. `a && b` is false as soon as one side is false, `a || b` is true as soon as one side is true, and everything else that touches an unknown value stays unknown. A policy that comes out unknown makes the verdict `depends`.
 
 **Running an action.** A run checks, in order: the policies (`no` refuses the run), the preconditions (a false one reports its error), the transition whose `from` state matches and whose guard does not fail, then applies the transition's effects, the state change and the action's effects, records `emit` effects as events, and evaluates the entity's invariants on the result. Derived fields are computed from the record when an expression reads them.
@@ -113,6 +126,7 @@ import { Simulator } from '@appling/model';
 const simulator = new Simulator(graph);
 simulator.reach('shop.Flow', 'closed');
 simulator.actors('shop.Close');
+simulator.access('shop.Customer');
 simulator.risks('shop.Discount');
 simulator.run('shop.Discount', { lines: [{ amount: 5 }], discount: 0 }, { actor: 'shop.Staff' }, { amount: 20 });
 ```

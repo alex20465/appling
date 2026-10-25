@@ -26,6 +26,7 @@
     "@appling/codegen": "workspace:*",
     "@appling/lang": "workspace:*",
     "@appling/model": "workspace:*",
+    "@appling/viz": "workspace:*",
     "@modelcontextprotocol/sdk": "1.32.1",
     "ai": "7.0.149",
     "langium": "4.4.0",

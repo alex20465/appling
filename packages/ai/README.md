@@ -11,6 +11,8 @@ appling-mcp [folder] --http 4411    # Streamable HTTP on http://127.0.0.1:4411/m
 
 For example in Claude Code: `claude mcp add appling -- npx appling-mcp .`
 
+The server instructions tell the assistant that the model is the source of truth for business logic, so it asks the model before it searches the application code.
+
 | Tool | Does |
 |---|---|
 | `check` | Validates the model and lists its errors |
@@ -25,6 +27,19 @@ For example in Claude Code: `claude mcp add appling -- npx appling-mcp .`
 | `run_tests` | Runs the generated project's tests |
 
 The prompt `implement_next_task` carries the registry workflow.
+
+### Visualization window
+
+Over stdio the server also drives a floating window (`@appling/viz`, Electron; macOS, Windows and Linux, through XWayland on Wayland). Ask Claude Code to show part of the model and the window opens at the top right of the main screen, above every other window.
+
+| Tool | Does |
+|---|---|
+| `visualize` | Shows the `entities` view, or cards of a `machine` (per state what can be done there), an `action`, a `usecase` or an `event` |
+| `visual_selection` | The element selected in the window and the view on screen |
+| `visual_reply` | Answers a question typed into the window |
+| `propose_edits` | Shows edit operations as a proposal in the window and writes them only when accepted |
+
+Questions typed into the window reach the session as Claude Code channel messages. Channels are a research preview, so start Claude Code with `claude --dangerously-load-development-channels server:appling`.
 
 ## Registry skill
 

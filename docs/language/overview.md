@@ -56,7 +56,7 @@ Identifiers start with a letter or an underscore, followed by letters, digits or
 
 Many keywords are also valid names, so fields such as `state`, `from` or `input` stay legal:
 
-`state`, `input`, `value`, `from`, `to`, `on`, `for`, `step`, `list`, `detail`, `form`, `route`, `run`, `actions`, `fields`, `role`, `event`, `action`, `query`, `page`, `timeout`, `sort`, `when`, `create`, `read`, `update`, `delete`, `per`, `flow`, `actor`, `tenant`, `set`, `op`, `human`, `system`, `service`, `asc`, `desc`, `remove`, `rename`, `retype`, `roles`, `second`, `minute`, `hour`.
+`state`, `input`, `value`, `from`, `to`, `on`, `for`, `step`, `list`, `detail`, `form`, `route`, `run`, `actions`, `fields`, `role`, `event`, `action`, `query`, `page`, `timeout`, `sort`, `when`, `create`, `read`, `update`, `delete`, `per`, `flow`, `actor`, `tenant`, `set`, `op`, `human`, `system`, `service`, `asc`, `desc`, `remove`, `rename`, `retype`, `roles`, `second`, `minute`, `hour`, `link`.
 
 Every other keyword (`module`, `entity`, `machine`, `policy`, `true`, `null` and so on) is reserved.
 

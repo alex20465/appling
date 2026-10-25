@@ -11,7 +11,7 @@ Create a declarative Domain-Specific Language (DSL) that describes the structura
 
 The model is the **single source of truth**. It has a canonical text syntax that round-trips losslessly to an Abstract Syntax Tree (AST). After reference resolution, the AST becomes a semantic graph. All tools (visualization, AI, validation) work on that graph.
 
-The primary goal is an **interactive, zoomable visualization** that both humans and AI can explore, construct, and modify, backed by a model that can be **validated structurally and simulated behaviorally**. Code generation produces a draft project for a target framework (Django and Ash first) through installable extensions; work it cannot complete is recorded as tasks for AI or humans.
+The primary goal is an **interactive visualization** that both humans and AI can explore, construct, and modify, backed by a model that can be **validated structurally and simulated behaviorally**. Code generation produces a draft project for a target framework (Django and Ash first) through installable extensions; work it cannot complete is recorded as tasks for AI or humans.
 
 **Differentiator:** layered application modeling exists already (WebML/IFML, MDA, Ash, Mendix). This project's distinct contribution is AI-native editing plus semantic-zoom exploration of one validated model.
 
@@ -23,7 +23,7 @@ These are not layers. They apply across all layers.
 
 **Modules (bounded contexts)**
 - Every model element belongs to exactly one module.
-- Modules may contain sub-modules and form the containment hierarchy used by semantic zoom.
+- Modules may contain sub-modules and form the containment hierarchy of the visualization.
 - Cross-module references must go through elements the target module explicitly exports.
 
 **Identity and access**
@@ -129,16 +129,16 @@ Allowed references form a directed acyclic graph:
 
 ## 4. Interactive Visualization
 
-The model is visualized as a connected, multidimensional graph with **semantic zoom**.
+The visualization serves a human who needs to understand the business logic. It draws little and lets the person ask for detail:
 
-- **Zoomed out:** modules, their dependencies, and major use cases
-- **Medium zoom:** entities, relationships, actions, state machines, queries, projections, interfaces, and pages
-- **Zoomed in:** fields, invariants, policies, guards, expressions, and errors
+- **Entity view:** modules with their core entities and the associations between them. Value types, enums and the edges to them stay out. Secondary entities, such as join records marked `entity link`, are hidden until asked for and then shown grayed out. Fields, invariants and policies are never drawn in the view.
+- **Search:** every element of every layer, filtered by layer, as the way into behavior, application logic, interfaces and pages.
+- **Inspector:** the selected element in detail: its members, and the declarations that use it and that it uses, grouped by layer. For an entity this shows its behavior, queries, use cases, endpoints and pages in one place.
 
 Rules:
 
-- The graph is a projection of the semantic graph, not a separate source of truth.
-- Zoom levels follow the module containment hierarchy. Aggregated nodes and edges, such as module-to-module dependencies, are computed from the model, never drawn by hand.
+- Every view is a projection of the semantic graph, not a separate source of truth.
+- Modules nest by the module containment hierarchy. Aggregated nodes and edges, such as module-to-module dependencies, are computed from the model, never drawn by hand.
 - Every model element is identified by its **qualified name**, such as `sales.Order.status`, so graph edits map back to exact AST nodes. Renames are recorded as migration steps, so tools can follow an element to its new name.
 - Elements without a name are identified by a key derived from their content, written in brackets after their kind: `sales.Order.invariant["total never negative"]`, `sales.Order.policy[read fields total]`, `sales.OrderFlow.transition[draft,placed->cancelled]`, `sales.PublicApi.endpoint[GET /orders]`, `sales.PlaceOrder.effect[set placed_at]`. When two siblings share a key, an ordinal is appended, such as `policy[read]#2`.
 - Layout and view state (positions, collapsed groups, saved views) are stored **separately** from the model. They are not part of the truth and do not appear in model diffs.

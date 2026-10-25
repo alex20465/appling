@@ -36,11 +36,12 @@ test('requests from other origins are refused', async () => {
     expect((await fetch(`${ide.url}/api/snapshot`, { headers: { origin: 'https://evil.example' } })).status).toBe(403);
 });
 
-test('layout is stored outside the model', async () => {
-    const layout = { positions: { medium: { 'sales.Order': { x: 10, y: 20 } } } };
-    await fetch(`${ide.url}/api/layout`, { method: 'PUT', body: JSON.stringify(layout) });
-    expect(await (await fetch(`${ide.url}/api/layout`)).json()).toEqual(layout);
-    expect(JSON.parse(readFileSync(join(root, '.appling/layout.json'), 'utf8'))).toEqual(layout);
+test('view settings are stored outside the model', async () => {
+    expect(await (await fetch(`${ide.url}/api/view`)).json()).toEqual({});
+    const view = { linkEntities: true, direction: 'DOWN' };
+    expect((await fetch(`${ide.url}/api/view`, { method: 'PUT', body: JSON.stringify(view) })).status).toBe(204);
+    expect(await (await fetch(`${ide.url}/api/view`)).json()).toEqual(view);
+    expect(JSON.parse(readFileSync(join(root, '.appling/view.json'), 'utf8'))).toEqual(view);
 });
 
 test('changes on disk are pushed as snapshots', async () => {

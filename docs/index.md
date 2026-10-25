@@ -3,7 +3,7 @@ title: Introduction
 description: Appling describes a business application as one validated model in plain text, then visualizes it, edits it with AI and generates a draft project from it.
 ---
 
-Appling is a declarative language for business applications. You write `.appling` files that describe what exists, what can happen, how capabilities are organized, how programs reach them and how people use them. Appling parses and links those files into one validated model, and every tool works on that model: the CLI, the IDE with its zoomable graph, the AI assistants and the code generators.
+Appling is a declarative language for business applications. You write `.appling` files that describe what exists, what can happen, how capabilities are organized, how programs reach them and how people use them. Appling parses and links those files into one validated model, and every tool works on that model: the CLI, the IDE with its entity view and search, the AI assistants and the code generators.
 
 The text is the single source of truth. The graph you see, the edits the AI proposes and the project the generator writes all come from it and go back to it.
 
@@ -63,7 +63,7 @@ Each concept is defined once, in the layer that owns it. References only point d
 ## What you can do with it
 
 - **Validate** the whole model on every build: references, types, layer rules, exports and migrations. See [the CLI](tools/cli.md).
-- **Explore and edit** it in [the IDE](tools/ide.md): the text with a language server next to the graph, at three zoom levels.
+- **Explore and edit** it in [the IDE](tools/ide.md): the text with a language server next to a map of modules and entities, and a search over every element.
 - **Work with AI** through [the MCP server or the IDE chat](tools/ai.md). AI changes pass the same validation and arrive as reviewable diffs.
 - **Generate** a draft [Django](codegen/django.md) or [Ash](codegen/ash.md) project, or the domain and behavior layers as [Go](codegen/go.md) packages or a [Rust](codegen/rust.md) crate. What the generator cannot write becomes a task in a [registry](codegen/registry.md) for you or an AI.
 - **Evolve** it safely: once you cut a [release](language/migrations.md), renames and type changes of stored data are recorded as migration steps and [carried into generated projects](codegen/migrations.md).

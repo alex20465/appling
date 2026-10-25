@@ -1,17 +1,18 @@
 import type { ChatEvent } from '@appling/ai';
 import type { EditOperation, EditResult } from '@appling/model';
-import type { Layout, Snapshot } from '../shared/snapshot.js';
+import { DEFAULT_VIEW, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
 
 export async function loadSnapshot(): Promise<Snapshot> {
     return (await fetch('/api/snapshot')).json();
 }
 
-export async function loadLayout(): Promise<Layout> {
-    return (await fetch('/api/layout')).json();
+/** The stored view settings over the defaults, so settings added later get their default. */
+export async function loadView(): Promise<ViewSettings> {
+    return { ...DEFAULT_VIEW, ...await (await fetch('/api/view')).json() };
 }
 
-export async function saveLayout(layout: Layout): Promise<void> {
-    await fetch('/api/layout', { method: 'PUT', body: JSON.stringify(layout) });
+export async function saveView(view: ViewSettings): Promise<void> {
+    await fetch('/api/view', { method: 'PUT', body: JSON.stringify(view) });
 }
 
 export async function saveFile(path: string, text: string): Promise<void> {

@@ -6,7 +6,8 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
 import { expect, test } from 'vitest';
 import { writeRegistry } from '@appling/codegen';
-import { chat, createMcpServer, MAX_ATTEMPTS, Project, type ChatEvent } from '../src/index.js';
+import type { Ask, Decision, Review, Show } from '@appling/viz';
+import { chat, createMcpServer, MAX_ATTEMPTS, Project, type ChatEvent, type VisualHost } from '../src/index.js';
 
 function workspace(): string {
     const root = mkdtempSync(join(tmpdir(), 'appling-ai-'));
@@ -97,4 +98,74 @@ test('write_model_file writes only files that keep the workspace valid, inside t
     expect(await write('../outside.appling', 'module x {\n}\n')).toEqual({ ok: false, errors: ['The path must be a .appling file inside the workspace.'] });
     const prompt = await client.getPrompt({ name: 'derive_model' });
     expect((prompt.messages[0].content as { text: string }).text).toContain('write_model_file');
+});
+
+function fakeWindow(decision: Decision) {
+    const shown: Show[] = [];
+    const reviews: Review[] = [];
+    const listeners: ((ask: Ask) => void)[] = [];
+    const host: VisualHost = {
+        show: async show => { shown.push(show); },
+        selection: () => ({ open: true, qn: 'sales.OrderStatus.placed', view: shown.at(-1) }),
+        reply: () => true,
+        review: async review => { reviews.push(review); return decision; },
+        onAsk: listener => { listeners.push(listener); }
+    };
+    return { host, shown, reviews, ask: (ask: Ask) => listeners.forEach(l => l(ask)) };
+}
+
+async function visualClient(root: string, host: VisualHost) {
+    const client = new Client({ name: 'test', version: '1' });
+    const notifications: unknown[] = [];
+    client.fallbackNotificationHandler = async notification => { notifications.push(notification); };
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([createMcpServer(root, { visualizer: host }).connect(serverTransport), client.connect(clientTransport)]);
+    const text = async (name: string, args: Record<string, unknown>) => JSON.parse(((await client.callTool({ name, arguments: args })).content as { text: string }[])[0].text);
+    return { client, notifications, text };
+}
+
+test('with a visualizer the MCP server is a channel that shows views and forwards questions from the window', async () => {
+    const window = fakeWindow({ accepted: true });
+    const { client, notifications, text } = await visualClient(workspace(), window.host);
+    expect(client.getServerCapabilities()?.experimental).toEqual({ 'claude/channel': {} });
+    expect(client.getInstructions()).toContain('The model is the source of truth for business logic.');
+    expect(client.getInstructions()).toContain('visual_reply');
+    expect((await client.listTools()).tools.map(t => t.name)).toEqual(expect.arrayContaining(['visualize', 'visual_selection', 'visual_reply', 'propose_edits']));
+    expect((await text('visualize', { view: 'machine', focus: ['sales.Order', 'sales.Nope'] })).error).toBe('The machine view draws Machine elements; not: sales.Order (Entity), sales.Nope (no such element).');
+    expect(await text('visualize', { view: 'machine', focus: ['sales.OrderFlow'], title: 'Order lifecycle' })).toEqual({ shown: true });
+    expect(window.shown).toEqual([{ view: 'machine', focus: ['sales.OrderFlow'], title: 'Order lifecycle' }]);
+    expect(await text('visual_selection', {})).toMatchObject({ open: true, qn: 'sales.OrderStatus.placed' });
+    window.ask({ id: 'a1', text: 'Why?', selected: 'sales.OrderStatus.placed', view: window.shown[0] });
+    await new Promise(done => setTimeout(done, 10));
+    expect(notifications).toMatchObject([{
+        method: 'notifications/claude/channel',
+        params: { content: 'Why?', meta: { ask_id: 'a1', selected: 'sales.OrderStatus.placed', view: 'machine sales.OrderFlow' } }
+    }]);
+});
+
+test('the MCP server without a visualizer has no visual tools and is no channel', async () => {
+    const client = new Client({ name: 'test', version: '1' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([createMcpServer(workspace()).connect(serverTransport), client.connect(clientTransport)]);
+    expect(client.getServerCapabilities()?.experimental).toBeUndefined();
+    expect(client.getInstructions()).toContain('The model is the source of truth for business logic.');
+    expect(client.getInstructions()).not.toContain('visual_reply');
+    expect((await client.listTools()).tools.map(t => t.name)).not.toContain('visualize');
+});
+
+test('proposed edits are written only when the person accepts them in the window', async () => {
+    const operations = [{ op: 'add', parent: 'crm.Account', source: 'phone: String?' }];
+    const accepting = fakeWindow({ accepted: true });
+    const root = workspace();
+    const accepted = await (await visualClient(root, accepting.host)).text('propose_edits', { operations, summary: 'Add a phone number' });
+    expect(accepted).toEqual({ accepted: true, ok: true, changed: ['crm.appling'] });
+    expect(accepting.reviews[0]).toMatchObject({ summary: 'Add a phone number', hunks: [{ file: 'crm.appling', added: ['    phone: String?'] }], graph: { added: ['crm.Account.phone'] } });
+    expect(readFileSync(join(root, 'crm.appling'), 'utf8')).toContain('phone: String?');
+
+    const other = workspace();
+    const before = readFileSync(join(other, 'crm.appling'), 'utf8');
+    const rejecting = fakeWindow({ accepted: false, comment: 'Not now' });
+    expect(await (await visualClient(other, rejecting.host)).text('propose_edits', { operations, summary: 'Add a phone number' })).toEqual({ accepted: false, comment: 'Not now' });
+    expect(readFileSync(join(other, 'crm.appling'), 'utf8')).toBe(before);
+    expect((await (await visualClient(other, rejecting.host)).text('propose_edits', { operations: [{ op: 'remove', target: 'crm.Nope' }], summary: 'x' })).ok).toBe(false);
 });

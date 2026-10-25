@@ -22,16 +22,4 @@ export interface Snapshot {
     errors: string[];
 }
 
-export type Level = 'out' | 'medium' | 'in';
-
-export interface Position {
-    x: number;
-    y: number;
-}
-
-/** View state, kept in `.appling/layout.json` outside the model. Positions are relative to the enclosing module. */
-export interface Layout {
-    positions?: Partial<Record<Level, Record<string, Position>>>;
-    /** The layers the graph shows at the declaration and member levels. */
-    layers?: string[];
-}
+export { DEFAULT_VIEW, type ViewSettings } from '@appling/viz/views';

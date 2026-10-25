@@ -68,7 +68,7 @@ interface ToolDefinition<SHAPE extends z.ZodRawShape> {
     run(context: ToolContext, input: z.infer<z.ZodObject<SHAPE>>): Promise<unknown>;
 }
 
-function define<SHAPE extends z.ZodRawShape>(definition: ToolDefinition<SHAPE>): ToolDefinition<SHAPE> {
+export function define<SHAPE extends z.ZodRawShape>(definition: ToolDefinition<SHAPE>): ToolDefinition<SHAPE> {
     return definition;
 }
 
@@ -80,7 +80,7 @@ export const MODEL_TOOLS = {
         run: async context => ({ errors: await context.project.check(context.sources()) })
     }),
     graph_query: define({
-        description: 'Query the semantic graph. With qn: that element with its properties, members and references in both directions. Without qn: elements filtered by kind (Entity, Field, Action, Query...), module or a search text in the qualified name.',
+        description: 'Query the semantic graph of the Appling model, the source of truth for business logic: use it before searching application code for rules, states, actions, permissions or flows. With qn: that element with its properties, members and references in both directions. Without qn: elements filtered by kind (Entity, Field, Action, Query...), module or a search text in the qualified name.',
         input: { qn: z.string().optional(), kind: z.string().optional(), module: z.string().optional(), search: z.string().optional() },
         run: async (context, input) => queryGraph(await context.project.graph(context.sources()), input)
     }),

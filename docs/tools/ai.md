@@ -7,6 +7,7 @@ description: Give AI assistants validated access to your model through the MCP s
 
 - an [MCP server](#mcp-server), `appling-mcp`, with tools to query the model, edit it through validated operations and work through a generated project's task registry,
 - the [registry skill](#registry-skill), instructions for an agent that finishes a generated project one task at a time,
+- the [visualization window](#visualization-window), a floating window in which Claude Code shows you parts of the model, takes your questions and asks you to accept its changes,
 - the [IDE chat](#ide-chat), which runs the same model tools on a working copy and returns its changes as a proposal you review.
 
 An assistant never edits `.appling` text directly. It changes the model with [edit operations](../reference/edit-operations.md), and every operation is validated: an edit that does not parse or adds an error is rejected with the reasons, so the model stays valid.
@@ -28,6 +29,8 @@ appling-mcp [folder] --http [port]    # Streamable HTTP on http://127.0.0.1:<por
 | `--http [port]` | off; port `4411` | Serve Streamable HTTP instead of stdio. Put the folder before `--http`, since the argument after it is read as the port |
 
 Over stdio, the server serves one client on stdin and stdout. Over HTTP, it listens on `127.0.0.1` only, answers on the path `/mcp`, accepts only the `Host` headers `127.0.0.1:<port>` and `localhost:<port>` (DNS rebinding protection), and handles every request statelessly.
+
+The server sends Claude instructions that the model is the source of truth for business logic: questions about rules, states, actions, permissions and flows go to `graph_query`, `read_source` and `simulate` first, and the application code only for how something is implemented or what the model does not cover.
 
 The server reads the files on every tool call, so it always sees the current text, including changes from the IDE or your editor. Edits it makes are written to the files at once.
 
@@ -65,7 +68,7 @@ Use an absolute folder here, since the client decides the working directory.
 
 ## Tools
 
-The server registers ten tools. Each returns its result as JSON text.
+The server registers ten tools, and over stdio four more for the [visualization window](#visualization-window). Each returns its result as JSON text.
 
 ### Model tools
 
@@ -146,6 +149,54 @@ cp -r node_modules/@appling/ai/skills/appling-registry .claude/skills/
 ```
 
 Then ask Claude Code to finish the generated project; the skill's description makes it load for requests about the task registry.
+
+## Visualization window
+
+Over stdio, `appling-mcp` can show the model in a window of its own while you talk to Claude Code in the terminal. Ask for it in words, such as "show me the order lifecycle" or "draw what PlaceOrder does": Claude calls `visualize`, and a frameless window opens at the top right of your main screen, above every other window, without taking the focus from the terminal. It closes with its close button or when the Claude Code session ends; the next `visualize` opens it again.
+
+The window runs on [Electron](https://www.electronjs.org), which `@appling/ai` installs through `@appling/viz`. It works on macOS, Windows and Linux. The first window downloads the Electron binary once.
+
+> [!NOTE]
+> Linux Wayland sessions do not let an application keep a window on top or place it, so the window runs through XWayland there. It needs XWayland, which GNOME and KDE provide.
+
+### Views
+
+| View | Draws | `focus` takes |
+|---|---|---|
+| `entities` | Entities with their associations and modules, like the [IDE](ide.md) entity view, limited to the focused entities and the entities associated with them | Entities or modules |
+| `machine` | One card per state of the machine's field type, marked `initial` or `final`, listing what can be done there: each action or event that leaves the state with the states it leads to, its guard and the jobs that run it in that state | Machines |
+| `action` | One card: the states it moves between, whether each actor may run it (`yes`, `no` or `depends` on the data, from the [simulator](simulator.md)), its inputs, preconditions, changes, errors and the declarations that use it | Actions |
+| `usecase` | One card: the inputs, the steps in order as written, with their error handlers and timeouts, and what uses it | Use cases |
+| `event` | One card: the fields, the actions that emit it, the transitions it triggers and the use cases that await it | Events |
+
+Only the entity view draws arrows; the other views list options and facts on cards, one card per focused element (or per state). Click a card title or a row to select the element behind it; the strip below the canvas shows its kind, members and related declarations, and clicking a related declaration draws it in its own view. The window follows the files: an edit from Claude, the IDE or your editor redraws it.
+
+### Talk about what you see
+
+When you say "this" or "the selected one" in the terminal, Claude reads your selection with `visual_selection`.
+
+You can also type a question into the window. It reaches the session through [Claude Code channels](https://code.claude.com/docs/en/channels), and Claude answers in the window with `visual_reply`. Channels are a research preview, and a channel that is not on Anthropic's allowlist must be named at start:
+
+```sh
+claude --dangerously-load-development-channels server:appling
+```
+
+Here `appling` is the name of the server in your MCP configuration. Without the flag, everything else works, and questions typed into the window are dropped.
+
+### Review changes in the window
+
+While the window is open, Claude proposes model changes with `propose_edits` instead of `edit`. The window shows the summary, the changed lines per file and the elements added, removed and changed. Accept writes the operations to the files; Reject leaves them unchanged and returns your optional comment to Claude. Closing the window rejects an open proposal.
+
+### Visualization tools
+
+| Tool | Input | Returns |
+|---|---|---|
+| `visualize` | `view`: `entities`, `machine`, `action`, `usecase` or `event`; `focus`: qualified names; `title?`, `note?` | `{ shown: true }`, or `{ error }` naming the elements the view cannot draw |
+| `visual_selection` | none | `{ open, qn?, view? }`: whether the window is open, the selected element and the view on screen |
+| `visual_reply` | `text`, `ask_id?` | `{ sent: true }`, or `{ sent: false, reason }` when the window is closed |
+| `propose_edits` | `operations`: [edit operations](../reference/edit-operations.md); `summary` | After your decision: `{ accepted: true, ok: true, changed }`, `{ accepted: false, comment? }`, or `{ ok: false, operation, errors }` when an operation is invalid before review |
+
+A question from the window arrives in the session as a channel message with the attributes `ask_id`, `selected` (the selected element) and `view` (the view and its focus).
 
 ## IDE chat
 

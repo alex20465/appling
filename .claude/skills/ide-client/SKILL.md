@@ -1,6 +1,6 @@
 ---
 name: ide-client
-description: How the Appling IDE client works with Monaco 0.57 (native LSP client), React Flow 12 and ELK, and how edits, snapshots, selection and layout flow between client and server. Use when changing the editor, the graph view, the inspector, layout persistence, the /lsp websocket, or when debugging stale graph state, lost selection or LSP features that fail across files.
+description: How the Appling IDE client works with Monaco 0.57 (native LSP client), React Flow 12 and ELK, and how edits, snapshots and selection flow between client and server. Use when changing the editor, the entity view, the search, the inspector, the /lsp websocket, or when debugging stale graph state, lost selection or LSP features that fail across files.
 metadata:
   anchors:
     - name: monaco-editor
@@ -28,7 +28,7 @@ Since 0.55 Monaco ships an LSP client. The IDE connects with `monaco.lsp.WebSock
 
 ## Snapshot, dirty models and saves
 
-The graph, inspector and selection read only the snapshot, which is built from disk. Unsaved Monaco text never reaches them; an edit shows after App saves and the watcher pushes a new snapshot (100ms debounce). `/api/edit` receives `modelTexts()`, unsaved text included, and App then saves the whole model text, so a graph or inspector edit also saves unrelated unsaved typing in that file. Source: `App.tsx`, `monaco.ts`, `server.ts`.
+The graph, inspector and selection read only the snapshot, which is built from disk. Unsaved Monaco text never reaches them; an edit shows after App saves and the watcher pushes a new snapshot (100ms debounce). `/api/edit` receives `modelTexts()`, unsaved text included, and App then saves the whole model text, so an inspector edit also saves unrelated unsaved typing in that file. Source: `App.tsx`, `monaco.ts`, `server.ts`.
 
 A snapshot replaces a model with `setValue` only when the model is clean. Cursor events with `source === 'api'` are ignored so a programmatic reveal does not feed selection back. Source: `Editor.tsx`.
 
@@ -36,10 +36,10 @@ A snapshot replaces a model with `setValue` only when the model is clean. Cursor
 
 `ReactFlow` is a named import from `@xyflow/react`, CSS is `@xyflow/react/dist/style.css`, subflows use `parentId` (was `parentNode`) with child positions relative to the parent, `width`/`height` are inputs and measured sizes live in `node.measured`, and `onBeforeDelete` can cancel a delete by returning false. Source: https://reactflow.dev/learn/troubleshooting/migrate-to-v12
 
-In the IDE, nodes and edges are derived from the snapshot through `view()` and ELK. `onBeforeDelete` runs `remove` ops and returns false, `onConnect` runs an `add` field op and adds no edge, `useNodesState` only holds transient drag state. Card highlight comes from `data.selected` (the app's qualified name selection mapped to the nearest shown card by `shownFor`), not React Flow's `selected`. Source: `graph/GraphView.tsx`.
+In the IDE, nodes and edges are derived from the snapshot through `entityView()` and ELK, recomputed as a plain `useMemo` (no `useNodesState`, the canvas is read only: `nodesDraggable` and `nodesConnectable` off, `deleteKeyCode={null}`). Entity highlight comes from `data.selected` (the app's qualified name selection mapped to the shown entity or module by `shownFor`), not React Flow's `selected`. Source: `packages/viz/src/canvas/EntityCanvas.tsx`.
 
-## Layout storage
+## Layout
 
-Positions are stored per level, keyed by qualified name and relative to the enclosing module, matching both React Flow `parentId` and ELK child coordinates under `hierarchyHandling: INCLUDE_CHILDREN`. Saved positions override ELK. On rename they move by prefix (`moveLayout`) and through migration rename steps (`followRenames`). Module group nodes are emitted before cards so a parent precedes its children. Source: `src/shared/snapshot.ts`, `graph/layout.ts`, `graph/model.ts`, https://reactflow.dev/learn/layouting/sub-flows
+ELK child coordinates under `hierarchyHandling: INCLUDE_CHILDREN` are relative to the enclosing module, matching React Flow `parentId`. Module group nodes are emitted before entities so a parent precedes its children; a module without entities needs an explicit width and height or ELK gives it zero size. Positions are not persisted; only the view options (`ViewSettings`, `/api/view`, `.appling/view.json`), merged over `DEFAULT_VIEW` on load. Source: `packages/viz/src/layout.ts`, https://reactflow.dev/learn/layouting/sub-flows
 
-elkjs 0.12 has no `exports` map; `elkjs/lib/elk.bundled.js` without `workerUrl` runs layout on the main thread. A worker needs `workerUrl` or `workerFactory` with `elk-api.js`. Source: `elkjs/README.md`, `graph/layout.ts`.
+elkjs 0.12 has no `exports` map; `elkjs/lib/elk.bundled.js` without `workerUrl` runs layout on the main thread. A worker needs `workerUrl` or `workerFactory` with `elk-api.js`. Source: `elkjs/README.md`, `packages/viz/src/layout.ts`. Under NodeNext the default import is the CommonJS module object, so `layout.ts` constructs `Elk.default`, which the bundle also sets.

@@ -75,7 +75,7 @@ function aiTools(tools: Tools, context: ToolContext) {
     })]));
 }
 
-async function proposal(project: Project, context: ProposalContext): Promise<Proposal> {
+export async function proposal(project: Project, context: ProposalContext): Promise<Proposal> {
     const [before, after] = [await project.graph(context.original), await project.graph(context.sources())];
     return { operations: context.operations, hunks: hunks(project.root, context.original, context.sources()), graph: graphDiff(before, after) };
 }

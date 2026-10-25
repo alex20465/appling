@@ -3,7 +3,7 @@ title: Roadmap
 description: The phases, tracks and decisions that built Appling, what has shipped and what comes later.
 ---
 
-The goal: an Appling IDE that visualizes the application model at every zoom level, edits it visually, in text and through AI, records migrations once a release exists, and generates a draft project for a target framework through installable extensions.
+The goal: an Appling IDE that visualizes the application model, edits it visually, in text and through AI, records migrations once a release exists, and generates a draft project for a target framework through installable extensions.
 
 Every one of these tools reads the same resolved semantic graph and changes it through the same edit operations. That graph is built first; everything else depends on it.
 

@@ -164,8 +164,8 @@ Both hold the element's own properties, without its name and without the element
 
 | | `props` | `data` |
 |---|---|---|
-| Purpose | Display, such as the IDE inspector and the graph rows | Tools, such as code generation extensions and AI |
-| Scalars (`label`, `modifiers`, `kind`, `verb`, `path`) | As they are | As they are |
+| Purpose | Display, such as the IDE inspector | Tools, such as code generation extensions and AI |
+| Scalars (`label`, `modifiers`, `kind`, `verb`, `path`, and `link: true` on a [link entity](../language/domain.md#link-entities)) | As they are | As they are |
 | Nested parts that are not elements (types, expressions, preconditions, steps, sorts) | Canonical source text, such as `"total >= 0"` | Objects with `$type` and their own properties |
 | References | Left out, they become edges | The qualified name of the target, or `null` when it does not resolve |
 | Expressions | Source text | [ExprData](#exprdata) with the computed `type` and, for names, the `target` |
@@ -254,8 +254,6 @@ References made by parts that are not elements (preconditions, sorts, steps, com
 | `from` | The module that references |
 | `to` | The module it references |
 | `count` | The number of edges behind the dependency |
-
-The IDE draws these at the Modules zoom level, labeled with the count.
 
 ## ExprData
 

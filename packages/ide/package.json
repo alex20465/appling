@@ -1,7 +1,7 @@
 {
   "name": "@appling/ide",
   "version": "0.1.1",
-  "description": "Appling IDE: the model as zoomable graph and text, in the browser",
+  "description": "Appling IDE: the model as text, entity view and search, in the browser",
   "type": "module",
   "bin": {
     "appling-ide": "./out/server/main.js"
@@ -17,6 +17,7 @@
     "@appling/ai": "workspace:*",
     "@appling/lang": "workspace:*",
     "@appling/model": "workspace:*",
+    "@appling/viz": "workspace:*",
     "ai": "7.0.149",
     "langium": "4.4.0",
     "vscode-languageserver": "~10.1.0",

@@ -3,7 +3,7 @@ import { dirname, join, relative } from 'node:path';
 import { AstUtils, URI } from 'langium';
 import { buildSources, errorsOf, type Model } from '@appling/lang';
 import { buildGraph, dependencies, findApplingFiles, qualifiedNames } from '@appling/model';
-import type { Layout, Location, Snapshot } from '../shared/snapshot.js';
+import type { Location, Snapshot, ViewSettings } from '../shared/snapshot.js';
 
 export async function snapshot(root: string): Promise<Snapshot> {
     const files = findApplingFiles(root).map(path => ({ uri: URI.file(path).toString(), path: relative(root, path), text: readFileSync(path, 'utf8') }));
@@ -17,16 +17,16 @@ export async function snapshot(root: string): Promise<Snapshot> {
     return { root: URI.file(root).toString(), files, graph, dependencies: dependencies(graph), locations, errors: errorsOf(workspace) };
 }
 
-const LAYOUT = join('.appling', 'layout.json');
+const VIEW = join('.appling', 'view.json');
 
-/** Positions and view state, kept outside the model so they never appear in model diffs. */
-export function readLayout(root: string): Layout {
-    const file = join(root, LAYOUT);
+/** The entity view settings, kept outside the model so they never appear in model diffs. */
+export function readView(root: string): Partial<ViewSettings> {
+    const file = join(root, VIEW);
     return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
 }
 
-export function writeLayout(root: string, layout: Layout): void {
-    const file = join(root, LAYOUT);
+export function writeView(root: string, view: ViewSettings): void {
+    const file = join(root, VIEW);
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, JSON.stringify(layout, null, 2) + '\n');
+    writeFileSync(file, JSON.stringify(view, null, 2) + '\n');
 }

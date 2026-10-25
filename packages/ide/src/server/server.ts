@@ -11,7 +11,7 @@ import { createApplingLspServices } from '@appling/lang/lsp';
 import { chat, languageModel, modelSettings } from '@appling/ai';
 import { applyEdit, latestRelease, readReleases, type EditOperation } from '@appling/model';
 import type { ModelMessage } from 'ai';
-import { readLayout, snapshot, writeLayout } from './workspace.js';
+import { readView, snapshot, writeView } from './workspace.js';
 
 const CLIENT = fileURLToPath(new URL('../../dist/client/', import.meta.url));
 const TYPES: Record<string, string> = {
@@ -72,9 +72,9 @@ export async function startIde(root: string, port = 0): Promise<Ide> {
 async function handle(request: IncomingMessage, response: ServerResponse, root: string): Promise<void> {
     const url = new URL(request.url!, 'http://localhost');
     if (url.pathname === '/api/snapshot' && request.method === 'GET') return json(response, await snapshot(root));
-    if (url.pathname === '/api/layout' && request.method === 'GET') return json(response, readLayout(root));
-    if (url.pathname === '/api/layout' && request.method === 'PUT') {
-        writeLayout(root, JSON.parse(await body(request)));
+    if (url.pathname === '/api/view' && request.method === 'GET') return json(response, readView(root));
+    if (url.pathname === '/api/view' && request.method === 'PUT') {
+        writeView(root, JSON.parse(await body(request)));
         return send(response, 204, '');
     }
     if (url.pathname === '/api/edit' && request.method === 'POST') {

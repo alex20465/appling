@@ -3,7 +3,7 @@ title: API
 description: The public TypeScript API of the Appling packages, export by export, with one usage example per package.
 ---
 
-Every tool in Appling is built on five public packages. Use them to build your own checks, reports, editors, generators or agents. All packages are ES modules for Node 24.
+Every tool in Appling is built on six public packages. Use them to build your own checks, reports, editors, generators or agents. All packages are ES modules for Node 24.
 
 | Package | Purpose |
 |---|---|
@@ -12,6 +12,7 @@ Every tool in Appling is built on five public packages. Use them to build your o
 | `@appling/model` | Semantic graph, edit operations, releases |
 | `@appling/codegen` | Code generation core: plans, registry, migrations |
 | `@appling/ai` | Workspace access for AI, MCP server, chat |
+| `@appling/viz` | Model views, the canvases of the IDE and the visualization window |
 
 ## Language: @appling/lang
 
@@ -192,9 +193,10 @@ Tools and MCP:
 | `MODEL_TOOLS`, `REGISTRY_TOOLS`, `Tools` | The tool definitions: description, zod input shape and `run(context, input)` |
 | `operationSchema` | The zod schema of an edit operation |
 | `ToolContext`, `diskContext(project)`, `ProposalContext` | Where tools read and write: the files on disk, or a working copy that collects operations |
-| `createMcpServer(root)` | An MCP server with all tools and the `implement_next_task` prompt |
+| `createMcpServer(root, { visualizer? })` | An MCP server with all tools, the `implement_next_task` and `derive_model` prompts and `MCP_INSTRUCTIONS`; with a visualizer also the visualization tools, and it declares the `claude/channel` capability |
+| `visualTools(host)`, `VisualHost`, `VISUAL_INSTRUCTIONS` | The visualization tools over a window host, the part of `Visualizer` they use, and the server instructions that explain them |
 | `serveHttp(root, port)` | The MCP server over Streamable HTTP on `127.0.0.1`; returns `{ url, close() }` |
-| `REGISTRY_PROMPT`, `CHAT_SYSTEM` | The registry skill text and the chat system prompt |
+| `REGISTRY_PROMPT`, `CHAT_SYSTEM`, `MCP_INSTRUCTIONS` | The registry skill text, the chat system prompt and the MCP server instructions that make the model the source of truth for business logic |
 
 Chat:
 
@@ -207,3 +209,37 @@ Chat:
 | `hunks(root, before, after)`, `graphDiff(before, after)` | The text and graph differences of a proposal |
 
 The tools and the chat are described in [AI tools](../tools/ai.md).
+
+## Visualization: @appling/viz
+
+Open the visualization window from your own Node program:
+
+```ts
+import { Project } from '@appling/ai';
+import { Visualizer } from '@appling/viz';
+
+const project = new Project('models');
+const window = new Visualizer({ root: 'models', graph: () => project.graph() });
+window.onAsk(ask => console.error(ask.text, ask.selected));
+await window.show({ view: 'machine', focus: ['sales.OrderFlow'], title: 'Order lifecycle' });
+```
+
+| Export | Purpose |
+|---|---|
+| `Visualizer` | The window host: `show(show)`, `selection()`, `reply(text, askId)`, `review(review)` (resolves with the decision), `onAsk(listener)`, `close()`. It serves the window on `127.0.0.1` with a random token, starts Electron on first use and pushes a new graph when `.appling` files change |
+| `VisualizerOptions` | `root`, `graph()` and an optional `launch(url)` that starts the window, for tests |
+| `Show`, `Review`, `Decision`, `Ask`, `Selection` | What the window draws, a proposal to decide, the decision, a question from the window, the current selection |
+| `HostMessage`, `WindowMessage` | The websocket messages between host and window |
+
+`@appling/viz/views` holds the pure view logic, without React or DOM imports:
+
+| Export | Purpose |
+|---|---|
+| `GraphIndex` | The graph with children, parents and lineage by qualified name |
+| `entityView(index, settings)` | Modules, entities and associations; `settings.focus` limits it to the focused entities or modules and their neighbours |
+| `cardView(index, view, focus)` | The `machine`, `action`, `usecase` or `event` view of the focused elements as `Card`s: a title, a tag and sections of rows, each row selecting an element |
+| `viewFor(kind)`, `VIEW_KINDS`, `ViewKind` | The view that draws an element kind |
+| `search`, `relations`, `entityActions`, `actionSummary`, `memberText`, `kindLabel`, `elementAt`, `shownFor` | The search, relations and summaries the IDE side panel shows |
+| `ViewSettings`, `DEFAULT_VIEW` | The entity view options |
+
+`@appling/viz/canvas` exports the React Flow canvas `EntityCanvas` and the card grid `CardCanvas`; import `@xyflow/react/dist/style.css` and `@appling/viz/canvas.css` with them. They need `react`, `@xyflow/react` and `elkjs` as peer dependencies.

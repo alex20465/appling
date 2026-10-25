@@ -14,7 +14,7 @@ my-app/
     sales.appling            one or more modules per file
     crm.appling
   .appling/
-    layout.json              graph positions and view state from the IDE
+    view.json                entity view options from the IDE
     releases/
       1.0.0.json             graph snapshot written by appling release
   build/
@@ -28,12 +28,12 @@ my-app/
 |---|---|---|
 | `*.appling` | you, the IDE, the AI | yes, it is the source of truth |
 | `appling.config.json` | you | yes |
-| `.appling/layout.json` | the IDE | yes, if you want to share graph layouts |
+| `.appling/view.json` | the IDE | yes, if your team should share the view options |
 | `.appling/releases/*.json` | `appling release` | yes, edits compare against the latest release |
 | `<out>/.appling/tasks.json` | `appling generate`, the registry tools | yes, with the generated project |
 | `<out>/.appling/migrations.json` | `appling generate --migrate` | yes, with the generated project |
 
-The tree assumes you run the tools from `my-app`: `appling release` writes into the current folder, and the IDE keeps `.appling/layout.json` in the folder it serves. See [configuration and files](../reference/configuration.md) for the format of each.
+The tree assumes you run the tools from `my-app`: `appling release` writes into the current folder, and the IDE keeps `.appling/view.json` in the folder it serves. See [configuration and files](../reference/configuration.md) for the format of each.
 
 ## One workspace
 

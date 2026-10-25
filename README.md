@@ -2,7 +2,7 @@
 
 Appling is a declarative language that describes a business or web application as one validated model. The model covers what exists, what can happen, how capabilities are organized and exposed, and how people interact with them.
 
-The text is the canonical source of truth. Parsed and linked, it becomes a semantic graph that tools validate, visualize with semantic zoom, edit with AI and generate draft Django or Ash projects from.
+The text is the canonical source of truth. Parsed and linked, it becomes a semantic graph that tools validate, visualize, edit with AI and generate draft Django or Ash projects from.
 
 The documentation is at [appling.tools/docs](https://appling.tools/docs/) and in [docs/](docs/index.md).
 
@@ -52,7 +52,7 @@ The language is documented in [docs/language](docs/language/overview.md); the fu
 | [`@appling/cli`](packages/cli) | The `appling` command: `check`, `fmt`, `graph`, `release`, `generate` |
 | [`@appling/lang`](packages/lang) | The language: grammar, scoping, validation, expression typing, canonical printer and language server, built on [Langium](https://langium.org) |
 | [`@appling/model`](packages/model) | The semantic graph, edit operations and releases with automatic migration steps |
-| [`@appling/ide`](packages/ide) | A local IDE: text and zoomable graph side by side, editing in both, AI chat with reviewable proposals |
+| [`@appling/ide`](packages/ide) | A local IDE: text next to a map of modules and entities, a search over every element, an inspector that edits, AI chat with reviewable proposals |
 | [`@appling/ai`](packages/ai) | MCP server, model adapter and the skill that works through a generated project's task registry |
 | [`@appling/codegen`](packages/codegen) | Code generation core: plan, step runner, extension contract, task registry, migrations |
 | [`@appling/codegen-django`](packages/codegen-django) | Django extension |

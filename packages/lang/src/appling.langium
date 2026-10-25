@@ -45,7 +45,7 @@ ValueType:
     'value' name=Ident '{' fields+=Field* '}';
 
 Entity:
-    'entity' name=Ident '{'
+    'entity' link?='link'? name=Ident '{'
         (fields+=Field | invariants+=Invariant | policies+=Policy)*
     '}';
 
@@ -296,7 +296,7 @@ Ident returns string:
     | 'form' | 'route' | 'run' | 'actions' | 'fields' | 'role' | 'event' | 'action' | 'query'
     | 'page' | 'timeout' | 'sort' | 'when' | 'create' | 'read' | 'update' | 'delete' | 'per'
     | 'flow' | 'actor' | 'tenant' | 'set' | 'op' | 'human' | 'system' | 'service' | 'asc'
-    | 'desc' | 'remove' | 'rename' | 'retype' | 'roles' | 'second' | 'minute' | 'hour';
+    | 'desc' | 'remove' | 'rename' | 'retype' | 'roles' | 'second' | 'minute' | 'hour' | 'link';
 
 hidden terminal WS: /\s+/;
 terminal ID: /[_a-zA-Z][\w]*/;
