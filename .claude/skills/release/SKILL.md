@@ -21,6 +21,8 @@ Stop and report when one fails:
 - `git branch --show-current` is `main`, `git status --porcelain` is empty (`pnpm version -r` and `pnpm publish` refuse a dirty tree), `git fetch && git status -sb` is not behind.
 - `npm whoami` answers. On `E401`, ask the user to run `! npm login`.
 
+- `corepack pnpm audit` reports no high or critical advisory for any package. On a finding, name the affected packages and ask how to fix it (overrides in `pnpm-workspace.yaml`, or bump the direct dependency), re-audit, build and test, and commit the fix before continuing.
+
 ## 2. Collect changes
 
 For every package in `packages/*` without `"private": true`:
