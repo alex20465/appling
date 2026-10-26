@@ -233,23 +233,26 @@ await window.show({ view: 'machine', focus: ['sales.OrderFlow'], title: 'Order l
 
 | Export | Purpose |
 |---|---|
-| `Visualizer` | The window host: `show(show)`, `selection()`, `reply(text, askId)`, `review(review)` (resolves with the decision), `onAsk(listener)`, `close()`. It serves the window on `127.0.0.1` with a random token, starts Electron on first use and pushes a new graph when `.appling` files change |
-| `VisualizerOptions` | `root`, `graph()` and an optional `launch(url)` that starts the window, for tests |
-| `Show`, `Review`, `Decision`, `Ask`, `Selection` | What the window draws, a proposal to decide, the decision, a question from the window, the current selection |
+| `Visualizer` | The window host: `show(show)`, `bubble(bubble)`, `selection()`, `reply(text, askId)`, `review(review)` (resolves with the decision), `onAsk(listener)`, `close()`. It serves the window on `127.0.0.1` with a random token, starts Electron on first use and pushes a new graph when `.appling` files change |
+| `VisualizerOptions` | `root`, `graph()`, an optional `launch(url)` that starts the window and an optional `edit(file, line)` that opens a file clicked in the window, for tests |
+| `Show`, `Bubble`, `Review`, `Decision`, `Ask`, `Selection` | What the window draws, a note or code example on an element, a proposal to decide, the decision, a question from the window, the current selection |
 | `HostMessage`, `WindowMessage` | The websocket messages between host and window |
+| `nextShow(current, next)` | The view after the next one: a `node` view on a `node` view adds its elements, and whether the bubbles stay |
 
 `@appling/viz/views` holds the pure view logic, without React or DOM imports:
 
 | Export | Purpose |
 |---|---|
 | `GraphIndex` | The graph with children, parents and lineage by qualified name, and `relevanceOf(qn)`, the relevance of the declaration an element belongs to |
-| `growTree(index, settings, unfolded, name?)` | The dependency tree of `settings.lens` as a `TreeNode`: the seed holds the modules, a module the declarations of the lens, a declaration the declarations that use it, grouped by kind when there is more than one; only the node ids in `unfolded` have children, the most relevant first |
+| `growTree(index, settings, unfolded, name?, trail?)` | The dependency tree of `settings.lens` as a `TreeNode`: the seed holds the modules, a module the declarations of the lens, a declaration the declarations that use it, grouped by kind when there is more than one; only the node ids in `unfolded` have children, the most relevant first; a node id in `trail` shows only its children in `unfolded` or `trail` |
+| `trailOf(index, settings, focus)`, `lensOf(kind)` | The `unfolded` and `trail` sets that draw the focused elements one after another, each unfolded in place, with the node id of each; the lens that starts from a kind |
 | `revealPath(index, settings, qn)` | The node ids to unfold so that an element's declaration shows in its module |
 | `factOf(index, node)` | The short fact a tree node shows under its name, such as `on Order · draft, placed → cancelled` |
 | `LENSES`, `Lens` | The lenses (`domain`, `behavior`, `application`, `interfaces`, `access`) with their label and the kinds the tree starts from |
-| `cardView(index, view, focus)` | The `machine`, `action`, `usecase` or `event` view of the focused elements as `Card`s: a title, a tag and sections of rows, each row selecting an element |
-| `viewFor(kind)`, `VIEW_KINDS`, `ViewKind` | The view that draws an element kind |
+| `cardView(index, view, focus)` | The `action` or `event` view of the focused elements as `Card`s: a title, a tag and sections of rows, each row selecting an element |
+| `flowView(index, view, focus)` | The `machine` or `usecase` view as a `Flow`: nodes for the states or steps, edges for the transitions or the step order |
+| `viewFor(kind)`, `VIEW_KINDS`, `ViewKind`, `anchorOf(index, qn, drawn)` | The view that draws an element kind; the innermost of an element and its ancestors that a view draws |
 | `search`, `relations`, `entityActions`, `actionSummary`, `memberText`, `kindLabel`, `elementAt` | The search, relations and summaries the IDE side panel shows |
 | `ViewSettings`, `DEFAULT_VIEW` | The canvas options, the lens included |
 
-`@appling/viz/canvas` exports the SVG tree `ModelCanvas` (one lens at a time, unfolded node by node, circles sized by relevance) and the card grid `CardCanvas`; import `@appling/viz/canvas.css` with them. They need `react` as a peer dependency.
+`@appling/viz/canvas` exports the SVG tree `ModelCanvas` (one lens at a time, unfolded node by node, circles sized by relevance, only trails when given a `focus`), the SVG flowchart `FlowCanvas` and the card grid `CardCanvas`, each with optional `bubbles`; import `@appling/viz/canvas.css` with them. They need `react` as a peer dependency.

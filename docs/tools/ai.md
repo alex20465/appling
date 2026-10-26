@@ -68,7 +68,7 @@ Use an absolute folder here, since the client decides the working directory.
 
 ## Tools
 
-The server registers twelve tools, and over stdio four more for the [visualization window](#visualization-window). Each returns its result as JSON text.
+The server registers twelve tools, and over stdio five more for the [visualization window](#visualization-window). Each returns its result as JSON text.
 
 ### Model tools
 
@@ -162,7 +162,7 @@ Then ask Claude Code to finish the generated project; the skill's description ma
 
 ## Visualization window
 
-Over stdio, `appling-mcp` can show the model in a window of its own while you talk to Claude Code in the terminal. Ask for it in words, such as "show me the order lifecycle" or "draw what PlaceOrder does": Claude calls `visualize`, and a frameless window opens at the top right of your main screen, above every other window, without taking the focus from the terminal. It closes with its close button or when the Claude Code session ends; the next `visualize` opens it again.
+Over stdio, `appling-mcp` can show the model in a window of its own while you talk to Claude Code in the terminal. Ask for it in words, such as "show me the order lifecycle" or "draw what PlaceOrder does", or ask how a part of the application works, such as "how does observability work": Claude calls `visualize`, and a frameless window opens at the top right of your main screen, above every other window, without taking the focus from the terminal. It closes with its close button or when the Claude Code session ends; the next `visualize` opens it again.
 
 The window runs on [Electron](https://www.electronjs.org), which `@appling/ai` installs through `@appling/viz`. It works on macOS, Windows and Linux. The first window downloads the Electron binary once.
 
@@ -173,13 +173,27 @@ The window runs on [Electron](https://www.electronjs.org), which `@appling/ai` i
 
 | View | Draws | `focus` takes |
 |---|---|---|
-| `entities` | The [IDE](ide.md#the-model-canvas)'s model tree, opened on the Domain lens and unfolded to the focused declarations or modules. Its tabs switch to the Behavior, Application, Interfaces and Access lenses | Entities or modules |
-| `machine` | One card per state of the machine's field type, marked `initial` or `final`, listing what can be done there: each action or event that leaves the state with the states it leads to, its guard and the jobs that run it in that state | Machines |
+| `node` | The [IDE](ide.md#the-model-canvas)'s model tree with only the focused declarations or modules: the trail from the seed through the module to each one, unfolded to what uses it. Its tabs switch the lens | Any declaration or module |
+| `machine` | A flowchart: the states of the machine's field type as boxes, the initial one highlighted and the final ones double framed. The transitions stay hidden until you click a state; then its arrows show where it can go, one per transition, labelled with the action or event that drives it, its guard and the jobs that run it. Click the state again to hide them | Machines |
 | `action` | One card: the states it moves between, whether each actor may run it (`yes`, `no` or `depends` on the data, from the [simulator](simulator.md)), its inputs, preconditions, changes, errors and the declarations that use it | Actions |
-| `usecase` | One card: the inputs, the steps in order as written, with their error handlers and timeouts, and what uses it | Use cases |
+| `usecase` | A flowchart: the use case with its inputs, then its steps in order, with each error handler and timeout branching off its step to the call it makes | Use cases |
 | `event` | One card: the fields, the actions that emit it, the transitions it triggers and the use cases that await it | Events |
 
-Only the `entities` view draws links; the other views list options and facts on cards, one card per focused element (or per state). Click a card title or a row to select the element behind it; the strip below the canvas shows its kind, members and related declarations, and clicking a related declaration draws it in its own view. The window follows the files: an edit from Claude, the IDE or your editor redraws it.
+Arrows run in straight segments with right angle corners. Click a node, an arrow label, a card title or a row to select the element behind it; the strip below the canvas shows its kind, members and related declarations, and clicking a related declaration draws it in its own view. The window follows the files: an edit from Claude, the IDE or your editor redraws it.
+
+### One node at a time
+
+The `node` view lets Claude walk you through the model. Each `visualize` with the `node` view adds to the tree on screen instead of replacing it: a declaration the tree already shows, such as one that uses the last node, unfolds where it is; any other one gets its own trail from the seed. A declaration the lens on screen cannot draw switches the tree to the lens of its kind. Another view replaces the tree.
+
+### Bubbles
+
+Claude explains what happens at an element with `visual_bubble`. A bubble points at the element, or at one of its members such as a field; when the view draws only the element, the bubble names the member. A code bubble carries a few lines of code that hint how the element is implemented, with the file and line they come from, such as a [code reference](references.md). A bubble whose element the view does not draw shows in the bottom left corner.
+
+The canvas shows one bubble at a time, so none covers another. It grows as large as its text and code need, up to the width of the window, and shows the code in full. Its pointer leads to the element it is about, and that element is selected: highlighted in the view and described in the strip below the canvas. On the tree the camera glides to the element and leaves room for the bubble below it, so you see where the explanation moves; in a flowchart or on cards the view scrolls smoothly to it. Back and Next at the bottom of the bubble step through the explanation in Claude's order, with the step number between them. A row of numbered tabs above the canvas lists every bubble of the view, named after the element or member it points at, so you can also jump to one. A new bubble from Claude becomes the shown one. Bubbles stay while the view stays, and through every `node` view that adds to the tree; another view clears them.
+
+### Open code in your editor
+
+Every file and line in the window is a link: in a code bubble, above each changed file of a proposal, and in Claude's answers (`shop/sales/models.py:14`). A click opens the file at that line in your editor, found by [launch-editor](https://github.com/yyx990803/launch-editor): the running editor, else the one in `LAUNCH_EDITOR`, `VISUAL` or `EDITOR`. Paths are relative to the model folder.
 
 ### Talk about what you see
 
@@ -201,7 +215,8 @@ While the window is open, Claude proposes model changes with `propose_edits` ins
 
 | Tool | Input | Returns |
 |---|---|---|
-| `visualize` | `view`: `entities`, `machine`, `action`, `usecase` or `event`; `focus`: qualified names; `title?`, `note?` | `{ shown: true }`, or `{ error }` naming the elements the view cannot draw |
+| `visualize` | `view`: `node`, `machine`, `action`, `usecase` or `event`; `focus`: qualified names; `title?`, `note?` | `{ shown: true }`, or `{ error }` naming the elements the view cannot draw |
+| `visual_bubble` | `target`: an element or member; `text`; `code?`; `file?` (relative to the model folder) and `line?` | `{ placed: true }`, or `{ placed: false, reason }` for an unknown element, a missing file, a line without its file or a closed window |
 | `visual_selection` | none | `{ open, qn?, view? }`: whether the window is open, the selected element and the view on screen |
 | `visual_reply` | `text`, `ask_id?` | `{ sent: true }`, or `{ sent: false, reason }` when the window is closed |
 | `propose_edits` | `operations`: [edit operations](../reference/edit-operations.md); `summary` | After your decision: `{ accepted: true, ok: true, changed }`, `{ accepted: false, comment? }`, or `{ ok: false, operation, errors }` when an operation is invalid before review |

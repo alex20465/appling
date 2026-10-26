@@ -68,6 +68,16 @@ Extensions are configured in `appling.config.json` by package name. Third party 
 - [x] B5 Registry skill in `@appling/ai`: picks open entries, implements them, runs the related tests, marks them done.
 - [x] B6 Migrations through `makemigrations` and `mix ash.codegen`, fed with Appling `rename` and `retype` steps so they are not guessed as remove plus add.
 
+## Track C: AI visual window
+
+`@appling/viz`, `@appling/ai`
+
+- [x] C1 Show one node: `visualize` draws the element that was asked for and unfolds it in place, so the AI can guide through the model one node at a time instead of drawing a whole view.
+- [x] C2 Flowcharts: the machine and use case views draw a flowchart, with states and steps as nodes and transitions and step order as edges, instead of a list of cards or steps.
+- [x] C3 Note bubbles: the AI places a bubble on an element or one of its members, such as a field, to say what happens there.
+- [x] C4 Code bubbles: the AI places a bubble with a code example that hints how an element is implemented, with its file and line.
+- [x] C5 Code references: a file and line in the window is a link that opens the file at that line.
+
 ## Order
 
 1. Phase 1

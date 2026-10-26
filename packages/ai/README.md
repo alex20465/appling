@@ -36,12 +36,13 @@ Over stdio the server also drives a floating window (`@appling/viz`, Electron; m
 
 | Tool | Does |
 |---|---|
-| `visualize` | Shows the `entities` view, or cards of a `machine` (per state what can be done there), an `action`, a `usecase` or an `event` |
+| `visualize` | Shows a `node` in the model tree, adding to the tree on screen so Claude can guide one node at a time, a flowchart of a `machine` or a `usecase`, or a card of an `action` or an `event` |
+| `visual_bubble` | Places a note on an element or member of the view, or a code example with its file and line |
 | `visual_selection` | The element selected in the window and the view on screen |
 | `visual_reply` | Answers a question typed into the window |
 | `propose_edits` | Shows edit operations as a proposal in the window and writes them only when accepted |
 
-Questions typed into the window reach the session as Claude Code channel messages. Channels are a research preview, so start Claude Code with `claude --dangerously-load-development-channels server:appling`.
+Every file and line in the window opens in your editor on click. Questions typed into the window reach the session as Claude Code channel messages. Channels are a research preview, so start Claude Code with `claude --dangerously-load-development-channels server:appling`.
 
 ## Registry skill
 

@@ -6,7 +6,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
 import { expect, test } from 'vitest';
 import { writeRegistry } from '@appling/codegen';
-import type { Ask, Decision, Review, Show } from '@appling/viz';
+import type { Ask, Bubble, Decision, Review, Show } from '@appling/viz';
 import { chat, createMcpServer, MAX_ATTEMPTS, Project, type ChatEvent, type VisualHost } from '../src/index.js';
 
 function workspace(): string {
@@ -107,16 +107,18 @@ test('write_model_file writes only files that keep the workspace valid, inside t
 
 function fakeWindow(decision: Decision) {
     const shown: Show[] = [];
+    const bubbles: Bubble[] = [];
     const reviews: Review[] = [];
     const listeners: ((ask: Ask) => void)[] = [];
     const host: VisualHost = {
         show: async show => { shown.push(show); },
+        bubble: bubble => { bubbles.push(bubble); return true; },
         selection: () => ({ open: true, qn: 'sales.OrderStatus.placed', view: shown.at(-1) }),
         reply: () => true,
         review: async review => { reviews.push(review); return decision; },
         onAsk: listener => { listeners.push(listener); }
     };
-    return { host, shown, reviews, ask: (ask: Ask) => listeners.forEach(l => l(ask)) };
+    return { host, shown, bubbles, reviews, ask: (ask: Ask) => listeners.forEach(l => l(ask)) };
 }
 
 async function visualClient(root: string, host: VisualHost) {
@@ -139,6 +141,12 @@ test('with a visualizer the MCP server is a channel that shows views and forward
     expect((await text('visualize', { view: 'machine', focus: ['sales.Order', 'sales.Nope'] })).error).toBe('The machine view draws Machine elements; not: sales.Order (Entity), sales.Nope (no such element).');
     expect(await text('visualize', { view: 'machine', focus: ['sales.OrderFlow'], title: 'Order lifecycle' })).toEqual({ shown: true });
     expect(window.shown).toEqual([{ view: 'machine', focus: ['sales.OrderFlow'], title: 'Order lifecycle' }]);
+    expect(await text('visualize', { view: 'node', focus: ['sales.Order', 'crm'] })).toEqual({ shown: true });
+    expect(await text('visual_bubble', { target: 'sales.Order.status', text: 'Moves through OrderFlow' })).toEqual({ placed: true });
+    expect(await text('visual_bubble', { target: 'sales.Order', text: 'Stored here', code: 'class Order:', file: 'sales.appling', line: 3 })).toEqual({ placed: true });
+    expect(window.bubbles.map(b => b.target)).toEqual(['sales.Order.status', 'sales.Order']);
+    expect(await text('visual_bubble', { target: 'sales.Nope', text: 'x' })).toEqual({ placed: false, reason: 'No element sales.Nope.' });
+    expect(await text('visual_bubble', { target: 'sales.Order', text: 'x', file: 'missing.py', line: 1 })).toEqual({ placed: false, reason: 'No file missing.py relative to the model folder.' });
     expect(await text('visual_selection', {})).toMatchObject({ open: true, qn: 'sales.OrderStatus.placed' });
     window.ask({ id: 'a1', text: 'Why?', selected: 'sales.OrderStatus.placed', view: window.shown[0] });
     await new Promise(done => setTimeout(done, 10));

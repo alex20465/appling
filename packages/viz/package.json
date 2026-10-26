@@ -28,6 +28,7 @@
   "dependencies": {
     "@appling/model": "workspace:*",
     "electron": "44.7.0",
+    "launch-editor": "2.14.2",
     "ws": "8.22.0"
   },
   "peerDependencies": {

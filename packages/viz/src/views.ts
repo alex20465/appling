@@ -48,8 +48,11 @@ export interface TreeNode {
     children?: TreeNode[];
 }
 
-/** Grows the tree of a lens: the seed and every node whose id is in `unfolded` show their children. */
-export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Set<string>, name = 'model'): TreeNode {
+/**
+ * Grows the tree of a lens: the seed and every node whose id is in `unfolded` show their children. A node on the
+ * `trail` shows only the children in `unfolded` or on the trail.
+ */
+export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Set<string>, name = 'model', trail = new Set<string>()): TreeNode {
     const shown = (n: GraphNode) => settings.linkEntities || !n.props.link;
     const roots = index.graph.nodes.filter(n => LENSES[settings.lens].kinds.includes(n.kind) && index.declaration(n.qn) === n.qn && shown(n));
     const modules = [...new Set(roots.map(n => n.module))];
@@ -61,13 +64,17 @@ export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Se
         }
         return dependents.get(qn)!;
     };
+    const childrenOf = (id: string, grow: () => TreeNode[]) => {
+        if (unfolded.has(id)) return grow();
+        if (trail.has(id)) return grow().filter(child => unfolded.has(child.id) || trail.has(child.id));
+    };
     const element = (node: GraphNode, parent: string, module: string, path: string[]): TreeNode => {
         const id = `${parent}/${node.qn}`;
         const cycle = path.includes(node.qn);
         const used = cycle ? [] : dependentsOf(node.qn);
         const label = node.module === module ? localName(node.qn, index) : node.qn;
         const tree: TreeNode = { id, type: 'element', qn: node.qn, kind: node.kind, layer: node.layer, label, fact: factOf(index, node), count: used.length, relevance: index.relevanceOf(node.qn), cycle };
-        if (unfolded.has(id) && used.length) tree.children = grouped(used, id, node.module, [...path, node.qn]);
+        if (used.length) tree.children = childrenOf(id, () => grouped(used, id, node.module, [...path, node.qn]));
         return tree;
     };
     /** Elements directly when they are of one kind, else one group per kind; the most relevant first. */
@@ -78,22 +85,52 @@ export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Se
         return [...byKind].map(([kind, members]) => {
             const id = `${parent}/#${kind}`;
             const group: TreeNode = { id, type: 'group', kind, layer: members[0].layer, label: plural(kind), fact: '', count: members.length, relevance: index.relevanceOf(members[0].qn) };
-            if (unfolded.has(id)) group.children = members.map(n => element(n, id, module, path));
+            group.children = childrenOf(id, () => members.map(n => element(n, id, module, path)));
             return group;
         });
     };
     const seed: TreeNode = { id: '~', type: 'seed', label: name, fact: `${modules.length} module${modules.length === 1 ? '' : 's'}`, count: modules.length, relevance: 1 };
-    if (unfolded.has(seed.id)) {
-        seed.children = modules.sort((a, b) => index.relevanceOf(b) - index.relevanceOf(a)).map(module => {
+    seed.children = childrenOf(seed.id, () => modules.sort((a, b) => index.relevanceOf(b) - index.relevanceOf(a)).map(module => {
             const members = roots.filter(n => n.module === module);
             const id = `~/${module}`;
             const kinds = [...Map.groupBy(members, n => n.kind)].sort(([a], [b]) => rank(a) - rank(b)).map(([kind, list]) => `${list.length} ${list.length === 1 ? kindLabel(kind) : plural(kind).toLowerCase()}`);
             const tree: TreeNode = { id, type: 'module', qn: module, label: module, fact: kinds.join(' · '), count: members.length, relevance: index.relevanceOf(module) };
-            if (unfolded.has(id)) tree.children = grouped(members, id, module, []);
+            tree.children = childrenOf(id, () => grouped(members, id, module, []));
             return tree;
-        });
-    }
+        }));
     return seed;
+}
+
+/**
+ * The tree that draws these elements one after another and nothing else: each unfolds where the tree already shows
+ * it, else its trail from the seed through its module is added. `ids` are the drawn nodes, undefined when the lens
+ * has no place for the element.
+ */
+export function trailOf(index: GraphIndex, settings: ViewSettings, focus: string[]): { unfolded: Set<string>, trail: Set<string>, ids: (string | undefined)[] } {
+    const unfolded = new Set<string>();
+    const trail = new Set(['~']);
+    const find = (qn: string, open: string[]) => flatten(growTree(index, settings, new Set([...unfolded, ...open]), undefined, trail))
+        .find(n => n.type !== 'group' && n.qn === qn);
+    const ids = focus.map(qn => {
+        const declaration = index.declaration(qn);
+        const groups = flatten(growTree(index, settings, unfolded, undefined, trail)).filter(n => n.type === 'group').map(n => n.id);
+        const found = find(declaration, groups) ?? find(declaration, revealPath(index, settings, declaration));
+        if (!found) return undefined;
+        const parts = found.id.split('/');
+        parts.slice(1).forEach((_, i) => trail.add(parts.slice(0, i + 1).join('/')));
+        unfolded.add(found.id);
+        return found.id;
+    });
+    return { unfolded, trail, ids };
+}
+
+/** The lens whose tree starts from declarations of this kind. */
+export function lensOf(kind: string): Lens | undefined {
+    return (Object.keys(LENSES) as Lens[]).find(lens => LENSES[lens].kinds.includes(kind));
+}
+
+function flatten(tree: TreeNode): TreeNode[] {
+    return [tree, ...(tree.children ?? []).flatMap(flatten)];
 }
 
 /** The node ids to unfold so that the declaration of an element shows on the first level of its module, if the lens has it. */
@@ -229,12 +266,17 @@ export class GraphIndex {
     }
 }
 
-export type ViewKind = 'entities' | 'machine' | 'action' | 'usecase' | 'event';
+export type ViewKind = 'machine' | 'action' | 'usecase' | 'event' | 'node';
 
-/** The element kinds each view is drawn for. */
+/** The element kinds each view is drawn for; the views of one kind come before `node`, which draws any declaration. */
 export const VIEW_KINDS: Record<ViewKind, string[]> = {
-    entities: ['Entity', 'Module'], machine: ['Machine'], action: ['Action'], usecase: ['UseCase'], event: ['Event']
+    machine: ['Machine'], action: ['Action'], usecase: ['UseCase'], event: ['Event'], node: ['Module', ...Object.values(LENSES).flatMap(l => l.kinds)]
 };
+
+/** The innermost of an element and its ancestors that a view draws: where a bubble on the element points. */
+export function anchorOf(index: GraphIndex, qn: string, drawn: Set<string>): string | undefined {
+    return index.lineage(qn).find(q => drawn.has(q));
+}
 
 /** The view that draws an element of this kind, if any. */
 export function viewFor(kind: string): ViewKind | undefined {
@@ -270,44 +312,81 @@ interface StepData {
     $type: string;
     call?: CallData;
     event?: string;
+    timeout?: string;
+    handlers?: { error: string, call: CallData }[];
 }
 
-const CARDS: Record<Exclude<ViewKind, 'entities'>, (index: GraphIndex, qn: string) => Card[]> = {
-    machine: machineCards, action: actionCards, usecase: useCaseCards, event: eventCards
-};
+export type CardViewKind = 'action' | 'event';
+
+const CARDS: Record<CardViewKind, (index: GraphIndex, qn: string) => Card[]> = { action: actionCards, event: eventCards };
 
 /** The cards of every focused element, in focus order. */
-export function cardView(index: GraphIndex, view: Exclude<ViewKind, 'entities'>, focus: string[]): Card[] {
+export function cardView(index: GraphIndex, view: CardViewKind, focus: string[]): Card[] {
     return focus.filter(qn => index.nodes.has(qn)).flatMap(qn => CARDS[view](index, qn));
 }
 
+export interface FlowNode {
+    id: string;
+    label: string;
+    /** The element a click selects. */
+    qn?: string;
+    tag?: string;
+    note?: string;
+}
+
+export interface FlowEdge {
+    from: string;
+    to: string;
+    label?: string;
+    note?: string;
+    /** The element a click on the label selects. */
+    qn?: string;
+    /** The element the edge stands for, such as a transition. */
+    of?: string;
+}
+
+/** A flowchart: states or steps as nodes, transitions or the step order as edges. */
+export interface Flow {
+    nodes: FlowNode[];
+    edges: FlowEdge[];
+}
+
+export type FlowViewKind = 'machine' | 'usecase';
+
+const FLOWS: Record<FlowViewKind, (index: GraphIndex, qn: string) => Flow> = { machine: machineFlow, usecase: useCaseFlow };
+
+/** The flowcharts of every focused element, drawn as one. */
+export function flowView(index: GraphIndex, view: FlowViewKind, focus: string[]): Flow {
+    const flows = focus.filter(qn => index.nodes.has(qn)).map(qn => FLOWS[view](index, qn));
+    return { nodes: flows.flatMap(f => f.nodes), edges: flows.flatMap(f => f.edges) };
+}
+
 /**
- * One card per state of the machine's field type with what can be done there: each action or event that leaves the
- * state, with the states it leads to, its guard and the jobs that run it.
+ * The states of the machine's field type and its transitions: one edge per state a transition leaves, labelled
+ * with the action or event that drives it, its guard and the jobs that run it.
  */
-function machineCards(index: GraphIndex, qn: string): Card[] {
+function machineFlow(index: GraphIndex, qn: string): Flow {
     const field = index.nodes.get(String(index.nodes.get(qn)!.data.field));
     const states = String((field?.data.type as TypeData | undefined)?.decl ?? '');
     const transitions = index.children(qn).filter(c => c.kind === 'Transition');
     const jobs = index.graph.nodes.filter(n => n.kind === 'Job');
-    return index.children(states).filter(c => c.kind === 'EnumLiteral').map(literal => {
-        const name = localName(literal.qn, index);
-        const options = new Map<string, CardRow & { to: string[] }>();
-        for (const transition of transitions.filter(t => (t.props.from as string[]).includes(name))) {
-            const { action, event } = transition.data as { action?: string, event?: string };
-            const by = action ? shortName(action, index) : `on ${shortName(event ?? '', index)}`;
-            const guard = transition.props.guard as string | undefined;
-            const key = `${by}|${guard ?? ''}`;
-            const running = jobs.filter(j => action && j.data.action === action && runsIn(j, literal.qn, states)).map(j => `job ${shortName(j.qn, index)}`);
-            const option = options.get(key) ?? { text: '', qn: action ?? event, to: [], note: [guard && `when ${guard}`, ...running].filter(Boolean).join(' · ') || undefined };
-            option.to.push(String(transition.props.to));
-            option.text = `${by} → ${option.to.join(', ')}`;
-            options.set(key, option);
-        }
-        const rows = [...options.values()].map(({ text, qn, note }) => ({ text, qn, note }));
-        const tag = field?.props.default === name ? 'initial' : rows.length ? undefined : 'final';
-        return { id: literal.qn, qn: literal.qn, title: name, tag, sections: rows.length ? [{ rows }] : [] };
+    const edges = transitions.flatMap(transition => {
+        const { action, event } = transition.data as { action?: string, event?: string };
+        const guard = transition.props.guard as string | undefined;
+        return (transition.props.from as string[]).map(from => {
+            const running = jobs.filter(j => action && j.data.action === action && runsIn(j, `${states}.${from}`, states)).map(j => `job ${shortName(j.qn, index)}`);
+            return {
+                from: `${states}.${from}`, to: `${states}.${transition.props.to}`, label: action ? shortName(action, index) : `on ${shortName(event ?? '', index)}`,
+                note: [guard && `when ${guard}`, ...running].filter(Boolean).join(' · ') || undefined, qn: action ?? event, of: transition.qn
+            };
+        });
     });
+    const nodes = index.children(states).filter(c => c.kind === 'EnumLiteral').map(literal => {
+        const name = localName(literal.qn, index);
+        const tag = field?.props.default === name ? 'initial' : edges.some(e => e.from === literal.qn) ? undefined : 'final';
+        return { id: literal.qn, label: name, qn: literal.qn, tag };
+    });
+    return { nodes, edges };
 }
 
 /** Whether a job may pick records in this state: its filter names the state, or names no state at all. */
@@ -333,17 +412,32 @@ function actionCards(index: GraphIndex, qn: string): Card[] {
     return [{ id: qn, qn, title: shortName(qn, index), tag: summary.on ? `on ${shortName(summary.on, index)}` : 'action', sections: sections.filter(s => s.rows.length) }];
 }
 
-/** The steps of a use case in order as written, each selecting what it calls or awaits. */
-function useCaseCards(index: GraphIndex, qn: string): Card[] {
-    const useCase = index.nodes.get(qn)!;
-    const texts = (useCase.props.steps as string[] | undefined) ?? [];
-    const steps = ((useCase.data.steps as StepData[] | undefined) ?? []).map((step, i) => ({ text: `${i + 1}. ${texts[i] ?? ''}`, qn: step.$type === 'AwaitStep' ? step.event : step.call?.target }));
-    const sections: CardSection[] = [
-        { title: 'Inputs', rows: index.children(qn).filter(m => m.kind === 'Param').map(m => ({ text: memberText(m, index) })) },
-        { title: 'Steps', rows: steps },
-        { title: 'Used by', rows: usedBy(index, qn) }
-    ];
-    return [{ id: qn, qn, title: shortName(qn, index), tag: 'usecase', sections: sections.filter(s => s.rows.length) }];
+/**
+ * The use case with its inputs, then its steps in order, each selecting what it calls or awaits; an error handler or
+ * a timeout branches off its step to the call it makes.
+ */
+function useCaseFlow(index: GraphIndex, qn: string): Flow {
+    const inputs = index.children(qn).filter(m => m.kind === 'Param').map(m => memberText(m, index)).join(', ');
+    const nodes: FlowNode[] = [{ id: qn, label: shortName(qn, index), qn, tag: 'usecase', note: inputs || undefined }];
+    const edges: FlowEdge[] = [];
+    let previous = qn;
+    const call = (id: string, target: string, from: string, edge: Omit<FlowEdge, 'from' | 'to'> = {}) => {
+        nodes.push({ id, label: shortName(target, index), qn: target });
+        edges.push({ from, to: id, ...edge });
+    };
+    ((index.nodes.get(qn)!.data.steps as StepData[] | undefined) ?? []).forEach((step, i) => {
+        const id = `${qn}#${i + 1}`;
+        if (step.$type === 'AwaitStep') {
+            nodes.push({ id, label: `await ${shortName(step.event!, index)}`, qn: step.event });
+            edges.push({ from: previous, to: id });
+            if (step.call) call(`${id}.timeout`, step.call.target, id, { label: `timeout ${step.timeout}` });
+        } else {
+            call(id, step.call!.target, previous);
+            for (const handler of step.handlers ?? []) call(`${id}.${handler.error}`, handler.call.target, id, { label: localName(handler.error, index), qn: handler.error });
+        }
+        previous = id;
+    });
+    return { nodes, edges };
 }
 
 /** An event with its fields, what emits it, and the transitions and use cases it drives. */

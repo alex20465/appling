@@ -79,3 +79,49 @@ button.card-row:hover { background: var(--surface-hover); }
 .card-row.selected { color: var(--leaf); }
 .card-note { font-size: 11px; color: var(--ink-muted); }
 .card-empty { font-size: 12px; color: var(--ink-muted); }
+
+.flow { position: relative; height: 100%; overflow: auto; background: var(--surface); }
+.flow-board { position: relative; margin: 0 auto; }
+.flow svg { display: block; }
+.flow marker path { fill: var(--line-strong); }
+.flow-edge { fill: none; stroke: var(--line-strong); stroke-width: 1.5; stroke-linejoin: round; }
+.flow-node { cursor: pointer; }
+.flow-node rect { fill: var(--surface-elevated); stroke: var(--leaf); stroke-width: 1.5; }
+.flow-node .inner { fill: none; stroke-width: 1; }
+.flow-node.initial rect { stroke: var(--sprout); stroke-width: 2.5; }
+.flow-node.usecase rect { stroke: var(--rust); }
+.flow-node:hover rect { fill: var(--surface-hover); }
+.flow-node.selected rect { stroke: var(--ink); stroke-width: 2.5; }
+.flow-node.open rect { fill: var(--surface-hover); }
+.flow-hint { position: absolute; top: 8px; left: 0; right: 0; margin: 0; text-align: center; font: 11px var(--font-mono); color: var(--ink-muted); pointer-events: none; }
+.flow text { text-anchor: middle; fill: var(--ink); font: 12px var(--font-mono); }
+.flow-label { font-weight: 600; }
+.flow .flow-note { fill: var(--ink-muted); font-size: 10.5px; }
+.flow-edge-label { cursor: pointer; }
+.flow-edge-label text { paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; fill: var(--leaf); }
+.flow-edge-label .flow-note { fill: var(--ink-muted); }
+.flow-edge-label:hover text, .flow-edge-label.selected text { fill: var(--ink); }
+
+.bubble { position: absolute; z-index: 1; display: grid; gap: 4px; width: max-content; max-width: 520px; padding: 8px 11px; border: 1px solid var(--rust); border-radius: 8px; background: var(--surface-raised); box-shadow: 0 4px 14px #0008; color: var(--ink-soft); font: 12.5px/1.5 var(--font-sans); cursor: auto; user-select: text; animation: bubble-in 260ms ease-out both; }
+@keyframes bubble-in { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .bubble { animation: none; } }
+.flow .bubble { transform: translateY(-50%); }
+.card .bubble, .loose-bubbles .bubble { position: static; max-width: none; transform: none; }
+.bubble p { margin: 0; white-space: pre-wrap; }
+.bubble-body { display: grid; gap: 6px; }
+.bubble.tail-up::before, .bubble.tail-left::before { content: ""; position: absolute; width: 10px; height: 10px; border: 1px solid var(--rust); border-right: 0; border-bottom: 0; background: var(--surface-raised); }
+.bubble.code.tail-up::before, .bubble.code.tail-left::before { border-color: var(--leaf); }
+.bubble.tail-up::before { top: -6px; left: calc(var(--tail) - 5px); transform: rotate(45deg); }
+.bubble.tail-left::before { top: calc(50% - 5px); left: -6px; transform: rotate(-45deg); }
+.bubble-steps { display: flex; align-items: center; gap: 8px; margin-top: 2px; padding-top: 6px; border-top: 1px solid var(--line); font: 11px var(--font-mono); color: var(--ink-muted); }
+.bubble-steps span { margin: 0 auto; }
+.bubble-steps button { padding: 2px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-elevated); color: var(--ink-soft); font: inherit; cursor: pointer; }
+.bubble-steps button:hover:not(:disabled) { color: var(--ink); border-color: var(--line-strong); }
+.bubble-steps button:disabled { opacity: 0.4; cursor: default; }
+.bubble.code { border-color: var(--leaf); }
+.bubble pre { margin: 0; padding: 8px 10px; border-radius: 4px; background: var(--surface); font: 11.5px/1.55 var(--font-mono); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.bubble-member { font: 600 10px var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--rust); }
+.loose-bubbles { position: absolute; left: 12px; bottom: 40px; z-index: 1; display: grid; gap: 6px; max-width: min(320px, 60%); max-height: 50%; overflow-y: auto; }
+.file-link { padding: 0; border: 0; background: none; color: var(--leaf); font: 11px var(--font-mono); text-align: left; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.file-link:hover { color: var(--sprout); }
+.cards .loose-bubbles { position: static; grid-column: 1 / -1; max-width: none; max-height: none; }

@@ -7,7 +7,7 @@ import { extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { Graph } from '@appling/model';
-import type { Ask, Decision, HostMessage, Review, Show, WindowMessage } from './protocol.js';
+import { nextShow, type Ask, type Bubble, type Decision, type HostMessage, type Review, type Show, type WindowMessage } from './protocol.js';
 
 const WINDOW = fileURLToPath(new URL('../dist/window/', import.meta.url));
 const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
@@ -23,6 +23,8 @@ export interface VisualizerOptions {
     graph(): Promise<Graph>;
     /** Starts the window on a URL; Electron by default. */
     launch?(url: string): Launched | Promise<Launched>;
+    /** Opens a file at a line, for a file reference clicked in the window; the editor `launch-editor` finds by default. */
+    edit?(file: string, line: number): void;
 }
 
 export interface Selection {
@@ -40,6 +42,7 @@ export class Visualizer {
     private window?: Launched;
     private current?: Show;
     private selected?: string;
+    private bubbles: Bubble[] = [];
     private readonly clients = new Set<WebSocket>();
     private readonly reviews = new Map<string, { review: Review, resolve(decision: Decision): void }>();
     private readonly askListeners: ((ask: Ask) => void)[] = [];
@@ -47,10 +50,18 @@ export class Visualizer {
     constructor(private readonly options: VisualizerOptions) {}
 
     async show(show: Show): Promise<void> {
-        this.current = show;
+        this.view(show);
         this.selected = undefined;
         await this.open();
-        this.broadcast({ type: 'show', show });
+        this.broadcast({ type: 'show', show: this.current! });
+    }
+
+    /** Places a bubble on the view on screen; false when the window is closed. */
+    bubble(bubble: Bubble): boolean {
+        if (!this.window) return false;
+        this.bubbles.push(bubble);
+        this.broadcast({ type: 'bubble', bubble });
+        return true;
     }
 
     selection(): Selection {
@@ -138,13 +149,16 @@ export class Visualizer {
         const send = (message: HostMessage) => ws.send(JSON.stringify(message));
         send({ type: 'graph', graph: await this.options.graph() });
         if (this.current) send({ type: 'show', show: this.current });
+        for (const bubble of this.bubbles) send({ type: 'bubble', bubble });
         for (const [id, { review }] of this.reviews) send({ type: 'review', id, review });
     }
 
     private receive(message: WindowMessage): void {
         if (message.type === 'select') {
             this.selected = message.qn;
-            this.current = message.view;
+            this.view(message.view);
+        } else if (message.type === 'open') {
+            (this.options.edit ?? editor)(resolve(this.options.root, message.file), message.line);
         } else if (message.type === 'ask') {
             const ask = { id: randomUUID().slice(0, 8), text: message.text, selected: this.selected, view: this.current };
             this.askListeners.forEach(listener => listener(ask));
@@ -155,6 +169,12 @@ export class Visualizer {
             pending.resolve(message.decision);
             this.broadcast({ type: 'reviewed', id: message.id });
         }
+    }
+
+    private view(show: Show): void {
+        const next = nextShow(this.current, show);
+        this.current = next.show;
+        if (!next.keep) this.bubbles = [];
     }
 
     private broadcast(message: HostMessage): void {
@@ -174,6 +194,12 @@ function electron(url: string): Launched {
     const env = { ...process.env };
     delete env.ELECTRON_RUN_AS_NODE;
     return spawn(binary, [...(wayland ? ['--ozone-platform=x11'] : []), main, url, String(process.pid)], { stdio: 'ignore', env });
+}
+
+/** Opens the file in the running or configured editor; in a child process, since `launch-editor` hands the editor its stdout, which carries the MCP protocol here. */
+function editor(file: string, line: number): void {
+    const require = createRequire(import.meta.url);
+    spawn(process.execPath, ['-e', 'require(process.argv[1])(process.argv[2])', require.resolve('launch-editor'), `${file}:${line}`], { stdio: ['ignore', 2, 2] });
 }
 
 /** Only the window this host served may connect: blocks other sites and DNS rebinding. */

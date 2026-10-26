@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { layoutTree, type Placed } from '../layout.js';
 import { relevanceLevel } from '@appling/model/relevance';
-import { growTree, kindLabel, LENSES, revealPath, type GraphIndex, type Lens, type TreeNode, type ViewSettings } from '../views.js';
+import type { Bubble } from '../protocol.js';
+import { anchorOf, growTree, kindLabel, LENSES, revealPath, trailOf, type GraphIndex, type Lens, type TreeNode, type ViewSettings } from '../views.js';
+import { BubbleView, LooseBubbles, memberOf, type BubbleStep } from './Bubble.js';
 
 interface CanvasProps {
     index: GraphIndex;
     /** The seed's label, such as the workspace folder. */
     name?: string;
-    /** Elements or modules to unfold to at first. */
+    /** Elements or modules to draw one after another, each unfolded in place; when given, the tree draws only their trails. */
     focus?: string[];
     selected?: string;
     settings: ViewSettings;
+    bubbles?: Bubble[];
+    /** The place of the shown bubble among all, for its back and next buttons. */
+    step?: BubbleStep;
     onSelect(qn: string): void;
     onSettings(settings: ViewSettings): void;
+    onOpenFile?(file: string, line: number): void;
 }
 
 interface Camera {
@@ -28,6 +34,10 @@ function radius(node: TreeNode): number {
     const [low, high] = RADIUS[node.type];
     return low + (high - low) * node.relevance;
 }
+/** The widest a bubble grows, and how long the camera takes to glide to a new place. */
+const BUBBLE = 520;
+const GLIDE = 500;
+
 /** How far the labels reach right of the circle, so a press anywhere on them counts. */
 const LABEL: Record<TreeNode['type'], number> = { seed: 0, module: 210, group: 140, element: 190 };
 
@@ -35,32 +45,42 @@ const LABEL: Record<TreeNode['type'], number> = { seed: 0, module: 210, group: 1
  * The model as a tree that grows from a seed: modules first, then the declarations of the lens, then on every
  * unfold what uses the unfolded declaration. Only what you unfold is drawn.
  */
-export function ModelCanvas({ index, name, focus, selected, settings, onSelect, onSettings }: CanvasProps) {
+export function ModelCanvas({ index, name, focus, selected, settings, bubbles = [], onSelect, onSettings, onOpenFile, step }: CanvasProps) {
     const box = useRef<HTMLDivElement>(null);
     const drag = useRef<{ x: number, y: number, moved: boolean }>(undefined);
     const [camera, setCamera] = useState<Camera>({ x: 0, y: 0, k: 1 });
+    const seen = useRef(camera);
+    seen.current = camera;
+    const glide = useRef<number>(undefined);
     const [current, setCurrent] = useState('~');
-    const [unfolded, setUnfolded] = useState<Set<string>>(() => initial(index, settings, focus));
+    const [start] = useState(() => initial(index, settings, focus));
+    const [unfolded, setUnfolded] = useState(start.unfolded);
+    const [trail, setTrail] = useState(start.trail);
     const [fitting, setFitting] = useState(true);
     /** The node whose children just grew, to bring into view once they are placed. */
     const [follow, setFollow] = useState<string>();
 
-    const tree = useMemo(() => growTree(index, settings, unfolded, name), [index, settings, unfolded, name]);
+    const tree = useMemo(() => growTree(index, settings, unfolded, name, trail), [index, settings, unfolded, name, trail]);
     const placed = useMemo(() => layoutTree(tree), [tree]);
     const byId = useMemo(() => new Map(placed.map(p => [p.node.id, p])), [placed]);
     const here = byId.get(current) ?? byId.get('~')!;
     const lit = new Set(lineage(here).map(p => p.node.id));
     const chosen = selected && index.declaration(selected);
 
-    useEffect(() => {
-        setUnfolded(initial(index, settings, focus));
-        setCurrent('~');
-        setFitting(true);
-    }, [settings.lens, focus]);
+    const replant = () => {
+        const next = initial(index, settings, focus);
+        setUnfolded(next.unfolded);
+        setTrail(next.trail);
+        setCurrent(next.last ?? '~');
+        if (next.last) setFollow(next.last);
+        else setFitting(true);
+    };
+
+    useEffect(replant, [settings.lens, focus]);
 
     /** A selection from the text, the search or the inspector unfolds the tree to its declaration when the lens has it. */
     useEffect(() => {
-        if (!selected || byId.get(current)?.node.qn === chosen) return;
+        if (!selected || focus || byId.get(current)?.node.qn === chosen) return;
         const path = revealPath(index, settings, selected);
         if (!path.length) return;
         const next = new Set([...unfolded, ...path]);
@@ -72,6 +92,20 @@ export function ModelCanvas({ index, name, focus, selected, settings, onSelect, 
         }
     }, [selected]);
 
+    /** Moves the camera there smoothly, so the eye can follow; a pan or zoom by hand stops it. */
+    const move = useCallback((to: Camera) => {
+        cancelAnimationFrame(glide.current!);
+        if (matchMedia('(prefers-reduced-motion: reduce)').matches) return setCamera(to);
+        const [from, start] = [seen.current, performance.now()];
+        const step = (now: number) => {
+            const t = Math.min(1, (now - start) / GLIDE);
+            const e = 1 - (1 - t) ** 3;
+            setCamera({ x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e, k: from.k + (to.k - from.k) * e });
+            if (t < 1) glide.current = requestAnimationFrame(step);
+        };
+        glide.current = requestAnimationFrame(step);
+    }, []);
+
     /** Frames these nodes between the toolbars, never closer than `most`. */
     const frame = useCallback((nodes: Placed[], most: number) => {
         const element = box.current;
@@ -81,7 +115,7 @@ export function ModelCanvas({ index, name, focus, selected, settings, onSelect, 
         const [left, right, top, bottom] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
         const [width, height] = [element.clientWidth, element.clientHeight - 130];
         const k = Math.min(most, (width / (right - left)) * 0.94, (height / (bottom - top)) * 0.94);
-        setCamera({ k, x: width / 2 - ((left + right) / 2) * k, y: 85 + height / 2 - ((top + bottom) / 2) * k });
+        move({ k, x: width / 2 - ((left + right) / 2) * k, y: 85 + height / 2 - ((top + bottom) / 2) * k });
     }, []);
 
     const fit = useCallback(() => frame(placed, 1.1), [frame, placed]);
@@ -111,6 +145,7 @@ export function ModelCanvas({ index, name, focus, selected, settings, onSelect, 
         const element = box.current!;
         const wheel = (event: WheelEvent) => {
             event.preventDefault();
+            cancelAnimationFrame(glide.current!);
             const rect = element.getBoundingClientRect();
             const [px, py] = [event.clientX - rect.left, event.clientY - rect.top];
             setCamera(c => {
@@ -137,14 +172,27 @@ export function ModelCanvas({ index, name, focus, selected, settings, onSelect, 
         if (node.type === 'module') onSelect(node.qn!);
         if (node.count === 0 || node.cycle) return;
         setFollow(node.id);
-        setUnfolded(open => {
-            const next = new Set(open);
-            if (next.has(node.id) && (node.type !== 'element' || current === node.id || !node.children)) {
-                for (const id of next) if (id === node.id || id.startsWith(`${node.id}/`)) next.delete(id);
-            } else next.add(node.id);
-            return next;
-        });
+        const inside = (id: string) => id === node.id || id.startsWith(`${node.id}/`);
+        if (unfolded.has(node.id) && (node.type !== 'element' || current === node.id || !node.children)) {
+            setUnfolded(new Set([...unfolded].filter(id => !inside(id))));
+            setTrail(new Set([...trail].filter(id => !id.startsWith(`${node.id}/`))));
+        } else setUnfolded(new Set([...unfolded, node.id]));
     };
+
+    const drawn = new Map(placed.filter(p => p.node.type !== 'seed' && p.node.type !== 'group').reverse().map(p => [p.node.qn!, p]));
+    const anchored = bubbles.map(bubble => ({ bubble, anchor: index.nodes.has(bubble.target) ? anchorOf(index, bubble.target, new Set(drawn.keys())) : undefined }));
+
+    /** The shown bubble makes the node it points at the current one and glides it to the top left, leaving room for the bubble below. */
+    useEffect(() => {
+        const anchor = anchored[0]?.anchor;
+        const element = box.current;
+        if (!anchor || !element) return;
+        const p = drawn.get(anchor)!;
+        setCurrent(p.node.id);
+        const k = Math.max(seen.current.k, 1);
+        const x = Math.max(40, (element.clientWidth - bubbleWidth(element)) / 2 + 24);
+        move({ k, x: x - p.x * k, y: 120 - p.y * k });
+    }, [bubbles[0]]);
 
     const crumbs = lineage(here);
     const info = here.node.type === 'element'
@@ -165,6 +213,7 @@ export function ModelCanvas({ index, name, focus, selected, settings, onSelect, 
                 if (!start.moved && Math.hypot(dx, dy) < 4) return;
                 start.moved = true;
                 drag.current = { x: event.clientX, y: event.clientY, moved: true };
+                cancelAnimationFrame(glide.current!);
                 setCamera(c => ({ ...c, x: c.x + dx, y: c.y + dy }));
             }}
             onPointerUp={() => setTimeout(() => { drag.current = undefined; })}
@@ -181,6 +230,16 @@ export function ModelCanvas({ index, name, focus, selected, settings, onSelect, 
                     ))}
                 </g>
             </svg>
+            {anchored.filter(a => a.anchor).map(({ bubble, anchor }, i) => {
+                const p = drawn.get(anchor!)!;
+                // Below the node, where its own branch runs, and never past the edges of the canvas.
+                const x = camera.x + p.x * camera.k;
+                const width = box.current ? bubbleWidth(box.current) : BUBBLE;
+                const left = Math.max(8, Math.min(x - 24, (box.current?.clientWidth ?? 0) - width - 8));
+                const style = { position: 'absolute', left, maxWidth: width, top: camera.y + (p.y + radius(p.node)) * camera.k + 10, '--tail': `${Math.max(10, x - left)}px` } as React.CSSProperties;
+                return <BubbleView key={`${i} ${bubble.target} ${bubble.text}`} bubble={bubble} member={memberOf(bubble, anchor!)} style={style} tail="up" step={step} onOpenFile={onOpenFile} />;
+            })}
+            <LooseBubbles bubbles={anchored.filter(a => !a.anchor).map(a => a.bubble)} step={step} onOpenFile={onOpenFile} />
             <div className="tree-top">
                 <nav className="lenses" aria-label="Lens">
                     {(Object.keys(LENSES) as Lens[]).map(key => (
@@ -199,7 +258,7 @@ export function ModelCanvas({ index, name, focus, selected, settings, onSelect, 
                 <button onClick={() => zoom(1 / 1.25)} aria-label="Zoom out">−</button>
                 <button onClick={() => zoom(1.25)} aria-label="Zoom in">+</button>
                 <button onClick={fit}>Fit</button>
-                <button onClick={() => { setUnfolded(initial(index, settings, focus)); setCurrent('~'); setFitting(true); }}>Replant</button>
+                <button onClick={replant}>Replant</button>
             </div>
         </div>
     );
@@ -253,12 +312,20 @@ function TreeItem({ placed, current, chosen, unfolded, onPress }: { placed: Plac
     );
 }
 
-/** The seed, then each module whose declarations a single module tree would show anyway, then the revealed focus. */
-function initial(index: GraphIndex, settings: ViewSettings, focus?: string[]): Set<string> {
-    const open = new Set(['~', ...(focus ?? []).flatMap(qn => revealPath(index, settings, qn))]);
+/** The trails of the focus with the last focused node; without a focus the seed, unfolded to the module when there is only one. */
+function initial(index: GraphIndex, settings: ViewSettings, focus?: string[]): { unfolded: Set<string>, trail: Set<string>, last?: string } {
+    if (focus) {
+        const { unfolded, trail, ids } = trailOf(index, settings, focus);
+        return { unfolded, trail, last: ids.findLast(id => id !== undefined) };
+    }
+    const open = new Set(['~']);
     const modules = growTree(index, settings, open).children ?? [];
     if (modules.length === 1) open.add(modules[0].id);
-    return open;
+    return { unfolded: open, trail: new Set() };
+}
+
+function bubbleWidth(canvas: HTMLElement): number {
+    return Math.min(BUBBLE, canvas.clientWidth - 16);
 }
 
 function lineage(placed: Placed): Placed[] {

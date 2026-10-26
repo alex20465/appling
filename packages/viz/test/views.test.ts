@@ -2,7 +2,11 @@ import { expect, test } from 'vitest';
 import type { Model } from '@appling/lang';
 import { buildGraph, Simulator } from '@appling/model';
 import { buildWorkspace, examples } from '../../lang/test/workspace.js';
-import { abilities, actionSummary, cardView, elementAt, entityActions, factOf, GraphIndex, growTree, policyText, relations, revealPath, search, viewFor, type Card, type TreeNode } from '../src/views.js';
+import { layoutFlow } from '../src/layout.js';
+import {
+    abilities, actionSummary, anchorOf, cardView, elementAt, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, policyText, relations, revealPath, search, trailOf, viewFor,
+    type Card, type Flow, type TreeNode
+} from '../src/views.js';
 
 const DOMAIN = { lens: 'domain' as const, linkEntities: false };
 
@@ -53,6 +57,38 @@ test('the tree starts folded at the seed and unfolds modules, then the lens decl
         '  crm (1)'
     ]);
     expect(growTree(index, DOMAIN, open).children!.find(m => m.label === 'sales')!.fact).toBe('1 entity · 1 value · 1 enum');
+});
+
+test('a trail draws only the elements shown one after another, each unfolded where the tree already has it', async () => {
+    const index = await indexOf(examples());
+    const { unfolded, trail, ids } = trailOf(index, DOMAIN, ['sales.Order', 'sales.Cancel', 'crm.Account', 'crm.Clerk']);
+    expect(ids).toEqual(['~/sales/#Entity/sales.Order', '~/sales/#Entity/sales.Order/#Action/sales.Cancel', '~/crm/crm.Account', undefined]);
+    expect(outline(growTree(index, DOMAIN, unfolded, 'shop', trail))).toEqual([
+        'shop (2)',
+        '  sales (3)',
+        '    Entities (1)',
+        '      Order (9)',
+        '        Actions (2)',
+        '          Cancel (5)',
+        '            Use cases (1)',
+        '            Machines (1)',
+        '            Pages (2)',
+        '            Jobs (1)',
+        '        Use cases (1)',
+        '        Machines (1)',
+        '        Projections (1)',
+        '        Queries (1)',
+        '        Events (2)',
+        '        Jobs (1)',
+        '  crm (1)',
+        '    Account (4)',
+        '      Entities (1)',
+        '      Actors (1)',
+        '      Projections (1)',
+        '      Tenants (1)'
+    ]);
+    expect(trailOf(index, { ...DOMAIN, lens: 'behavior' }, ['sales.OrderFlow']).ids).toEqual(['~/sales/#Machine/sales.OrderFlow']);
+    expect([lensOf('Machine'), lensOf('Field')]).toEqual(['behavior', undefined]);
 });
 
 test('a declaration that is already on its branch does not unfold again', async () => {
@@ -148,18 +184,33 @@ const text = (cards: Card[]) => cards.map(card => ({
     sections: card.sections.map(s => `${s.title ?? ''}: ${s.rows.map(r => `${r.text}${r.note ? ` [${r.note}]` : ''}`).join('; ')}`)
 }));
 
-test('a machine view is one card per state with what can be done there', async () => {
-    const cards = cardView(await indexOf(examples()), 'machine', ['sales.OrderFlow']);
-    expect(text(cards)).toEqual([
-        { title: 'draft (initial)', sections: [': PlaceOrder → placed; Cancel → cancelled [when !has(paid_at) · job ExpireDrafts]'] },
-        { title: 'placed', sections: [': on PaymentReceived → paid; Cancel → cancelled [when !has(paid_at)]'] },
-        { title: 'paid (final)', sections: [] },
-        { title: 'cancelled (final)', sections: [] }
-    ]);
-    expect(cards[0].sections[0].rows.map(r => r.qn)).toEqual(['sales.PlaceOrder', 'sales.Cancel']);
+/** Nodes as `label (tag)`, edges as `from -label-> to [note]`, by label. */
+const chart = (flow: Flow) => {
+    const label = new Map(flow.nodes.map(n => [n.id, n.label]));
+    return {
+        nodes: flow.nodes.map(n => `${n.label}${n.tag ? ` (${n.tag})` : ''}${n.note ? ` [${n.note}]` : ''}`),
+        edges: flow.edges.map(e => `${label.get(e.from)} -${e.label ?? ''}-> ${label.get(e.to)}${e.note ? ` [${e.note}]` : ''}`)
+    };
+};
+
+test('a machine view is a flowchart of the states with one edge per transition and state it leaves', async () => {
+    const index = await indexOf(examples());
+    const flow = flowView(index, 'machine', ['sales.OrderFlow']);
+    expect(chart(flow)).toEqual({
+        nodes: ['draft (initial)', 'placed', 'paid (final)', 'cancelled (final)'],
+        edges: ['draft -PlaceOrder-> placed', 'placed -on PaymentReceived-> paid', 'draft -Cancel-> cancelled [when !has(paid_at) · job ExpireDrafts]', 'placed -Cancel-> cancelled [when !has(paid_at)]']
+    });
+    expect(flow.edges.map(e => e.qn)).toEqual(['sales.PlaceOrder', 'sales.PaymentReceived', 'sales.Cancel', 'sales.Cancel']);
+    const placed = layoutFlow(flow);
+    const y = new Map(placed.nodes.map(n => [n.node.label, n.y]));
+    expect(y.get('draft')).toBeLessThan(y.get('placed')!);
+    expect(y.get('placed')).toBeLessThan(y.get('paid')!);
+    expect(placed.nodes.every(n => n.x - n.width / 2 >= 0 && n.x + n.width / 2 <= placed.width)).toBe(true);
+    const corners = placed.edges.map(e => e.path.slice(2).split(' L ').map(p => p.split(' ').map(Number)));
+    expect(corners.every(points => points.slice(1).every(([x, y], i) => x === points[i][0] || y === points[i][1]))).toBe(true);
 });
 
-test('one action of several targets is one option per state', async () => {
+test('one action of several targets is one edge per target', async () => {
     const index = await indexOf({ 'm.appling': `module m {
   enum S { a b c }
   entity E {
@@ -173,7 +224,7 @@ test('one action of several targets is one option per state', async () => {
   }
 }
 ` });
-    expect(text(cardView(index, 'machine', ['m.F']))[0].sections).toEqual([': Go → b, c']);
+    expect(chart(flowView(index, 'machine', ['m.F'])).edges).toEqual(['a -Go-> b', 'a -Go-> c']);
 });
 
 test('an action card says between which states it moves, who may run it and what it requires and changes', async () => {
@@ -188,16 +239,16 @@ test('an action card says between which states it moves, who may run it and what
     }]);
 });
 
-test('use case and event cards list steps, emitters and consumers', async () => {
+test('a use case is a flowchart of its steps with its error handlers and timeouts branching off, and event cards list emitters and consumers', async () => {
     const index = await indexOf(examples());
-    expect(text(cardView(index, 'usecase', ['sales.Checkout']))[0].sections).toEqual([
-        'Inputs: order: Order',
-        'Steps: 1. step PlaceOrder(order); 2. step Payments.Charge(order.total) on Declined do Cancel(order); 3. await PaymentReceived timeout "24h" do Cancel(order)',
-        'Used by: CheckoutFlow [flow]'
-    ]);
+    expect(chart(flowView(index, 'usecase', ['sales.Checkout']))).toEqual({
+        nodes: ['Checkout (usecase) [order: Order]', 'PlaceOrder', 'Payments.Charge', 'Cancel', 'await PaymentReceived', 'Cancel'],
+        edges: ['Checkout --> PlaceOrder', 'PlaceOrder --> Payments.Charge', 'Payments.Charge -Declined-> Cancel', 'Payments.Charge --> await PaymentReceived', 'await PaymentReceived -timeout 24h-> Cancel']
+    });
     expect(text(cardView(index, 'event', ['sales.OrderPlaced', 'sales.PaymentReceived']))).toEqual([
         { title: 'OrderPlaced (event)', sections: ['Fields: order: Order', 'Emitted by: PlaceOrder'] },
         { title: 'PaymentReceived (event)', sections: ['Fields: order: Order', 'Triggers: OrderFlow: placed → paid', 'Resumes: Checkout'] }
     ]);
-    expect([viewFor('Machine'), viewFor('Module'), viewFor('Field')]).toEqual(['machine', 'entities', undefined]);
+    expect([viewFor('Machine'), viewFor('Module'), viewFor('Entity'), viewFor('Field')]).toEqual(['machine', 'node', 'node', undefined]);
+    expect(anchorOf(index, 'sales.Order.status', new Set(['sales', 'sales.Order']))).toBe('sales.Order');
 });
