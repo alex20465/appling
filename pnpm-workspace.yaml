@@ -13,3 +13,10 @@ minimumReleaseAgeExclude:
 versioning:
   changelog:
     storage: repository
+overrides:
+  dompurify: '>=3.4.17'
+  body-parser: '>=2.4.0'
+  zod: '>=4.6.6'
+  '@azure/msal-node': '>=7.1.0'
+  file-type: '>=21.3.2'
+  postcss-selector-parser: '>=7.1.6'

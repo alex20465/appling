@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@appling/model": "workspace:*",
-    "electron": "44.7.0",
+    "electron": "44.9.1",
     "launch-editor": "2.14.2",
     "ws": "8.22.0"
   },
