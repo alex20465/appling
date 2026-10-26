@@ -1,5 +1,18 @@
 # @appling/cli
 
+## 0.2.1
+
+### Patch Changes
+
+- `appling graph` writes its whole output when piped into another program instead of stopping at 128 KB.
+
+- `appling refs <qualified name>` prints an element's code references, and `appling refs --check` reports shifted, broken and orphaned ones with exit code 1.
+
+- Updated dependencies:
+  - @appling/codegen@0.1.1
+  - @appling/lang@0.2.1
+  - @appling/model@0.1.1
+
 ## 0.2.0
 
 ### Minor Changes

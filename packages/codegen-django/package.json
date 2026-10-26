@@ -1,6 +1,6 @@
 {
   "name": "@appling/codegen-django",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Appling code generation extension for Django",
   "type": "module",
   "exports": {

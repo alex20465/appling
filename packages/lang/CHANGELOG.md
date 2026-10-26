@@ -1,5 +1,13 @@
 # @appling/lang
 
+## 0.2.1
+
+### Patch Changes
+
+- `entity link` marks a secondary entity such as a join record.
+
+- Modules and declarations take a relevance level, core, supporting or peripheral, before their opening brace; a module passes its level to its members.
+
 ## 0.2.0
 
 ### Minor Changes

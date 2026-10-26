@@ -2,6 +2,11 @@
   dir: packages/ai
   intents:
     - warm-waves-live
+"@appling/ai@0.1.2":
+  dir: packages/ai
+  intents:
+    - fluffy-elephants-wait
+    - pretty-seals-happen
 "@appling/cli@0.2.0":
   dir: packages/cli
   intents:
@@ -10,6 +15,16 @@
     - quiet-shirts-tan
     - rare-forks-guess
     - spicy-rabbits-roll
+"@appling/cli@0.2.1":
+  dir: packages/cli
+  intents:
+    - loud-frogs-tie
+    - purple-pears-mix
+"@appling/ide@0.1.2":
+  dir: packages/ide
+  intents:
+    - light-planes-carry
+    - polite-pears-begin
 "@appling/lang@0.2.0":
   dir: packages/lang
   intents:
@@ -18,3 +33,14 @@
     - shiny-mugs-pretend
     - strong-jokes-dream
     - warm-falcons-wait
+"@appling/lang@0.2.1":
+  dir: packages/lang
+  intents:
+    - great-taxis-brush
+    - loud-cups-agree
+"@appling/model@0.1.1":
+  dir: packages/model
+  intents:
+    - big-pots-retire
+    - empty-ducks-flash
+    - good-hairs-doubt

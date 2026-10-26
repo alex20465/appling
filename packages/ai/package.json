@@ -1,6 +1,6 @@
 {
   "name": "@appling/ai",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Appling for AI: MCP server, model adapter and the registry skill",
   "type": "module",
   "exports": {

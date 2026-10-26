@@ -1,6 +1,6 @@
 {
   "name": "@appling/model",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Appling semantic graph: nodes, edges and module dependencies of a resolved model",
   "type": "module",
   "exports": {

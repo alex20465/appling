@@ -1,6 +1,6 @@
 {
   "name": "@appling/lang",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Appling language: grammar, scoping, validation, expression typing, canonical printer and language server",
   "type": "module",
   "exports": {
