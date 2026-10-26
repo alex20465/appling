@@ -591,6 +591,11 @@ exports[`graph of examples 1`] = `
     {
       "from": "crm.Account.policy[read]",
       "kind": "uses",
+      "to": "sales.Customer",
+    },
+    {
+      "from": "crm.Account.policy[read]",
+      "kind": "uses",
       "to": "sales.Shopper.account",
     },
     {
@@ -621,6 +626,11 @@ exports[`graph of examples 1`] = `
     {
       "from": "sales.Order.policy[read]",
       "kind": "uses",
+      "to": "sales.Customer",
+    },
+    {
+      "from": "sales.Order.policy[read]",
+      "kind": "uses",
       "to": "sales.Order.customer",
     },
     {
@@ -636,17 +646,22 @@ exports[`graph of examples 1`] = `
     {
       "from": "sales.Order.policy[read fields total]",
       "kind": "uses",
+      "to": "crm.Clerk",
+    },
+    {
+      "from": "sales.Order.policy[read fields total]",
+      "kind": "uses",
+      "to": "sales.Customer",
+    },
+    {
+      "from": "sales.Order.policy[read fields total]",
+      "kind": "uses",
       "to": "sales.Order.status",
     },
     {
       "from": "sales.Order.policy[read fields total]",
       "kind": "uses",
       "to": "sales.OrderStatus.draft",
-    },
-    {
-      "from": "sales.Order.policy[read fields total]",
-      "kind": "uses",
-      "to": "crm.Clerk",
     },
     {
       "from": "sales.PlaceOrder",
@@ -842,20 +857,49 @@ exports[`graph of examples 1`] = `
             "$type": "BinaryExpr",
             "left": {
               "$type": "MemberExpr",
-              "member": "account",
+              "args": [
+                {
+                  "$type": "MemberExpr",
+                  "member": "Customer",
+                  "receiver": {
+                    "$type": "NameExpr",
+                    "name": "sales",
+                    "type": "unknown",
+                  },
+                  "target": "sales.Customer",
+                  "type": "unknown",
+                },
+              ],
+              "call": true,
+              "member": "is",
               "receiver": {
                 "$type": "NameExpr",
                 "name": "actor",
                 "type": "actor",
               },
-              "target": "sales.Shopper.account",
-              "type": "Account",
+              "type": "Bool",
             },
-            "op": "==",
+            "op": "&&",
             "right": {
-              "$type": "NameExpr",
-              "name": "this",
-              "type": "Account",
+              "$type": "BinaryExpr",
+              "left": {
+                "$type": "MemberExpr",
+                "member": "account",
+                "receiver": {
+                  "$type": "NameExpr",
+                  "name": "actor",
+                  "type": "actor",
+                },
+                "target": "sales.Shopper.account",
+                "type": "Account",
+              },
+              "op": "==",
+              "right": {
+                "$type": "NameExpr",
+                "name": "this",
+                "type": "Account",
+              },
+              "type": "Bool",
             },
             "type": "Bool",
           },
@@ -870,7 +914,7 @@ exports[`graph of examples 1`] = `
       "level": "in",
       "module": "crm",
       "props": {
-        "condition": "actor.is(Clerk) || actor.account == this",
+        "condition": "actor.is(Clerk) || (actor.is(sales.Customer) && actor.account == this)",
         "operations": [
           "read",
         ],
@@ -898,6 +942,7 @@ exports[`graph of examples 1`] = `
               "OrderSummary",
               "OpenOrders",
               "PlaceOrder",
+              "Customer",
             ],
           },
         ],
@@ -908,7 +953,7 @@ exports[`graph of examples 1`] = `
       "module": "",
       "props": {
         "exports": [
-          "export Order, OrderSummary, OpenOrders, PlaceOrder",
+          "export Order, OrderSummary, OpenOrders, PlaceOrder, Customer",
         ],
       },
       "qn": "sales",
@@ -1322,22 +1367,46 @@ exports[`graph of examples 1`] = `
           "right": {
             "$type": "BinaryExpr",
             "left": {
-              "$type": "NameExpr",
-              "name": "customer",
-              "target": "sales.Order.customer",
-              "type": "Account",
-            },
-            "op": "==",
-            "right": {
               "$type": "MemberExpr",
-              "member": "account",
+              "args": [
+                {
+                  "$type": "NameExpr",
+                  "name": "Customer",
+                  "target": "sales.Customer",
+                  "type": "unknown",
+                },
+              ],
+              "call": true,
+              "member": "is",
               "receiver": {
                 "$type": "NameExpr",
                 "name": "actor",
                 "type": "actor",
               },
-              "target": "sales.Shopper.account",
-              "type": "Account",
+              "type": "Bool",
+            },
+            "op": "&&",
+            "right": {
+              "$type": "BinaryExpr",
+              "left": {
+                "$type": "NameExpr",
+                "name": "customer",
+                "target": "sales.Order.customer",
+                "type": "Account",
+              },
+              "op": "==",
+              "right": {
+                "$type": "MemberExpr",
+                "member": "account",
+                "receiver": {
+                  "$type": "NameExpr",
+                  "name": "actor",
+                  "type": "actor",
+                },
+                "target": "sales.Shopper.account",
+                "type": "Account",
+              },
+              "type": "Bool",
             },
             "type": "Bool",
           },
@@ -1352,7 +1421,7 @@ exports[`graph of examples 1`] = `
       "level": "in",
       "module": "sales",
       "props": {
-        "condition": "actor.is(crm.Clerk) || customer == actor.account",
+        "condition": "actor.is(crm.Clerk) || (actor.is(Customer) && customer == actor.account)",
         "operations": [
           "read",
         ],
@@ -1410,24 +1479,6 @@ exports[`graph of examples 1`] = `
         "condition": {
           "$type": "BinaryExpr",
           "left": {
-            "$type": "BinaryExpr",
-            "left": {
-              "$type": "NameExpr",
-              "name": "status",
-              "target": "sales.Order.status",
-              "type": "OrderStatus",
-            },
-            "op": "!=",
-            "right": {
-              "$type": "NameExpr",
-              "name": "draft",
-              "target": "sales.OrderStatus.draft",
-              "type": "OrderStatus",
-            },
-            "type": "Bool",
-          },
-          "op": "||",
-          "right": {
             "$type": "MemberExpr",
             "args": [
               {
@@ -1451,6 +1502,48 @@ exports[`graph of examples 1`] = `
             },
             "type": "Bool",
           },
+          "op": "||",
+          "right": {
+            "$type": "BinaryExpr",
+            "left": {
+              "$type": "MemberExpr",
+              "args": [
+                {
+                  "$type": "NameExpr",
+                  "name": "Customer",
+                  "target": "sales.Customer",
+                  "type": "unknown",
+                },
+              ],
+              "call": true,
+              "member": "is",
+              "receiver": {
+                "$type": "NameExpr",
+                "name": "actor",
+                "type": "actor",
+              },
+              "type": "Bool",
+            },
+            "op": "&&",
+            "right": {
+              "$type": "BinaryExpr",
+              "left": {
+                "$type": "NameExpr",
+                "name": "status",
+                "target": "sales.Order.status",
+                "type": "OrderStatus",
+              },
+              "op": "!=",
+              "right": {
+                "$type": "NameExpr",
+                "name": "draft",
+                "target": "sales.OrderStatus.draft",
+                "type": "OrderStatus",
+              },
+              "type": "Bool",
+            },
+            "type": "Bool",
+          },
           "type": "Bool",
         },
         "fields": [
@@ -1465,7 +1558,7 @@ exports[`graph of examples 1`] = `
       "level": "in",
       "module": "sales",
       "props": {
-        "condition": "status != draft || actor.is(crm.Clerk)",
+        "condition": "actor.is(crm.Clerk) || (actor.is(Customer) && status != draft)",
         "operations": [
           "read",
         ],

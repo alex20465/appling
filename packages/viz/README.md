@@ -1,6 +1,6 @@
 # @appling/viz
 
-The views of an Appling model and the windows that draw them: the pure view logic and the React Flow canvases shared by the Appling IDE, and the floating visualization window that `appling-mcp` opens next to a Claude Code session.
+The views of an Appling model and the windows that draw them: the pure view logic and the SVG canvases shared by the Appling IDE, and the floating visualization window that `appling-mcp` opens next to a Claude Code session.
 
 ## Visualization window
 
@@ -25,11 +25,12 @@ The window is a frameless Electron window at the top right of the main screen, a
 
 | Export | Purpose |
 |---|---|
-| `entityView(index, settings)` | Modules, entities and associations, optionally limited to `focus` |
+| `growTree(index, settings, unfolded)` | The dependency tree of one lens (`domain`, `behavior`, `application`, `interfaces`, `access`): modules, then the lens's declarations, then what uses each unfolded declaration, the most relevant first |
+| `revealPath(index, settings, qn)`, `factOf(index, node)` | The node ids that show a declaration, and the fact a node shows under its name |
 | `cardView(index, view, focus)` | The `machine`, `action`, `usecase` or `event` view as cards: per state what can be done there, per action, use case or event its facts |
 | `GraphIndex`, `search`, `relations`, `entityActions`, `actionSummary` | The index and queries the IDE side panel uses |
 
-`@appling/viz/canvas` exports `EntityCanvas` and `CardCanvas`; import `@xyflow/react/dist/style.css` and `@appling/viz/canvas.css` with them. `react`, `@xyflow/react` and `elkjs` are peer dependencies.
+`@appling/viz/canvas` exports `ModelCanvas`, the tree that grows from a seed and sizes its circles by relevance, and `CardCanvas`; import `@appling/viz/canvas.css` with them. `react` is a peer dependency.
 
 ## License
 

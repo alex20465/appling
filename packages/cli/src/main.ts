@@ -9,18 +9,19 @@ import {
     BASELINE, checkPrerequisites, describe, loadExtension, mergeGeneration, pendingChanges, plan, planMigrations, readApplied, readConfig, readRegistry,
     runMigrations, runPlan, type Plan
 } from '@appling/codegen';
-import { buildGraph, dependencies, findApplingFiles, Simulator, writeRelease, type Graph } from '@appling/model';
+import { buildGraph, dependencies, findApplingFiles, resolveReferences, Simulator, writeRelease, type Graph, type ResolvedReference } from '@appling/model';
 
 const USAGE = [
     'Usage: appling <check|fmt|graph> [files or folders...]',
     '       appling release <version> [files or folders...]',
     '       appling generate [--plan | --migrate | --sync] [files or folders...]',
-    '       appling simulate <reach <machine> <state> | actors <action> | risks <action>> [files or folders...]'
+    '       appling simulate <reach <machine> <state> | actors <action> | risks <action>> [files or folders...]',
+    '       appling refs <qualified name | --check> [files or folders...]'
 ].join('\n');
 
 async function main([command, ...args]: string[]): Promise<number> {
-    const question = command === 'simulate' ? args.slice(0, args[0] === 'reach' ? 3 : 2) : [];
-    if (!['check', 'fmt', 'graph', 'release', 'generate', 'simulate'].includes(command) || (command === 'release' && !args[0])
+    const question = command === 'simulate' ? args.slice(0, args[0] === 'reach' ? 3 : 2) : command === 'refs' ? args.slice(0, 1) : [];
+    if (!['check', 'fmt', 'graph', 'release', 'generate', 'simulate', 'refs'].includes(command) || ((command === 'release' || command === 'refs') && !args[0])
         || (command === 'simulate' && (!['reach', 'actors', 'risks'].includes(question[0]) || question.some(a => !a)))) {
         console.error(USAGE);
         return 2;
@@ -36,6 +37,7 @@ async function main([command, ...args]: string[]): Promise<number> {
     if (command === 'release') return release(documents, Appling, version);
     if (command === 'generate') return generate(documents, Appling, mode);
     if (command === 'simulate') return simulate(documents, Appling, question);
+    if (command === 'refs') return refs(documents, Appling, question[0]);
     const errors = report(documents, console.log);
     console.log(`${documents.length} file(s), ${errors} error(s)`);
     return errors ? 1 : 0;
@@ -61,6 +63,27 @@ function simulate(documents: LangiumDocument[], services: ApplingServices, [ques
         console.error((error as Error).message);
         return 1;
     }
+}
+
+/** Prints where an element and its members are implemented, or with --check every reference that is not current. */
+function refs(documents: LangiumDocument[], services: ApplingServices, target: string): number {
+    if (report(documents, console.error)) return 1;
+    const all = resolveReferences('.', buildGraph(documents.map(doc => doc.parseResult.value as Model), services));
+    const line = (r: ResolvedReference) => `${r.file}:${r.start}-${r.end} ${r.qn}`;
+    if (target !== '--check') {
+        const found = all.filter(r => r.qn === target || r.qn.startsWith(`${target}.`));
+        for (const r of found) console.log(`${line(r)}${r.status === 'current' ? '' : ` (${r.status})`}`);
+        if (!found.length) console.log(`no code references for ${target}`);
+        return 0;
+    }
+    const stale = all.filter(r => r.status !== 'current');
+    for (const r of stale) {
+        console.log(`${line(r)}: ${r.status === 'shifted' ? `shifted from ${r.recorded!.start}-${r.recorded!.end}`
+            : r.status === 'broken' ? `broken, "${r.anchor}" not found` : 'orphaned, no such element in the model'}`);
+    }
+    const count = (status: string) => stale.filter(r => r.status === status).length;
+    console.log(`${all.length} reference(s), ${count('shifted')} shifted, ${count('broken')} broken, ${count('orphaned')} orphaned`);
+    return stale.length ? 1 : 0;
 }
 
 async function generate(documents: LangiumDocument[], services: ApplingServices, mode: string | undefined): Promise<number> {
@@ -220,4 +243,4 @@ function format(documents: LangiumDocument[]): number {
     return failed ? 1 : 0;
 }
 
-main(process.argv.slice(2)).then(code => process.exit(code));
+main(process.argv.slice(2)).then(code => { process.exitCode = code; });

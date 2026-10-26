@@ -14,7 +14,7 @@ my-app/
     sales.appling            one or more modules per file
     crm.appling
   .appling/
-    view.json                entity view options from the IDE
+    view.json                canvas lens and option from the IDE
     releases/
       1.0.0.json             graph snapshot written by appling release
   build/
@@ -28,7 +28,7 @@ my-app/
 |---|---|---|
 | `*.appling` | you, the IDE, the AI | yes, it is the source of truth |
 | `appling.config.json` | you | yes |
-| `.appling/view.json` | the IDE | yes, if your team should share the view options |
+| `.appling/view.json` | the IDE | yes, if your team should share the view |
 | `.appling/releases/*.json` | `appling release` | yes, edits compare against the latest release |
 | `<out>/.appling/tasks.json` | `appling generate`, the registry tools | yes, with the generated project |
 | `<out>/.appling/migrations.json` | `appling generate --migrate` | yes, with the generated project |

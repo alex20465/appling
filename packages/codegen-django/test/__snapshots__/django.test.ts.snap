@@ -35,7 +35,7 @@ class Account(models.Model):
 
 
 class AccountReadPolicyTest(TestCase):
-    """crm.Account.policy[read]: actor.is(Clerk) || actor.account == this"""
+    """crm.Account.policy[read]: actor.is(Clerk) || (actor.is(sales.Customer) && actor.account == this)"""
 
     def test_allows_permitted_actors(self):
         self.skipTest("registry task: crm.Account.policy[read]")
@@ -398,7 +398,7 @@ class OrderTotalNeverNegativeTest(TestCase):
 
 
 class OrderReadPolicyTest(TestCase):
-    """sales.Order.policy[read]: actor.is(crm.Clerk) || customer == actor.account"""
+    """sales.Order.policy[read]: actor.is(crm.Clerk) || (actor.is(Customer) && customer == actor.account)"""
 
     def test_allows_permitted_actors(self):
         self.skipTest("registry task: sales.Order.policy[read]")
@@ -418,7 +418,7 @@ class OrderCreateUpdateDeletePolicyTest(TestCase):
 
 
 class OrderReadPolicy2Test(TestCase):
-    """sales.Order.policy[read fields total]: status != draft || actor.is(crm.Clerk)"""
+    """sales.Order.policy[read fields total]: actor.is(crm.Clerk) || (actor.is(Customer) && status != draft)"""
 
     def test_allows_permitted_actors(self):
         self.skipTest("registry task: sales.Order.policy[read fields total]")

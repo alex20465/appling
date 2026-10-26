@@ -76,29 +76,19 @@ Next to your models, in the workspace folder:
 
 ### View
 
-`.appling/view.json` holds the options of the IDE's entity view. The IDE writes it whenever you change an option. It never affects the model. Missing keys take their default.
+`.appling/view.json` holds the lens and the option of the IDE's [model canvas](../tools/ide.md#the-model-canvas). The IDE writes it whenever you change one. It never affects the model. Missing keys take their default.
 
 ```json
 {
-  "linkEntities": false,
-  "emptyModules": false,
-  "labels": true,
-  "actionCounts": true,
-  "focus": true,
-  "direction": "RIGHT",
-  "edges": "default"
+  "lens": "domain",
+  "linkEntities": false
 }
 ```
 
 | Key | Default | Meaning |
 |---|---|---|
-| `linkEntities` | `false` | Show link entities, grayed out |
-| `emptyModules` | `false` | Show modules without shown entities |
-| `labels` | `true` | Field names on association arrows |
-| `actionCounts` | `true` | The number of actions on each entity |
-| `focus` | `true` | Fade what is not associated with the selected entity |
-| `direction` | `RIGHT` | Layout direction: `RIGHT` or `DOWN` |
-| `edges` | `default` | Arrow shape: `default` (curved), `smoothstep` (right angled) or `straight` |
+| `lens` | `domain` | The lens the tree starts from: `domain`, `behavior`, `application`, `interfaces` or `access` |
+| `linkEntities` | `false` | Show link entities in the tree |
 
 ### Releases
 

@@ -154,4 +154,25 @@ export const REGISTRY_TOOLS = {
     })
 };
 
+/** Tools for the code references: where each element is implemented. */
+export const REFERENCE_TOOLS = {
+    code_references: define({
+        description: 'Where an element and its members are implemented in the application code: file, line range and status (current, shifted, broken or orphaned). Shifted references come with the lines where their anchor is now. Without qn: every reference that is not current, the ones to record again.',
+        input: { qn: z.string().optional() },
+        run: async (context, input) => ({ references: await context.project.references(input.qn) })
+    }),
+    record_code_references: define({
+        description: 'Record where an element is implemented, replacing its earlier references: one line range per place in the code. The first line of each range becomes its anchor, so start at the line that declares the code, such as the class or function. An empty list removes the references.',
+        input: {
+            qn: z.string(),
+            ranges: z.array(z.object({
+                file: z.string().describe('Absolute, or relative to the workspace folder'),
+                start: z.number().int().describe('First line, 1 based'),
+                end: z.number().int().describe('Last line, inclusive')
+            }))
+        },
+        run: async (context, input) => context.project.recordReferences(input.qn, input.ranges)
+    })
+};
+
 export type Tools = Record<string, ToolDefinition<z.ZodRawShape>>;

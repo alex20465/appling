@@ -10,7 +10,7 @@ Expressions are written inside braces (`requires { ... }`, `where { ... }`, `pol
 ```appling
 total >= 0
 status in [placed, paid]
-actor.is(crm.Clerk) || customer == actor.account
+actor.is(crm.Clerk) || (actor.is(Customer) && customer == actor.account)
 sum(lines.map(l, l.amount))
 created_at < now - duration("720h")
 lines.exists(l, l.amount > 0) && !has(paid_at)
@@ -156,7 +156,8 @@ The functions take exactly one argument. In `map`, `filter`, `exists` and `all`,
 ```appling check
 module sales {
   role Clerk
-  actor human Shopper {
+  role Customer
+  actor human Shopper roles Customer {
     account: Account
   }
 
@@ -191,8 +192,8 @@ module sales {
     invariant "has lines" { lines.size() > 0 && lines.all(l, l.amount >= 0) }
     invariant "reference format" { reference.startsWith("SO") && !reference.contains(" ") }
 
-    policy read { actor.is(Clerk) || account == actor.account }
-    policy update { account == tenant && status in [draft, placed] }
+    policy read { actor.is(Clerk) || (actor.is(Customer) && account == actor.account) }
+    policy update { actor.is(Clerk) && account == tenant && status in [draft, placed] }
   }
 
   query Stale from Order {

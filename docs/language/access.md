@@ -57,6 +57,16 @@ A policy is a condition in braces, introduced by `policy`. Policies sit on the e
 
 `actor`, `now` and `tenant` are available in all of them. An element can have any number of policies.
 
+### Granting by role
+
+A policy grants access to roles. Write one `||` branch per role that may act, each starting with `actor.is(Role)` and followed by `&&` and the conditions that role must meet:
+
+```appling
+policy { actor.is(Clerk) || (actor.is(Customer) && account == actor.account) }
+```
+
+Nothing is open by default. A role that no policy names may do nothing, and a target that no policy guards along its path is closed to every actor. Write `{ false }` to state that nobody may, such as `policy delete { false }` for records that are never deleted. The validator warns about a policy with a branch that names no role, which includes `{ true }` and negative checks such as `!actor.is(Clerk) || ...`: `A policy grants by role: every "||" branch needs actor.is(Role), or write { false }.`
+
 ### Operations
 
 On an entity, a policy can name the operations it covers: `read`, `create`, `update`, `delete`, separated by commas. Without operations, it covers every operation.
@@ -66,7 +76,7 @@ On an entity, a policy can name the operations it covers: `read`, `create`, `upd
 On an entity, `fields` limits a policy to some of its fields. Combine it with operations to guard reading one field:
 
 ```appling
-policy read fields total { status != draft || actor.is(crm.Clerk) }
+policy read fields total { actor.is(crm.Clerk) || (actor.is(Customer) && status != draft) }
 ```
 
 Operations and `fields` exist only on entity policies. On an action, a query or a use case, the validator rejects them: `Operations and fields narrow entity policies only.`
@@ -89,7 +99,7 @@ module shop {
 
   entity Account {
     name: String unique
-    policy read { actor.is(Clerk) || actor.account == this }
+    policy read { actor.is(Clerk) || (actor.is(Customer) && actor.account == this) }
   }
 
   tenant Company on Account
@@ -98,7 +108,7 @@ module shop {
     account: Account
     total: Money
     note: Text?
-    policy read { actor.is(Clerk) || account == actor.account }
+    policy read { actor.is(Clerk) || (actor.is(Customer) && account == actor.account) }
     policy create, update, delete { actor.is(Clerk) }
     policy read fields note { actor.is(Employee) }
   }

@@ -56,7 +56,7 @@ Identifiers start with a letter or an underscore, followed by letters, digits or
 
 Many keywords are also valid names, so fields such as `state`, `from` or `input` stay legal:
 
-`state`, `input`, `value`, `from`, `to`, `on`, `for`, `step`, `list`, `detail`, `form`, `route`, `run`, `actions`, `fields`, `role`, `event`, `action`, `query`, `page`, `timeout`, `sort`, `when`, `create`, `read`, `update`, `delete`, `per`, `flow`, `actor`, `tenant`, `set`, `op`, `human`, `system`, `service`, `asc`, `desc`, `remove`, `rename`, `retype`, `roles`, `second`, `minute`, `hour`, `link`.
+`state`, `input`, `value`, `from`, `to`, `on`, `for`, `step`, `list`, `detail`, `form`, `route`, `run`, `actions`, `fields`, `role`, `event`, `action`, `query`, `page`, `timeout`, `sort`, `when`, `create`, `read`, `update`, `delete`, `per`, `flow`, `actor`, `tenant`, `set`, `op`, `human`, `system`, `service`, `asc`, `desc`, `remove`, `rename`, `retype`, `roles`, `second`, `minute`, `hour`, `link`, `core`, `supporting`, `peripheral`.
 
 Every other keyword (`module`, `entity`, `machine`, `policy`, `true`, `null` and so on) is reserved.
 
@@ -161,6 +161,7 @@ Other unnamed parts, such as preconditions, sort clauses, use case steps, page c
 | Page | Covers |
 |---|---|
 | [Modules](modules.md) | `module`, nested modules, `export`, references across modules and files |
+| [Relevance](relevance.md) | `core`, `supporting`, `peripheral` and the computed relevance score |
 | [Access](access.md) | `role`, `actor`, `tenant`, policies, `actor.is(...)`, narrowing |
 | [Domain](domain.md) | `enum`, `value`, `entity`, field types and modifiers, `invariant`, `policy` |
 | [Behavior](behavior.md) | `event`, `action`, `machine`, `job` |

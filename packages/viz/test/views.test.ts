@@ -2,10 +2,9 @@ import { expect, test } from 'vitest';
 import type { Model } from '@appling/lang';
 import { buildGraph, Simulator } from '@appling/model';
 import { buildWorkspace, examples } from '../../lang/test/workspace.js';
-import { abilities, actionSummary, cardView, elementAt, entityActions, entityView, GraphIndex, policyText, relations, search, shownFor, viewFor, type Card } from '../src/views.js';
+import { abilities, actionSummary, cardView, elementAt, entityActions, factOf, GraphIndex, growTree, policyText, relations, revealPath, search, viewFor, type Card, type TreeNode } from '../src/views.js';
 
-const HIDE = { linkEntities: false, emptyModules: false };
-const SHOW = { linkEntities: true, emptyModules: true };
+const DOMAIN = { lens: 'domain' as const, linkEntities: false };
 
 async function indexOf(sources: Record<string, string>) {
     const { documents, services } = await buildWorkspace(sources);
@@ -28,29 +27,52 @@ const CATALOG = `module catalog {
 }
 `;
 
-test('the entity view shows modules, entities and the associations between entities only', async () => {
-    const view = entityView(await indexOf(examples()), HIDE);
-    expect(view.modules).toEqual([{ qn: 'crm', parent: undefined }, { qn: 'sales', parent: undefined }]);
-    expect(view.entities.map(e => [e.qn, e.actions])).toEqual([['crm.Account', 0], ['sales.Order', 2]]);
-    expect(view.associations).toEqual([{ id: 'sales.Order>crm.Account', from: 'sales.Order', to: 'crm.Account', label: 'customer' }]);
-});
+/** Each node as `label (count)`, with its children indented below it. */
+const outline = (node: TreeNode, depth = 0): string[] => [`${'  '.repeat(depth)}${node.label} (${node.count})`, ...(node.children ?? []).flatMap(c => outline(c, depth + 1))];
 
-test('link entities are hidden unless asked for', async () => {
-    const index = await indexOf({ 'c.appling': CATALOG });
-    const hidden = entityView(index, HIDE);
-    expect(hidden.entities.map(e => e.qn)).toEqual(['catalog.Product', 'catalog.Tag']);
-    expect(hidden.associations).toEqual([]);
-    const shown = entityView(index, SHOW);
-    expect(shown.entities.find(e => e.qn === 'catalog.ProductTag')).toMatchObject({ name: 'ProductTag', link: true });
-    expect(shown.associations.map(a => `${a.id} ${a.label}`)).toEqual([
-        'catalog.Product>catalog.ProductTag tags[]', 'catalog.ProductTag>catalog.Product product', 'catalog.ProductTag>catalog.Tag tag?'
+test('the tree starts folded at the seed and unfolds modules, then the lens declarations, then what uses them, by kind', async () => {
+    const index = await indexOf(examples());
+    expect(outline(growTree(index, DOMAIN, new Set(), 'shop'))).toEqual(['shop (2)']);
+    const open = new Set(['~', '~/sales', '~/sales/#Entity', '~/sales/#Entity/sales.Order', '~/sales/#Entity/sales.Order/#Action']);
+    expect(outline(growTree(index, DOMAIN, open))).toEqual([
+        'model (2)',
+        '  sales (3)',
+        '    Entities (1)',
+        '      Order (9)',
+        '        Actions (2)',
+        '          PlaceOrder (4)',
+        '          Cancel (5)',
+        '        Use cases (1)',
+        '        Machines (1)',
+        '        Projections (1)',
+        '        Queries (1)',
+        '        Events (2)',
+        '        Jobs (1)',
+        '    Enums (1)',
+        '    Value types (1)',
+        '  crm (1)'
     ]);
+    expect(growTree(index, DOMAIN, open).children!.find(m => m.label === 'sales')!.fact).toBe('1 entity · 1 value · 1 enum');
 });
 
-test('modules without shown entities are hidden unless asked for', async () => {
-    const index = await indexOf({ 'a.appling': 'module a {\n  module b {\n    entity X {\n      n: Int\n    }\n  }\n}\nmodule empty {\n  role R\n}\n' });
-    expect(entityView(index, HIDE).modules.map(m => m.qn)).toEqual(['a', 'a.b']);
-    expect(entityView(index, SHOW).modules.map(m => m.qn)).toEqual(['a', 'a.b', 'empty']);
+test('a declaration that is already on its branch does not unfold again', async () => {
+    const index = await indexOf({ 'a.appling': 'module a {\n  entity Node {\n    parent: Node?\n    owner: Owner\n  }\n  entity Owner {\n    nodes: Node[]\n  }\n}\n' });
+    const open = new Set(['~', '~/a', '~/a/a.Owner', '~/a/a.Owner/a.Node']);
+    const owner = growTree(index, DOMAIN, open).children![0].children!.find(n => n.qn === 'a.Owner')!;
+    expect(owner.children!.map(n => n.qn)).toEqual(['a.Node']);
+    expect(owner.children![0].children!.map(n => [n.qn, n.cycle, n.count])).toEqual([['a.Owner', true, 0]]);
+});
+
+test('facts say what a declaration is about, and a selection reveals its declaration in the lens that has it', async () => {
+    const index = await indexOf(examples());
+    const fact = (qn: string) => factOf(index, index.nodes.get(qn)!);
+    expect(fact('sales.Order')).toBe('8 fields · 2 actions on it');
+    expect(fact('sales.Cancel')).toBe('on Order · draft, placed → cancelled');
+    expect(fact('sales.OrderFlow')).toBe('on Order.status · 4 states');
+    expect(fact('sales.ExpireDrafts')).toBe('every 0 3 * * * · runs Cancel');
+    expect(fact('sales.OpenOrders')).toBe('from Order');
+    expect(revealPath(index, { ...DOMAIN, lens: 'behavior' }, 'sales.PlaceOrder.EmptyOrder')).toEqual(['~', '~/sales', '~/sales/#Action']);
+    expect(revealPath(index, DOMAIN, 'sales.PlaceOrder')).toEqual([]);
 });
 
 test('an entity lists its actions with the transitions they drive, and who creates it', async () => {
@@ -76,13 +98,6 @@ test('an action summary says what it takes, requires and changes', async () => {
     expect(actionSummary(index, 'sales.Cancel').inputs).toEqual(['reason: String?']);
 });
 
-test('a selection maps to the entity or module shown for it', async () => {
-    const index = await indexOf(examples());
-    const view = entityView(index, HIDE);
-    expect(shownFor('sales.Order.status', view, index)).toBe('sales.Order');
-    expect(shownFor('sales.PlaceOrder', view, index)).toBe('sales');
-});
-
 test('search finds elements of the chosen layers by name or kind', async () => {
     const index = await indexOf(examples());
     const all = ['domain', 'behavior', 'application', 'interface', 'experience', 'cross'];
@@ -102,7 +117,7 @@ test('relations lift members to declarations and group them by layer', async () 
         behavior: ['sales.OrderPlaced', 'sales.PaymentReceived', 'sales.PlaceOrder', 'sales.Cancel', 'sales.OrderFlow', 'sales.ExpireDrafts'],
         application: ['sales.OpenOrders', 'sales.OrderSummary', 'sales.Checkout']
     });
-    expect(grouped('sales.Order', 'uses')).toEqual({ domain: ['crm.Account', 'sales.Line', 'sales.OrderStatus'], cross: ['crm.Clerk', 'sales.Shopper'] });
+    expect(grouped('sales.Order', 'uses')).toEqual({ domain: ['crm.Account', 'sales.Line', 'sales.OrderStatus'], cross: ['crm.Clerk', 'sales.Customer', 'sales.Shopper'] });
     expect(via('sales.Order.placed_at', 'usedBy')).toEqual({ 'sales.PlaceOrder': ['effect[set placed_at]'], 'sales.OpenOrders': [] });
     expect(via('sales.Order', 'uses')['crm.Account']).toEqual(['customer']);
     expect(via('sales.PlaceOrder', 'usedBy')).toMatchObject({ 'sales.OrderFlow': ['transition[draft->placed]'], 'sales.PublicApi': ['endpoint[POST /orders/{id}/place]'] });
@@ -124,7 +139,7 @@ test('abilities group what an actor may do, pages with the actions they offer', 
         ['sales.Orders', 'depends', ['sales.Cancel no']],
         ['sales.OrderDetail', 'depends', ['sales.PlaceOrder no', 'sales.Cancel no']]
     ]);
-    expect(policyText(index, 'sales.Order.policy[read]')).toBe('Order policy[read]: actor.is(crm.Clerk) || customer == actor.account');
+    expect(policyText(index, 'sales.Order.policy[read]')).toBe('Order policy[read]: actor.is(crm.Clerk) || (actor.is(Customer) && customer == actor.account)');
     expect(policyText(index, 'sales.PlaceOrder.policy[]')).toBe('PlaceOrder policy: actor.is(Customer) && customer == actor.account');
 });
 
@@ -132,13 +147,6 @@ const text = (cards: Card[]) => cards.map(card => ({
     title: `${card.title}${card.tag ? ` (${card.tag})` : ''}`,
     sections: card.sections.map(s => `${s.title ?? ''}: ${s.rows.map(r => `${r.text}${r.note ? ` [${r.note}]` : ''}`).join('; ')}`)
 }));
-
-test('a focused entity view keeps the focused entities, their neighbours and their modules', async () => {
-    const view = entityView(await indexOf(examples()), { ...HIDE, focus: ['crm.Account'] });
-    expect(view.entities.map(e => e.qn)).toEqual(['crm.Account', 'sales.Order']);
-    expect(view.modules.map(m => m.qn)).toEqual(['crm', 'sales']);
-    expect(view.associations.map(a => a.id)).toEqual(['sales.Order>crm.Account']);
-});
 
 test('a machine view is one card per state with what can be done there', async () => {
     const cards = cardView(await indexOf(examples()), 'machine', ['sales.OrderFlow']);

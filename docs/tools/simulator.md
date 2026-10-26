@@ -48,7 +48,7 @@ module shop {
   action Close on Cart {
     requires { lines.size() > 0 } else Empty
     errors Empty
-    policy { actor.is(Clerk) || owner == actor.name }
+    policy { actor.is(Clerk) || (actor.is(Buyer) && owner == actor.name) }
   }
 
   action Discount on Cart {
@@ -90,21 +90,21 @@ A customer may close a cart only when it is theirs, which depends on the cart's 
 
 **Reachability.** The search starts at the default of the machine's state field, or at every value of its enum when the field has no default, and follows transitions by their `from` states. Guards are not evaluated; the path marks guarded transitions.
 
-**Who may trigger an action.** An action is allowed when its own policies and the policies of its entity that cover `update` (or every operation) hold. Following the [concept](../concept.md), the effective policy is the conjunction of all policies along the way, so an entity that only lets clerks update it also keeps other actors from its actions. An actor holds the roles listed in its declaration, and `actor.is(...)` is true for those roles and for the actor itself.
+**Who may trigger an action.** An action is allowed when its own policies, the policies of its entity that cover `update` (or every operation), and the policies that cover `create` of every entity it creates (through a `create` effect of the action or of a transition it triggers) hold. Following the [concept](../concept.md), the effective policy is the conjunction of all policies along the way, so an entity that only lets clerks update it also keeps other actors from its actions. An actor holds the roles listed in its declaration, and `actor.is(...)` is true for those roles and for the actor itself.
 
 **What one actor may do.** `access` judges the same way, for one actor and every target, with the policies that add up along the reference path:
 
 | Target | Policies |
 |---|---|
 | Entity, per operation | The entity's policies that cover the operation and name no fields; a policy with `fields` gives one more entry for those fields, on top of the others |
-| Action | Its own, and its entity's policies that cover `update` |
+| Action | Its own, its entity's policies that cover `update`, and the policies that cover `create` of every entity it creates |
 | Query | Its own, and its entity's policies that cover `read` |
 | Use case | Its own, and those of every action, query, use case and external operation its steps and error handlers call |
 | Page | Those of the queries its lists show and of the projections it shows (a projection needs what its source needs). The actions a page offers are judged on their own |
 
-A target without any policy is open: `yes`, with no deciding policy.
+Nothing is open by default: a target that no policy guards along its path is `no` for every actor, with no deciding policy. A role that no policy names may do nothing.
 
-**Unknown data.** Expressions are evaluated with three valued logic. A value that needs data you did not give, such as a field of a record or an actor's field, is unknown. `a && b` is false as soon as one side is false, `a || b` is true as soon as one side is true, and everything else that touches an unknown value stays unknown. A policy that comes out unknown makes the verdict `depends`.
+**Unknown data.** Expressions are evaluated with three valued logic. A value that needs data you did not give, such as a field of a record or an actor's field, is unknown. A field the actor does not declare is null, and so is any field read from a null value, such as `actor.desk.closed_at` for an actor without `desk`. `a && b` is false as soon as one side is false, `a || b` is true as soon as one side is true, and everything else that touches an unknown value stays unknown. A policy that comes out unknown makes the verdict `depends`.
 
 **Running an action.** A run checks, in order: the policies (`no` refuses the run), the preconditions (a false one reports its error), the transition whose `from` state matches and whose guard does not fail, then applies the transition's effects, the state change and the action's effects, records `emit` effects as events, and evaluates the entity's invariants on the result. Derived fields are computed from the record when an expression reads them.
 

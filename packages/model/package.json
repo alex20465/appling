@@ -11,6 +11,10 @@
     "./simulator": {
       "types": "./out/simulator.d.ts",
       "default": "./out/simulator.js"
+    },
+    "./relevance": {
+      "types": "./out/relevance.d.ts",
+      "default": "./out/relevance.js"
     }
   },
   "files": [

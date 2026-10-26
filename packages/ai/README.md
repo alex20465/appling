@@ -25,6 +25,8 @@ The server instructions tell the assistant that the model is the source of truth
 | `registry_next` | The next open task of a generated project, with its model context |
 | `registry_update` | Marks a task `done`, or `partial` with a note |
 | `run_tests` | Runs the generated project's tests |
+| `code_references` | Where an element and its members are implemented, by file and line range, with their status; without a name, every reference that is not current |
+| `record_code_references` | Records the line ranges that implement an element in `.appling/references.json`, each with its first line as the anchor |
 
 The prompt `implement_next_task` carries the registry workflow.
 
@@ -43,11 +45,11 @@ Questions typed into the window reach the session as Claude Code channel message
 
 ## Registry skill
 
-`skills/appling-registry/SKILL.md` is an agent skill for working through `.appling/tasks.json` of a project made by `appling generate`: take the next open entry, implement what is missing, run the tests, record the outcome. Entries stop coming back after three attempts, with notes on what is left. Copy the folder into your agent's skills folder (for Claude Code, `.claude/skills/`) next to the MCP server.
+`skills/appling-registry/SKILL.md` is an agent skill for working through `.appling/tasks.json` of a project made by `appling generate`: take the next open entry, implement what is missing, run the tests, record where it is implemented and the outcome. Entries stop coming back after three attempts, with notes on what is left. Copy the folder into your agent's skills folder (for Claude Code, `.claude/skills/`) next to the MCP server.
 
 ## Reverse engineering skill
 
-`skills/appling-reverse/SKILL.md` (also the MCP prompt `derive_model`) is an agent skill for deriving an Appling model from an existing application: survey the code, map it to the five layers, write and validate module by module, compare behavior with `simulate`, and report what the model cannot say exactly.
+`skills/appling-reverse/SKILL.md` (also the MCP prompt `derive_model`) is an agent skill for deriving an Appling model from an existing application: survey the code, map it to the five layers (with rules for modeling access), write and validate module by module, record the code each element describes, compare behavior with `simulate`, and report what the model cannot say exactly.
 
 ## Model adapter and chat
 

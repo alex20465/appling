@@ -1,54 +1,64 @@
-import Elk, { type ElkNode } from 'elkjs/lib/elk.bundled.js';
-import type { EntityView, ViewSettings } from './views.js';
+import type { TreeNode } from './views.js';
 
-export interface Box {
+/** A node of the tree at its place: the seed at 0,0, children above their parent. */
+export interface Placed {
+    node: TreeNode;
     x: number;
     y: number;
-    width: number;
-    height: number;
-    parent?: string;
+    parent?: Placed;
 }
 
-/** elkjs is CommonJS: Node sees its module object, whose `default` is the class too. */
-const elk = new Elk.default();
-export const ENTITY_WIDTH = 200;
-const ENTITY_HEIGHT = 40;
-const EMPTY_MODULE = { width: 200, height: 56 };
+/** The width each node type takes in a row: a circle with its labels on the right. */
+const SLOT: Record<TreeNode['type'], number> = { seed: 220, module: 260, group: 210, element: 250 };
+/** From a parent to the first row of its children. */
+const LEVEL = 140;
+/** Between the rows of a wrapped group. */
+const ROW = 100;
+/** Folded children beyond this many wrap into rows. */
+const WRAP = 6;
 
-/** Lays out the modules as nested groups around their entities with ELK. */
-export async function layoutView(current: EntityView, direction: ViewSettings['direction']): Promise<Map<string, Box>> {
-    const children = (module: string | undefined): ElkNode[] => [
-        ...current.modules.filter(m => m.parent === module).map(m => {
-            const inside = children(m.qn);
-            return {
-                id: m.qn,
-                layoutOptions: { 'elk.padding': '[top=44,left=20,bottom=20,right=20]' },
-                children: inside,
-                ...(inside.length ? {} : EMPTY_MODULE)
-            };
-        }),
-        ...current.entities.filter(e => module && e.module === module).map(e => ({ id: e.qn, width: ENTITY_WIDTH, height: ENTITY_HEIGHT }))
-    ];
-    const root = await elk.layout({
-        id: '(root)',
-        layoutOptions: {
-            'elk.algorithm': 'layered',
-            'elk.direction': direction,
-            'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
-            'elk.spacing.nodeNode': '32',
-            'elk.layered.spacing.nodeNodeBetweenLayers': '80'
-        },
-        children: children(undefined),
-        edges: current.associations.map(a => ({ id: a.id, sources: [a.from], targets: [a.to] }))
-    });
-    const boxes = new Map<string, Box>();
-    const collect = (node: ElkNode, parent?: string) => {
-        for (const child of node.children ?? []) {
-            boxes.set(child.id, { x: child.x ?? 0, y: child.y ?? 0, width: child.width ?? ENTITY_WIDTH, height: child.height ?? ENTITY_HEIGHT, parent });
-            collect(child, child.id);
+/**
+ * Places the tree growing upwards: each parent centered below its children, groups of folded elements wrapped into
+ * rows. Children come most relevant first; each row puts them in the middle and the least relevant at the edges.
+ */
+export function layoutTree(root: TreeNode): Placed[] {
+    const placed: Placed[] = [];
+    const place = (node: TreeNode, x: number, y: number, parent?: Placed) => {
+        const here = { node, x, y, parent };
+        placed.push(here);
+        const children = node.children ?? [];
+        if (wraps(node)) {
+            const slot = SLOT[children[0].type];
+            for (let row = 0; row * WRAP < children.length; row++) {
+                const inRow = centered(children.slice(row * WRAP, (row + 1) * WRAP));
+                inRow.forEach((child, column) => place(child, x + (column - (inRow.length - 1) / 2) * slot, y - LEVEL - row * ROW, here));
+            }
+            return;
+        }
+        let left = x - children.reduce((sum, child) => sum + width(child), 0) / 2;
+        for (const child of centered(children)) {
+            place(child, left + width(child) / 2, y - LEVEL, here);
+            left += width(child);
         }
     };
-    collect(root);
-    return boxes;
+    place(root, 0, 0);
+    return placed;
 }
 
+/** The first in the middle, then the next ones alternating to either side. */
+function centered<T>(items: T[]): T[] {
+    const result: T[] = [];
+    items.forEach((item, i) => i % 2 ? result.unshift(item) : result.push(item));
+    return result;
+}
+
+function wraps(node: TreeNode): boolean {
+    return (node.children?.length ?? 0) > WRAP && !node.children!.some(c => c.children);
+}
+
+function width(node: TreeNode): number {
+    const children = node.children ?? [];
+    if (!children.length) return SLOT[node.type];
+    if (wraps(node)) return Math.max(SLOT[node.type], WRAP * SLOT[children[0].type]);
+    return Math.max(SLOT[node.type], children.reduce((sum, child) => sum + width(child), 0));
+}

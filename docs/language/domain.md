@@ -68,11 +68,12 @@ module sales {
 
     invariant "total never negative" { total >= 0 }
 
-    policy read { actor.is(Clerk) }
-    policy read fields total { status != draft || actor.is(Clerk) }
+    policy read { actor.is(Clerk) || actor.is(Customer) }
+    policy read fields total { actor.is(Clerk) || (actor.is(Customer) && status != draft) }
   }
 
   role Clerk
+  role Customer
 }
 ```
 
@@ -186,9 +187,9 @@ Put a rule that must always be true here. A rule that must be true only for one 
 Entity policies guard the records and fields of the entity. They can name the operations they cover (`read`, `create`, `update`, `delete`) and the fields they protect.
 
 ```appling
-policy read { actor.is(crm.Clerk) || customer == actor.account }
+policy read { actor.is(crm.Clerk) || (actor.is(Customer) && customer == actor.account) }
 policy create, update, delete { actor.is(crm.Clerk) }
-policy read fields total { status != draft || actor.is(crm.Clerk) }
+policy read fields total { actor.is(crm.Clerk) || (actor.is(Customer) && status != draft) }
 ```
 
 See [access](access.md#policies) for the full rules.

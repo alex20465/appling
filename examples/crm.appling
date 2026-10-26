@@ -6,7 +6,7 @@ module crm {
   entity Account {
     name: String unique
     email: String
-    policy read { actor.is(Clerk) || actor.account == this }
+    policy read { actor.is(Clerk) || (actor.is(sales.Customer) && actor.account == this) }
   }
 
   tenant Company on Account

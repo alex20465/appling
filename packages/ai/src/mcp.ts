@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { Project } from './project.js';
 import { MCP_INSTRUCTIONS, REGISTRY_PROMPT, REVERSE_PROMPT } from './prompts.js';
-import { AUTHORING_TOOLS, diskContext, MODEL_TOOLS, REGISTRY_TOOLS, type Tools } from './tools.js';
+import { AUTHORING_TOOLS, diskContext, MODEL_TOOLS, REFERENCE_TOOLS, REGISTRY_TOOLS, type Tools } from './tools.js';
 import { VISUAL_INSTRUCTIONS, visualTools, type VisualHost } from './visual.js';
 
 /**
@@ -23,7 +23,7 @@ export function createMcpServer(root: string, options: { visualizer?: VisualHost
         params: { content: ask.text, meta: { ask_id: ask.id, selected: ask.selected ?? '', view: ask.view ? `${ask.view.view} ${ask.view.focus.join(' ')}` : '' } }
     }).catch(error => console.error(error)));
     const visual = visualizer ? visualTools(visualizer) : {};
-    for (const [name, tool] of Object.entries({ ...MODEL_TOOLS, ...AUTHORING_TOOLS, ...REGISTRY_TOOLS, ...visual } as Tools)) {
+    for (const [name, tool] of Object.entries({ ...MODEL_TOOLS, ...AUTHORING_TOOLS, ...REGISTRY_TOOLS, ...REFERENCE_TOOLS, ...visual } as Tools)) {
         server.registerTool(name, { description: tool.description, inputSchema: tool.input }, async (input: Record<string, unknown>) => {
             const result = await tool.run(context, input);
             return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };

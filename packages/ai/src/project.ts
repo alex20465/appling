@@ -5,8 +5,8 @@ import { AstUtils, URI } from 'langium';
 import { buildSources, type Model, type Workspace } from '@appling/lang';
 import { readConfig, readRegistry, writeRegistry, type Registry, type RegistryEntry, type Status } from '@appling/codegen';
 import {
-    applyEdit, buildGraph, findApplingFiles, latestRelease, qualifiedNames, readReleases,
-    type EditOperation, type EditResult, type Graph
+    applyEdit, buildGraph, findApplingFiles, latestRelease, qualifiedNames, readReleases, recordReferences, resolveReferences,
+    type CodeReference, type EditOperation, type EditResult, type Graph, type ResolvedReference
 } from '@appling/model';
 
 /** After this many attempts an entry stops coming back from `nextTask`. */
@@ -67,6 +67,21 @@ export class Project {
         const changed = Object.keys(sources).filter(uri => sources[uri] !== current[uri]);
         for (const uri of changed) writeFileSync(URI.parse(uri).fsPath, sources[uri]);
         return changed.map(uri => relative(this.root, URI.parse(uri).fsPath));
+    }
+
+    /** Where one element and its members are implemented; without a name, every reference that is not current. */
+    async references(qn?: string): Promise<ResolvedReference[]> {
+        const all = resolveReferences(this.root, await this.graph());
+        return qn ? all.filter(r => r.qn === qn || r.qn.startsWith(`${qn}.`)) : all.filter(r => r.status !== 'current');
+    }
+
+    async recordReferences(qn: string, ranges: { file: string, start: number, end: number }[]): Promise<CodeReference[] | { error: string }> {
+        if (!(await this.graph()).nodes.some(n => n.qn === qn)) return { error: `No element ${qn}.` };
+        try {
+            return recordReferences(this.root, qn, ranges);
+        } catch (error) {
+            return { error: (error as Error).message };
+        }
     }
 
     /** The generated projects that have a task registry, from `appling.config.json`. */

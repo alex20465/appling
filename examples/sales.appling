@@ -1,6 +1,6 @@
 // Order management: one module across all five layers.
 module sales {
-  export Order, OrderSummary, OpenOrders, PlaceOrder
+  export Order, OrderSummary, OpenOrders, PlaceOrder, Customer
 
   role Customer
   actor human Shopper roles Customer {
@@ -33,9 +33,9 @@ module sales {
 
     invariant "total never negative" { total >= 0 }
 
-    policy read { actor.is(crm.Clerk) || customer == actor.account }
+    policy read { actor.is(crm.Clerk) || (actor.is(Customer) && customer == actor.account) }
     policy create, update, delete { actor.is(crm.Clerk) }
-    policy read fields total { status != draft || actor.is(crm.Clerk) }
+    policy read fields total { actor.is(crm.Clerk) || (actor.is(Customer) && status != draft) }
   }
 
   // L2 Behavior

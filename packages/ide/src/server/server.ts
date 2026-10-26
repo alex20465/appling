@@ -9,7 +9,7 @@ import { WebSocketMessageReader, WebSocketMessageWriter, type IWebSocket } from 
 import { WebSocketServer, type WebSocket } from 'ws';
 import { createApplingLspServices } from '@appling/lang/lsp';
 import { chat, languageModel, modelSettings } from '@appling/ai';
-import { applyEdit, latestRelease, readReleases, type EditOperation } from '@appling/model';
+import { applyEdit, latestRelease, readReleases, REFERENCES, type EditOperation } from '@appling/model';
 import type { ModelMessage } from 'ai';
 import { readView, snapshot, writeView } from './workspace.js';
 
@@ -47,7 +47,7 @@ export async function startIde(root: string, port = 0): Promise<Ide> {
 
     let timer: NodeJS.Timeout | undefined;
     const watcher = watch(root, { recursive: true }, (_, file) => {
-        if (!file?.endsWith('.appling') || file.split(sep).some(part => part.startsWith('.') || part === 'node_modules')) return;
+        if (file !== REFERENCES && (!file?.endsWith('.appling') || file.split(sep).some(part => part.startsWith('.') || part === 'node_modules'))) return;
         clearTimeout(timer);
         timer = setTimeout(async () => {
             const message = JSON.stringify({ type: 'snapshot', snapshot: await snapshot(root) });

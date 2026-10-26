@@ -32,6 +32,10 @@ These are not layers. They apply across all layers.
 - The current actor and tenant are always available in the expression context.
 - Actors declare typed fields, such as the account a human user acts for. In expressions, `actor.is(Role)` tests a role and `actor.field` reads a field declared by at least one actor. The field is null for actors that do not declare it.
 
+**Relevance**
+- How much a module or top level declaration matters to the business, from 0 to 1. The graph computes it from what uses a declaration and what it uses; a declared level (`core`, `supporting`, `peripheral`), on the declaration or inherited from its module, maps it into a fixed range, so a person's judgment of the business wins over connectivity.
+- Tools use it to show the core of the application first and the housekeeping last.
+
 **Expression language**
 - A small, typed, side-effect-free language used for constraints, policies, guards, derived fields, and filters.
 - It has defined semantics, so it can be evaluated by the validator and the simulator.
@@ -119,7 +123,7 @@ Allowed references form a directed acyclic graph:
 
 **Bottom-up inheritance with monotonic narrowing:** Higher layers inherit definitions, constraints, and policies from lower layers. They may only narrow them, by exposing fewer fields or applying stricter policies. They may never widen them. Intentional divergence of shape happens only through Layer 3 projections.
 
-**Local policies:** Access policies are defined next to the concepts they protect: entities, actions, queries, and use cases. The effective policy at any point is the conjunction of all policies along the reference path.
+**Local policies:** Access policies are defined next to the concepts they protect: entities, actions, queries, and use cases. The effective policy at any point is the conjunction of all policies along the reference path. Nothing is open by default: a policy grants by role (`actor.is(Role)`, with conditions), and a role that no policy names may do nothing.
 
 **Explicit exposure:** Interfaces, navigation, pages, and module exports are intentionally declared, never derived from the mere existence of entities.
 
@@ -131,7 +135,7 @@ Allowed references form a directed acyclic graph:
 
 The visualization serves a human who needs to understand the business logic. It draws little and lets the person ask for detail:
 
-- **Entity view:** modules with their core entities and the associations between them. Value types, enums and the edges to them stay out. Secondary entities, such as join records marked `entity link`, are hidden until asked for and then shown grayed out. Fields, invariants and policies are never drawn in the view.
+- **Model tree:** one lens at a time (domain, behavior, application, interfaces, access) grows as a tree from a seed: modules, then the lens's declarations, then on each unfold the declarations that use the unfolded one, grouped by kind. Nothing is drawn until asked for. Each circle says what it is (name, kind, one fact); its relevance sets its size and its place in the row. Secondary entities, such as join records marked `entity link`, are hidden until asked for. Fields, invariants and policies are never drawn in the tree.
 - **Search:** every element of every layer, filtered by layer, as the way into behavior, application logic, interfaces and pages.
 - **Inspector:** the selected element in detail: its members, and the declarations that use it and that it uses, grouped by layer. For an entity this shows its behavior, queries, use cases, endpoints and pages in one place.
 

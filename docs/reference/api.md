@@ -103,7 +103,14 @@ console.log(result.ok ? result.edits : result.errors);
 | `releasesDir(root)` | `<root>/.appling/releases` |
 | `migrationBlockName(version)` | The migration block for steps after a release: `1.0.0` gives `since_v1_0_0` |
 | `Release` | `{ version, created, graph }` |
+| `recordReferences(root, qn, ranges)` | Replaces the [code references](../tools/references.md) of one element in `<root>/.appling/references.json` and returns them; throws for a missing file, a range outside it or one that starts on an empty line |
+| `readReferences(root)`, `resolveReferences(root, graph?)` | The stored references by qualified name, and every reference with its status and where it is now; with a graph, references to elements it lacks are `orphaned` |
+| `REFERENCES`, `CodeReference`, `References`, `ResolvedReference`, `ReferenceStatus` | `.appling/references.json` and the reference types |
+| `relevance(graph)` | The [relevance](../language/relevance.md) of every module and top level declaration, from 0 to 1, by qualified name |
+| `relevanceLevel(score)`, `RELEVANCE_LEVELS`, `RelevanceLevel` | The level a score falls in, and the score range of each level |
 | `findApplingFiles(path)` | The `.appling` files at a path, searching folders recursively and skipping hidden folders and `node_modules` |
+
+`@appling/model/simulator` and `@appling/model/relevance` export the simulator and the relevance functions without the rest of the package, so a browser bundle can import them.
 
 ## Code generation: @appling/codegen
 
@@ -181,7 +188,7 @@ Workspace:
 
 | Export | Purpose |
 |---|---|
-| `Project` | A workspace folder: `sources()`, `check()`, `graph()`, `source(qn)`, `edit(operation)` with the latest release, `write(sources)`, and the registry methods `targets()`, `nextTask(target)`, `updateTask(qn, status, note, target)`, `runTests(target)` |
+| `Project` | A workspace folder: `sources()`, `check()`, `graph()`, `source(qn)`, `edit(operation)` with the latest release, `write(sources)`, and the registry methods `targets()`, `nextTask(target)`, `updateTask(qn, status, note, target)`, `runTests(target)`, and `references(qn?)`, `recordReferences(qn, ranges)` for the code references |
 | `queryGraph(graph, query)` | What the `graph_query` tool returns |
 | `MAX_ATTEMPTS` | Attempts after which a registry entry stops coming back, `3` |
 | `Sources` | `{ [uri]: text }` |
@@ -190,7 +197,7 @@ Tools and MCP:
 
 | Export | Purpose |
 |---|---|
-| `MODEL_TOOLS`, `REGISTRY_TOOLS`, `Tools` | The tool definitions: description, zod input shape and `run(context, input)` |
+| `MODEL_TOOLS`, `AUTHORING_TOOLS`, `REGISTRY_TOOLS`, `REFERENCE_TOOLS`, `Tools` | The tool definitions: description, zod input shape and `run(context, input)` |
 | `operationSchema` | The zod schema of an edit operation |
 | `ToolContext`, `diskContext(project)`, `ProposalContext` | Where tools read and write: the files on disk, or a working copy that collects operations |
 | `createMcpServer(root, { visualizer? })` | An MCP server with all tools, the `implement_next_task` and `derive_model` prompts and `MCP_INSTRUCTIONS`; with a visualizer also the visualization tools, and it declares the `claude/channel` capability |
@@ -235,11 +242,14 @@ await window.show({ view: 'machine', focus: ['sales.OrderFlow'], title: 'Order l
 
 | Export | Purpose |
 |---|---|
-| `GraphIndex` | The graph with children, parents and lineage by qualified name |
-| `entityView(index, settings)` | Modules, entities and associations; `settings.focus` limits it to the focused entities or modules and their neighbours |
+| `GraphIndex` | The graph with children, parents and lineage by qualified name, and `relevanceOf(qn)`, the relevance of the declaration an element belongs to |
+| `growTree(index, settings, unfolded, name?)` | The dependency tree of `settings.lens` as a `TreeNode`: the seed holds the modules, a module the declarations of the lens, a declaration the declarations that use it, grouped by kind when there is more than one; only the node ids in `unfolded` have children, the most relevant first |
+| `revealPath(index, settings, qn)` | The node ids to unfold so that an element's declaration shows in its module |
+| `factOf(index, node)` | The short fact a tree node shows under its name, such as `on Order · draft, placed → cancelled` |
+| `LENSES`, `Lens` | The lenses (`domain`, `behavior`, `application`, `interfaces`, `access`) with their label and the kinds the tree starts from |
 | `cardView(index, view, focus)` | The `machine`, `action`, `usecase` or `event` view of the focused elements as `Card`s: a title, a tag and sections of rows, each row selecting an element |
 | `viewFor(kind)`, `VIEW_KINDS`, `ViewKind` | The view that draws an element kind |
-| `search`, `relations`, `entityActions`, `actionSummary`, `memberText`, `kindLabel`, `elementAt`, `shownFor` | The search, relations and summaries the IDE side panel shows |
-| `ViewSettings`, `DEFAULT_VIEW` | The entity view options |
+| `search`, `relations`, `entityActions`, `actionSummary`, `memberText`, `kindLabel`, `elementAt` | The search, relations and summaries the IDE side panel shows |
+| `ViewSettings`, `DEFAULT_VIEW` | The canvas options, the lens included |
 
-`@appling/viz/canvas` exports the React Flow canvas `EntityCanvas` and the card grid `CardCanvas`; import `@xyflow/react/dist/style.css` and `@appling/viz/canvas.css` with them. They need `react`, `@xyflow/react` and `elkjs` as peer dependencies.
+`@appling/viz/canvas` exports the SVG tree `ModelCanvas` (one lens at a time, unfolded node by node, circles sized by relevance) and the card grid `CardCanvas`; import `@appling/viz/canvas.css` with them. They need `react` as a peer dependency.

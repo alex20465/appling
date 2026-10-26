@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { AstUtils, URI } from 'langium';
 import { buildSources, errorsOf, type Model } from '@appling/lang';
-import { buildGraph, dependencies, findApplingFiles, qualifiedNames } from '@appling/model';
-import type { Location, Snapshot, ViewSettings } from '../shared/snapshot.js';
+import { buildGraph, dependencies, findApplingFiles, qualifiedNames, resolveReferences } from '@appling/model';
+import type { CodeLocation, Location, Snapshot, ViewSettings } from '../shared/snapshot.js';
 
 export async function snapshot(root: string): Promise<Snapshot> {
     const files = findApplingFiles(root).map(path => ({ uri: URI.file(path).toString(), path: relative(root, path), text: readFileSync(path, 'utf8') }));
@@ -14,12 +14,15 @@ export async function snapshot(root: string): Promise<Snapshot> {
     for (const [node, qn] of qualifiedNames(models)) {
         locations[qn] = { uri: AstUtils.getDocument(node).uri.toString(), start: node.$cstNode!.offset, end: node.$cstNode!.end };
     }
-    return { root: URI.file(root).toString(), files, graph, dependencies: dependencies(graph), locations, errors: errorsOf(workspace) };
+    const code = Object.groupBy(resolveReferences(root, graph).map(r => ({
+        ...r, text: r.status === 'broken' ? '' : readFileSync(resolve(root, r.file), 'utf8').split('\n').slice(r.start - 1, r.end).join('\n')
+    })), r => r.qn) as Record<string, CodeLocation[]>;
+    return { root: URI.file(root).toString(), files, graph, dependencies: dependencies(graph), locations, code, errors: errorsOf(workspace) };
 }
 
 const VIEW = join('.appling', 'view.json');
 
-/** The entity view settings, kept outside the model so they never appear in model diffs. */
+/** The canvas settings, kept outside the model so they never appear in model diffs. */
 export function readView(root: string): Partial<ViewSettings> {
     const file = join(root, VIEW);
     return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};

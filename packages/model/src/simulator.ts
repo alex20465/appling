@@ -39,7 +39,7 @@ export interface Access {
     operation?: 'read' | 'create' | 'update' | 'delete';
     fields?: string[];
     verdict: Verdict;
-    /** The qualified names of the deciding policies; none means nothing guards the target. */
+    /** The qualified names of the deciding policies; none means nothing grants the target, so nobody may. */
     policies: string[];
 }
 
@@ -88,7 +88,7 @@ export class Simulator {
         return undefined;
     }
 
-    /** For every declared actor: whether it may trigger the action, by the action's policies and the entity's update policies. */
+    /** For every declared actor: whether it may trigger the action, by the action's policies, the entity's update policies and the create policies of what it creates. */
     actors(action: string): { actor: string, verdict: Verdict }[] {
         return this.graph.nodes.filter(n => n.kind === 'Actor').map(actor => ({
             actor: actor.qn,
@@ -99,8 +99,9 @@ export class Simulator {
     /**
      * What an actor may do: every entity operation, action, query, use case and page with the verdict of its
      * policies. Policies add up along the reference path (concept.md section 3): an action also needs its entity's
-     * update policies, a query its entity's read policies, a use case the policies of everything its steps call,
-     * and a page the policies of the queries and projections it shows. The actions a page offers keep their own.
+     * update policies and the create policies of the entities it creates, a query its entity's read policies, a use
+     * case the policies of everything its steps call, and a page the policies of the queries and projections it
+     * shows. The actions a page offers keep their own.
      */
     access(actor: string): Access[] {
         const verdict = (policies: GraphNode[]): Verdict => this.verdict(policies, { actor }, undefined, {});
@@ -181,7 +182,7 @@ export class Simulator {
         switch (expr.$type) {
             case 'StringExpr': return String(expr.value);
             case 'NumberExpr': return Number(expr.value);
-            case 'BoolExpr': return expr.value === true;
+            case 'BoolExpr': return expr.value === 'true';
             case 'NullExpr': return null;
             case 'ListExpr': return (expr.items ?? []).map(sub);
             case 'UnaryExpr': {
@@ -205,7 +206,7 @@ export class Simulator {
 
     private verdict(policies: GraphNode[], actor: Actor, record: Record | undefined, inputs: { [name: string]: Value }): Verdict {
         const verdicts = policies.map(p => this.evaluate(p.data.condition as ExprData, { self: record, actor, inputs }));
-        if (verdicts.some(v => v === false)) return 'no';
+        if (!verdicts.length || verdicts.some(v => v === false)) return 'no';
         return verdicts.every(v => v === true) ? 'yes' : 'depends';
     }
 
@@ -217,7 +218,11 @@ export class Simulator {
         const own = this.kids(node, 'Policy');
         const along = (targets: (string | undefined)[]) => targets.filter(t => t).flatMap(t => this.guards(t!, seen));
         switch (node.kind) {
-            case 'Action': return [...own, ...this.entityPolicies(node.data.entity as string | undefined, 'update')];
+            case 'Action': {
+                const transitions = this.graph.nodes.filter(n => n.kind === 'Transition' && n.data.action === qn);
+                const creates = [node, ...transitions].flatMap(n => this.kids(n, 'CreateEffect')).map(e => e.data.entity as string);
+                return [...own, ...this.entityPolicies(node.data.entity as string | undefined, 'update'), ...[...new Set(creates)].flatMap(e => this.entityPolicies(e, 'create'))];
+            }
             case 'Query': return [...own, ...this.entityPolicies(node.data.entity as string, 'read')];
             case 'Entity': return this.entityPolicies(qn, 'read');
             case 'Projection': return along([node.data.source as string]);
@@ -288,9 +293,12 @@ export class Simulator {
         return UNKNOWN;
     }
 
+    /** A field of a null record is null, as the typer makes it optional; an actor's field it does not declare is null too. */
     private member(receiver: Value, member: string, target: string | undefined, scope: Parameters<Simulator['evaluate']>[1]): Value {
-        if (receiver === UNKNOWN || receiver === null || typeof receiver !== 'object' || Array.isArray(receiver) || receiver instanceof Date) return UNKNOWN;
+        if (receiver === null) return null;
+        if (receiver === UNKNOWN || typeof receiver !== 'object' || Array.isArray(receiver) || receiver instanceof Date) return UNKNOWN;
         if (member in receiver) return receiver[member] as Value;
+        if (this.nodes.get(receiver.$type ?? '')?.kind === 'Actor' && !this.nodes.has(`${receiver.$type}.${member}`)) return null;
         const field = target ? this.nodes.get(target) : undefined;
         if (field?.data.derived) return this.evaluate(field.data.derived as ExprData, { ...scope, self: receiver, vars: undefined });
         return UNKNOWN;

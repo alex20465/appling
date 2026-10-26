@@ -21,6 +21,7 @@ const deps = dependencies(graph);
 | `applyEdit(sources, operation, { release })` | Applies one edit operation to sources keyed by URI |
 | `writeRelease(root, version, graph)`, `readReleases(root)`, `latestRelease(releases)` | Release snapshots in `<root>/.appling/releases/` |
 | `migrationBlockName(version)` | The migration block for steps after a release, such as `since_v1_0_0` |
+| `recordReferences(root, qn, ranges)`, `readReferences(root)`, `resolveReferences(root, graph?)` | Code references in `<root>/.appling/references.json`: where elements are implemented, by file, line range and anchor line, resolved as `current`, `shifted`, `broken` or `orphaned` |
 | `Graph`, `GraphNode`, `GraphEdge`, `Dependency` | The serializable graph types |
 
 ### Nodes
@@ -80,7 +81,11 @@ simulator.risks('sales.Discount');             // invariants that read a field t
 simulator.run('sales.Cancel', { status: 'draft' }, { actor: 'sales.Staff' }, { reason: 'late' });
 ```
 
-An action is allowed when its own policies and the `update` policies of its entity hold. `access` adds policies up along the reference path the same way: a query needs its entity's `read` policies, a use case everything its steps call, a page what its lists and projections show. Expressions are evaluated with three valued logic: anything that needs data that is not given is `UNKNOWN`, which `&&` and `||` short circuit around. `run` checks the policies and preconditions, takes the transition whose state and guard match, applies the effects, records emitted events and reports violated invariants.
+An action is allowed when its own policies, the `update` policies of its entity and the `create` policies of every entity it creates hold. Nothing is open by default: a target that no policy guards is `no` for every actor. `access` adds policies up along the reference path the same way: a query needs its entity's `read` policies, a use case everything its steps call, a page what its lists and projections show. Expressions are evaluated with three valued logic: anything that needs data that is not given is `UNKNOWN`, which `&&` and `||` short circuit around. `run` checks the policies and preconditions, takes the transition whose state and guard match, applies the effects, records emitted events and reports violated invariants.
+
+## Relevance
+
+`relevance(graph)` scores every module and top level declaration from 0 to 1 by how much it matters to the application (`import { relevance } from '@appling/model'`, or `@appling/model/relevance` without the language dependencies). The score counts the declarations that use it and those it uses, on a log scale against the busiest one; a declared level (`core`, `supporting`, `peripheral`), its own or its module's, maps it into the ranges 0.7 to 1, 0.35 to 0.7 and 0 to 0.35. A module scores as its best declaration. `relevanceLevel(score)` names the level of a score.
 
 ## License
 

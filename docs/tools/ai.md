@@ -68,7 +68,7 @@ Use an absolute folder here, since the client decides the working directory.
 
 ## Tools
 
-The server registers ten tools, and over stdio four more for the [visualization window](#visualization-window). Each returns its result as JSON text.
+The server registers twelve tools, and over stdio four more for the [visualization window](#visualization-window). Each returns its result as JSON text.
 
 ### Model tools
 
@@ -121,13 +121,22 @@ These three tools work on the [task registry](../codegen/registry.md) (`.appling
 
 The entry from `registry_next` carries everything an agent needs: the element's qualified name, kind and layer, the steps and files that produced it, and for each missing task its description with the element's properties and related elements.
 
+### Reference tools
+
+These two tools read and write the [code references](references.md) of the workspace (`.appling/references.json`): where each element is implemented, by file and line range.
+
+| Tool | Input | Returns |
+|---|---|---|
+| `code_references` | `qn?` (string) | `{ references }`. With `qn`: the references of that element and its members. Without: every reference that is not `current`. Each has `qn`, `file`, `start`, `end`, `anchor` and `status` (`current`, `shifted`, `broken` or `orphaned`); a shifted one has the lines where its anchor is now and the `recorded` range |
+| `record_code_references` | `qn` (string), `ranges`: a list of `{ file, start, end }`, with `file` absolute or relative to the workspace folder and lines counted from 1 | The recorded references, each with the first line of its range as `anchor`; `{ error }` for an unknown element, a missing file, a range outside the file or one that starts on an empty line. It replaces the element's references; an empty list removes them |
+
 ### The implement_next_task prompt
 
 The server also registers the MCP prompt `implement_next_task`. It carries the text of the registry skill below, so a client that supports prompts can start the workflow without installing the skill.
 
 ## Reverse engineering skill
 
-`skills/appling-reverse/SKILL.md` guides an agent from an existing application to an Appling model: learn the language through `language_reference`; survey where the code keeps its data model, rules, behavior, reads, access checks, interfaces and pages; map each to its Appling construct; write one module per file with `write_model_file`, checking after each; compare the model's behavior with the code through `simulate`; and report what the model cannot say exactly, with comments that name the source files. The MCP prompt `derive_model` carries the same instructions. Install it like the registry skill, next to the MCP server pointed at the folder for the new model. [Start from an existing project](../getting-started/existing-project.md) walks through it step by step.
+`skills/appling-reverse/SKILL.md` guides an agent from an existing application to an Appling model: learn the language through `language_reference`; survey where the code keeps its data model, rules, behavior, reads, access checks, interfaces and pages; map each to its Appling construct, with rules for access (every policy grants by role with conditions, every principal including unauthenticated visitors and code without an actor gets a role, grants taken from the call sites, nested writes); write one module per file with `write_model_file`, checking after each; mark what the business runs on as `core` and housekeeping modules as `peripheral` where the graph's own [relevance](../language/relevance.md) ranking misses it; record the code each element describes with `record_code_references`; compare the model's behavior with the code through `simulate`; and report what the model cannot say exactly, with comments that name the source files. The MCP prompt `derive_model` carries the same instructions. Install it like the registry skill, next to the MCP server pointed at the folder for the new model. [Start from an existing project](../getting-started/existing-project.md) walks through it step by step.
 
 ## Registry skill
 
@@ -137,9 +146,10 @@ The registry skill lives in the package at `skills/appling-registry/SKILL.md`. I
 2. Read the generated files listed in it, `read_source` for the element and `graph_query` for related elements. The model is the specification; the agent does not change it to make the code easier.
 3. Implement what is missing in the style of the code around it. For a test body, write the test and remove the skip that points at the entry.
 4. Call `run_tests` and fix failures until the related tests pass.
-5. Call `registry_update` with `done`, or `partial` with a note on what is left and why.
+5. Call `record_code_references` with every line range that implements the element, and now and then record again what `code_references` reports as shifted or broken.
+6. Call `registry_update` with `done`, or `partial` with a note on what is left and why.
 
-Entries that need a decision only a person can make (credentials, an external system's real behavior, product choices) end as `partial` with the question in the note.
+Entries that need a decision only a person can make (credentials, an external system's real behavior, product choices) end as `partial` with the question in the note. Effort follows the [relevance](../language/relevance.md) of the element: `core` declarations are implemented completely with tests for their rules, `peripheral` ones get the simplest correct implementation.
 
 To install it for Claude Code, copy the folder into your project's skills folder, next to the MCP server:
 
@@ -163,13 +173,13 @@ The window runs on [Electron](https://www.electronjs.org), which `@appling/ai` i
 
 | View | Draws | `focus` takes |
 |---|---|---|
-| `entities` | Entities with their associations and modules, like the [IDE](ide.md) entity view, limited to the focused entities and the entities associated with them | Entities or modules |
+| `entities` | The [IDE](ide.md#the-model-canvas)'s model tree, opened on the Domain lens and unfolded to the focused declarations or modules. Its tabs switch to the Behavior, Application, Interfaces and Access lenses | Entities or modules |
 | `machine` | One card per state of the machine's field type, marked `initial` or `final`, listing what can be done there: each action or event that leaves the state with the states it leads to, its guard and the jobs that run it in that state | Machines |
 | `action` | One card: the states it moves between, whether each actor may run it (`yes`, `no` or `depends` on the data, from the [simulator](simulator.md)), its inputs, preconditions, changes, errors and the declarations that use it | Actions |
 | `usecase` | One card: the inputs, the steps in order as written, with their error handlers and timeouts, and what uses it | Use cases |
 | `event` | One card: the fields, the actions that emit it, the transitions it triggers and the use cases that await it | Events |
 
-Only the entity view draws arrows; the other views list options and facts on cards, one card per focused element (or per state). Click a card title or a row to select the element behind it; the strip below the canvas shows its kind, members and related declarations, and clicking a related declaration draws it in its own view. The window follows the files: an edit from Claude, the IDE or your editor redraws it.
+Only the `entities` view draws links; the other views list options and facts on cards, one card per focused element (or per state). Click a card title or a row to select the element behind it; the strip below the canvas shows its kind, members and related declarations, and clicking a related declaration draws it in its own view. The window follows the files: an edit from Claude, the IDE or your editor redraws it.
 
 ### Talk about what you see
 

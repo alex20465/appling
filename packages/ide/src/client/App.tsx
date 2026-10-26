@@ -3,7 +3,7 @@ import { DEFAULT_VIEW, type Snapshot, type ViewSettings } from '../shared/snapsh
 import type { EditOperation } from '@appling/model';
 import { loadRelease, loadSnapshot, loadView, onSnapshot, requestEdit, saveFile, saveView } from './api.js';
 import { Editor, type Reveal } from './Editor.js';
-import { EntityCanvas } from '@appling/viz/canvas';
+import { ModelCanvas } from '@appling/viz/canvas';
 import { elementAt, GraphIndex } from '@appling/viz/views';
 import { Chat } from './Chat.js';
 import { Inspector } from './Inspector.js';
@@ -82,7 +82,7 @@ export function App() {
                     onCursor={(uri, offset) => setSelected(elementAt(snapshot.locations, uri, offset))}
                     onSave={(path, text) => saveFile(path, text)}
                 />
-                <EntityCanvas index={index} selected={selected} settings={view} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />
+                <ModelCanvas index={index} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={selected} settings={view} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />
                 <div className="side">
                     <nav className="tabs" aria-label="Side panel">
                         <button className={side === 'search' ? 'active' : ''} onClick={() => setSide('search')}>Search</button>
@@ -90,7 +90,7 @@ export function App() {
                         <button className={side === 'ai' ? 'active' : ''} onClick={() => setSide('ai')}>AI</button>
                     </nav>
                     <div hidden={side !== 'search'} className="side-panel"><Search index={index} onSelect={select} /></div>
-                    <div hidden={side !== 'inspector'} className="side-panel"><Inspector index={index} qn={selected} onSelect={select} onEdit={edit} /></div>
+                    <div hidden={side !== 'inspector'} className="side-panel"><Inspector index={index} qn={selected} code={selected ? snapshot.code[selected] ?? [] : []} onSelect={select} onEdit={edit} /></div>
                     <div hidden={side !== 'ai'} className="side-panel"><Chat onEdit={edit} onSelect={qn => select(qn, false)} /></div>
                 </div>
             </main>

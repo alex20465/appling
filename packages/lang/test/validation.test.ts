@@ -62,3 +62,14 @@ test('migration removes an element that is gone', async () => {
     expect(await check(`module m { ${ORDER} migration One { remove Order.note } }`))
         .toContain('Removed element Order.note still exists.');
 });
+
+test('a policy grants by role', async () => {
+    const warnings = async (condition: string) => (await build({ 'test.appling': `module m { role Clerk ${ORDER} action Edit on Order { policy { ${condition} } } }` }))
+        .flatMap(d => d.diagnostics ?? []).filter(d => d.severity === 2).map(d => d.message);
+    const message = 'A policy grants by role: every "||" branch needs actor.is(Role), or write { false }.';
+    expect(await warnings('true')).toContain(message);
+    expect(await warnings('!actor.is(Clerk) || note == ""')).toContain(message);
+    expect(await warnings('actor.is(Clerk) || note == ""')).toContain(message);
+    expect(await warnings('actor.is(Clerk) && note == ""')).toEqual([]);
+    expect(await warnings('false')).toEqual([]);
+});

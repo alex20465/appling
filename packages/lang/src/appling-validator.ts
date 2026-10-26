@@ -1,8 +1,8 @@
 import { AstUtils, type AstNode, type ValidationAcceptor, type ValidationChecks } from 'langium';
 import {
-    isAction, isEntity, isEnum, isMachine, isMigration, isModule, isValueType,
+    isAction, isBinaryExpr, isBoolExpr, isEntity, isMemberExpr, isNameExpr, isEnum, isMachine, isMigration, isModule, isValueType,
     type ApplingAstType, type Endpoint, type Machine, type Migration, type MigrationStep, type Model, type Module,
-    type Policy, type Projection, type RenameStep, type SetEffect
+    type Expr, type Policy, type Projection, type RenameStep, type SetEffect
 } from './generated/ast.js';
 import { namedPaths, projectionSourceEntity } from './appling-scope.js';
 import { ExpressionTyper } from './appling-types.js';
@@ -97,6 +97,9 @@ export class ApplingValidator {
         if (!isEntity(policy.$container) && (policy.operations.length > 0 || policy.fields.length > 0)) {
             accept('error', 'Operations and fields narrow entity policies only.', { node: policy });
         }
+        if (!grantsByRole(policy.condition)) {
+            accept('warning', 'A policy grants by role: every "||" branch needs actor.is(Role), or write { false }.', { node: policy, property: 'condition' });
+        }
     }
 
     checkProjectionFields(projection: Projection, accept: ValidationAcceptor): void {
@@ -172,4 +175,12 @@ function isAllowed(from: AstNode, to: AstNode): boolean {
         case 'experience':
             return target === 'application' || isAction(to) || isEnum(to) || isValueType(to);
     }
+}
+
+/** `false`, or every `||` branch has a positive `actor.is(...)` among its `&&` conditions. */
+function grantsByRole(condition: Expr): boolean {
+    if (isBoolExpr(condition) && condition.value === 'false') return true;
+    const split = (expr: Expr, op: string): Expr[] => isBinaryExpr(expr) && expr.op === op ? [...split(expr.left, op), ...split(expr.right, op)] : [expr];
+    const isRole = (expr: Expr) => isMemberExpr(expr) && expr.call && expr.member === 'is' && isNameExpr(expr.receiver) && expr.receiver.name === 'actor';
+    return split(condition, '||').every(branch => split(branch, '&&').some(isRole));
 }

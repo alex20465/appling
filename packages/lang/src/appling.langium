@@ -6,7 +6,7 @@ entry Model:
 // Cross cutting
 
 Module:
-    'module' name=Ident '{'
+    'module' name=Ident relevance=Relevance? '{'
         (exports+=Export | members+=Member)*
     '}';
 
@@ -23,29 +23,33 @@ Member:
     | Migration;
 
 Role:
-    'role' name=Ident;
+    'role' name=Ident relevance=Relevance?;
 
 Actor:
     'actor' kind=('human' | 'system' | 'service') name=Ident
-    ('roles' roles+=[Role:QualifiedName] (',' roles+=[Role:QualifiedName])*)?
+    ('roles' roles+=[Role:QualifiedName] (',' roles+=[Role:QualifiedName])*)? relevance=Relevance?
     ('{' fields+=Field* '}')?;
 
 Tenant:
-    'tenant' name=Ident 'on' entity=[Entity:QualifiedName];
+    'tenant' name=Ident 'on' entity=[Entity:QualifiedName] relevance=Relevance?;
+
+// How much a declaration matters to what the application does; a module's level applies to its members.
+Relevance returns string:
+    'core' | 'supporting' | 'peripheral';
 
 // L1 Domain
 
 Enum:
-    'enum' name=Ident '{' literals+=EnumLiteral* '}';
+    'enum' name=Ident relevance=Relevance? '{' literals+=EnumLiteral* '}';
 
 EnumLiteral:
     name=Ident;
 
 ValueType:
-    'value' name=Ident '{' fields+=Field* '}';
+    'value' name=Ident relevance=Relevance? '{' fields+=Field* '}';
 
 Entity:
-    'entity' link?='link'? name=Ident '{'
+    'entity' link?='link'? name=Ident relevance=Relevance? '{'
         (fields+=Field | invariants+=Invariant | policies+=Policy)*
     '}';
 
@@ -78,10 +82,10 @@ Operation returns string:
 // L2 Behavior
 
 Event:
-    'event' name=Ident '{' fields+=Field* '}';
+    'event' name=Ident relevance=Relevance? '{' fields+=Field* '}';
 
 Action:
-    'action' name=Ident ('on' entity=[Entity:QualifiedName])? '{'
+    'action' name=Ident ('on' entity=[Entity:QualifiedName])? relevance=Relevance? '{'
         ('input' '{' inputs+=Param* '}')?
         preconditions+=Precondition*
         ('effect' '{' effects+=Effect* '}')?
@@ -115,7 +119,7 @@ Assignment:
     name=Ident '=' value=Expr;
 
 Machine:
-    'machine' name=Ident 'on' field=[Field:QualifiedName] '{' transitions+=Transition* '}';
+    'machine' name=Ident 'on' field=[Field:QualifiedName] relevance=Relevance? '{' transitions+=Transition* '}';
 
 Transition:
     'transition' from+=Ident (',' from+=Ident)* '->' to=Ident
@@ -125,12 +129,12 @@ Transition:
 
 Job:
     'job' name=Ident ('every' schedule=STRING | 'on' event=[Event:QualifiedName])
-    'run' action=[Action:QualifiedName] ('where' '{' filter=Expr '}')?;
+    'run' action=[Action:QualifiedName] ('where' '{' filter=Expr '}')? relevance=Relevance?;
 
 // L3 Application
 
 Query:
-    'query' name=Ident 'from' entity=[Entity:QualifiedName] '{'
+    'query' name=Ident 'from' entity=[Entity:QualifiedName] relevance=Relevance? '{'
         ('where' '{' filter=Expr '}')?
         ('sort' sorts+=Sort (',' sorts+=Sort)*)?
         ('paginate' pageSize=NUMBER)?
@@ -141,7 +145,7 @@ Sort:
     field=[Field:Ident] direction=('asc' | 'desc')?;
 
 Projection:
-    'projection' name=Ident 'from' source=[ProjectionSource:QualifiedName] '{'
+    'projection' name=Ident 'from' source=[ProjectionSource:QualifiedName] relevance=Relevance? '{'
         fields+=ProjectionField*
     '}';
 
@@ -151,7 +155,7 @@ ProjectionField:
     name=Ident ('=' value=Expr)?;
 
 External:
-    'external' name=Ident '{' operations+=ExternalOperation* '}';
+    'external' name=Ident relevance=Relevance? '{' operations+=ExternalOperation* '}';
 
 ExternalOperation:
     'op' name=Ident '(' (params+=Param (',' params+=Param)*)? ')'
@@ -159,7 +163,7 @@ ExternalOperation:
     ('errors' errors+=ErrorDecl (',' errors+=ErrorDecl)*)?;
 
 UseCase:
-    'usecase' name=Ident ('(' (params+=Param (',' params+=Param)*)? ')')? '{'
+    'usecase' name=Ident ('(' (params+=Param (',' params+=Param)*)? ')')? relevance=Relevance? '{'
         (steps+=Step | policies+=Policy)*
     '}';
 
@@ -183,7 +187,7 @@ type Callable = Action | Query | UseCase | ExternalOperation;
 // L4 Interfaces
 
 Interface:
-    'interface' protocol=Ident name=Ident '{'
+    'interface' protocol=Ident name=Ident relevance=Relevance? '{'
         ('auth' auth=Ident)?
         ('limit' rateLimit=NUMBER 'per' rateUnit=('second' | 'minute' | 'hour'))?
         ('cors' origins+=STRING (',' origins+=STRING)*)?
@@ -199,7 +203,7 @@ type Exposable = Query | Action | UseCase;
 // L5 Experience
 
 Page:
-    'page' name=Ident 'route' route=STRING '{' components+=Component* '}';
+    'page' name=Ident 'route' route=STRING relevance=Relevance? '{' components+=Component* '}';
 
 Component:
     ListView | DetailView | FormView;
@@ -220,17 +224,17 @@ FormView:
 type Submittable = Action | UseCase;
 
 Navigation:
-    'navigation' name=Ident '{' items+=NavItem* '}';
+    'navigation' name=Ident relevance=Relevance? '{' items+=NavItem* '}';
 
 NavItem:
     label=STRING '->' page=[Page:QualifiedName] ('{' children+=NavItem* '}')?;
 
 Flow:
-    'flow' name=Ident 'for' usecase=[UseCase:QualifiedName]
+    'flow' name=Ident 'for' usecase=[UseCase:QualifiedName] relevance=Relevance?
     '{' pages+=[Page:QualifiedName] ('->' pages+=[Page:QualifiedName])* '}';
 
 Messages:
-    'messages' name=Ident '{' entries+=Message* '}';
+    'messages' name=Ident relevance=Relevance? '{' entries+=Message* '}';
 
 Message:
     key=QualifiedName '=' text=STRING;
@@ -296,7 +300,8 @@ Ident returns string:
     | 'form' | 'route' | 'run' | 'actions' | 'fields' | 'role' | 'event' | 'action' | 'query'
     | 'page' | 'timeout' | 'sort' | 'when' | 'create' | 'read' | 'update' | 'delete' | 'per'
     | 'flow' | 'actor' | 'tenant' | 'set' | 'op' | 'human' | 'system' | 'service' | 'asc'
-    | 'desc' | 'remove' | 'rename' | 'retype' | 'roles' | 'second' | 'minute' | 'hour' | 'link';
+    | 'desc' | 'remove' | 'rename' | 'retype' | 'roles' | 'second' | 'minute' | 'hour' | 'link'
+    | 'core' | 'supporting' | 'peripheral';
 
 hidden terminal WS: /\s+/;
 terminal ID: /[_a-zA-Z][\w]*/;

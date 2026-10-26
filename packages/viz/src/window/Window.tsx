@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Graph } from '@appling/model';
-import { CardCanvas, EntityCanvas } from '../canvas/index.js';
+import { CardCanvas, ModelCanvas } from '../canvas/index.js';
 import type { HostMessage, Review, Show, WindowMessage } from '../protocol.js';
 import { cardView, DEFAULT_VIEW, GraphIndex, kindLabel, memberText, relations, viewFor, type ViewSettings } from '../views.js';
 
@@ -68,7 +68,7 @@ export function Window() {
             <main className="window-canvas">
                 {!index || !show ? <div className="loading">Waiting for Claude</div>
                     : cards ? <CardCanvas cards={cards} selected={selected} onSelect={select} />
-                    : <EntityCanvas index={index} focus={show.focus} selected={selected} settings={settings} onSelect={select} onSettings={setSettings} />}
+                    : <ModelCanvas index={index} focus={show.focus} selected={selected} settings={settings} onSelect={select} onSettings={setSettings} />}
             </main>
             <section className="dock">
                 {reviews.map(({ id, review }) => <ReviewCard key={id} review={review} onDecide={decision => send({ type: 'decide', id, decision })} />)}

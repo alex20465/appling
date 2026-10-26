@@ -27,6 +27,7 @@ appling generate [--plan | --migrate] [files or folders...]
 appling simulate reach <machine> <state> [files or folders...]
 appling simulate actors <action> [files or folders...]
 appling simulate risks <action> [files or folders...]
+appling refs <qualified name | --check> [files or folders...]
 ```
 
 Folders are searched recursively for `.appling` files. Hidden folders and `node_modules` are skipped. Without a path, the current folder is used.
@@ -90,13 +91,23 @@ paid is reachable from draft:
   PaymentReceived -> paid
 ```
 
+### refs
+
+Prints the code references of the workspace in the current folder (`.appling/references.json`): where an element and its members are implemented, by file and line range. With `--check`, it lists every reference whose anchor line moved (`shifted`), whose file or anchor is gone (`broken`) or whose element the model no longer has (`orphaned`), and exits with 1 when there is one.
+
+```
+$ appling refs --check
+../shop/sales/models.py:16-33 sales.Order: shifted from 14-31
+1 reference(s), 1 shifted, 0 broken, 0 orphaned
+```
+
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
 | 0 | No errors |
-| 1 | `check`, `graph`, `release` or `generate` found errors, `release` found an invalid or existing version, `generate` failed, or `fmt` skipped a file with syntax errors |
-| 2 | Unknown command, or `release` without a version |
+| 1 | `check`, `graph`, `release`, `generate` or `refs` found errors, `refs --check` found a reference that is not current, `release` found an invalid or existing version, `generate` failed, or `fmt` skipped a file with syntax errors |
+| 2 | Unknown command, `release` without a version, or `refs` without a qualified name or `--check` |
 
 ## License
 

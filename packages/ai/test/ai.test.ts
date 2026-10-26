@@ -45,7 +45,7 @@ test('the MCP server exposes model and registry tools and the registry prompt', 
     const client = new Client({ name: 'test', version: '1' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await Promise.all([createMcpServer(root).connect(serverTransport), client.connect(clientTransport)]);
-    expect((await client.listTools()).tools.map(t => t.name).sort()).toEqual(['check', 'edit', 'graph_query', 'language_reference', 'read_source', 'registry_next', 'registry_update', 'run_tests', 'simulate', 'write_model_file']);
+    expect((await client.listTools()).tools.map(t => t.name).sort()).toEqual(['check', 'code_references', 'edit', 'graph_query', 'language_reference', 'read_source', 'record_code_references', 'registry_next', 'registry_update', 'run_tests', 'simulate', 'write_model_file']);
     const text = async (name: string, args: Record<string, unknown>) => JSON.parse(((await client.callTool({ name, arguments: args })).content as { text: string }[])[0].text);
     expect((await text('language_reference', {})).pages).toContainEqual({ page: 'overview', title: 'Language overview', description: expect.any(String) });
     expect((await text('language_reference', { page: 'domain' })).markdown).toContain('entity');
@@ -55,6 +55,11 @@ test('the MCP server exposes model and registry tools and the registry prompt', 
     expect((await text('read_source', { qn: 'crm.Clerk' })).source).toBe('crm.appling:\nrole Clerk');
     expect(await text('edit', { operation: { op: 'rename', target: 'crm.Account.email', name: 'mail' } })).toEqual({ ok: true, changed: ['crm.appling'] });
     expect(readFileSync(join(root, 'crm.appling'), 'utf8')).toContain('mail: String');
+    writeFileSync(join(root, 'models.py'), 'class Order(models.Model):\n    pass\n');
+    expect(await text('record_code_references', { qn: 'sales.Order', ranges: [{ file: 'models.py', start: 1, end: 2 }] })).toEqual([{ file: 'models.py', start: 1, end: 2, anchor: 'class Order(models.Model):' }]);
+    expect((await text('record_code_references', { qn: 'sales.Nope', ranges: [] })).error).toBe('No element sales.Nope.');
+    expect((await text('code_references', { qn: 'sales.Order' })).references).toEqual([{ qn: 'sales.Order', file: 'models.py', start: 1, end: 2, anchor: 'class Order(models.Model):', status: 'current' }]);
+    expect(await text('code_references', {})).toEqual({ references: [] });
     const prompt = await client.getPrompt({ name: 'implement_next_task' });
     expect((prompt.messages[0].content as { text: string }).text).toContain('registry_next');
 });

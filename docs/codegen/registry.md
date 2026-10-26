@@ -151,6 +151,6 @@ The AI tools automate that loop. The Appling MCP server (`appling-mcp`) offers t
 | `registry_update` | Records the outcome for a qualified name: `done`, `partial` or `todo`, with an optional note. Every call counts as one attempt. |
 | `run_tests` | Runs the registry's `test` command in the project and returns whether it passed, with the end of the output. |
 
-The agent repeats: take the next entry, read the generated files and the element's Appling source, implement what is missing, run the tests until they pass, then record `done`. When it cannot finish, it records `partial` with a note on what is left.
+The agent repeats: take the next entry, read the generated files and the element's Appling source, implement what is missing, run the tests until they pass, record where the element is implemented as [code references](../tools/references.md), then record `done`. When it cannot finish, it records `partial` with a note on what is left.
 
 After three attempts without `done`, an entry stops coming back from `registry_next`, and a note `stopped after 3 attempts` is added. The notes are what the next person reads. Decisions only a person can make, such as credentials or product choices, belong in such a note.

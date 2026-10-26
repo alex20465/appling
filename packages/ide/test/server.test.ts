@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { WebSocket } from 'ws';
-import { writeRelease } from '@appling/model';
+import { recordReferences, writeRelease } from '@appling/model';
 import { startIde, type Ide } from '../src/server/server.js';
 
 let ide: Ide;
@@ -23,6 +23,13 @@ test('the snapshot has files, graph and locations', async () => {
     expect(snapshot.errors).toEqual([]);
     expect(snapshot.locations['sales.Order'].uri).toMatch(/sales\.appling$/);
     expect(snapshot.dependencies).toContainEqual({ from: 'sales', to: 'crm', count: 7 });
+});
+
+test('the snapshot has the code references with their lines', async () => {
+    writeFileSync(join(root, 'models.py'), 'import x\n\nclass Order(models.Model):\n    pass\n');
+    recordReferences(root, 'sales.Order', [{ file: 'models.py', start: 3, end: 4 }]);
+    const snapshot = await (await fetch(`${ide.url}/api/snapshot`)).json();
+    expect(snapshot.code['sales.Order']).toMatchObject([{ file: 'models.py', start: 3, end: 4, status: 'current', text: 'class Order(models.Model):\n    pass' }]);
 });
 
 test('files are written only inside the workspace', async () => {

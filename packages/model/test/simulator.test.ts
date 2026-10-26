@@ -31,7 +31,8 @@ test('access lists what one actor may do, with policies added up along the refer
     const access = Object.fromEntries(sim.access('sales.Shopper').map(a => [`${a.target}${a.operation ? ` ${a.operation}` : ''}${a.fields ? ` ${a.fields}` : ''}`, `${a.verdict} ${a.policies.join(' & ')}`.trim()]));
     expect(access).toMatchObject({
         'crm.Account read': 'depends crm.Account.policy[read]',
-        'crm.Account delete': 'yes',
+        // Nothing grants deleting an account, so nobody may.
+        'crm.Account delete': 'no',
         'sales.Order read': 'depends sales.Order.policy[read]',
         'sales.Order read total': 'depends sales.Order.policy[read] & sales.Order.policy[read fields total]',
         'sales.Order update': 'no sales.Order.policy[create,update,delete]',
@@ -84,7 +85,7 @@ const SHOP = `module shop {
       set closed_at = now
     }
     errors Empty
-    policy { actor.is(Clerk) || owner == actor.name }
+    policy { actor.is(Clerk) || (actor.is(Buyer) && owner == actor.name) }
   }
 
   action Discount on Cart {
@@ -94,6 +95,7 @@ const SHOP = `module shop {
     effect {
       set discount = amount
     }
+    policy { actor.is(Clerk) }
   }
 
   machine Flow on Cart.status {
@@ -129,4 +131,38 @@ test('unknown data stays unknown, but logic short circuits around it', async () 
     const total = sim.graph.nodes.find(n => n.qn === 'shop.Cart.total')!.data.derived as never;
     expect(sim.evaluate(total, { self: { lines: [{ amount: 2 }], discount: 1 } })).toBe(1);
     expect(sim.evaluate(total, { self: {} })).toBe(UNKNOWN);
+});
+
+test('a create effect needs the created entity create policies, true allows and an undeclared actor field is null', async () => {
+    const sim = await simulator({
+        'desk.appling': `module desk {
+  role Clerk
+  actor human Staff roles Clerk {
+    desk: Desk
+  }
+  actor human Visitor
+
+  entity Desk {
+    closed_at: DateTime?
+  }
+
+  entity Ticket {
+    title: String
+
+    policy read { true }
+    policy create { actor.desk.closed_at == null && actor.desk != null }
+  }
+
+  action Open {
+    input {
+      title: String
+    }
+    effect {
+      create Ticket { title = title }
+    }
+  }
+}`
+    });
+    expect(sim.actors('desk.Open')).toEqual([{ actor: 'desk.Staff', verdict: 'depends' }, { actor: 'desk.Visitor', verdict: 'no' }]);
+    expect(sim.access('desk.Visitor').find(a => a.target === 'desk.Ticket' && a.operation === 'read')?.verdict).toBe('yes');
 });

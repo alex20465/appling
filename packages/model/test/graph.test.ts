@@ -11,7 +11,7 @@ async function graphOf(sources: Record<string, string>) {
 test('graph of examples', async () => {
     const graph = await graphOf(examples());
     expect(graph).toMatchSnapshot();
-    expect(dependencies(graph)).toEqual([{ from: 'sales', to: 'crm', count: 7 }, { from: 'crm', to: 'sales', count: 1 }]);
+    expect(dependencies(graph)).toEqual([{ from: 'sales', to: 'crm', count: 7 }, { from: 'crm', to: 'sales', count: 2 }]);
 });
 
 test('unnamed elements get derived keys, with an ordinal for duplicates', async () => {

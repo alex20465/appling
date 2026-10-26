@@ -7,6 +7,7 @@ export const SECTIONS = [
     pages: [
       "language/overview",
       "language/modules",
+      "language/relevance",
       "language/access",
       "language/domain",
       "language/behavior",
@@ -18,7 +19,7 @@ export const SECTIONS = [
       "language/validation",
     ],
   },
-  { label: "Tools", pages: ["tools/cli", "tools/ide", "tools/editors", "tools/ai", "tools/simulator"] },
+  { label: "Tools", pages: ["tools/cli", "tools/ide", "tools/editors", "tools/ai", "tools/simulator", "tools/references"] },
   { label: "Code generation", pages: ["codegen/overview", "codegen/registry", "codegen/migrations", "codegen/sync", "codegen/django", "codegen/ash", "codegen/go", "codegen/rust", "codegen/extensions"] },
   { label: "Reference", pages: ["reference/configuration", "reference/graph", "reference/edit-operations", "reference/api"] },
   { label: "Contributing", pages: ["contributing/development", "contributing/architecture", "contributing/documentation"] },

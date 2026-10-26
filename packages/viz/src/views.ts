@@ -1,52 +1,158 @@
 import type { Access, Graph, GraphNode, TypeData } from '@appling/model';
+import { relevance } from '@appling/model/relevance';
 import { Simulator } from '@appling/model/simulator';
 
-/** What the entity view shows and how, kept in `.appling/view.json` outside the model. */
-export interface ViewSettings {
-    /** Link entities, such as join records, grayed out. */
-    linkEntities: boolean;
-    /** Modules without shown entities. */
-    emptyModules: boolean;
-    /** The field names on association arrows. */
-    labels: boolean;
-    /** The number of actions on each entity. */
-    actionCounts: boolean;
-    /** Dims what is not associated with the selected entity. */
-    focus: boolean;
-    direction: 'RIGHT' | 'DOWN';
-    edges: 'default' | 'smoothstep' | 'straight';
-}
+/** The layers the tree starts from: each tab grows the model from the declarations of its kinds, module by module. */
+export type Lens = 'domain' | 'behavior' | 'application' | 'interfaces' | 'access';
 
-export const DEFAULT_VIEW: ViewSettings = {
-    linkEntities: false, emptyModules: false, labels: true, actionCounts: true, focus: true, direction: 'RIGHT', edges: 'default'
+export const LENSES: Record<Lens, { label: string, kinds: string[] }> = {
+    domain: { label: 'Domain', kinds: ['Entity', 'ValueType', 'Enum'] },
+    behavior: { label: 'Behavior', kinds: ['Action', 'Event', 'Machine', 'Job'] },
+    application: { label: 'Application', kinds: ['Query', 'Projection', 'External', 'UseCase'] },
+    interfaces: { label: 'Interfaces', kinds: ['Interface', 'Page', 'Navigation', 'Flow', 'Messages'] },
+    access: { label: 'Access', kinds: ['Role', 'Actor', 'Tenant'] }
 };
 
-export interface ModuleGroup {
-    qn: string;
-    /** The enclosing module of a nested module. */
-    parent?: string;
+/** What the canvas shows, kept in `.appling/view.json` outside the model. */
+export interface ViewSettings {
+    lens: Lens;
+    /** Link entities, such as join records. */
+    linkEntities: boolean;
 }
 
-export interface EntityCard {
-    qn: string;
-    name: string;
-    module: string;
-    link: boolean;
-    /** The number of actions declared on the entity. */
-    actions: number;
-}
+export const DEFAULT_VIEW: ViewSettings = { lens: 'domain', linkEntities: false };
 
-export interface Association {
+/**
+ * One node of the dependency tree. The seed holds the modules, a module the declarations of the lens, a declaration
+ * the declarations that use it, grouped by kind as soon as there is more than one kind.
+ */
+export interface TreeNode {
+    /** The path from the seed, unique in the tree. */
     id: string;
-    from: string;
-    to: string;
+    type: 'seed' | 'module' | 'group' | 'element';
+    /** The module or the element. */
+    qn?: string;
+    /** The element kind, or the kind of a group's elements. */
+    kind?: string;
+    layer?: string;
     label: string;
+    /** For an element: what it is about, such as `on Order · draft → placed`. For a module: what it holds. */
+    fact: string;
+    /** How many nodes unfolding shows: dependents for an element, members for a module or group. */
+    count: number;
+    /** From 0 to 1, how much it matters to the application (`relevance` in `@appling/model`); a group takes its most relevant element's. */
+    relevance: number;
+    /** The element already appears on the path below, so it does not unfold again. */
+    cycle?: boolean;
+    /** Present when unfolded. */
+    children?: TreeNode[];
 }
 
-export interface EntityView {
-    modules: ModuleGroup[];
-    entities: EntityCard[];
-    associations: Association[];
+/** Grows the tree of a lens: the seed and every node whose id is in `unfolded` show their children. */
+export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Set<string>, name = 'model'): TreeNode {
+    const shown = (n: GraphNode) => settings.linkEntities || !n.props.link;
+    const roots = index.graph.nodes.filter(n => LENSES[settings.lens].kinds.includes(n.kind) && index.declaration(n.qn) === n.qn && shown(n));
+    const modules = [...new Set(roots.map(n => n.module))];
+    const dependents = new Map<string, GraphNode[]>();
+    const dependentsOf = (qn: string) => {
+        if (!dependents.has(qn)) {
+            const used = [...relations(index, qn, 'usedBy').values()].flat().map(r => index.nodes.get(r.qn)!).filter(n => n.kind !== 'Module' && shown(n));
+            dependents.set(qn, used);
+        }
+        return dependents.get(qn)!;
+    };
+    const element = (node: GraphNode, parent: string, module: string, path: string[]): TreeNode => {
+        const id = `${parent}/${node.qn}`;
+        const cycle = path.includes(node.qn);
+        const used = cycle ? [] : dependentsOf(node.qn);
+        const label = node.module === module ? localName(node.qn, index) : node.qn;
+        const tree: TreeNode = { id, type: 'element', qn: node.qn, kind: node.kind, layer: node.layer, label, fact: factOf(index, node), count: used.length, relevance: index.relevanceOf(node.qn), cycle };
+        if (unfolded.has(id) && used.length) tree.children = grouped(used, id, node.module, [...path, node.qn]);
+        return tree;
+    };
+    /** Elements directly when they are of one kind, else one group per kind; the most relevant first. */
+    const grouped = (nodes: GraphNode[], parent: string, module: string, path: string[]): TreeNode[] => {
+        const sorted = [...nodes].sort((a, b) => index.relevanceOf(b.qn) - index.relevanceOf(a.qn) || rank(a.kind) - rank(b.kind));
+        const byKind = Map.groupBy(sorted, n => n.kind);
+        if (byKind.size === 1) return sorted.map(n => element(n, parent, module, path));
+        return [...byKind].map(([kind, members]) => {
+            const id = `${parent}/#${kind}`;
+            const group: TreeNode = { id, type: 'group', kind, layer: members[0].layer, label: plural(kind), fact: '', count: members.length, relevance: index.relevanceOf(members[0].qn) };
+            if (unfolded.has(id)) group.children = members.map(n => element(n, id, module, path));
+            return group;
+        });
+    };
+    const seed: TreeNode = { id: '~', type: 'seed', label: name, fact: `${modules.length} module${modules.length === 1 ? '' : 's'}`, count: modules.length, relevance: 1 };
+    if (unfolded.has(seed.id)) {
+        seed.children = modules.sort((a, b) => index.relevanceOf(b) - index.relevanceOf(a)).map(module => {
+            const members = roots.filter(n => n.module === module);
+            const id = `~/${module}`;
+            const kinds = [...Map.groupBy(members, n => n.kind)].sort(([a], [b]) => rank(a) - rank(b)).map(([kind, list]) => `${list.length} ${list.length === 1 ? kindLabel(kind) : plural(kind).toLowerCase()}`);
+            const tree: TreeNode = { id, type: 'module', qn: module, label: module, fact: kinds.join(' · '), count: members.length, relevance: index.relevanceOf(module) };
+            if (unfolded.has(id)) tree.children = grouped(members, id, module, []);
+            return tree;
+        });
+    }
+    return seed;
+}
+
+/** The node ids to unfold so that the declaration of an element shows on the first level of its module, if the lens has it. */
+export function revealPath(index: GraphIndex, settings: ViewSettings, qn: string): string[] {
+    const node = index.nodes.get(index.declaration(qn));
+    if (node?.kind === 'Module') return ['~', `~/${node.qn}`];
+    if (!node || !LENSES[settings.lens].kinds.includes(node.kind)) return [];
+    return ['~', `~/${node.module}`, `~/${node.module}/#${node.kind}`];
+}
+
+/** Groups come in the order of the layers, and within a layer the kind a developer looks for first. */
+const KIND_ORDER = [
+    'Role', 'Actor', 'Tenant', 'Entity', 'ValueType', 'Enum', 'Action', 'Event', 'Machine', 'Job',
+    'UseCase', 'Query', 'Projection', 'External', 'Interface', 'Page', 'Navigation', 'Flow', 'Messages'
+];
+
+function rank(kind: string): number {
+    const at = KIND_ORDER.indexOf(kind);
+    return at < 0 ? KIND_ORDER.length : at;
+}
+
+const PLURALS: Record<string, string> = { Query: 'Queries', Entity: 'Entities', UseCase: 'Use cases', ValueType: 'Value types', Messages: 'Messages' };
+
+function plural(kind: string): string {
+    if (PLURALS[kind]) return PLURALS[kind];
+    const label = kindLabel(kind);
+    return `${label[0].toUpperCase()}${label.slice(1)}s`;
+}
+
+/** The one or two facts a developer needs first to place a declaration, after its name and kind. */
+export function factOf(index: GraphIndex, node: GraphNode): string {
+    const members = (kind: string) => index.children(node.qn).filter(c => c.kind === kind).length;
+    const name = (qn: unknown) => typeof qn === 'string' ? shortName(qn, index) : '';
+    const count = (n: number, what: string) => `${n} ${what}${n === 1 ? '' : 's'}`;
+    const facts: Record<string, () => string[]> = {
+        Entity: () => [count(members('Field'), 'field'), `${count(index.graph.nodes.filter(n => n.kind === 'Action' && n.data.entity === node.qn).length, 'action')} on it`],
+        ValueType: () => [count(members('Field'), 'field')],
+        Enum: () => [count(members('EnumLiteral'), 'value')],
+        Event: () => [count(members('Field'), 'field')],
+        Action: () => [node.data.entity ? `on ${name(node.data.entity)}` : '', ...transitionsOf(index, node.qn).map(t => `${(t.props.from as string[]).join(', ')} → ${t.props.to}`)],
+        Machine: () => {
+            const field = index.nodes.get(String(node.data.field));
+            const states = field ? index.children(String((field.data.type as TypeData | undefined)?.decl ?? '')).length : 0;
+            return [`on ${name(node.data.field)}`, count(states, 'state')];
+        },
+        Job: () => [node.props.schedule ? `every ${node.props.schedule}` : '', node.data.action ? `runs ${name(node.data.action)}` : ''],
+        Query: () => [`from ${name(node.data.entity)}`],
+        Projection: () => [`from ${name(node.data.source)}`],
+        External: () => [count(members('ExternalOperation'), 'operation')],
+        UseCase: () => [count(((node.props.steps as string[] | undefined) ?? []).length, 'step')],
+        Interface: () => [String(node.props.protocol ?? ''), count(members('Endpoint'), 'endpoint')],
+        Page: () => [String(node.props.route ?? '')],
+        Navigation: () => [count(((node.props.items as string[] | undefined) ?? []).length, 'item')],
+        Flow: () => [count(((node.data.pages as string[] | undefined) ?? []).length, 'page')],
+        Messages: () => [count(((node.props.entries as string[] | undefined) ?? []).length, 'key')],
+        Actor: () => [String(node.props.kind ?? ''), ...((node.data.roles as string[] | undefined) ?? []).map(r => `role ${name(r)}`)],
+        Tenant: () => [`on ${name(node.data.entity)}`]
+    };
+    return (facts[node.kind]?.() ?? []).filter(Boolean).join(' · ');
 }
 
 export interface Relation {
@@ -84,15 +190,22 @@ const KIND_LABELS: Record<string, string> = { ErrorDecl: 'error', UseCase: 'usec
 
 export class GraphIndex {
     readonly nodes: Map<string, GraphNode>;
+    private readonly relevance: Map<string, number>;
     private readonly childrenOf = new Map<string, GraphNode[]>();
     private readonly parentOf = new Map<string, string>();
 
     constructor(readonly graph: Graph) {
         this.nodes = new Map(graph.nodes.map(n => [n.qn, n]));
+        this.relevance = relevance(graph);
         for (const edge of graph.edges.filter(e => e.kind === 'contains')) {
             this.childrenOf.set(edge.from, [...(this.childrenOf.get(edge.from) ?? []), this.nodes.get(edge.to)!]);
             this.parentOf.set(edge.to, edge.from);
         }
+    }
+
+    /** The relevance of the declaration an element belongs to, or of a module. */
+    relevanceOf(qn: string): number {
+        return this.relevance.get(this.declaration(qn)) ?? 0;
     }
 
     children(qn: string): GraphNode[] {
@@ -114,52 +227,6 @@ export class GraphIndex {
     declaration(qn: string): string {
         return this.lineage(qn).find(q => this.nodes.get(this.parent(q) ?? '')?.kind === 'Module') ?? qn;
     }
-}
-
-/**
- * Modules, their entities and the associations between entities. Link entities and modules without shown entities
- * only on request; enums, value types and the other layers never.
- */
-export function entityView(index: GraphIndex, settings: Pick<ViewSettings, 'linkEntities' | 'emptyModules'> & { focus?: string[] }): EntityView {
-    const actions = new Map<string, number>();
-    for (const action of index.graph.nodes.filter(n => n.kind === 'Action' && n.data.entity)) {
-        actions.set(String(action.data.entity), (actions.get(String(action.data.entity)) ?? 0) + 1);
-    }
-    const entities = index.graph.nodes
-        .filter(n => n.kind === 'Entity' && (settings.linkEntities || !n.props.link))
-        .map(n => ({ qn: n.qn, name: localName(n.qn, index), module: n.module, link: n.props.link === true, actions: actions.get(n.qn) ?? 0 }));
-    const occupied = new Set(entities.flatMap(e => index.lineage(e.module)));
-    const shown = new Set(entities.map(e => e.qn));
-    const associations = new Map<string, Association>();
-    for (const edge of index.graph.edges.filter(e => e.kind === 'type' && shown.has(e.to))) {
-        const from = index.parent(edge.from);
-        if (!from || !shown.has(from) || from === edge.to) continue;
-        const id = `${from}>${edge.to}`;
-        const field = index.nodes.get(edge.from)!;
-        const type = field.data.type as TypeData;
-        const label = `${localName(field.qn, index)}${type.many ? '[]' : ''}${type.optional ? '?' : ''}`;
-        const existing = associations.get(id);
-        associations.set(id, { id, from, to: edge.to, label: existing ? `${existing.label}, ${label}` : label });
-    }
-    const view = {
-        modules: index.graph.nodes.filter(n => n.kind === 'Module' && (settings.emptyModules || occupied.has(n.qn))).map(m => ({ qn: m.qn, parent: index.parent(m.qn) })),
-        entities,
-        associations: [...associations.values()]
-    };
-    return settings.focus ? focused(view, index, settings.focus) : view;
-}
-
-/** The focused entities (or the entities of focused modules), the entities associated with them and their modules. */
-function focused(view: EntityView, index: GraphIndex, focus: string[]): EntityView {
-    const chosen = new Set(view.entities.filter(e => focus.some(qn => index.lineage(e.qn).includes(qn))).map(e => e.qn));
-    const keep = new Set([...chosen, ...view.associations.filter(a => chosen.has(a.from) || chosen.has(a.to)).flatMap(a => [a.from, a.to])]);
-    const entities = view.entities.filter(e => keep.has(e.qn));
-    const occupied = new Set(entities.flatMap(e => index.lineage(e.module)));
-    return {
-        modules: view.modules.filter(m => occupied.has(m.qn)),
-        entities,
-        associations: view.associations.filter(a => keep.has(a.from) && keep.has(a.to))
-    };
 }
 
 export type ViewKind = 'entities' | 'machine' | 'action' | 'usecase' | 'event';
@@ -309,13 +376,6 @@ function usedBy(index: GraphIndex, qn: string): CardRow[] {
 function shortName(qn: string, index: GraphIndex): string {
     const module = index.nodes.get(qn)?.module;
     return module && qn.startsWith(`${module}.`) ? qn.slice(module.length + 1) : qn;
-}
-
-/** The entity or module that stands for a selected element in the entity view. */
-export function shownFor(qn: string | undefined, current: EntityView, index: GraphIndex): string | undefined {
-    if (!qn) return undefined;
-    const shown = new Set([...current.entities.map(e => e.qn), ...current.modules.map(m => m.qn)]);
-    return index.lineage(qn).find(q => shown.has(q));
 }
 
 /** Elements of the chosen layers whose qualified name or kind contains every word; without words, the top level declarations. */

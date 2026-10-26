@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Simulator, type Access, type Verdict } from '@appling/model/simulator';
 import type { EditOperation } from '@appling/model';
+import type { CodeLocation } from '../shared/snapshot.js';
 import { abilities, actionSummary, entityActions, kindLabel, LAYER_LABELS, memberText, policyText, relations, type Ability, type GraphIndex } from '@appling/viz/views';
 
 interface InspectorProps {
     index: GraphIndex;
     qn?: string;
+    /** Where the element is implemented. */
+    code: CodeLocation[];
     onSelect(qn: string): void;
     /** Applies an edit operation; resolves to the reasons it was rejected, or an empty list. */
     onEdit(operation: EditOperation): Promise<string[]>;
@@ -13,7 +16,7 @@ interface InspectorProps {
 
 const TYPED = new Set(['Field', 'Param']);
 
-export function Inspector({ index, qn, onSelect, onEdit }: InspectorProps) {
+export function Inspector({ index, qn, code, onSelect, onEdit }: InspectorProps) {
     const node = qn ? index.nodes.get(qn) : undefined;
     const [errors, setErrors] = useState<string[]>([]);
     const [removing, setRemoving] = useState(false);
@@ -35,6 +38,14 @@ export function Inspector({ index, qn, onSelect, onEdit }: InspectorProps) {
             <div className="eyebrow">{node.props.link ? 'link ' : ''}{kindLabel(node.kind)} · {LAYER_LABELS[node.layer]}</div>
             <h2>{node.qn}</h2>
             {errors.length > 0 && <ul className="errors" role="alert">{errors.map(e => <li key={e}>{e}</li>)}</ul>}
+            <Section title="Code" items={code.map(c => (
+                <li key={`${c.file}:${c.recorded?.start ?? c.start}`}>
+                    <details>
+                        <summary>{c.file}:{c.start}-{c.end}{c.status !== 'current' && <span className="muted"> {c.status}</span>}</summary>
+                        {c.text && <pre className="code">{c.text}</pre>}
+                    </details>
+                </li>
+            ))} />
             {node.kind === 'Action' && <WhatItDoes index={index} qn={node.qn} link={link} />}
             {node.kind === 'Actor' && <WhatTheyCanDo index={index} qn={node.qn} link={link} />}
             {node.kind === 'Entity' && <Section title="Actions" items={entityActions(index, node.qn).map(a => (
@@ -71,10 +82,9 @@ export function Inspector({ index, qn, onSelect, onEdit }: InspectorProps) {
 function Behavior({ index, qn, kind, link }: { index: GraphIndex, qn: string, kind: string, link(qn: string): React.ReactNode }) {
     const simulator = useMemo(() => new Simulator(index.graph), [index]);
     if (kind === 'Action') {
-        const verdicts = { yes: 'may', no: 'may not', depends: 'depends on the data' };
         return (
             <>
-                <Section title="Who may trigger it" items={simulator.actors(qn).map(a => <li key={a.actor}>{link(a.actor)} <span className="muted">{verdicts[a.verdict]}</span></li>)} />
+                <Section title="Who may trigger it" items={simulator.actors(qn).filter(a => a.verdict !== 'no').map(a => <li key={a.actor}>{link(a.actor)} <span className="muted">{VERDICTS[a.verdict]}</span></li>)} />
                 <Section title="Invariants at risk" items={simulator.risks(qn).map(r => <li key={r.invariant}>{link(r.invariant)} <span className="muted">reads {r.fields.join(', ')}</span></li>)} />
             </>
         );
@@ -93,9 +103,8 @@ function Behavior({ index, qn, kind, link }: { index: GraphIndex, qn: string, ki
 }
 
 const VERDICTS: Record<Verdict, string> = { yes: 'may', no: 'may not', depends: 'depends on the data' };
-const ORDER: Verdict[] = ['yes', 'depends', 'no'];
 
-/** What an actor may do and under which policies, by the simulator: allowed and data dependent first, refused folded away. */
+/** What an actor may do and under which policies, by the simulator: allowed first, then data dependent; refused is left out. */
 function WhatTheyCanDo({ index, qn, link }: { index: GraphIndex, qn: string, link(qn: string, text?: string): React.ReactNode }) {
     const groups = useMemo(() => abilities(index, new Simulator(index.graph).access(qn)), [index, qn]);
     const verdict = (entry: Access) => <span className={`verdict verdict-${entry.verdict}`}>{VERDICTS[entry.verdict]}</span>;
@@ -105,8 +114,8 @@ function WhatTheyCanDo({ index, qn, link }: { index: GraphIndex, qn: string, lin
             <ul className="policies">
                 {entry.policies.length ? entry.policies.map(p => <li key={p}>{link(p, policyText(index, p))}</li>) : <li className="muted">no policy</li>}
             </ul>
-            {entry.offers && entry.offers.length > 0 && (
-                <ul className="offers">{entry.offers.map(o => <li key={o.target}>offers {link(o.target)} {verdict(o)}</li>)}</ul>
+            {entry.offers?.some(o => o.verdict !== 'no') && (
+                <ul className="offers">{entry.offers.filter(o => o.verdict !== 'no').map(o => <li key={o.target}>offers {link(o.target)} {verdict(o)}</li>)}</ul>
             )}
         </li>
     );
@@ -114,13 +123,11 @@ function WhatTheyCanDo({ index, qn, link }: { index: GraphIndex, qn: string, lin
         <section>
             <h3>What they can do</h3>
             {[...groups].map(([label, entries]) => {
-                const sorted = [...entries].sort((a, b) => ORDER.indexOf(a.verdict) - ORDER.indexOf(b.verdict));
-                const refused = sorted.filter(e => e.verdict === 'no');
-                return (
+                const allowed = entries.filter(e => e.verdict !== 'no').sort((a, b) => Number(a.verdict === 'depends') - Number(b.verdict === 'depends'));
+                return allowed.length > 0 && (
                     <div key={label} className="abilities">
                         <h4>{label}</h4>
-                        <ul>{sorted.filter(e => e.verdict !== 'no').map(item)}</ul>
-                        {refused.length > 0 && <details><summary>may not ({refused.length})</summary><ul>{refused.map(item)}</ul></details>}
+                        <ul>{allowed.map(item)}</ul>
                     </div>
                 );
             })}

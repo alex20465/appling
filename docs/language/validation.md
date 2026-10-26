@@ -3,7 +3,7 @@ title: Validation rules
 description: Every rule the validator and the expression typer enforce, with the message each one reports.
 ---
 
-`appling check`, the language server and every tool that edits the model run the same validation. A model with errors is not graphed, released or generated, and an edit that adds an error is rejected. This page lists every rule, grouped, with the message it reports. In the messages, names in angle brackets stand for the actual names.
+`appling check`, the language server and every tool that edits the model run the same validation. A model with errors is not graphed, released or generated, and an edit that adds an error is rejected. This page lists every rule, grouped, with the message it reports. Rules marked as a warning are reported but do not block anything. In the messages, names in angle brackets stand for the actual names.
 
 Messages show types the way you write them: `Int`, `Order`, `Line[]`, `DateTime?`. The type of an expression that already failed shows as `unknown`, and the current actor as `actor`.
 
@@ -87,10 +87,15 @@ machine Flow on Order.status {
 | Rule | Message |
 |---|---|
 | Operations and `fields` appear only on entity policies | `Operations and fields narrow entity policies only.` |
+| Every `\|\|` branch of a policy grants by role (warning) | `A policy grants by role: every "\|\|" branch needs actor.is(Role), or write { false }.` |
 
 ```appling
 action Edit on Order {
   policy read { true } // Operations and fields narrow entity policies only.
+}
+
+action Close on Order {
+  policy { true } // A policy grants by role: every "||" branch needs actor.is(Role), or write { false }.
 }
 ```
 

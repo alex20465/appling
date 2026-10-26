@@ -70,8 +70,9 @@ The agent then works through these steps:
    | Permission check | `policy` |
 
 4. **Write and validate.** It writes one module per file with `write_model_file`, domain layer first, and checks the model after each file. A file that would add an error is not written; the agent gets the errors and fixes them.
-5. **Compare behavior.** It asks the simulator whether each state is reachable the way the code reaches it and whether the right actors pass the policies.
-6. **Report.** Where the code does something the model cannot say exactly, such as a rule spread over several functions or raw SQL, it models the closest correct form with a `//` comment that names the source file, and lists these places in its summary. When the code allows two readings, it asks you.
+5. **Record where it lives.** For each element it records the lines of the code it describes as [code references](../tools/references.md), so you, the IDE and later agents find the implementation of any element without searching.
+6. **Compare behavior.** It asks the simulator whether each state is reachable the way the code reaches it and whether the right actors pass the policies.
+7. **Report.** Where the code does something the model cannot say exactly, such as a rule spread over several functions or raw SQL, it models the closest correct form with a `//` comment that names the source file, and lists these places in its summary. When the code allows two readings, it asks you.
 
 > [!TIP]
 > For a large application, derive one part at a time: "Derive the model for the billing app only", then the next one. Modules that reference each other resolve across files.
@@ -90,5 +91,6 @@ npx @appling/ide models
 ## 5. Keep going
 
 - Cut a [release](../language/migrations.md) with `npx appling release 1.0.0 models`, so later renames and type changes become migration steps.
+- Check that the code references still point at the right code after changes, from the model folder: `cd models && npx appling refs --check`. See [Code references](../tools/references.md).
 - [Generate](../codegen/overview.md) a project for Django, Ash, Go or Rust from the model.
 - Keep working on the model with the agent: the same MCP server [edits](../tools/ai.md#tools) it through validated operations.

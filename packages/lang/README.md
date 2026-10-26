@@ -50,6 +50,8 @@ module sales {
 | L4 Interfaces | `interface <protocol>` with endpoints |
 | L5 Experience | `page` with `list`, `detail`, `form`; `navigation`, `flow`, `messages` |
 
+A module or declaration may state its relevance to the business before its opening brace: `core`, `supporting` or `peripheral` (`entity Quote core { ... }`, `module observability peripheral { ... }`). A module's level applies to its members unless they state their own.
+
 Expressions inside `{ ... }` use a subset of [CEL](https://cel.dev): `&&`, `||`, `!`, comparisons, `in`, arithmetic, member access, calls and list literals.
 
 Expressions are typed. Names resolve against their position: the fields of the entity (and `this`) in invariants, entity policies, defaults and derived fields, plus the inputs inside actions, the machine's entity in guards, the query entity in `where`, the source in projections, the parameters in use cases. Everywhere, `actor` is the current actor, `now` is the current DateTime and `tenant` is the entity of the single declared tenant. A bare enum value such as `draft` takes its type from the other side of a comparison or from the field it is assigned to.

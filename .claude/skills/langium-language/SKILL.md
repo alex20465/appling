@@ -58,3 +58,7 @@ The printer keeps comments because the hidden terminal whose regex matches white
 ## LSP rename is partial
 
 `lsp.ts` overrides only `Formatter` and `HoverProvider`, so Langium's `DefaultRenameProvider` handles F2 in the IDE. It changes cross references and the declaration but misses expression names, transition states, export lists, message keys and bound projection fields. Source: `packages/lang/src/lsp.ts`, `renameSplices` in `packages/model/src/edit.ts`.
+
+## Relevance is a plain string property
+
+`Relevance returns string: 'core' | 'supporting' | 'peripheral'` is assigned as `relevance=Relevance?` right before the opening brace of every top level declaration and module (at the end for `role`, `tenant` and `job`, between `roles` and the field block for `actor`). Being a scalar, it lands in `GraphNode.props.relevance` with no graph code; `relevance()` in `packages/model/src/relevance.ts` reads it and inherits it down through `contains` edges. The three words are listed in `Ident` so they stay valid names. A new declaration kind needs the same optional assignment, or it can only inherit its module's level. Source: `packages/lang/src/appling.langium`, `packages/model/src/relevance.ts`.

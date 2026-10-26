@@ -25,6 +25,8 @@ appling fmt   [files or folders...]
 appling graph [files or folders...]
 appling release <version> [files or folders...]
 appling generate [--plan | --migrate | --sync] [files or folders...]
+appling simulate <reach <machine> <state> | actors <action> | risks <action>> [files or folders...]
+appling refs <qualified name | --check> [files or folders...]
 ```
 
 ### How files are found
@@ -223,13 +225,37 @@ $ appling simulate risks sales.PlaceOrder examples
 no invariant reads a field this action changes
 ```
 
+## refs
+
+```sh
+appling refs <qualified name> [paths...]
+appling refs --check [paths...]
+```
+
+Prints the [code references](references.md) of the workspace in the current folder (`.appling/references.json`): where elements are implemented, by file and line range. The model must be valid. With a qualified name, it prints the references of that element and its members, each with its status when it is not `current`:
+
+```
+$ appling refs sales.Order
+../shop/sales/models.py:14-31 sales.Order
+../shop/sales/permissions.py:12-24 sales.Order.policy[create,update,delete] (shifted)
+```
+
+With `--check`, it prints every reference that is `shifted`, `broken` or `orphaned`, then the counts, and exits with 1 when there is one:
+
+```
+$ appling refs --check
+../shop/sales/models.py:16-33 sales.Order: shifted from 14-31
+../shop/sales/views.py:40-52 sales.Archive: orphaned, no such element in the model
+3 reference(s), 1 shifted, 0 broken, 1 orphaned
+```
+
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
 | 0 | No errors |
-| 1 | `check`, `graph`, `release` or `generate` found errors in the model; `release` got an invalid or existing version; `generate` has no targets, a missing prerequisite, a non empty output folder, a failing step, or (with `--migrate`) a target that was not generated; `fmt` skipped a file with syntax errors |
-| 2 | Unknown command, `release` without a version, or `simulate` without a known question and its arguments |
+| 1 | `check`, `graph`, `release`, `generate` or `refs` found errors in the model; `refs --check` found a reference that is not current; `release` got an invalid or existing version; `generate` has no targets, a missing prerequisite, a non empty output folder, a failing step, or (with `--migrate`) a target that was not generated; `fmt` skipped a file with syntax errors |
+| 2 | Unknown command, `release` without a version, `refs` without a qualified name or `--check`, or `simulate` without a known question and its arguments |
 
 Exit code 2 also prints the usage.
 

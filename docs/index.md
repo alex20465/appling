@@ -3,7 +3,7 @@ title: Introduction
 description: Appling describes a business application as one validated model in plain text, then visualizes it, edits it with AI and generates a draft project from it.
 ---
 
-Appling is a declarative language for business applications. You write `.appling` files that describe what exists, what can happen, how capabilities are organized, how programs reach them and how people use them. Appling parses and links those files into one validated model, and every tool works on that model: the CLI, the IDE with its entity view and search, the AI assistants and the code generators.
+Appling is a declarative language for business applications. You write `.appling` files that describe what exists, what can happen, how capabilities are organized, how programs reach them and how people use them. Appling parses and links those files into one validated model, and every tool works on that model: the CLI, the IDE with its model canvas and search, the AI assistants and the code generators.
 
 The text is the single source of truth. The graph you see, the edits the AI proposes and the project the generator writes all come from it and go back to it.
 

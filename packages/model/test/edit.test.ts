@@ -67,7 +67,7 @@ test('edits span only the changed text', async () => {
 
 test('add a field to an entity', async () => {
     const sales = (await edit({ op: 'add', parent: 'sales.Order', source: 'note:Text?' }))[SALES];
-    expect(sales).toContain('    policy read fields total { status != draft || actor.is(crm.Clerk) }\n    note: Text?\n  }');
+    expect(sales).toContain('    policy read fields total { actor.is(crm.Clerk) || (actor.is(Customer) && status != draft) }\n    note: Text?\n  }');
 });
 
 test('add a precondition finds its place in the action', async () => {

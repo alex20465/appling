@@ -1,4 +1,4 @@
-import type { Dependency, Graph } from '@appling/model';
+import type { Dependency, Graph, ResolvedReference } from '@appling/model';
 
 export interface SourceFile {
     uri: string;
@@ -12,6 +12,11 @@ export interface Location {
     end: number;
 }
 
+/** A code reference with the lines it points at now; empty for a broken one. */
+export interface CodeLocation extends ResolvedReference {
+    text: string;
+}
+
 /** Everything the IDE shows, built from the files on disk. */
 export interface Snapshot {
     root: string;
@@ -19,6 +24,8 @@ export interface Snapshot {
     graph: Graph;
     dependencies: Dependency[];
     locations: Record<string, Location>;
+    /** Where elements are implemented, by qualified name. */
+    code: Record<string, CodeLocation[]>;
     errors: string[];
 }
 
