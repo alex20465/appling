@@ -4,6 +4,12 @@
 
 ### Patch Changes
 
+- Make the edit operations usable in the browser for the IDE demo.
+
+## 0.1.1
+
+### Patch Changes
+
 - Code references map model elements to file line ranges in `.appling/references.json`: `recordReferences`, `readReferences` and `resolveReferences`, which follows moved code by its anchor line.
 
 - `Simulator.access(actor)` lists what one actor may do, with the deciding policies.

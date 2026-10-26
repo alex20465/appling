@@ -6,6 +6,7 @@
   dir: packages/ai
   intents:
     - fluffy-elephants-wait
+    - new-donkeys-cheer
     - pretty-seals-happen
 "@appling/cli@0.2.0":
   dir: packages/cli
@@ -24,6 +25,7 @@
   dir: packages/ide
   intents:
     - light-planes-carry
+    - mean-geckos-call
     - polite-pears-begin
 "@appling/lang@0.2.0":
   dir: packages/lang
@@ -44,3 +46,4 @@
     - big-pots-retire
     - empty-ducks-flash
     - good-hairs-doubt
+    - strong-dragons-do

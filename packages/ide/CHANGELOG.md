@@ -4,6 +4,12 @@
 
 ### Patch Changes
 
+- Add a browser only demo of the IDE that runs the language server in a worker.
+
+## 0.1.2
+
+### Patch Changes
+
 - The model canvas is an SVG tree that unfolds by dependency from modules to what uses each declaration, with circles sized and ordered by relevance.
 
 - The inspector shows the code references of an element under Code, and lists only what an actor may do.
