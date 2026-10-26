@@ -8,6 +8,14 @@
       "types": "./out/index.d.ts",
       "default": "./out/index.js"
     },
+    "./graph": {
+      "types": "./out/graph.d.ts",
+      "default": "./out/graph.js"
+    },
+    "./edit": {
+      "types": "./out/edit.d.ts",
+      "default": "./out/edit.js"
+    },
     "./simulator": {
       "types": "./out/simulator.d.ts",
       "default": "./out/simulator.js"

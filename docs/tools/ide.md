@@ -5,6 +5,9 @@ description: A local browser IDE that shows your model as canonical text next to
 
 The Appling IDE (`@appling/ide`) is a local web application. It puts three panes side by side: the text editor with the language server, the model canvas, and a side panel with the search, the inspector and the AI chat. All of them show the same model: the text is the source, the views are computed from it, and every change from the inspector goes back into the text.
 
+> [!TIP]
+> To try the IDE without installing anything, open the [demo](https://appling.tools/ide/). It runs the same IDE on the sample sales and CRM model entirely in your browser, language server included. Edits stay in the page until you reload, and the AI tab works only in a local IDE.
+
 ## Start the IDE
 
 ```sh

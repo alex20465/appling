@@ -1,6 +1,7 @@
 import type { ChatEvent } from '@appling/ai';
 import type { EditOperation, EditResult } from '@appling/model';
 import { DEFAULT_VIEW, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
+import { monaco } from './monaco.js';
 
 export async function loadSnapshot(): Promise<Snapshot> {
     return (await fetch('/api/snapshot')).json();
@@ -49,4 +50,10 @@ export async function* chatTurn(messages: { role: 'user' | 'assistant', content:
         buffer = lines.pop()!;
         for (const line of lines.filter(Boolean)) yield JSON.parse(line) as ChatEvent;
     }
+}
+
+/** Connects Monaco's own LSP client to the language server; it keeps every open model in sync. */
+export async function connectLanguageServer(): Promise<void> {
+    const transport = await monaco.lsp.WebSocketTransport.connectTo({ address: `ws://${location.host}/lsp` });
+    new monaco.lsp.MonacoLspClient(transport);
 }

@@ -110,7 +110,7 @@ console.log(result.ok ? result.edits : result.errors);
 | `relevanceLevel(score)`, `RELEVANCE_LEVELS`, `RelevanceLevel` | The level a score falls in, and the score range of each level |
 | `findApplingFiles(path)` | The `.appling` files at a path, searching folders recursively and skipping hidden folders and `node_modules` |
 
-`@appling/model/simulator` and `@appling/model/relevance` export the simulator and the relevance functions without the rest of the package, so a browser bundle can import them.
+`@appling/model/graph`, `@appling/model/edit`, `@appling/model/simulator` and `@appling/model/relevance` export the graph, the edit operations, the simulator and the relevance functions without the file system functions of the rest of the package, so a browser bundle can import them.
 
 ## Code generation: @appling/codegen
 

@@ -23,6 +23,7 @@
     "unist-util-visit": "5.1.0"
   },
   "devDependencies": {
+    "@appling/ide": "workspace:*",
     "bunny-transfer": "0.0.5"
   }
 }

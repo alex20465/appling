@@ -30,12 +30,6 @@ monaco.editor.defineTheme('appling', {
     }
 });
 
-/** Connects Monaco's own LSP client to the language server; it keeps every open model in sync. */
-export async function connectLanguageServer(): Promise<void> {
-    const transport = await monaco.lsp.WebSocketTransport.connectTo({ address: `ws://${location.host}/lsp` });
-    new monaco.lsp.MonacoLspClient(transport);
-}
-
 /** The current text of every open Appling file, saved or not. */
 export function modelTexts(): Record<string, string> {
     return Object.fromEntries(monaco.editor.getModels().filter(m => m.getLanguageId() === 'appling').map(m => [m.uri.toString(), m.getValue()]));

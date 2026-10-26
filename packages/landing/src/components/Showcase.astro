@@ -1,0 +1,44 @@
+---
+// The IDE itself, built by @appling/ide as a browser only demo and copied to /ide/ by the build
+---
+
+<section id="showcase" class="border-t border-line px-4 py-16 sm:px-8">
+  <div class="mx-auto flex max-w-[1200px] flex-col gap-8">
+    <div class="flex max-w-[640px] flex-col gap-3">
+      <span class="eyebrow">Try it</span>
+      <h2 class="text-h1">The IDE, right here</h2>
+      <p class="text-ink-soft">The real IDE on the sample sales and CRM model, running in your browser with its language server. Unfold the canvas, search, open the inspector and edit the text; every change is validated, and nothing leaves this page.</p>
+    </div>
+    <div class="overflow-hidden rounded-sm border border-line bg-surface-raised">
+      <div class="flex items-center justify-between gap-4 border-b border-line px-4 py-2 font-mono text-xs leading-5 text-ink-muted">
+        <span class="truncate">npx @appling/ide examples</span>
+        <a href="/ide/" target="_blank" class="font-semibold whitespace-nowrap">Open full screen →</a>
+      </div>
+      <div id="ide-stage" class="relative h-[min(760px,80vh)] min-h-[480px] bg-surface">
+        <div aria-hidden="true" class="absolute inset-0 grid grid-cols-[2fr_3fr_1fr] opacity-60 max-sm:grid-cols-1">
+          <div class="flex flex-col gap-3 border-r border-line p-6 max-sm:hidden">
+            {[70, 45, 85, 60, 30, 75, 50].map((width) => <span class="h-2 rounded-full bg-surface-elevated" style={`width: ${width}%`}></span>)}
+          </div>
+          <div class="bg-[radial-gradient(circle_at_2px_2px,var(--color-line)_1.2px,transparent_1.5px)] bg-size-[20px_20px]"></div>
+          <div class="border-l border-line bg-surface-raised max-sm:hidden"></div>
+        </div>
+        <div class="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
+          <button type="button" class="inline-flex min-h-11 cursor-pointer items-center rounded-md bg-leaf px-6 font-mono text-[13px] leading-4 font-semibold text-on-leaf hover:bg-leaf-hover">Try the IDE</button>
+          <p class="max-w-[420px] text-sm leading-[22px] text-ink-muted">Loads the editor, the language server and the model canvas, a few megabytes. Edits stay in your browser until you reload.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  const stage = document.querySelector("#ide-stage")!;
+  stage.querySelector("button")!.addEventListener("click", () => {
+    const frame = document.createElement("iframe");
+    frame.src = "/ide/";
+    frame.title = "Appling IDE on the sample model";
+    frame.className = "absolute inset-0 size-full border-0";
+    stage.replaceChildren(frame);
+    frame.focus();
+  });
+</script>

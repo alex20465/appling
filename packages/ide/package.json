@@ -8,10 +8,10 @@
   },
   "files": [
     "out",
-    "dist"
+    "dist/client"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.server.json && tsc -p tsconfig.client.json && vite build"
+    "build": "tsc -p tsconfig.server.json && tsc -p tsconfig.client.json && vite build && vite build -c vite.demo.config.ts"
   },
   "dependencies": {
     "@appling/ai": "workspace:*",

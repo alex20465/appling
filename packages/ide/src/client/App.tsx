@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DEFAULT_VIEW, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
 import type { EditOperation } from '@appling/model';
-import { loadRelease, loadSnapshot, loadView, onSnapshot, requestEdit, saveFile, saveView } from './api.js';
+import { connectLanguageServer, loadRelease, loadSnapshot, loadView, onSnapshot, requestEdit, saveFile, saveView } from './api.js';
 import { Editor, type Reveal } from './Editor.js';
 import { ModelCanvas } from '@appling/viz/canvas';
 import { elementAt, GraphIndex } from '@appling/viz/views';
 import { Chat } from './Chat.js';
 import { Inspector } from './Inspector.js';
 import { Search } from './Search.js';
-import { applyTextEdits, connectLanguageServer, modelTexts, monaco } from './monaco.js';
+import { applyTextEdits, modelTexts, monaco } from './monaco.js';
 
 export function App() {
     const [snapshot, setSnapshot] = useState<Snapshot>();

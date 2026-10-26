@@ -8,6 +8,8 @@ npx @appling/ide [folder] [--port 4410]
 
 It serves the folder's `.appling` files on `http://127.0.0.1:4410` and only answers pages it served itself.
 
+To try it without installing anything, open the demo at https://appling.tools/ide/: the same IDE on the sample sales and CRM model, with the language server running in the browser. Edits stay in the page until you reload, and the AI tab needs a local IDE with an API key.
+
 ## What you get
 
 - A text editor (Monaco) backed by the Appling language server: diagnostics, completion, hover, go to definition, references, rename and formatting. Ctrl+S (Cmd+S) saves.

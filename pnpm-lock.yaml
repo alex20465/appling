@@ -409,6 +409,9 @@ importers:
         specifier: 5.1.0
         version: 5.1.0
     devDependencies:
+      '@appling/ide':
+        specifier: workspace:*
+        version: link:../ide
       bunny-transfer:
         specifier: 0.0.5
         version: 0.0.5(@types/react@19.3.0)

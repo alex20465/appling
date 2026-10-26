@@ -24,6 +24,8 @@ const deps = dependencies(graph);
 | `recordReferences(root, qn, ranges)`, `readReferences(root)`, `resolveReferences(root, graph?)` | Code references in `<root>/.appling/references.json`: where elements are implemented, by file, line range and anchor line, resolved as `current`, `shifted`, `broken` or `orphaned` |
 | `Graph`, `GraphNode`, `GraphEdge`, `Dependency` | The serializable graph types |
 
+In a browser bundle, import the graph from `@appling/model/graph` and the edit operations from `@appling/model/edit`; the package root also loads the file system functions.
+
 ### Nodes
 
 | Field | Meaning |
