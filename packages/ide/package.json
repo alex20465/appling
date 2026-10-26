@@ -1,6 +1,6 @@
 {
   "name": "@appling/ide",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Appling IDE: the model as text, entity view and search, in the browser",
   "type": "module",
   "bin": {

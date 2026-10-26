@@ -1,6 +1,6 @@
 {
   "name": "@appling/viz",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Appling visualization: the model views and canvases shared by the IDE and a floating window for AI sessions",
   "type": "module",
   "exports": {
@@ -35,7 +35,9 @@
     "react": "19.3.1"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true }
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@appling/lang": "workspace:*",

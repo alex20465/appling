@@ -47,3 +47,7 @@
     - empty-ducks-flash
     - good-hairs-doubt
     - strong-dragons-do
+"@appling/viz@0.1.1":
+  dir: packages/viz
+  intents:
+    - mighty-geese-yawn
