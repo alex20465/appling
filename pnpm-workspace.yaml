@@ -18,6 +18,7 @@ overrides:
   body-parser: '>=2.4.0'
   zod: '>=4.6.6'
   'bunny-transfer>zod': 3.25.76
+  'bunny-transfer>file-type': 20.5.0
   '@azure/msal-node': '>=7.1.0'
   file-type: '>=21.3.2'
   postcss-selector-parser: '>=7.1.6'

@@ -167,6 +167,7 @@ overrides:
   body-parser: '>=2.4.0'
   zod: '>=4.6.6'
   bunny-transfer>zod: 3.25.76
+  bunny-transfer>file-type: 20.5.0
   '@azure/msal-node': '>=7.1.0'
   file-type: '>=21.3.2'
   postcss-selector-parser: '>=7.1.6'
@@ -1619,8 +1620,8 @@ packages:
       '@types/react':
         optional: true
 
-  '@tokenizer/inflate@0.5.2':
-    resolution: {integrity: sha512-3AZIuReWQ7i916s/UWAzy4V4k2wrkAZLW2sTi448W3w7Hz5uoc+Y7h+cnwzr0cwrwf3PsC5xKsH8MOl0NRltlg==}
+  '@tokenizer/inflate@0.2.7':
+    resolution: {integrity: sha512-MADQgmZT1eKjp06jpI2yozxaU9uVs4GzzgSL+uEq7bVcJ9V1ZXQkeGNql1fsSI0gMy1vhvNTNbUqrx+pZfJVmg==}
     engines: {node: '>=18'}
 
   '@tokenizer/token@0.3.0':
@@ -2753,13 +2754,16 @@ packages:
       picomatch:
         optional: true
 
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
+
   figures@6.1.0:
     resolution: {integrity: sha512-d+l3qxjSesT4V7v2fh+QnmFnUWv9lSpjarhShNTgBOfA0ttejbQUAlHLitbjkoRiDulW0OPoQPYIGhIC8ohejg==}
     engines: {node: '>=18'}
 
-  file-type@22.2.0:
-    resolution: {integrity: sha512-XmEVJsRpQMVYC+sWFW+FKAVo2P7/lPctDdWH4UQ1r6oxhdrTobnowdM3z+ZJ93a4J8D3yDpxX0bEvRuFev0vUQ==}
-    engines: {node: '>=22'}
+  file-type@20.5.0:
+    resolution: {integrity: sha512-BfHZtG/l9iMm4Ecianu7P8HRD2tBHLtjXinm4X62XBOYzi7CYA7jyqfJzOvXHqzVrVPYqBo2/GvbARMaaJkKVg==}
+    engines: {node: '>=18'}
 
   fill-range@7.1.1:
     resolution: {integrity: sha512-YsGpe3WHLK8ZYi4tWDg2Jy3ebRz2rXowDxnld4bkQB00cc/1Zw9AWnC0i9ztDJitivtQvaI9KaLyKrc+hBW0yg==}
@@ -5676,10 +5680,10 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.3.0
 
-  '@tokenizer/inflate@0.5.2':
+  '@tokenizer/inflate@0.2.7':
     dependencies:
       debug: 4.4.3
-      strtok3: 10.6.2
+      fflate: 0.8.3
       token-types: 6.1.2
     transitivePeerDependencies:
       - supports-color
@@ -6252,7 +6256,7 @@ snapshots:
       fast-deep-equal: 3.1.3
       fast-glob: 3.3.3
       figures: 6.1.0
-      file-type: 22.2.0
+      file-type: 20.5.0
       fs-extra: 11.4.1
       ink: 5.2.1(@types/react@19.3.0)(react@18.3.1)
       ink-spinner: 5.0.0(ink@5.2.1(@types/react@19.3.0)(react@18.3.1))(react@18.3.1)
@@ -6912,13 +6916,15 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.7
 
+  fflate@0.8.3: {}
+
   figures@6.1.0:
     dependencies:
       is-unicode-supported: 2.1.0
 
-  file-type@22.2.0:
+  file-type@20.5.0:
     dependencies:
-      '@tokenizer/inflate': 0.5.2
+      '@tokenizer/inflate': 0.2.7
       strtok3: 10.6.2
       token-types: 6.1.2
       uint8array-extras: 1.6.0
