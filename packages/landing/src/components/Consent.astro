@@ -18,7 +18,7 @@ const button = "inline-flex min-h-11 cursor-pointer items-center justify-center 
       <span class="eyebrow">Cookie inspection</span>
       <h2 id="consent-title" class="mt-2 text-lg leading-6 font-semibold text-balance">Beep boop. Mind if I count you?</h2>
       <p id="consent-text" class="mt-2 text-sm leading-[22px] text-ink-soft">
-        I searched everywhere and found no cookies, just crumbs. With your OK I tally page visits with Umami: cookieless, privacy friendly, no ads and no tracking across sites.
+        I searched everywhere and found no cookies, just crumbs. With your OK I tally page visits with Umami and record anonymous session replays and heatmaps to see where the site confuses people: no ads and no tracking across sites.
       </p>
       <div class="mt-5 grid gap-2 @min-[276px]:grid-cols-2">
         <button type="button" data-consent="granted" class={`${button} bg-leaf text-on-leaf hover:bg-leaf-hover`}>Sure, count me</button>
@@ -32,14 +32,18 @@ const button = "inline-flex min-h-11 cursor-pointer items-center justify-center 
   const KEY = "appling-consent";
   const dialog = document.getElementById("consent")!;
 
+  let loaded = false;
+
   function load() {
-    if (document.getElementById("umami")) return;
-    const script = document.createElement("script");
-    script.id = "umami";
-    script.defer = true;
-    script.src = "https://analytics.techthos.systems/script.js";
-    script.dataset.websiteId = "a090bce2-6782-4895-8a12-577a510bf77b";
-    document.head.append(script);
+    if (loaded) return;
+    loaded = true;
+    for (const file of ["script.js", "recorder.js"]) {
+      const script = document.createElement("script");
+      script.defer = true;
+      script.src = `https://analytics.techthos.systems/${file}`;
+      script.dataset.websiteId = "a090bce2-6782-4895-8a12-577a510bf77b";
+      document.head.append(script);
+    }
   }
 
   let choice = null;
@@ -56,7 +60,7 @@ const button = "inline-flex min-h-11 cursor-pointer items-center justify-center 
         localStorage.setItem(KEY, value);
       } catch {}
       // Withdrawn after Umami already loaded: reload so it stops counting this visit
-      if (value === "denied" && document.getElementById("umami")) location.reload();
+      if (value === "denied" && loaded) location.reload();
       if (value === "granted") load();
       dialog.hidden = true;
     });
