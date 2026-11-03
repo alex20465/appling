@@ -3,7 +3,7 @@ import {
     type AstNode, type AstNodeDescription, type LangiumDocument, type ReferenceInfo, type Scope
 } from 'langium';
 import {
-    isAction, isCallStep, isEndpoint, isDetailView, isExternalOperation, isHandler, isListView,
+    isAction, isCallStep, isEndpoint, isDetailView, isExport, isExternalOperation, isHandler, isListView,
     isModule, isQuery, isSetEffect, isSort, isTransition, isMachine,
     type Entity, type Model, type Module, type Projection
 } from './generated/ast.js';
@@ -19,7 +19,7 @@ export class ApplingScopeComputation extends DefaultScopeComputation {
         const model = document.parseResult.value as Model;
         for (const module of AstUtils.streamAst(model).filter(isModule)) {
             const prefix = modulePath(module);
-            const exported = new Set(module.exports.flatMap(e => e.names));
+            const exported = new Set(module.exports.flatMap(e => e.names.map(n => n.$refText)));
             for (const member of module.members.filter(m => exported.has(this.nameProvider.getName(m) ?? ''))) {
                 for (const [path, node] of namedPaths(member, this.nameProvider.getName.bind(this.nameProvider))) {
                     exports.push(this.descriptions.createDescription(node, `${prefix}.${path}`, document));
@@ -55,6 +55,9 @@ export class ApplingScopeProvider extends DefaultScopeProvider {
         const node = context.container;
         if (context.property === 'picks' && (isEndpoint(node) || isListView(node) || isDetailView(node))) {
             return this.createScopeForNodes(node.projection?.ref?.fields ?? []);
+        }
+        if (isExport(node)) {
+            return this.createScopeForNodes(node.$container.members);
         }
         if (isSort(node)) {
             return this.fieldsOf(AstUtils.getContainerOfType(node, isQuery)?.entity?.ref);

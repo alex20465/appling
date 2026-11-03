@@ -1,7 +1,8 @@
-import { inject, type AstNode, type LangiumDocument, type Module } from 'langium';
+import { inject, URI, type AstNode, type LangiumDocument, type Module } from 'langium';
 import {
-    createDefaultModule, createDefaultSharedModule, MultilineCommentHoverProvider,
-    type DefaultSharedModuleContext, type Formatter, type LangiumServices, type LangiumSharedServices, type PartialLangiumServices
+    createDefaultModule, createDefaultSharedModule, DefaultDocumentUpdateHandler, MultilineCommentHoverProvider,
+    type DefaultSharedModuleContext, type Formatter, type LangiumServices, type LangiumSharedServices, type PartialLangiumServices,
+    type PartialLangiumSharedServices
 } from 'langium/lsp';
 import { TextEdit } from 'vscode-languageserver';
 import { ApplingGeneratedModule, ApplingGeneratedSharedModule } from './generated/module.js';
@@ -49,6 +50,26 @@ export class ApplingHoverProvider extends MultilineCommentHoverProvider {
     }
 }
 
+/**
+ * Keeps one document per file when the workspace is also reachable through another path, such as a symlink:
+ * the path the editor opened replaces the copy read from disk, or every declaration would exist twice.
+ */
+export class ApplingDocumentUpdateHandler extends DefaultDocumentUpdateHandler {
+
+    constructor(private readonly services: LangiumSharedServices, private readonly realPath: (uri: URI) => string) {
+        super(services);
+    }
+
+    protected override fireDocumentUpdate(changed: URI[], deleted: URI[]): void {
+        this.workspaceManager.ready.then(() => {
+            const opened = new Map(this.services.workspace.TextDocuments.keys().map(uri => [this.realPath(URI.parse(uri)), uri]));
+            const copy = (uri: URI) => (opened.get(this.realPath(uri)) ?? uri.toString()) !== uri.toString();
+            const copies = this.services.workspace.LangiumDocuments.all.map(d => d.uri).filter(copy).toArray();
+            super.fireDocumentUpdate(changed.filter(uri => !copy(uri)), [...deleted, ...copies]);
+        });
+    }
+}
+
 export const ApplingLspModule: Module<LangiumServices, PartialLangiumServices> = {
     lsp: {
         Formatter: () => new ApplingFormatter(),
@@ -56,11 +77,16 @@ export const ApplingLspModule: Module<LangiumServices, PartialLangiumServices> =
     }
 };
 
-export function createApplingLspServices(context: DefaultSharedModuleContext): {
+/** With `realPath`, the real file path of a URI, the server keeps one document per file across symlinked paths. */
+export function createApplingLspServices(context: DefaultSharedModuleContext & { realPath?: (uri: URI) => string }): {
     shared: LangiumSharedServices,
     Appling: LangiumServices
 } {
-    const shared = inject(createDefaultSharedModule(context), ApplingGeneratedSharedModule);
+    const { realPath } = context;
+    const documents: Module<LangiumSharedServices, PartialLangiumSharedServices> = realPath
+        ? { lsp: { DocumentUpdateHandler: services => new ApplingDocumentUpdateHandler(services, realPath) } }
+        : {};
+    const shared = inject(createDefaultSharedModule(context), ApplingGeneratedSharedModule, documents);
     const Appling = inject(createDefaultModule({ shared }), ApplingGeneratedModule, ApplingModule, ApplingLspModule);
     shared.ServiceRegistry.register(Appling);
     registerValidationChecks(Appling);

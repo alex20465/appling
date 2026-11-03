@@ -2,7 +2,7 @@ import { AstUtils, WorkspaceCache, type AstNode } from 'langium';
 import {
     isAction, isActor, isAssignment, isBinaryExpr, isBoolExpr, isCall, isCreateEffect, isEntity, isEnum, isExpr, isExternalOperation,
     isField, isIndexExpr, isInvariant, isJob, isListExpr, isMemberExpr, isNameExpr, isNullExpr, isNumberExpr, isPolicy,
-    isPrecondition, isProjectionField, isQuery, isSetEffect, isStringExpr, isTenant, isTransition, isUnaryExpr, isUseCase,
+    isPrecondition, isProjectionField, isQuery, isRole, isSetEffect, isStringExpr, isTenant, isTransition, isUnaryExpr, isUseCase,
     type Action, type Actor, type Assignment, type BinaryExpr, type Call, type Entity, type Enum, type Event, type Expr,
     type Field, type MemberExpr, type NameExpr, type Param, type Policy, type Tenant, type Transition, type TypeRef, type ValueType
 } from './generated/ast.js';
@@ -113,6 +113,7 @@ export class ExpressionTyper {
         if (isField(owner)) return { env: this.fieldsEnv(owner.$container), expected: typeOfRef(owner.type) };
         if (isInvariant(owner)) return { env: this.entityEnv(owner.$container), ...condition };
         if (isPolicy(owner)) return { env: this.policyEnv(owner), ...condition };
+        if (isRole(owner)) return { env: this.base(), ...condition };
         if (isPrecondition(owner)) return { env: this.actionEnv(owner.$container), ...condition };
         if (isTransition(owner)) return { env: this.entityEnv(machineEntity(owner)), ...condition };
         if (isJob(owner)) return { env: this.actionEnv(owner.action.ref), ...condition };
@@ -163,30 +164,47 @@ export class ExpressionTyper {
         return ERROR;
     }
 
+    /** Where an enum is expected, its value wins over a field or parameter of the same name. */
     private name(expr: NameExpr, env: Env, expected?: Type): Type {
-        const binding = env.get(expr.name);
-        if (binding) {
-            if (binding.target) this.targets.set(expr, binding.target);
-            return binding.type;
-        }
         const literal = expected?.kind === 'decl' && isEnum(expected.decl) ? expected.decl.literals.find(l => l.name === expr.name) : undefined;
         if (literal) {
             this.targets.set(expr, literal);
             return { kind: 'decl', decl: literal.$container };
         }
+        const binding = env.get(expr.name);
+        if (binding) {
+            if (binding.target) this.targets.set(expr, binding.target);
+            return binding.type;
+        }
+        if (AstUtils.getContainerOfType(expr, isRole)) return this.problem(expr, `A role condition reads only actor, tenant and now, not "${expr.name}".`, 'name');
         return this.problem(expr, `Unknown name "${expr.name}".`, 'name');
     }
 
     private member(expr: MemberExpr, env: Env): Type {
+        const qualified = this.enumValue(expr, env);
+        if (qualified) return qualified;
         const receiver = this.infer(expr.receiver, env);
         if (receiver.kind === 'error') return ERROR;
         const fields = this.fieldsOf(receiver);
         const field = fields?.find(f => f.name === expr.member);
         if (!field) return this.problem(expr, `${show(receiver)} has no field "${expr.member}".`, 'member');
         this.targets.set(expr, field);
-        const partial = receiver.kind === 'actor' && this.actors.some(a => !a.fields.some(f => f.name === expr.member));
+        const partial = receiver.kind === 'actor' && this.actors.some(a => !actorFields(a).some(f => f.name === expr.member));
         const type = typeOfRef(field.type);
         return receiver.optional || partial ? { ...type, optional: true } : type;
+    }
+
+    /** A value named with its enum, such as `Status.open` or `sales.Status.open`, when the receiver is no name in scope. */
+    private enumValue(expr: MemberExpr, env: Env): Type | undefined {
+        const path = pathOf(expr.receiver);
+        if (!path || env.has(path.split('.')[0])) return undefined;
+        const scope = this.services.references.ScopeProvider as ApplingScopeProvider;
+        const decl = scope.lookup(expr, 'Enum', path);
+        if (!isEnum(decl)) return undefined;
+        const literal = decl.literals.find(l => l.name === expr.member);
+        if (!literal) return this.problem(expr, `Enum ${decl.name} has no value "${expr.member}".`, 'member');
+        this.targets.set(expr, literal);
+        return { kind: 'decl', decl };
     }
 
     private binary(expr: BinaryExpr, env: Env): Type {
@@ -205,7 +223,7 @@ export class ExpressionTyper {
         }
         const [left, right] = this.operands(expr, env);
         if (left.kind === 'error' || right.kind === 'error') return ['==', '!=', '<', '<=', '>', '>='].includes(op) ? primitive('Bool') : ERROR;
-        if (op === '==' || op === '!=') return comparable(left, right) ? primitive('Bool') : this.mismatch(expr, left, right);
+        if (op === '==' || op === '!=') return comparable(this.asEntity(left, right), this.asEntity(right, left)) ? primitive('Bool') : this.mismatch(expr, left, right);
         if (op === '<' || op === '<=' || op === '>' || op === '>=') {
             return comparable(left, right) && is(left, ...ORDERED) ? primitive('Bool') : this.mismatch(expr, left, right);
         }
@@ -221,6 +239,12 @@ export class ExpressionTyper {
         }
         const left = this.infer(expr.left, env);
         return [left, this.infer(expr.right, env, left)];
+    }
+
+    /** The actor compares with the entity some actor is bound to, such as `customer == actor`. */
+    private asEntity(type: Type, other: Type): Type {
+        if (type.kind !== 'actor' || other.kind !== 'decl') return type;
+        return this.actors.some(a => a.entity?.ref === other.decl) ? { kind: 'decl', decl: other.decl } : type;
     }
 
     private callFunction(expr: NameExpr, env: Env): Type {
@@ -278,7 +302,7 @@ export class ExpressionTyper {
     }
 
     private fieldsOf(type: Type): Field[] | undefined {
-        if (type.kind === 'actor') return this.actors.flatMap(a => a.fields);
+        if (type.kind === 'actor') return this.actors.flatMap(actorFields);
         if (type.kind === 'decl' && !isEnum(type.decl)) return type.decl.fields;
         return undefined;
     }
@@ -415,6 +439,11 @@ function signature(target: NonNullable<Call['target']['ref']>): Signature {
     }
     if (isExternalOperation(target) || isUseCase(target)) return { params: params(target.params), required: required(target.params) };
     return { params: [], required: 0 };
+}
+
+/** An actor's own fields and those of the entity it is bound to. */
+function actorFields(actor: Actor): Field[] {
+    return [...actor.fields, ...(actor.entity?.ref?.fields ?? [])];
 }
 
 function machineEntity(transition: Transition): Entity | undefined {

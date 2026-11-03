@@ -11,7 +11,7 @@ Module:
     '}';
 
 Export:
-    'export' names+=Ident (',' names+=Ident)*;
+    'export' names+=[Member:Ident] (',' names+=[Member:Ident])*;
 
 Member:
     Module | Role | Actor | Tenant
@@ -22,11 +22,13 @@ Member:
     | Page | Navigation | Flow | Messages
     | Migration;
 
+// The condition says when an actor counts as the role; it reads only actor, tenant and now.
 Role:
-    'role' name=Ident relevance=Relevance?;
+    'role' name=Ident relevance=Relevance? ('{' condition=Expr '}')?;
 
+// `is` binds the actor to the entity that stores it, such as the user.
 Actor:
-    'actor' kind=('human' | 'system' | 'service') name=Ident
+    'actor' kind=('human' | 'system' | 'service') name=Ident ('is' entity=[Entity:QualifiedName])?
     ('roles' roles+=[Role:QualifiedName] (',' roles+=[Role:QualifiedName])*)? relevance=Relevance?
     ('{' fields+=Field* '}')?;
 
@@ -301,7 +303,7 @@ Ident returns string:
     | 'page' | 'timeout' | 'sort' | 'when' | 'create' | 'read' | 'update' | 'delete' | 'per'
     | 'flow' | 'actor' | 'tenant' | 'set' | 'op' | 'human' | 'system' | 'service' | 'asc'
     | 'desc' | 'remove' | 'rename' | 'retype' | 'roles' | 'second' | 'minute' | 'hour' | 'link'
-    | 'core' | 'supporting' | 'peripheral';
+    | 'core' | 'supporting' | 'peripheral' | 'default' | 'limit' | 'messages' | 'migration' | 'is';
 
 hidden terminal WS: /\s+/;
 terminal ID: /[_a-zA-Z][\w]*/;

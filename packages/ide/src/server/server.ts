@@ -1,4 +1,4 @@
-import { watch, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { watch, existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { basename, extname, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -120,7 +120,8 @@ function serveLanguage(ws: WebSocket, root: string): void {
         dispose: () => ws.close()
     };
     const connection = createConnection(new WebSocketMessageReader(socket), new WebSocketMessageWriter(socket));
-    startLanguageServer(createApplingLspServices({ connection, ...NodeFileSystem }).shared);
+    const realPath = (uri: { fsPath: string }) => existsSync(uri.fsPath) ? realpathSync(uri.fsPath) : uri.fsPath;
+    startLanguageServer(createApplingLspServices({ connection, ...NodeFileSystem, realPath }).shared);
 }
 
 function withWorkspace(message: string, folder: { uri: string, name: string }): string {

@@ -92,7 +92,7 @@ A rule that must always be true belongs to the entity as an [invariant](domain.m
 
 Each value is an expression typed against the field it is assigned to. In `create` and `emit`, every assigned name must be a field of the entity or event: `Closed has no field "nope".`
 
-A `set` effect cannot change a `state` field. Only a machine transition changes it: `A state field changes only through a machine transition.`
+A `set` effect cannot change a `state` field. Only a machine transition changes it: `A state field changes only through a machine transition.` A `create` effect may assign a `state` field: it sets the state the new record starts in, such as a quote created as `draft` or `waiting`.
 
 ### Errors
 
@@ -138,6 +138,10 @@ The rules a machine must follow:
 - The field must be an entity field marked `state` with an enum type: `A machine must govern an entity field marked "state" with an enum type.`
 - Each state field has at most one machine: `State field status is already owned by another machine.`
 - Every state in a transition must be a value of the enum: `"closed" is not a value of Status.`
+
+### Initial states
+
+A record enters a machine in one of its initial states: the default of the state field, and every state that a `create` effect anywhere in the model assigns to that field. A field without a default that no `create` assigns may start in any state of its enum. The [simulator](../tools/simulator.md) searches for reachable states from all initial states.
 
 ## Jobs
 

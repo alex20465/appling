@@ -34,7 +34,7 @@ export Order, OrderSummary, OpenOrders
 export PlaceOrder
 ```
 
-- Each name must be a declaration directly inside the module. Exporting a name that does not exist is an error: `Module sales has no member "Missing" to export.`
+- Each name is a reference to a declaration directly inside the module. Exporting a name that does not exist is an error: `Could not resolve reference to Member named 'Missing'.` Because the names are references, renaming a declaration also renames it in every `export` line, and go to definition and find references work on them in an editor.
 - Exporting a declaration also exports everything inside it, by dotted path. Exporting `Order` makes `sales.Order` and `sales.Order.status` visible to other modules, which lets another module define a field of type `sales.Order` or a machine on `sales.Order.status`.
 - Exports are explicit. Nothing becomes visible to other modules just because it exists.
 

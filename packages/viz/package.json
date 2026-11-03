@@ -2,6 +2,12 @@
   "name": "@appling/viz",
   "version": "0.1.1",
   "description": "Appling visualization: the model views and canvases shared by the IDE and a floating window for AI sessions",
+  "homepage": "https://www.appling.tools/docs/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alex20465/appling.git",
+    "directory": "packages/viz"
+  },
   "type": "module",
   "exports": {
     ".": {

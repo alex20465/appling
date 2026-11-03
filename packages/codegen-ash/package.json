@@ -2,6 +2,12 @@
   "name": "@appling/codegen-ash",
   "version": "0.1.1",
   "description": "Appling code generation extension for Ash",
+  "homepage": "https://www.appling.tools/docs/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alex20465/appling.git",
+    "directory": "packages/codegen-ash"
+  },
   "type": "module",
   "exports": {
     ".": {

@@ -37,6 +37,7 @@ Requires `uv` on the PATH. Python and Django (6.1) are installed by uv into the 
 | `interface rest` | REST framework views in `<app>/api.py` and routes in `<app>/api_urls.py` under `api/`: list views for queries with projection, picks and pagination, `APIView`s for actions; `limit` becomes a throttle |
 | `page` | a server rendered view with its list, detail and form components, posting row actions and forms to a runner view per action |
 | `navigation`, `messages` | the menu of the base template, and labels per language |
+| `role` | a [django-rules](https://github.com/dfunckt/django-rules) predicate `is_<role>(user)` in `<app>/roles.py` (group membership and the role's condition), called wherever `actor.is(Role)` is translated; the entity actors are bound to with `is` extends `AbstractUser` and becomes `AUTH_USER_MODEL` |
 
 | rules | a `TestCase` per invariant, policy, transition and action with preconditions in `<app>/tests.py`, one skipped method per case; writing their bodies is a registry task |
 
@@ -44,7 +45,7 @@ Models with projections or interfaces also get Django REST framework. The projec
 
 `appling generate --migrate` continues that history: renamed, retyped and removed fields become `RenameField`, `AlterField` and `RemoveField`, renamed and removed entities `RenameModel` and `DeleteModel`, a renamed enum value an `AlterField` with a data migration of the stored values. `models.py` and `enums.py` change with them, so `makemigrations` finds nothing left to guess.
 
-What cannot be translated becomes a registry task: invariants over derived fields or other entities, derived fields and defaults that use `actor` or other context, policies, roles, guards and effects that cannot be expressed in Python, the client of an external system, scheduling of jobs, use cases from their first `await` on, authentication and CORS of interfaces.
+What cannot be translated becomes a registry task: invariants over derived fields or other entities, derived fields and defaults that use `actor` or other context, policies, the Django groups of roles, guards and effects that cannot be expressed in Python, the client of an external system, scheduling of jobs, use cases from their first `await` on, authentication and CORS of interfaces.
 
 ## License
 

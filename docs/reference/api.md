@@ -59,8 +59,9 @@ startLanguageServer(createApplingLspServices({ connection, ...NodeFileSystem }).
 
 | Export | Purpose |
 |---|---|
-| `createApplingLspServices(context)` | The Appling services with Langium's LSP services; returns `{ shared, Appling }` |
+| `createApplingLspServices(context)` | The Appling services with Langium's LSP services; returns `{ shared, Appling }`. `realPath` in the context keeps one document per file across symlinked paths |
 | `ApplingLspModule` | The Appling specific LSP services: formatter and hover |
+| `ApplingDocumentUpdateHandler` | Replaces a copy read from disk with the path the editor opened, when both are the same file |
 | `ApplingFormatter` | Formats a whole document into canonical form |
 | `ApplingHoverProvider` | Hover with kind, qualified name, layer and doc comment |
 

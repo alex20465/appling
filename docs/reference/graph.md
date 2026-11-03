@@ -170,6 +170,8 @@ Both hold the element's own properties, without its name and without the element
 | References | Left out, they become edges | The qualified name of the target, or `null` when it does not resolve |
 | Expressions | Source text | [ExprData](#exprdata) with the computed `type` and, for names, the `target` |
 
+An enum value named with its enum (`Scope.operator`) appears in `data` as the bare value would, `{ "$type": "NameExpr", "name": "operator", "type": "Scope", "target": "m.Scope.operator" }`, so tools handle both spellings alike.
+
 So an action's precondition shows as `"requires { lines.size() > 0 } else EmptyOrder"` in `props` and as `{ "$type": "Precondition", "condition": { ... }, "error": "sales.PlaceOrder.EmptyOrder" }` in `data`.
 
 ## Node kinds
@@ -217,7 +219,7 @@ Everything else folds into its element, for example types (`TypeRef`), expressio
 | Kind | Meaning |
 |---|---|
 | `contains` | From an element to each element directly inside it, looking through parts that are not elements |
-| `uses` | From an element to what a name in one of its expressions stands for: a field, an enum value, a parameter, a role and so on |
+| `uses` | From an element to what a name in one of its expressions stands for: a field, an enum value, a parameter, a role and so on. A role's condition gives `uses` edges from the role, such as `ops.Operator` to `ops.User.active` |
 | any other | A reference, named after the referencing property |
 
 The reference kinds, with the element the edge starts from:
@@ -225,7 +227,7 @@ The reference kinds, with the element the edge starts from:
 | Kind | From | To |
 |---|---|---|
 | `type` | A field, a parameter, or an external operation (its return type) | The enum, value type or entity |
-| `entity` | An action, query or tenant; a `create` effect | The entity |
+| `entity` | An action, query or tenant; an actor bound with `is`; a `create` effect | The entity |
 | `field` | A machine; a `set` effect; a query (its sort fields) | The field |
 | `fields` | A field policy | The fields it covers |
 | `roles` | An actor | Its roles |
@@ -243,7 +245,7 @@ The reference kinds, with the element the edge starts from:
 | `pages` | A flow | Its pages |
 | `usecase` | A flow | Its use case |
 
-References made by parts that are not elements (preconditions, sorts, steps, components, navigation items) belong to the element that contains them. An edge appears once per element, target and kind, however often the reference repeats.
+References made by parts that are not elements (preconditions, sorts, steps, components, navigation items) belong to the element that contains them. An edge appears once per element, target and kind, however often the reference repeats. The names in a module's `export` lines are references too, but they become no edges; they appear in the module's `data` as qualified names (`"exports": [{ "$type": "Export", "names": ["crm.Account"] }]`).
 
 ## Dependencies
 

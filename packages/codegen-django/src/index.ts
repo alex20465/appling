@@ -5,10 +5,11 @@ import { messagesSteps, navigationSteps, pageSteps } from './pages.js';
 import { externalSteps, projectionFieldSteps, projectionSteps, querySteps, useCaseSteps } from './application.js';
 import { actionSteps, errorSteps, eventSteps, jobSteps, machineSteps, transitionSteps } from './behavior.js';
 import { hasKind, task } from './files.js';
-import { entitySteps, enumSteps, fieldSteps, installApp, invariantSteps, moduleSteps, policySteps, valueSteps } from './models.js';
+import { entitySteps, enumSteps, fieldSteps, installApp, invariantSteps, moduleSteps, policySteps, roleSteps, valueSteps } from './models.js';
 
 const DJANGO = 'django~=6.1.0';
 const REST_FRAMEWORK = 'djangorestframework~=3.16';
+const RULES = 'rules~=3.5';
 
 const extension: CodegenExtension = {
     name: '@appling/codegen-django',
@@ -51,7 +52,7 @@ const extension: CodegenExtension = {
             case 'ExternalOperation':
             case 'Endpoint':
                 return [];
-            case 'Role': return [task(`create the Django group ${node.qn.split('.').pop()} for the role`)];
+            case 'Role': return roleSteps(node, context);
             default: return undefined;
         }
     }
@@ -63,7 +64,7 @@ function setup(context: MapContext): Step[] {
     const api = hasKind(context, 'Projection', 'Interface');
     return [
         { kind: 'command', run: ['uv', 'init', '--bare', '--name', context.name], creates: ['pyproject.toml'] },
-        { kind: 'command', run: ['uv', 'add', DJANGO, ...(api ? [REST_FRAMEWORK] : [])], creates: ['uv.lock'] },
+        { kind: 'command', run: ['uv', 'add', DJANGO, ...(api ? [REST_FRAMEWORK] : []), ...(hasKind(context, 'Role') ? [RULES] : [])], creates: ['uv.lock'] },
         { kind: 'command', run: ['uv', 'run', 'django-admin', 'startproject', 'config', '.'], creates: ['manage.py', 'config/'] },
         ...(api ? [installApp('rest_framework')] : []),
         { kind: 'command', run: ['uv', 'run', 'python', 'manage.py', 'makemigrations'], phase: 3 }

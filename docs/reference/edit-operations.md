@@ -95,10 +95,9 @@ When no position fits, the edit is rejected with `"<source>" does not fit into <
 
 Rename changes only name tokens, never the layout. It follows every place that names the element:
 
-- references, also as one segment of a qualified name, such as `Account` in `crm.Account`, or `Order` in `Order.status`,
+- references, also as one segment of a qualified name, such as `Account` in `crm.Account`, or `Order` in `Order.status`, and the module's `export` lists, whose names are references to its members,
 - names in expressions, such as `total` in an invariant or a bare enum value used as a default,
 - transitions of machines over a renamed enum value (`transition draft -> placed`),
-- the module's `export` list, for a top level declaration,
 - message keys that name the element, such as `Order.total = "Total"`,
 - projection fields without a value that copy an entity field by name: they are renamed with the field.
 

@@ -5,11 +5,15 @@ import {
 } from 'langium';
 import { ApplingGeneratedModule, ApplingGeneratedSharedModule } from './generated/module.js';
 import { ApplingScopeComputation, ApplingScopeProvider } from './appling-scope.js';
+import { ApplingTokenBuilder } from './appling-tokens.js';
 import { registerValidationChecks } from './appling-validator.js';
 
 export type ApplingServices = LangiumCoreServices;
 
 export const ApplingModule: Module<ApplingServices, PartialLangiumCoreServices> = {
+    parser: {
+        TokenBuilder: () => new ApplingTokenBuilder()
+    },
     references: {
         ScopeComputation: services => new ApplingScopeComputation(services),
         ScopeProvider: services => new ApplingScopeProvider(services)

@@ -1,6 +1,6 @@
 import { AstUtils, isAstNode, isReference, type AstNode, type Reference, type ReferenceInfo } from 'langium';
 import {
-    ExpressionTyper, LAYER_OF, isCreateEffect, isExpr, show, isEmitEffect, isEndpoint, isInvariant, isPolicy, isSetEffect, isTransition, modulePath, print,
+    ExpressionTyper, LAYER_OF, isCreateEffect, isEnumLiteral, isExport, isExpr, isMemberExpr, show, isEmitEffect, isEndpoint, isInvariant, isPolicy, isSetEffect, isTransition, modulePath, print,
     type ApplingServices, type Layer, type Model, type Module
 } from '@appling/lang';
 
@@ -126,6 +126,7 @@ export function buildGraph(models: Model[], services: ApplingServices): Graph {
     for (const [node, qn] of qns) {
         for (const child of elementsBelow(node)) add({ from: qn, to: qns.get(child)!, kind: 'contains' });
         for (const ref of referencesOf(node)) {
+            if (isExport(ref.container)) continue;
             const referenced = AstUtils.getReferenceNodes(ref.reference)[0];
             const target = referenced && qns.get(referenced);
             if (target) add({ from: qn, to: target, kind: ref.property === 'decl' ? 'type' : ref.property });
@@ -222,13 +223,13 @@ function data(node: AstNode, qns: Map<AstNode, string>, typer: ExpressionTyper):
         if (Array.isArray(value)) return value.map(serialize).filter(v => v !== undefined);
         if (!isAstNode(value)) return value;
         if (isElement(value)) return undefined;
-        const result: Record<string, unknown> = { $type: value.$type, ...fields(value, true) };
-        if (isExpr(value)) {
-            result.type = show(typer.types.get(value) ?? { kind: 'error' });
-            const target = typer.targets.get(value);
-            if (target && qns.has(target)) result.target = qns.get(target);
-        }
-        return result;
+        if (!isExpr(value)) return { $type: value.$type, ...fields(value, true) };
+        const type = show(typer.types.get(value) ?? { kind: 'error' });
+        const target = typer.targets.get(value);
+        const targetQn = target && qns.get(target);
+        // `Status.open` names an enum value together with its enum; tools get the value as a bare name.
+        if (isMemberExpr(value) && isEnumLiteral(target)) return { $type: 'NameExpr', name: value.member, type, target: targetQn };
+        return { $type: value.$type, ...fields(value, true), type, ...(targetQn && { target: targetQn }) };
     };
     const fields = (owner: AstNode, withName: boolean): Record<string, unknown> => {
         const result: Record<string, unknown> = {};

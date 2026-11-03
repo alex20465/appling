@@ -145,7 +145,7 @@ For typing, `Int`, `Decimal` and `Money` are the numeric types (an `Int` fits wh
 | Modifier | Meaning |
 |---|---|
 | `unique` | No two records share the value |
-| `state` | The field is the state of the entity. It must have an enum type, and only a [machine](behavior.md#machines) changes it. |
+| `state` | The field is the state of the entity. It must have an enum type, and only a [machine](behavior.md#machines) changes it; a `create` effect may set the state a record starts in. |
 | `owned` | The referenced records belong to this entity and go away with it, for example the lines of an order |
 
 ### Defaults

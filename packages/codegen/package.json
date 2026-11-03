@@ -2,6 +2,12 @@
   "name": "@appling/codegen",
   "version": "0.1.1",
   "description": "Appling code generation core: plan, step runner, extension contract and task registry",
+  "homepage": "https://www.appling.tools/docs/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alex20465/appling.git",
+    "directory": "packages/codegen"
+  },
   "type": "module",
   "exports": {
     ".": {

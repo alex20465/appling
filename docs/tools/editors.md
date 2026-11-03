@@ -48,8 +48,10 @@ module sales {
 
 The server loads every `.appling` file in the workspace folders the editor sends at startup, so references to files you have not opened resolve. Open your editor at the project root, the folder that contains all model files.
 
+When the workspace folder is reached through a symlink and the editor opens a file under its real path, the server still keeps one document per file: the opened path replaces the copy it read from disk. Without that every declaration would exist twice, which shows as false errors such as `Unknown name "tenant".`.
+
 > [!NOTE]
-> Rename in the language server changes the declaration and its references. It does not follow names inside expressions (`total` in `{ total >= 0 }`), export lists, transitions over enum values or message keys. The `rename` [edit operation](../reference/edit-operations.md#rename), used by the IDE inspector and the [AI tools](ai.md), follows all of them.
+> Rename in the language server changes the declaration and its references. Export lists are references too, so it covers them. It does not follow names inside expressions (`total` in `{ total >= 0 }`), transitions over enum values or message keys. The `rename` [edit operation](../reference/edit-operations.md#rename), used by the IDE inspector and the [AI tools](ai.md), follows all of them.
 
 ## Connect an editor
 
@@ -106,12 +108,20 @@ import { createApplingLspServices } from '@appling/lang/lsp';
 startLanguageServer(createApplingLspServices({ connection, ...NodeFileSystem }).shared);
 ```
 
-`connection` is a `vscode-languageserver` connection. The IDE creates one per websocket with `vscode-ws-jsonrpc` and starts one server for each page.
+`connection` is a `vscode-languageserver` connection. The IDE creates one per websocket with `vscode-ws-jsonrpc` and starts one server for each page. On Node, pass `realPath` too, as `appling-language-server` and the IDE do:
+
+```ts
+import { existsSync, realpathSync } from 'node:fs';
+
+const realPath = (uri: { fsPath: string }) => existsSync(uri.fsPath) ? realpathSync(uri.fsPath) : uri.fsPath;
+startLanguageServer(createApplingLspServices({ connection, ...NodeFileSystem, realPath }).shared);
+```
 
 | Export of `@appling/lang/lsp` | Purpose |
 |---|---|
-| `createApplingLspServices(context)` | The Appling services with Langium's LSP services; returns `{ shared, Appling }` |
+| `createApplingLspServices(context)` | The Appling services with Langium's LSP services; returns `{ shared, Appling }`. With `realPath` in the context, a function from a URI to the real path of its file, it keeps one document per file across symlinked paths |
 | `ApplingLspModule` | The Appling specific LSP services, to inject into your own module |
+| `ApplingDocumentUpdateHandler` | The document update handler that `realPath` turns on |
 | `ApplingFormatter` | Formats a document into canonical form |
 | `ApplingHoverProvider` | Hover with kind, qualified name, layer and doc comment |
 

@@ -116,3 +116,71 @@ test('call argument types', async () => {
 test('index needs a list and an Int', async () => {
     expect(await check('entity N { l: Int[] invariant "x" { l["a"] > 0 } }')).toContain('Int[] cannot be indexed by String.');
 });
+
+test('an entity compares with the optional form of itself', async () => {
+    expect(await check(`
+      entity Operator { name: String }
+      actor human Staff roles Clerk { operator: Operator? }
+      entity Key {
+        operator: Operator
+        policy { actor.is(Clerk) && operator == actor.operator }
+      }`)).toEqual([]);
+});
+
+test('an enum value wins over a field of the same name where the enum is expected', async () => {
+    expect(await check(`
+      enum Scope { operator }
+      entity Operator { name: String }
+      entity Key {
+        operator: Operator
+        scope: Scope default operator
+        invariant "operator scope" { scope == operator }
+      }`)).toEqual([]);
+});
+
+test('an enum value can be named with its enum', async () => {
+    const sources = {
+        'a.appling': 'module a { export Scope enum Scope { operator admin } entity Key { scope: Scope default Scope.operator invariant "x" { scope != a.Scope.admin } } }',
+        'b.appling': 'module b { entity Grant { scope: a.Scope default a.Scope.admin } }'
+    };
+    expect(errors(await build(sources))).toEqual([]);
+    expect(await check('entity Key { status: Status default Status.missing }')).toEqual(['Enum Status has no value "missing".']);
+});
+
+test('keywords that are names stay names before a colon and as enum values', async () => {
+    expect(await check(`
+      enum Theme { default migration messages limit }
+      entity Chat {
+        code: String unique
+        state: Status state default open
+        default: Theme default default
+        messages: String[]
+        limit: Int
+      }
+      action Page on Chat {
+        input {
+          limit: Int
+        }
+        requires { limit > 0 && default != migration }
+      }`)).toEqual([]);
+    expect(errors(await build({ 'm.appling': 'module migration { }' }))).toEqual([]);
+});
+
+test('a role holds a condition on the actor, and an actor binds to its entity', async () => {
+    expect(errors(await build({ 'ops.appling': `module ops {
+      entity User {
+        disabled: Bool default false
+        active: Bool = !disabled
+      }
+      role Operator { actor.active && now > actor.since }
+      role Customer { actor.active }
+      actor human Employee is User roles Operator {
+        since: DateTime
+      }
+      actor human Shopper is User roles Customer
+      entity Order {
+        customer: User
+        policy read { actor.is(Operator) || actor.is(Customer) && customer == actor }
+      }
+    }` }))).toEqual([]);
+});

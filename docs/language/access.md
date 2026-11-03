@@ -7,12 +7,22 @@ Access in Appling is declared with three cross cutting concepts (roles, actors a
 
 ## Roles
 
-A role is a name that actors carry and policies test.
+A role is a name that actors carry and policies test. It may hold a condition in braces that says when an actor counts as the role, such as an account that is not disabled:
 
 ```appling
 role Clerk
-role Customer
+role Operator { actor.active }
 ```
+
+The condition reads only `actor`, `tenant` and `now`, never the record a policy guards; the validator rejects any other name: `A role condition reads only actor, tenant and now, not "status".` Conditions on the record stay in the policies. To name what an entity means by a state, write a derived Bool field on it (`active: Bool = !disabled`) and read it in the role.
+
+| Condition reads | Goes into | Example |
+|---|---|---|
+| only `actor`, `tenant`, `now` | the role | `actor.active`, `actor.company == tenant` |
+| the guarded record or its inputs | the policy | `customer == actor`, `amount <= total` |
+| what an entity means by a state | a derived field | `active: Bool = !disabled` |
+
+What a role may do is not written in the role. Permissions stay in the policies, and the [simulator](../tools/cli.md#simulate) derives what each actor may do from them.
 
 ## Actors
 
@@ -22,6 +32,7 @@ An actor is someone or something that acts on the application. It has a kind, a 
 actor human Shopper roles Customer {
   account: crm.Account
 }
+actor human Employee is User roles Operator
 actor system Scheduler
 actor service PaymentWebhook roles Integration
 ```
@@ -29,10 +40,11 @@ actor service PaymentWebhook roles Integration
 | Part | Meaning |
 |---|---|
 | `human`, `system`, `service` | The kind of actor: a person, an internal process, an external service |
+| `is Entity` | The entity that stores this actor, such as the user. `actor.<field>` then reads the entity's fields too, and the actor compares with records of that entity: `customer == actor` |
 | `roles A, B` | The roles this actor carries; references to `role` declarations, also from other modules (`roles crm.Clerk`) |
 | `{ fields }` | Typed fields, written like [entity fields](domain.md#fields), that expressions read as `actor.<field>` |
 
-In an expression, `actor.account` is valid when at least one actor in the workspace declares `account`. When some actors do not declare it, the value is optional for them, and `actor.account` has an optional type. Actor fields are collected from the whole workspace, so they need no export.
+In an expression, `actor.account` is valid when at least one actor in the workspace declares `account`, itself or through its `is` entity. When some actors do not declare it, the value is optional for them, and `actor.account` has an optional type. Actor fields are collected from the whole workspace, so they need no export.
 
 ## Tenants
 
@@ -83,7 +95,7 @@ Operations and `fields` exist only on entity policies. On an action, a query or 
 
 ### actor.is
 
-`actor.is(X)` is true when the current actor carries role `X`, or is actor `X`. The argument is a role or actor name, written as a plain or dotted name (`Clerk`, `crm.Clerk`) and resolved like a reference, so a role from another module must be exported. Anything else is an error: `"Nobody" is not a role or actor.`
+`actor.is(X)` is true when the current actor carries role `X` and the role's condition holds, or when it is actor `X`. A policy that writes `actor.is(Operator)` therefore includes `actor.active` when `Operator` holds that condition, so no policy can forget it. The argument is a role or actor name, written as a plain or dotted name (`Clerk`, `crm.Clerk`) and resolved like a reference, so a role from another module must be exported. Anything else is an error: `"Nobody" is not a role or actor.`
 
 ## Example
 
@@ -138,9 +150,32 @@ module shop {
 Higher layers inherit the definitions, constraints and policies of lower layers and may only narrow them, never widen them. In practice:
 
 - Policies are local. Each one sits next to the element it protects, and the effective policy at any point is the conjunction of all policies along the reference path: a use case that runs an action is guarded by the use case policy and by the action policy, and the action works on an entity guarded by the entity policies.
-- A query inherits the policies of its entity and can add its own.
+- An action on an entity needs that entity's `update` policies, whatever the action does, also when it only fires a machine transition. An action with a `create` effect needs the `create` policies of the created entity. A query needs its entity's `read` policies and can add its own.
 - [Projections](application.md#projections) expose fewer fields, or computed ones; they are the only place where a shape may diverge from the entity.
 - [Interfaces](interfaces.md) add transport restrictions (`auth`, `limit`, `cors`); they can only restrict further.
 
+Frameworks such as Ash scope an `update` policy to one action and give each other action its own. To model that, leave `update` out of the entity's policy and write the policy on each action instead:
+
+```appling check
+module m {
+  role Clerk
+  role Manager
+
+  entity Order {
+    note: String?
+    policy read, create, delete { actor.is(Clerk) }
+  }
+
+  action Touch on Order {
+    effect { set note = "seen" }
+    policy { actor.is(Clerk) }
+  }
+
+  action Close on Order {
+    policy { actor.is(Manager) }
+  }
+}
+```
+
 > [!NOTE]
-> The validator checks where policies may appear and that their conditions are Bool. It does not compute the effective policy. Code generators turn each policy into a task in the [registry](../codegen/registry.md).
+> The validator checks where policies may appear and that their conditions are Bool. It does not compute the effective policy; the [simulator](../tools/cli.md#simulate) does. Code generators turn each policy into a task in the [registry](../codegen/registry.md), except where a target can say it, such as a policy that only names roles in [Ash](../codegen/ash.md).

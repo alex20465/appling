@@ -3,6 +3,7 @@ import { expect, test } from 'vitest';
 import { createApplingLspServices } from '../src/lsp.js';
 
 const TEXT = `module shop {
+  export Status, Item
   enum Status { open done }
   entity Item {
     /** The lifecycle of an item. */
@@ -36,4 +37,21 @@ test('go to definition follows a reference', async () => {
     const { Appling, document, at } = await open(TEXT);
     const [link] = await Appling.lsp.DefinitionProvider!.getDefinition(document, at('Status state')) ?? [];
     expect(document.textDocument.offsetAt(link.targetSelectionRange.start)).toBe(TEXT.indexOf('Status {'));
+});
+
+test('rename from the declaration or the export line renames both and every reference', async () => {
+    const { Appling, document, at } = await open(TEXT);
+    for (const needle of ['Status {', 'Status, Item']) {
+        const edit = await Appling.lsp.RenameProvider!.rename(document, { ...at(needle), newName: 'Phase' });
+        const texts = edit?.changes?.[document.uri.toString()].map(e => document.textDocument.offsetAt(e.range.start)).sort((a, b) => a - b);
+        expect(texts).toEqual([TEXT.indexOf('Status, Item'), TEXT.indexOf('Status {'), TEXT.indexOf('Status state')]);
+    }
+});
+
+test('export names lead to their member and find its references', async () => {
+    const { Appling, document, at } = await open(TEXT);
+    const [link] = await Appling.lsp.DefinitionProvider!.getDefinition(document, at('Item\n')) ?? [];
+    expect(document.textDocument.offsetAt(link.targetSelectionRange.start)).toBe(TEXT.indexOf('Item {'));
+    const references = await Appling.lsp.ReferencesProvider!.findReferences(document, { ...at('Status {'), context: { includeDeclaration: false } });
+    expect(references.map(r => document.textDocument.offsetAt(r.range.start)).sort((a, b) => a - b)).toEqual([TEXT.indexOf('Status, Item'), TEXT.indexOf('Status state')]);
 });

@@ -31,6 +31,13 @@ class Account(models.Model):
     name = models.CharField(max_length=255, unique=True)
     email = models.CharField(max_length=255)
 ",
+  "crm/roles.py": "import rules
+
+
+@rules.predicate
+def is_clerk(user):
+    return user.groups.filter(name="Clerk").exists()
+",
   "crm/tests.py": "from django.test import TestCase
 
 
@@ -315,6 +322,13 @@ OPEN_ORDERS_PAGE_SIZE = 50
 
 def open_orders():
     return Order.objects.filter(models.Q(status__in=["placed", "paid"])).order_by("-placed_at")
+",
+  "sales/roles.py": "import rules
+
+
+@rules.predicate
+def is_customer(user):
+    return user.groups.filter(name="Customer").exists()
 ",
   "sales/serializers.py": "from rest_framework import serializers
 from sales.models import Order

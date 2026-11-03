@@ -72,7 +72,7 @@ Every expression has a type: a primitive (`String`, `Text`, `Int`, `Decimal`, `M
 | `l1 + l2` | lists with comparable items | the list type |
 | `l[i]` | a list and an `Int` | the item type |
 
-Two types are comparable when they are both numeric, both text, the same primitive, the same declaration, or lists of comparable items. `null` compares with anything.
+Two types are comparable when they are both numeric, both text, the same primitive, the same declaration, or lists of comparable items. Optional and required forms compare too: `Operator` with `Operator?`. `null` compares with anything. The actor compares with an entity that an actor is bound to with [`is`](access.md#actors): `customer == actor`.
 
 Arithmetic and negation produce a non optional result. Reading a field through an optional value gives an optional result: `order.customer.name` is optional when `customer` is.
 
@@ -95,7 +95,7 @@ Names in expressions are not references. They resolve by the position of the exp
 
 | Name | Stands for | Type |
 |---|---|---|
-| `actor` | The current actor | The actor; its fields are those declared by any actor in the workspace |
+| `actor` | The current actor | The actor; its fields are those declared by any actor in the workspace, and those of the entities actors are bound to with `is` |
 | `now` | The current time | `DateTime` |
 | `tenant` | The current tenant | The entity of the single declared [tenant](access.md#tenants); unknown when there is none or more than one |
 
@@ -115,6 +115,7 @@ Names in expressions are not references. They resolve by the position of the exp
 | Query `where`, query `policy` | The fields of the query's entity, `this` | `Bool` |
 | Projection computed field | The fields of the source entity (the query's entity for a query source), `this` | Any |
 | Use case `policy` | The use case's parameters | `Bool` |
+| Role condition | Only `actor`, `tenant` and `now` | `Bool` |
 | Call arguments in `step`, `on ... do`, `await ... do` | The use case's parameters | The parameter type at that position |
 
 An action without `on <Entity>` has no `this` and no entity fields, only its inputs.
@@ -123,16 +124,18 @@ An action without `on <Entity>` has no `this` and no entity fields, only its inp
 
 `this` is the record the expression is about: the entity in entity, action, transition, job, query and projection positions. Its type is the entity, so it fits a field of that entity type: `emit OrderPlaced { order = this }`.
 
-### Bare enum values
+### Enum values
 
-You write an enum value without its enum: `draft`, not `OrderStatus.draft`. A bare value takes its type from the context:
+You usually write an enum value without its enum: `draft`, not `OrderStatus.draft`. A bare value takes its type from the context:
 
 - the other side of a comparison: `status == draft`,
 - the left side of `in` for the list items: `status in [placed, paid]`,
 - the field it is assigned to: `default draft`, `set priority = high`,
 - the parameter it is passed to in a call.
 
-A name that is neither visible at the position nor a value of the expected enum is an error: `Unknown name "missing".`
+Where an enum is expected, its value wins over a field or parameter of the same name: with an `operator` field and an enum `Scope { operator }`, `scope: Scope default operator` is the enum value.
+
+You can also name a value with its enum, like any other qualified name: `Scope.operator`, or `sales.Scope.operator` from another module when `sales` exports `Scope`. An enum without that value is an error: `Enum Scope has no value "missing".` A name that is neither visible at the position nor a value of the expected enum is an error: `Unknown name "missing".`
 
 ## Builtins
 
@@ -147,7 +150,7 @@ A name that is neither visible at the position nor a value of the expected enum 
 | `list.exists(x, cond)` | A variable and a `Bool` condition | `Bool` |
 | `list.all(x, cond)` | A variable and a `Bool` condition | `Bool` |
 | `s.contains(t)`, `s.startsWith(t)`, `s.endsWith(t)`, `s.matches(t)` | `s` and `t` text | `Bool` |
-| `actor.is(X)` | A role or actor name, plain or dotted (`crm.Clerk`) | `Bool` |
+| `actor.is(X)` | A role or actor name, plain or dotted (`crm.Clerk`); true when the actor carries the role and the role's condition holds, or is the actor | `Bool` |
 
 The functions take exactly one argument. In `map`, `filter`, `exists` and `all`, the first argument is a variable name bound to each item inside the second argument.
 

@@ -133,7 +133,9 @@ function method(expr: ExprData, scope: PythonScope): string | undefined {
     const args = expr.args ?? [];
     if (expr.member === 'is' && receiver === scope.actor) {
         const role = args[0]?.target ? scope.node(args[0].target) : undefined;
-        return role?.kind === 'Role' ? `${receiver}.groups.filter(name=${JSON.stringify(lastOf(role.qn))}).exists()` : undefined;
+        if (role?.kind !== 'Role') return undefined;
+        scope.imports.add(`from ${appOf(role.module)}.roles import ${rolePredicate(role)}`);
+        return `${rolePredicate(role)}(${receiver})`;
     }
     if (['map', 'filter', 'exists', 'all'].includes(expr.member!)) {
         const variable = args[0].name!;
@@ -168,7 +170,7 @@ function duration(text: string, scope: PythonScope): string | undefined {
     return `timedelta(${parts.map(([, amount, unit]) => `${DURATION_UNITS[unit]}=${amount}`).join(', ')})`;
 }
 
-function wrap(code: string): string {
+export function wrap(code: string): string {
     return /^[\w.]+(\(.*\)|\[.*\])?$/.test(code) || /^".*"$/.test(code) ? code : `(${code})`;
 }
 
@@ -190,6 +192,11 @@ export function appOf(module: string): string {
 
 export function constantOf(name: string): string {
     return name.toUpperCase();
+}
+
+/** The django-rules predicate of a role, such as `is_operator`. */
+export function rolePredicate(role: GraphNode): string {
+    return `is_${snake(lastOf(role.qn))}`;
 }
 
 export function snake(name: string): string {

@@ -36,7 +36,7 @@ The extension creates the project with uv and Django's own commands, then patche
 | Step | Command |
 |---|---|
 | Python project | `uv init --bare --name <name>` |
-| Dependencies | `uv add django~=6.1.0`, plus `djangorestframework~=3.16` when the model has projections or interfaces |
+| Dependencies | `uv add django~=6.1.0`, plus `djangorestframework~=3.16` when the model has projections or interfaces, and [`rules~=3.5`](https://github.com/dfunckt/django-rules) when it has roles |
 | Django project | `uv run django-admin startproject config .`, and `rest_framework` in `INSTALLED_APPS` when REST framework is installed |
 | Apps | `uv run python manage.py startapp <app>` per module, added to `INSTALLED_APPS` |
 | Migrations | `uv run python manage.py makemigrations`, as the very last step |
@@ -52,12 +52,12 @@ The app of a module is its qualified name with dots replaced by underscores: the
 | `module` | an app created by `startapp`, in `INSTALLED_APPS` |
 | `enum` | a `models.TextChoices` class in `<app>/enums.py`; each value becomes an upper case member, such as `DRAFT = "draft"` |
 | `value` | a `TypedDict` in `<app>/values.py` |
-| `entity` | a `models.Model` in `<app>/models.py` |
+| `entity` | a `models.Model` in `<app>/models.py`; the entity that actors are bound to with `is` (exactly one) extends `AbstractUser` instead, and `AUTH_USER_MODEL` in `config/settings.py` points at it |
 | stored field | a model field (see the next table) |
 | derived field | a `@property` that returns the expression translated to Python |
 | `invariant` | a `CheckConstraint` in `Meta.constraints`, named `<app>_<entity>_<label>`, when the condition compares stored fields with constants or other stored fields; a test class |
 | `policy` | a test class; enforcing it is a task |
-| `role` | a task to create a Django group for the role |
+| `role` | a django-rules predicate `is_<role>(user)` in `<app>/roles.py`: the user is in the Django group of the role and the role's condition holds; creating the group is a task (see [roles](#roles)) |
 | `event` | a `Signal` in `<app>/events.py` |
 | `errors` | exception classes in `<app>/errors.py`, which also defines `InvalidTransition` |
 | `action` | a function in `<app>/actions.py` (see [actions](#actions)) |
@@ -231,12 +231,39 @@ build/shop/
 
 An app only gets the files its module needs.
 
+## Roles
+
+A role becomes one predicate, and `actor.is(Role)` calls it wherever an expression is translated, such as in a precondition: `is_operator(actor)`. The condition of the role reads the actor's fields as fields of the user model:
+
+```appling
+module ops {
+  entity User {
+    disabled: Bool default false
+    active: Bool = !disabled
+  }
+  role Operator { actor.active }
+  actor human Employee is User roles Operator
+}
+```
+
+```python
+# ops/roles.py
+import rules
+
+
+@rules.predicate
+def is_operator(user):
+    return user.groups.filter(name="Operator").exists() and user.active
+```
+
+`User` extends `AbstractUser` and keeps the derived `active` as a property. The predicates are plain functions, so they also combine with django-rules (`is_operator | is_admin`); `rules.add_perm` is not generated.
+
 ## What becomes a task
 
 Whatever cannot be translated is listed in the [registry](registry.md):
 
 - invariants over derived fields, lists or other entities, and derived fields or defaults that use `actor` or other context
-- policies and roles
+- policies, the Django groups of roles, and role conditions without a Python translation
 - preconditions, guards and effects without a Python translation
 - actions without any generated code, and actions with `consistency eventual`
 - the client of an external system

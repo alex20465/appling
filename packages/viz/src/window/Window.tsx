@@ -17,7 +17,7 @@ export function Window() {
     const [graph, setGraph] = useState<Graph>();
     const [show, setShow] = useState<Show>();
     const [bubbles, setBubbles] = useState<Bubble[]>([]);
-    /** The bubble on the canvas; without a pick the latest, so the canvas follows Claude's explanation. */
+    /** The bubble on the canvas; without a pick the first, and new bubbles never move the reader on. */
     const [picked, setPicked] = useState<number>();
     const [selected, setSelected] = useState<string>();
     const [settings, setSettings] = useState<ViewSettings>(DEFAULT_VIEW);
@@ -41,7 +41,6 @@ export function Window() {
             }
             if (message.type === 'bubble') {
                 setBubbles(current => [...current, message.bubble]);
-                setPicked(undefined);
             }
             if (message.type === 'reply') setThread(current => [...current, { from: 'claude', text: message.text }]);
             if (message.type === 'review') setReviews(current => [...current.filter(r => r.id !== message.id), { id: message.id, review: message.review }]);
@@ -55,15 +54,15 @@ export function Window() {
     const cards = useMemo(() => index && (show?.view === 'action' || show?.view === 'event') ? cardView(index, show.view, show.focus) : undefined, [index, show]);
     const flow = useMemo(() => index && (show?.view === 'machine' || show?.view === 'usecase') ? flowView(index, show.view, show.focus) : undefined, [index, show]);
     const openFile = (file: string, line: number) => send({ type: 'open', file, line });
-    const current = picked ?? bubbles.length - 1;
+    const current = picked ?? 0;
     const shownBubbles = bubbles.slice(current, current + 1);
     const step = { at: current, of: bubbles.length, onBack: () => setPicked(current - 1), onNext: () => setPicked(current + 1) };
 
-    /** Each bubble shown, by Claude or by back and next, selects the element it is about. */
+    /** Each bubble shown, the first or one reached by back and next, selects the element it is about. */
     useEffect(() => {
         const target = bubbles[current]?.target;
         if (show && index?.nodes.has(target)) select(target);
-    }, [current, bubbles.length]);
+    }, [current, bubbles[current]]);
 
     /** Shows the next view; the bubbles go with the view they were placed on. */
     function view(next: Show): Show {

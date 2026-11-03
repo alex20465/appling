@@ -73,7 +73,7 @@ Modules are named `<App>.<Module>`, with nested modules as `<App>.<A>.<B>`; a ty
 | `default` | `default` on the attribute for constants and enum values; `now` becomes `&DateTime.utc_now/0` |
 | derived field | a calculation `calculate :<field>, <type>, expr(...)` |
 | `invariant` | a validation built from Ash's builtin validations (`compare`, `attribute_equals`, `attribute_does_not_equal`, `attribute_in`, `present`, `absent`, `all`, `any`, `negate`) with the label as message; a test |
-| `policy` | a task to add an Ash policy; a test when it is on an entity |
+| `policy` | a policy with `authorize_if` lines when its condition only names roles (see [roles](#roles)), otherwise a task to add an Ash policy; a test when it is on an entity |
 | `action` on an entity | an update action (see [actions](#actions)) |
 | `action` without an entity | a task to write a generic action |
 | `machine` | an AshStateMachine section (see [state machines](#state-machines)) |
@@ -81,7 +81,8 @@ Modules are named `<App>.<Module>`, with nested modules as `<App>.<A>.<B>`; a ty
 | `query` | a read action with `filter`, `sort` and offset pagination |
 | computed projection field | a calculation on the source resource |
 | `interface rest` | AshJsonApi routes and a router served by Bandit (see [JSON:API](#jsonapi)) |
-| `event`, `external`, `usecase`, `role` | tasks: an Ash notifier, a client module or generic actions, a Reactor or generic action, the role on the actor resource |
+| `role` | an `Ash.Policy.SimpleCheck` module `<App>.<Module>.Checks.<Role>` in `lib/<app>/<module>/checks/<role>.ex`, when actors are bound to exactly one entity with `is`; otherwise a task (see [roles](#roles)) |
+| `event`, `external`, `usecase` | tasks: an Ash notifier, a client module or generic actions, a Reactor or generic action |
 | experience layer, actors, tenants | not generated; `todo` entries in the [registry](registry.md) |
 
 ### Types
@@ -217,6 +218,65 @@ Invariants, policies on entities, transitions and actions with preconditions get
 test "transition draft -> placed moves from allowed states"
 ```
 
+
+## Roles
+
+The resource of the entity that actors are bound to with `is` is the actor: it gets a private `roles` attribute (`{:array, :atom}`, not public, so nobody assigns roles to themselves through the API) and one calculation `:<role>?` per role condition. Each role becomes a check that holds when the actor has the role and the condition:
+
+```appling
+module ops {
+  entity User {
+    disabled: Bool default false
+    active: Bool = !disabled
+  }
+  role Operator { actor.active }
+  actor human Employee is User roles Operator
+
+  entity Order {
+    note: String?
+    policy read { actor.is(Operator) }
+  }
+
+  action Cancel on Order {
+    policy { actor.is(Operator) }
+  }
+}
+```
+
+```elixir
+# lib/shop/ops/checks/operator.ex
+defmodule Shop.Ops.Checks.Operator do
+  use Ash.Policy.SimpleCheck
+
+  @impl true
+  def describe(_opts), do: "actor is Operator"
+
+  @impl true
+  def match?(%Shop.Ops.User{} = actor, _context, _opts) do
+    actor = Ash.load!(actor, :operator?, authorize?: false)
+    :operator in (actor.roles || []) and actor.operator?
+  end
+
+  def match?(_actor, _context, _opts), do: false
+end
+```
+
+A policy whose condition only names roles, one `actor.is(Role)` per `||` branch, becomes an Ash policy on the resource, which then uses `Ash.Policy.Authorizer`. An entity policy applies to its operations (`action_type(:read)`, `delete` becomes `:destroy`, `always()` without operations), an action policy to its action:
+
+```elixir
+policies do
+  policy action_type(:read) do
+    authorize_if Shop.Ops.Checks.Operator
+  end
+
+  policy action(:cancel) do
+    authorize_if Shop.Ops.Checks.Operator
+  end
+end
+```
+
+Ash forbids an action that no policy covers once a resource has policies, which matches the model: nothing is open by default. Policies with other conditions, field policies and policies of queries and use cases stay tasks.
+
 ## What becomes a task
 
 Whatever cannot be translated is listed in the [registry](registry.md):
@@ -226,7 +286,7 @@ Whatever cannot be translated is listed in the [registry](registry.md):
 - invariants, preconditions and guards over calculations, relationships or other resources, and guards when an action has several transitions
 - effects that create rows or emit events, and actions with several target states
 - actions with `consistency eventual`, and actions without an entity
-- policies, roles, events, externals and use cases
+- policies that say more than which roles may act, roles without an `is` bound actor resource, role conditions that do not translate, events, externals and use cases
 - jobs on events, and jobs whose filter does not translate
 - authentication, rate limits and CORS of interfaces, and endpoints that do not fit the route patterns
 - flows, actors, tenants, and interfaces with a protocol other than `rest`

@@ -30,7 +30,8 @@ These are not layers. They apply across all layers.
 - Actors (human users, systems, services), roles, and tenants.
 - Each policy, wherever it is defined, refers to these concepts.
 - The current actor and tenant are always available in the expression context.
-- Actors declare typed fields, such as the account a human user acts for. In expressions, `actor.is(Role)` tests a role and `actor.field` reads a field declared by at least one actor. The field is null for actors that do not declare it.
+- Actors declare typed fields, such as the account a human user acts for, and may be bound to the entity that stores them (`actor human Employee is User`), whose fields they then read too. In expressions, `actor.is(Role)` tests a role and `actor.field` reads a field declared by at least one actor or its entity. The field is null for actors that do not declare it.
+- A role may hold a condition on the actor (`role Operator { actor.active }`) that reads only `actor`, `tenant` and `now`. `actor.is(Role)` means the actor carries the role and the condition holds. Conditions on the guarded record stay in policies; named entity conditions are derived Bool fields; what a role may do is derived from the policies, not written in the role.
 
 **Relevance**
 - How much a module or top level declaration matters to the business, from 0 to 1. The graph computes it from what uses a declaration and what it uses; a declared level (`core`, `supporting`, `peripheral`), on the declaration or inherited from its module, maps it into a fixed range, so a person's judgment of the business wins over connectivity.
@@ -123,7 +124,7 @@ Allowed references form a directed acyclic graph:
 
 **Bottom-up inheritance with monotonic narrowing:** Higher layers inherit definitions, constraints, and policies from lower layers. They may only narrow them, by exposing fewer fields or applying stricter policies. They may never widen them. Intentional divergence of shape happens only through Layer 3 projections.
 
-**Local policies:** Access policies are defined next to the concepts they protect: entities, actions, queries, and use cases. The effective policy at any point is the conjunction of all policies along the reference path. Nothing is open by default: a policy grants by role (`actor.is(Role)`, with conditions), and a role that no policy names may do nothing.
+**Local policies:** Access policies are defined next to the concepts they protect: entities, actions, queries, and use cases. The effective policy at any point is the conjunction of all policies along the reference path: an action on an entity needs the entity's `update` policies whatever it does, a `create` the created entity's `create` policies, a query its entity's `read` policies. Nothing is open by default: a policy grants by role (`actor.is(Role)`, with conditions), and a role that no policy names may do nothing.
 
 **Explicit exposure:** Interfaces, navigation, pages, and module exports are intentionally declared, never derived from the mere existence of entities.
 

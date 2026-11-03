@@ -56,9 +56,15 @@ Identifiers start with a letter or an underscore, followed by letters, digits or
 
 Many keywords are also valid names, so fields such as `state`, `from` or `input` stay legal:
 
-`state`, `input`, `value`, `from`, `to`, `on`, `for`, `step`, `list`, `detail`, `form`, `route`, `run`, `actions`, `fields`, `role`, `event`, `action`, `query`, `page`, `timeout`, `sort`, `when`, `create`, `read`, `update`, `delete`, `per`, `flow`, `actor`, `tenant`, `set`, `op`, `human`, `system`, `service`, `asc`, `desc`, `remove`, `rename`, `retype`, `roles`, `second`, `minute`, `hour`, `link`, `core`, `supporting`, `peripheral`.
+`state`, `input`, `value`, `from`, `to`, `on`, `for`, `step`, `list`, `detail`, `form`, `route`, `run`, `actions`, `fields`, `role`, `event`, `action`, `query`, `page`, `timeout`, `sort`, `when`, `create`, `read`, `update`, `delete`, `per`, `flow`, `actor`, `tenant`, `set`, `op`, `human`, `system`, `service`, `asc`, `desc`, `remove`, `rename`, `retype`, `roles`, `second`, `minute`, `hour`, `link`, `core`, `supporting`, `peripheral`, `default`, `limit`, `messages`, `migration`, `is`.
 
-Every other keyword (`module`, `entity`, `machine`, `policy`, `true`, `null` and so on) is reserved.
+Followed by `:`, such a keyword is always a name, so a field named `state` may follow a field that ends with a modifier: `code: String unique` then `state: Status state`.
+
+Every other keyword is reserved and cannot be a name:
+
+`as`, `atomic`, `auth`, `await`, `consistency`, `cors`, `do`, `effect`, `else`, `emit`, `entity`, `enum`, `errors`, `eventual`, `every`, `export`, `external`, `false`, `in`, `interface`, `invariant`, `job`, `machine`, `module`, `navigation`, `null`, `owned`, `paginate`, `policy`, `projection`, `requires`, `returns`, `transition`, `true`, `unique`, `usecase`, `via`, `where`, and the primitive types `Bool`, `Date`, `DateTime`, `Decimal`, `Duration`, `File`, `Int`, `Money`, `String`, `Text`, `Uuid`.
+
+There is no escape syntax for reserved words; pick another name, such as `entries` for `export`.
 
 | Literal | Form | Example |
 |---|---|---|

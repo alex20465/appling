@@ -33,3 +33,9 @@ test('unnamed elements get derived keys, with an ordinal for duplicates', async 
         'm.E.invariant["positive"]', 'm.E.policy[read]', 'm.E.policy[read]#2', 'm.E.policy[read fields s]', 'm.F.transition[a,b->b]'
     ]));
 });
+
+test('an enum value named with its enum is data like a bare value', async () => {
+    const graph = await graphOf({ 'm.appling': 'module m { enum Scope { operator } entity Key { scope: Scope default Scope.operator } }' });
+    expect(graph.nodes.find(n => n.qn === 'm.Key.scope')!.data.default).toEqual({ $type: 'NameExpr', name: 'operator', type: 'Scope', target: 'm.Scope.operator' });
+    expect(graph.edges).toContainEqual({ from: 'm.Key.scope', to: 'm.Scope.operator', kind: 'uses' });
+});

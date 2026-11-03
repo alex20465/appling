@@ -1,7 +1,7 @@
 import { AstUtils, type AstNode, type ValidationAcceptor, type ValidationChecks } from 'langium';
 import {
     isAction, isBinaryExpr, isBoolExpr, isEntity, isMemberExpr, isNameExpr, isEnum, isMachine, isMigration, isModule, isValueType,
-    type ApplingAstType, type Endpoint, type Machine, type Migration, type MigrationStep, type Model, type Module,
+    type ApplingAstType, type Endpoint, type Machine, type Migration, type MigrationStep, type Model,
     type Expr, type Policy, type Projection, type RenameStep, type SetEffect
 } from './generated/ast.js';
 import { namedPaths, projectionSourceEntity } from './appling-scope.js';
@@ -23,7 +23,6 @@ export function registerValidationChecks(services: ApplingServices): void {
     const validator = new ApplingValidator(services);
     const checks: ValidationChecks<ApplingAstType> = {
         Model: [validator.checkLayerReferences, validator.checkTypes],
-        Module: validator.checkExports,
         Machine: validator.checkMachine,
         SetEffect: validator.checkSetEffect,
         Policy: validator.checkPolicyScope,
@@ -44,7 +43,7 @@ export class ApplingValidator {
                 const target = AstUtils.getReferenceNodes(ref.reference)[0];
                 const from = memberOf(node);
                 const to = target && memberOf(target);
-                if (!from || !to || isAllowed(from, to)) continue;
+                if (!from || !to || !LAYER_OF[from.$type] || isAllowed(from, to)) continue;
                 accept('error',
                     `${LAYER_OF[from.$type]} element ${from.$type} may not reference ${LAYER_OF[to.$type]} element ${to.$type} "${ref.reference.$refText}".`,
                     { node, property: ref.property, index: ref.index });
@@ -56,15 +55,6 @@ export class ApplingValidator {
         const typer = new ExpressionTyper(this.services);
         typer.checkModel(model);
         for (const { node, message, property } of typer.problems) accept('error', message, { node, property });
-    }
-
-    checkExports(module: Module, accept: ValidationAcceptor): void {
-        const names = new Set(module.members.map(m => 'name' in m ? m.name : undefined));
-        for (const exp of module.exports) {
-            exp.names.forEach((name, index) => {
-                if (!names.has(name)) accept('error', `Module ${module.name} has no member "${name}" to export.`, { node: exp, property: 'names', index });
-            });
-        }
     }
 
     checkMachine(machine: Machine, accept: ValidationAcceptor): void {

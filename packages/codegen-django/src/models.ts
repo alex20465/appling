@@ -2,7 +2,7 @@ import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
 import { annotation, children, pythonFile, task, template } from './files.js';
 import { testSteps } from './tests.js';
-import { appOf, constantOf, lastOf, parentOf, python, q, type PythonScope } from './python.js';
+import { appOf, constantOf, lastOf, parentOf, python, q, rolePredicate, wrap, type PythonScope } from './python.js';
 
 const PRIMITIVES: Record<string, string> = {
     String: 'models.CharField(max_length=255',
@@ -46,7 +46,30 @@ export function valueSteps(node: GraphNode, context: MapContext): Step[] {
 export function entitySteps(entity: GraphNode, context: MapContext): Step[] {
     const imports = new Set(['from django.db import models']);
     const code = modelClass(entity, context, imports);
-    return [template(`${appOf(entity.module)}/models.py`, existing => pythonFile(existing, imports, code))];
+    const model = template(`${appOf(entity.module)}/models.py`, existing => pythonFile(existing, imports, code));
+    if (userEntity(context) !== entity.qn) return [model];
+    const setting = `AUTH_USER_MODEL = ${JSON.stringify(modelLabel(entity))}`;
+    return [model, template('config/settings.py', existing => `${existing!.trimEnd()}\n\n${setting}\n`)];
+}
+
+/** The entity the actors are bound to with `is`, which becomes the Django user model; undefined unless there is exactly one. */
+export function userEntity(context: MapContext): string | undefined {
+    const bound = new Set(context.graph.nodes.filter(n => n.kind === 'Actor' && n.data.entity).map(n => n.data.entity as string));
+    return bound.size === 1 ? [...bound][0] : undefined;
+}
+
+/** One django-rules predicate per role: the actor is in the role's group and the role's condition holds. */
+export function roleSteps(role: GraphNode, context: MapContext): Step[] {
+    const name = lastOf(role.qn);
+    const imports = new Set(['import rules']);
+    const group = `user.groups.filter(name=${JSON.stringify(name)}).exists()`;
+    const condition = role.data.condition ? python(role.data.condition as ExprData, { ...scope(context, imports), actor: 'user' }) : undefined;
+    const code = ['@rules.predicate', `def ${rolePredicate(role)}(user):`, `    return ${condition ? `${group} and ${wrap(condition)}` : group}`].join('\n');
+    return [
+        template(`${appOf(role.module)}/roles.py`, existing => pythonFile(existing, imports, code)),
+        task(`create the Django group ${name} for the role`),
+        ...(role.data.condition && !condition ? [task(`check the condition of ${name} in ${rolePredicate(role)}: ${role.props.condition}`)] : [])
+    ];
 }
 
 export function fieldSteps(field: GraphNode, context: MapContext): Step[] | undefined {
@@ -93,7 +116,9 @@ function modelClass(entity: GraphNode, context: MapContext, imports: Set<string>
         return condition ? [`            models.CheckConstraint(condition=${condition}, name=${JSON.stringify(id)}),`] : [];
     });
     if (constraints.length) lines.push('', '    class Meta:', '        constraints = [', ...constraints, '        ]');
-    return [`class ${name}(models.Model):`, ...(lines.length ? lines : ['    pass'])].join('\n');
+    const user = userEntity(context) === entity.qn;
+    if (user) imports.add('from django.contrib.auth.models import AbstractUser');
+    return [`class ${name}(${user ? 'AbstractUser' : 'models.Model'}):`, ...(lines.length ? lines : ['    pass'])].join('\n');
 }
 
 export function djangoField(field: GraphNode, context: MapContext, imports: Set<string>): string {

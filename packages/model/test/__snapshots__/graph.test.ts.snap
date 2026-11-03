@@ -756,8 +756,8 @@ exports[`graph of examples 1`] = `
           {
             "$type": "Export",
             "names": [
-              "Account",
-              "Clerk",
+              "crm.Account",
+              "crm.Clerk",
             ],
           },
         ],
@@ -938,11 +938,11 @@ exports[`graph of examples 1`] = `
           {
             "$type": "Export",
             "names": [
-              "Order",
-              "OrderSummary",
-              "OpenOrders",
-              "PlaceOrder",
-              "Customer",
+              "sales.Order",
+              "sales.OrderSummary",
+              "sales.OpenOrders",
+              "sales.PlaceOrder",
+              "sales.Customer",
             ],
           },
         ],

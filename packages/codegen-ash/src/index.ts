@@ -6,6 +6,7 @@ import { actionSteps, jobSteps, machineSteps } from './behavior.js';
 import { constant, lastOf, parentOf, validation } from './elixir.js';
 import { migrationSteps } from './migrations.js';
 import { hasPages, navigationSteps, pageSteps } from './pages.js';
+import { roleCalculations, rolePolicySteps, roleSteps, userEntity } from './roles.js';
 import { testSteps } from './tests.js';
 import { app, attributeType, calculation, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, storedAttributes, task, typeModule } from './naming.js';
 
@@ -48,7 +49,7 @@ const extension: CodegenExtension = {
                 ...testSteps(node, owner(node, context), `invariant ${node.data.label}`, ['holds for valid records', 'rejects violations'], context)
             ];
             case 'Policy': return [
-                task(`add an Ash policy to ${parentOf(node.qn)} for ${(node.data.operations as string[] | undefined)?.join(', ') ?? 'any action'}: ${node.props.condition}`),
+                ...(rolePolicySteps(node, context) ?? [task(`add an Ash policy to ${parentOf(node.qn)} for ${(node.data.operations as string[] | undefined)?.join(', ') ?? 'any action'}: ${node.props.condition}`)]),
                 ...(context.node(parentOf(node.qn))!.kind === 'Entity'
                     ? testSteps(node, owner(node, context), lastOf(node.qn), ['allows permitted actors', 'denies other actors'], context)
                     : [])
@@ -67,7 +68,7 @@ const extension: CodegenExtension = {
             case 'Event': return [task(`publish ${lastOf(node.qn)} with an Ash notifier, for example Ash.Notifier.PubSub`)];
             case 'External': return [task(`implement ${lastOf(node.qn)} as a client module or generic actions`)];
             case 'UseCase': return [task(`implement ${lastOf(node.qn)} as a Reactor or a generic action`)];
-            case 'Role': return [task(`model the role ${lastOf(node.qn)} on the actor resource`)];
+            case 'Role': return roleSteps(node, context);
             case 'Param':
             case 'ErrorDecl':
             case 'SetEffect':
@@ -101,6 +102,8 @@ function entitySteps(entity: GraphNode, context: MapContext): Step[] {
         const type = f.data.type as TypeData;
         return [lastOf(f.qn), attributeType(type, context), ...(type.many ? ['array'] : []), ...(type.optional ? [] : ['required']), 'public'].join(':');
     });
+    // The roles of the actor resource are not public, so nobody assigns roles to themselves through the API.
+    if (userEntity(context)?.qn === entity.qn) specs.push('roles:atom:array');
     return [
         mix(['ash.gen.resource', typeModule(entity, context), '--domain', moduleName(entity.module, context),
             '--default-actions', 'read,create,update,destroy', '--uuid-primary-key', 'id', ...(specs.length ? ['--attribute', specs.join(',')] : []),
@@ -136,7 +139,7 @@ function patchResource(text: string, entity: GraphNode, context: MapContext): st
     }
     const blocks = [
         block('identities', fields.filter(f => ((f.data.modifiers ?? []) as string[]).includes('unique')).map(f => `identity :unique_${lastOf(f.qn)}, [:${lastOf(f.qn)}]`)),
-        block('calculations', fields.flatMap(f => calculation(f, context) ?? [])),
+        block('calculations', [...fields.flatMap(f => calculation(f, context) ?? []), ...roleCalculations(entity, context)]),
         block('validations', context.children(entity.qn).filter(n => n.kind === 'Invariant').flatMap(n => {
             const rule = check(n, context);
             return rule ? [`validate ${rule}, message: ${JSON.stringify(n.data.label)}`] : [];

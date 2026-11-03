@@ -6,6 +6,8 @@ Appling describes a business or web application as one validated model. The text
 
 For the command line tool, see [`@appling/cli`](https://www.npmjs.com/package/@appling/cli).
 
+The full language documentation lives at [appling.tools/docs](https://www.appling.tools/docs/language/overview/), from [`docs/language`](https://github.com/alex20465/appling/tree/main/docs/language) of the [repository](https://github.com/alex20465/appling).
+
 ## Example
 
 ```
@@ -54,7 +56,7 @@ A module or declaration may state its relevance to the business before its openi
 
 Expressions inside `{ ... }` use a subset of [CEL](https://cel.dev): `&&`, `||`, `!`, comparisons, `in`, arithmetic, member access, calls and list literals.
 
-Expressions are typed. Names resolve against their position: the fields of the entity (and `this`) in invariants, entity policies, defaults and derived fields, plus the inputs inside actions, the machine's entity in guards, the query entity in `where`, the source in projections, the parameters in use cases. Everywhere, `actor` is the current actor, `now` is the current DateTime and `tenant` is the entity of the single declared tenant. A bare enum value such as `draft` takes its type from the other side of a comparison or from the field it is assigned to.
+Expressions are typed. Names resolve against their position: the fields of the entity (and `this`) in invariants, entity policies, defaults and derived fields, plus the inputs inside actions, the machine's entity in guards, the query entity in `where`, the source in projections, the parameters in use cases. Everywhere, `actor` is the current actor, `now` is the current DateTime and `tenant` is the entity of the single declared tenant. A bare enum value such as `draft` takes its type from the other side of a comparison or from the field it is assigned to, and wins over a field of the same name there; `Status.draft` names it with its enum.
 
 | Builtin | Type |
 |---|---|
@@ -65,23 +67,25 @@ Expressions are typed. Names resolve against their position: the fields of the e
 | `list.map(x, expr)` | a list of the expression type |
 | `list.filter(x, cond)`, `list.exists(x, cond)`, `list.all(x, cond)` | the list, Bool, Bool |
 | `s.contains(t)`, `s.startsWith(t)`, `s.endsWith(t)`, `s.matches(t)` | Bool |
-| `actor.is(Role or Actor)` | Bool |
+| `actor.is(Role or Actor)` | Bool; true when the actor carries the role and the role's condition holds |
 
-Actors declare the fields that expressions read from `actor`:
+Actors declare the fields that expressions read from `actor`, or bind to the entity that stores them with `is`. A role may hold a condition that reads only `actor`, `tenant` and `now`:
 
 ```
+role Operator { actor.active }
+actor human Employee is User roles Operator
 actor human Shopper roles Customer {
   account: crm.Account
 }
 ```
 
-`actor.account` is valid when at least one actor declares `account`; it is optional when some actors do not.
+`actor.account` is valid when at least one actor declares `account`, itself or through its entity; it is optional when some actors do not.
 
 ### Rules
 
 - The keyword decides the layer. References follow the layer order: lower layers never reference higher ones, and interfaces and pages never reference each other.
 - Interfaces and pages reach entity data only through projections.
-- Other modules can only reference what a module lists in `export`, by its module path such as `crm.Account`.
+- Other modules can only reference what a module lists in `export`, by its module path such as `crm.Account`. Export names are references to the module's members, so rename and find references cover them.
 - Only a `machine` changes a `state` field, and each state field has at most one machine.
 - Expressions must type check: conditions are Bool, values fit the field they are assigned to, `null` only fits optional fields, and calls in use cases pass the right number and types of arguments (an action on an entity takes the entity first, then its inputs).
 - `migration` steps target elements by their path inside the module, as it was before the step: `rename Order.code -> reference`, `retype Order.total: Decimal -> Money`, `remove Order.legacy`. Renamed and retyped elements must exist, removed ones must not.
@@ -134,8 +138,8 @@ startLanguageServer(createApplingLspServices({ connection, ...NodeFileSystem }).
 
 | Export of `@appling/lang/lsp` | Purpose |
 |---|---|
-| `createApplingLspServices(context)` | The Appling services with Langium's LSP services |
-| `ApplingFormatter`, `ApplingHoverProvider`, `ApplingLspModule` | The Appling specific LSP services |
+| `createApplingLspServices(context)` | The Appling services with Langium's LSP services; `realPath` in the context keeps one document per file across symlinked paths |
+| `ApplingFormatter`, `ApplingHoverProvider`, `ApplingLspModule`, `ApplingDocumentUpdateHandler` | The Appling specific LSP services |
 
 ## License
 

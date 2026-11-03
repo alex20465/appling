@@ -2,6 +2,12 @@
   "name": "@appling/ide",
   "version": "0.1.3",
   "description": "Appling IDE: the model as text, entity view and search, in the browser",
+  "homepage": "https://www.appling.tools/docs/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alex20465/appling.git",
+    "directory": "packages/ide"
+  },
   "type": "module",
   "bin": {
     "appling-ide": "./out/server/main.js"

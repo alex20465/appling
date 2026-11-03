@@ -81,3 +81,33 @@ test('invariants over stored fields become check constraints, defaults and deriv
         'write the test bodies of ItemNotDerivedTest in shop/tests.py'
     ]);
 });
+
+test('roles become django-rules predicates, and the entity actors are bound to becomes the user model', async () => {
+    const { files, entries } = await generate({
+        'ops.appling': `module ops {
+            entity User {
+                disabled: Bool default false
+                active: Bool = !disabled
+            }
+            role Operator { actor.active }
+            role Viewer
+            actor human Employee is User roles Operator, Viewer
+            entity Order {
+                note: String?
+            }
+            action Cancel on Order {
+                requires { actor.is(Operator) }
+            }
+        }`
+    });
+    expect(files['ops/roles.py']).toBe([
+        'import rules', '', '', '@rules.predicate', 'def is_operator(user):', '    return user.groups.filter(name="Operator").exists() and user.active',
+        '', '', '@rules.predicate', 'def is_viewer(user):', '    return user.groups.filter(name="Viewer").exists()', ''
+    ].join('\n'));
+    expect(files['ops/models.py']).toContain('from django.contrib.auth.models import AbstractUser');
+    expect(files['ops/models.py']).toContain('class User(AbstractUser):');
+    expect(files['config/settings.py']).toContain('AUTH_USER_MODEL = "ops.User"');
+    expect(files['ops/actions.py']).toContain('from ops.roles import is_operator');
+    expect(files['ops/actions.py']).toContain('is_operator(actor)');
+    expect(entries['ops.Operator'].missing.map(m => m.what)).toEqual(['create the Django group Operator for the role']);
+});

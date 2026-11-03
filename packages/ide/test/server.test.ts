@@ -1,6 +1,7 @@
-import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { WebSocket } from 'ws';
 import { recordReferences, writeRelease } from '@appling/model';
@@ -82,4 +83,33 @@ test('edits are applied to the sent texts and recorded as migration steps after 
     expect(result.sources[crm]).toContain('migration since_v1_0_0 {\n    rename Account.email -> mail\n  }');
     const rejected = await (await fetch(`${ide.url}/api/edit`, { method: 'POST', body: JSON.stringify({ sources, operation: { op: 'remove', target: 'crm.Account' } }) })).json();
     expect(rejected.ok).toBe(false);
+});
+
+test('a workspace reached through a symlink keeps one document per file', async () => {
+    const folder = mkdtempSync(join(tmpdir(), 'appling-ide-link-'));
+    const real = join(folder, 'real');
+    mkdirSync(real);
+    const files = {
+        'accounts.appling': 'module accounts {\n  export Account, Operator\n\n  entity Account {\n    name: String\n  }\n\n  entity Operator {\n    name: String\n  }\n\n  tenant AccountTenant on Account\n}\n',
+        'keys.appling': 'module keys {\n  role Admin\n\n  actor human Staff roles Admin {\n    operator: accounts.Operator?\n  }\n\n  entity Key {\n    account: accounts.Account\n    operator: accounts.Operator\n    policy { actor.is(Admin) && account == tenant && operator == actor.operator }\n  }\n}\n'
+    };
+    Object.entries(files).forEach(([name, text]) => writeFileSync(join(real, name), text));
+    symlinkSync(real, join(folder, 'link'));
+    const linked = await startIde(join(folder, 'link'));
+    const socket = new WebSocket(linked.url.replace('http', 'ws') + '/lsp', { origin: linked.url });
+    await new Promise(resolve => socket.on('open', resolve));
+    const uri = (name: string) => pathToFileURL(join(real, name)).toString();
+    const diagnostics = new Promise<{ message: string }[]>(resolve => socket.on('message', data => {
+        const message = JSON.parse(data.toString());
+        if (message.method === 'textDocument/publishDiagnostics' && message.params.uri === uri('keys.appling')) resolve(message.params.diagnostics);
+    }));
+    const send = (message: object) => socket.send(JSON.stringify({ jsonrpc: '2.0', ...message }));
+    send({ id: 1, method: 'initialize', params: { processId: null, rootUri: null, capabilities: {} } });
+    send({ method: 'initialized', params: {} });
+    for (const [name, text] of Object.entries(files)) {
+        send({ method: 'textDocument/didOpen', params: { textDocument: { uri: uri(name), languageId: 'appling', version: 1, text } } });
+    }
+    expect((await diagnostics).map(d => d.message)).toEqual([]);
+    socket.close();
+    await linked.close();
 });

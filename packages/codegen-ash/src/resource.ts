@@ -37,3 +37,10 @@ export function addExtension(text: string, extension: string): string {
         : `${match[0]},\n    extensions: [${extension}]`;
     return text.replace(match[0], updated);
 }
+
+/** Adds `Ash.Policy.Authorizer` to the `use Ash.Resource` options, so the resource's policies apply. */
+export function addAuthorizer(text: string): string {
+    const match = /use Ash\.Resource,?[^\n]*(?:\n {4,}[^\n]*)*/.exec(text);
+    if (!match || match[0].includes('Ash.Policy.Authorizer')) return text;
+    return text.replace(match[0], `${match[0].replace(/,$/, '')},\n    authorizers: [Ash.Policy.Authorizer]`);
+}

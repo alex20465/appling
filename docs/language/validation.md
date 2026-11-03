@@ -34,11 +34,11 @@ module sales {
 
 | Rule | Message |
 |---|---|
-| An exported name must be a direct member of the module | `Module <module> has no member "<name>" to export.` |
+| An exported name must be a direct member of the module | `Could not resolve reference to Member named '<name>'.` |
 
 ```appling
 module m {
-  export Missing // Module m has no member "Missing" to export.
+  export Missing // Could not resolve reference to Member named 'Missing'.
 }
 ```
 
@@ -88,6 +88,7 @@ machine Flow on Order.status {
 |---|---|
 | Operations and `fields` appear only on entity policies | `Operations and fields narrow entity policies only.` |
 | Every `\|\|` branch of a policy grants by role (warning) | `A policy grants by role: every "\|\|" branch needs actor.is(Role), or write { false }.` |
+| A role condition reads only `actor`, `tenant` and `now` | `A role condition reads only actor, tenant and now, not "<name>".` |
 
 ```appling
 action Edit on Order {
@@ -97,6 +98,8 @@ action Edit on Order {
 action Close on Order {
   policy { true } // A policy grants by role: every "||" branch needs actor.is(Role), or write { false }.
 }
+
+role Clerk { status == open } // A role condition reads only actor, tenant and now, not "status".
 ```
 
 ## Projections and endpoints
@@ -145,6 +148,7 @@ The expression typer checks every expression and every call. See [expressions](e
 | Rule | Message |
 |---|---|
 | A name is visible at its position, or is a value of the expected enum | `Unknown name "<name>".` |
+| An enum value named with its enum exists in that enum | `Enum <Enum> has no value "<name>".` |
 | A field access names a field of the receiver | `<Type> has no field "<field>".` |
 | An assignment in `create` or `emit` names a field of the entity or event | `<Entity or Event> has no field "<name>".` |
 
@@ -153,6 +157,7 @@ entity Note {
   o: Order
   invariant "a" { missing } // Unknown name "missing".
   invariant "b" { o.nope == 1 } // Order has no field "nope".
+  invariant "c" { o.status != OrderStatus.gone } // Enum OrderStatus has no value "gone".
 }
 action Finish on Order {
   effect {

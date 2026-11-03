@@ -2,6 +2,12 @@
   "name": "@appling/ai",
   "version": "0.1.3",
   "description": "Appling for AI: MCP server, model adapter and the registry skill",
+  "homepage": "https://www.appling.tools/docs/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alex20465/appling.git",
+    "directory": "packages/ai"
+  },
   "type": "module",
   "exports": {
     ".": {

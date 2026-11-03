@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import type { Model } from '@appling/lang';
 import { buildWorkspace, examples } from '../../lang/test/workspace.js';
-import { buildGraph, Simulator, UNKNOWN } from '../src/index.js';
+import { buildGraph, Simulator, UNKNOWN, type ExprData } from '../src/index.js';
 
 async function simulator(sources: Record<string, string>) {
     const { documents, services } = await buildWorkspace(sources);
@@ -18,6 +18,38 @@ test('reachability follows transitions from the initial state', async () => {
         ]
     });
     expect(sim.reach('sales.OrderFlow', 'draft')?.path).toEqual([]);
+});
+
+test('reachability also starts from the states a create assigns', async () => {
+    const sim = await simulator({ 'm.appling': `module m {
+      enum S { open waiting done }
+      entity Order { status: S state default open }
+      action Close on Order { }
+      action Wait { effect { create Order { status = waiting } } }
+      machine Flow on Order.status { transition waiting -> done via Close }
+    }` });
+    expect(sim.reach('m.Flow', 'done')).toEqual({ from: 'waiting', path: [{ transition: 'm.Flow.transition[waiting->done]', trigger: 'Close', to: 'done', guarded: false }] });
+});
+
+test('actor.is(Role) holds when the actor carries the role and the role condition holds', async () => {
+    const sim = await simulator({ 'ops.appling': `module ops {
+      entity User {
+        disabled: Bool default false
+        active: Bool = !disabled
+      }
+      role Operator { actor.active }
+      role Guest
+      actor human Employee is User roles Operator
+      actor human Visitor roles Guest
+      entity Order { note: String? }
+      action Cancel on Order {
+        policy { actor.is(Operator) }
+      }
+    }` });
+    expect(sim.actors('ops.Cancel')).toEqual([{ actor: 'ops.Employee', verdict: 'depends' }, { actor: 'ops.Visitor', verdict: 'no' }]);
+    const condition = sim.graph.nodes.find(n => n.qn === 'ops.Cancel.policy[]')!.data.condition as ExprData;
+    expect(sim.evaluate(condition, { actor: { actor: 'ops.Employee', fields: { disabled: false } } })).toBe(true);
+    expect(sim.evaluate(condition, { actor: { actor: 'ops.Employee', fields: { disabled: true } } })).toBe(false);
 });
 
 test('actors are judged by action and entity update policies', async () => {

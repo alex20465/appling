@@ -64,12 +64,20 @@ export class Simulator {
         }
     }
 
-    /** The shortest sequence of transitions from the machine's initial state to the target state, or undefined. */
+    /**
+     * The shortest sequence of transitions from one of the machine's initial states to the target state, or undefined.
+     * The initial states are the field's default and every state a `create` assigns; without either, every state.
+     */
     reach(machine: string, state: string): { from: string, path: { transition: string, trigger: string, to: string, guarded: boolean }[] } | undefined {
         const node = this.node(machine);
         const field = this.node(node.data.field as string);
-        const initial = (field.data.default as ExprData | undefined)?.name;
-        const starts = initial ? [initial] : this.kids(this.node((field.data.type as TypeData).decl!)).map(l => last(l.qn));
+        const created = this.graph.nodes
+            .filter(n => n.kind === 'CreateEffect' && n.data.entity === this.parentOf(field.qn))
+            .flatMap(n => (n.data.assignments as { name: string, value: ExprData }[] | undefined) ?? [])
+            .filter(a => a.name === last(field.qn) && a.value.target)
+            .map(a => last(a.value.target!));
+        const initial = [(field.data.default as ExprData | undefined)?.name, ...created].filter(s => s !== undefined);
+        const starts = initial.length ? [...new Set(initial)] : this.kids(this.node((field.data.type as TypeData).decl!)).map(l => last(l.qn));
         const transitions = this.kids(node, 'Transition');
         for (const start of starts) {
             const seen = new Map<string, { transition: string, trigger: string, to: string, guarded: boolean }[]>([[start, []]]);
@@ -293,12 +301,13 @@ export class Simulator {
         return UNKNOWN;
     }
 
-    /** A field of a null record is null, as the typer makes it optional; an actor's field it does not declare is null too. */
+    /** A field of a null record is null, as the typer makes it optional; an actor's field that neither it nor its entity declares is null too. */
     private member(receiver: Value, member: string, target: string | undefined, scope: Parameters<Simulator['evaluate']>[1]): Value {
         if (receiver === null) return null;
         if (receiver === UNKNOWN || typeof receiver !== 'object' || Array.isArray(receiver) || receiver instanceof Date) return UNKNOWN;
         if (member in receiver) return receiver[member] as Value;
-        if (this.nodes.get(receiver.$type ?? '')?.kind === 'Actor' && !this.nodes.has(`${receiver.$type}.${member}`)) return null;
+        const actor = this.nodes.get(receiver.$type ?? '');
+        if (actor?.kind === 'Actor' && ![receiver.$type, actor.data.entity].some(owner => this.nodes.has(`${owner}.${member}`))) return null;
         const field = target ? this.nodes.get(target) : undefined;
         if (field?.data.derived) return this.evaluate(field.data.derived as ExprData, { ...scope, self: receiver, vars: undefined });
         return UNKNOWN;
@@ -329,7 +338,10 @@ export class Simulator {
             if (!scope.actor) return UNKNOWN;
             const target = args[0]?.target;
             const actor = this.nodes.get(scope.actor.actor);
-            return target === scope.actor.actor || ((actor?.data.roles ?? []) as string[]).includes(target ?? '');
+            if (target === scope.actor.actor) return true;
+            if (!((actor?.data.roles ?? []) as string[]).includes(target ?? '')) return false;
+            const condition = this.nodes.get(target!)?.data.condition as ExprData | undefined;
+            return condition ? this.evaluate(condition, { actor: scope.actor }) : true;
         }
         const receiver = this.evaluate(expr.receiver!, scope);
         if (receiver === UNKNOWN) return UNKNOWN;

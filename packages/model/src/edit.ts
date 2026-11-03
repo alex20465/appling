@@ -148,7 +148,7 @@ function insertionPoints(parent: AstNode): number[] {
     return [...new Set([...braces, ...children])].sort((a, b) => b - a);
 }
 
-/** Renames an element and everything that names it: references, names in expressions, transitions, exports, message keys. */
+/** Renames an element and everything that names it: references (exports included), names in expressions, transitions, message keys. */
 function renameSplices(workspace: Workspace, node: AstNode, name: string): Splice[] {
     const models = modelsOf(workspace);
     const typer = new ExpressionTyper(workspace.services);
@@ -186,13 +186,6 @@ function renameSplices(workspace: Workspace, node: AstNode, name: string): Splic
             }
         }
         const module = AstUtils.getContainerOfType(renamed.$container, isModule);
-        if (module && renamed.$container === module) {
-            for (const exp of module.exports) {
-                for (const cst of GrammarUtils.findNodesForProperty(exp.$cstNode, 'names')) {
-                    if (cst.text === old) splices.push(cstSplice(exp, cst, name));
-                }
-            }
-        }
         const path = module ? pathInModule(renamed, module) : [];
         for (const message of module?.members.filter(isMessages).flatMap(m => m.entries) ?? []) {
             const keys = nameLeaves(GrammarUtils.findNodeForProperty(message.$cstNode, 'key')!);
@@ -215,7 +208,7 @@ function remove(workspace: Workspace, sources: Sources, node: AstNode): Sources 
     const splices = [removal(node, node.$cstNode!)];
     if (isModule(parent)) {
         for (const exp of parent.exports) {
-            const names = GrammarUtils.findNodesForProperty(exp.$cstNode, 'names').filter(c => c.text === nameOf(node));
+            const names = exp.names.filter(n => n.ref === node).map(n => n.$refNode!);
             if (names.length === exp.names.length) splices.push(removal(exp, exp.$cstNode!));
             else splices.push(...names.map(c => removal(exp, c)));
         }

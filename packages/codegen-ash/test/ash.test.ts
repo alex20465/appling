@@ -89,3 +89,39 @@ test('behavior, queries and the JSON:API are patched into the generated modules'
         'write the tests "action place_order precondition" in test/shop/sales/order_test.exs'
     ]);
 });
+
+test('roles become policy checks on the actor resource, and policies that only name roles authorize with them', async () => {
+    const result = await planFor({
+        'ops.appling': `module ops {
+            entity User {
+                disabled: Bool default false
+                active: Bool = !disabled
+            }
+            role Operator { actor.active }
+            role Viewer
+            actor human Employee is User roles Operator, Viewer
+            entity Order {
+                note: String?
+                policy read { actor.is(Operator) || actor.is(Viewer) }
+                policy update { actor.is(Operator) && note != "" }
+            }
+            action Cancel on Order {
+                policy { actor.is(Operator) }
+            }
+        }`
+    });
+    const write = (file: string, text: string) => result.steps.reduce((current, { step }) => step.kind === 'template' && step.file === file ? step.write(current) : current, text);
+    expect(write('lib/shop/ops/checks/operator.ex', '')).toBe([
+        'defmodule Shop.Ops.Checks.Operator do', '  use Ash.Policy.SimpleCheck', '', '  @impl true', '  def describe(_opts), do: "actor is Operator"', '',
+        '  @impl true', '  def match?(%Shop.Ops.User{} = actor, _context, _opts) do', '    actor = Ash.load!(actor, :operator?, authorize?: false)',
+        '    :operator in (actor.roles || []) and actor.operator?', '  end', '', '  def match?(_actor, _context, _opts), do: false', 'end', ''
+    ].join('\n'));
+    expect(write('lib/shop/ops/checks/viewer.ex', '')).toContain('    :viewer in (actor.roles || [])\n  end');
+    expect(result.steps.some(({ step }) => step.kind === 'command' && step.run.includes('Shop.Ops.User') && step.run.join(' ').includes('roles:atom:array'))).toBe(true);
+    expect(write('lib/shop/ops/user.ex', 'defmodule Shop.Ops.User do\n  use Ash.Resource\nend\n')).toContain('    calculate :active, :boolean, expr(not disabled)\n    calculate :operator?, :boolean, expr(active)\n');
+    const order = write('lib/shop/ops/order.ex', 'defmodule Shop.Ops.Order do\n  use Ash.Resource,\n    domain: Shop.Ops\nend\n');
+    expect(order).toContain('  use Ash.Resource,\n    domain: Shop.Ops,\n    authorizers: [Ash.Policy.Authorizer]\n');
+    expect(order).toContain('  policies do\n    policy action_type(:read) do\n      authorize_if Shop.Ops.Checks.Operator\n      authorize_if Shop.Ops.Checks.Viewer\n    end\n\n    policy action(:cancel) do\n      authorize_if Shop.Ops.Checks.Operator\n    end\n  end\n');
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['ops.Order.policy[update]'].missing[0].what).toBe('add an Ash policy to ops.Order for update: actor.is(Operator) && note != ""');
+});

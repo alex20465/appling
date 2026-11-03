@@ -15,7 +15,8 @@ const ORDER = `
   action Close on Order { }`;
 
 test('export names an existing member', async () => {
-    expect(await check('module m { export Missing }')).toContain('Module m has no member "Missing" to export.');
+    expect(await check('module m { export Missing }')).toContain("Could not resolve reference to Member named 'Missing'.");
+    expect(await check('module m { module inner { export Outer } role Outer }')).toContain("Could not resolve reference to Member named 'Outer'.");
 });
 
 test('machine governs a state field with an enum type', async () => {
@@ -72,4 +73,9 @@ test('a policy grants by role', async () => {
     expect(await warnings('actor.is(Clerk) || note == ""')).toContain(message);
     expect(await warnings('actor.is(Clerk) && note == ""')).toEqual([]);
     expect(await warnings('false')).toEqual([]);
+});
+
+test('a role condition reads only actor, tenant and now', async () => {
+    expect(await check(`module m { ${ORDER} role Clerk { status == open } }`))
+        .toContain('A role condition reads only actor, tenant and now, not "status".');
 });
