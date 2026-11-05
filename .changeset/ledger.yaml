@@ -21,12 +21,24 @@
   intents:
     - loud-frogs-tie
     - purple-pears-mix
+"@appling/codegen-ash@0.1.2":
+  dir: packages/codegen-ash
+  intents:
+    - bright-kings-argue
+"@appling/codegen-django@0.1.2":
+  dir: packages/codegen-django
+  intents:
+    - warm-houses-rest
 "@appling/ide@0.1.2":
   dir: packages/ide
   intents:
     - light-planes-carry
     - mean-geckos-call
     - polite-pears-begin
+"@appling/ide@0.1.3":
+  dir: packages/ide
+  intents:
+    - heavy-clocks-stand
 "@appling/lang@0.2.0":
   dir: packages/lang
   intents:
@@ -40,6 +52,13 @@
   intents:
     - great-taxis-brush
     - loud-cups-agree
+"@appling/lang@0.2.2":
+  dir: packages/lang
+  intents:
+    - brave-queens-serve
+    - calm-bottles-own
+    - large-bottles-march
+    - smart-rice-lie
 "@appling/model@0.1.1":
   dir: packages/model
   intents:
@@ -47,7 +66,13 @@
     - empty-ducks-flash
     - good-hairs-doubt
     - strong-dragons-do
+"@appling/model@0.1.2":
+  dir: packages/model
+  intents:
+    - fresh-cups-pull
+    - giant-donkeys-tap
 "@appling/viz@0.1.1":
   dir: packages/viz
   intents:
     - mighty-geese-yawn
+    - new-snakes-throw

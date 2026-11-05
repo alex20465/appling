@@ -1,5 +1,16 @@
 # @appling/model
 
+## 0.1.2
+
+### Patch Changes
+
+- Simulator reach starts from created states.
+
+- The graph carries role conditions, and rename updates export lists.
+
+- Updated dependencies:
+  - @appling/lang@0.2.2
+
 ## 0.1.1
 
 ### Patch Changes

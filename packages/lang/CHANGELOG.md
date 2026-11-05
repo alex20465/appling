@@ -1,5 +1,17 @@
 # @appling/lang
 
+## 0.2.2
+
+### Patch Changes
+
+- Keywords used as names lex as names: default, limit, messages, migration and is are valid names, and enum values can be qualified.
+
+- Names in export lists are references, so rename, go to definition and find references cover them.
+
+- Roles hold a condition on the actor, and actors bind to their entity with `is`.
+
+- The language server keeps one document per real file across symlinked workspace paths.
+
 ## 0.2.1
 
 ### Patch Changes

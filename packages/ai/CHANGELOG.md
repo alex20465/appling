@@ -5,6 +5,15 @@
 ### Patch Changes
 
 - Updated dependencies:
+  - @appling/codegen@0.1.2
+  - @appling/lang@0.2.2
+  - @appling/model@0.1.2
+
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies:
   - @appling/viz@0.1.1
 
 ## 0.1.2

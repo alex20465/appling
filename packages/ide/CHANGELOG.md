@@ -4,6 +4,16 @@
 
 ### Patch Changes
 
+- No false diagnostics when the workspace is reached through a symlink.
+
+- Updated dependencies:
+  - @appling/lang@0.2.2
+  - @appling/model@0.1.2
+
+## 0.1.3
+
+### Patch Changes
+
 - Updated dependencies:
   - @appling/ai@0.1.3
   - @appling/viz@0.1.1
