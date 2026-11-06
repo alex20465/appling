@@ -73,7 +73,7 @@ Modules are named `<App>.<Module>`, with nested modules as `<App>.<A>.<B>`; a ty
 | `default` | `default` on the attribute for constants and enum values; `now` becomes `&DateTime.utc_now/0` |
 | derived field | a calculation `calculate :<field>, <type>, expr(...)` |
 | `invariant` | a validation built from Ash's builtin validations (`compare`, `attribute_equals`, `attribute_does_not_equal`, `attribute_in`, `present`, `absent`, `all`, `any`, `negate`) with the label as message; a test |
-| `policy` | a policy with `authorize_if` lines when its condition only names roles (see [roles](#roles)), otherwise a task to add an Ash policy; a test when it is on an entity |
+| `policy` | an Ash policy or field policy (see [policies](#policies)); a test when it is on an entity |
 | `action` on an entity | an update action (see [actions](#actions)) |
 | `action` without an entity | a task to write a generic action |
 | `machine` | an AshStateMachine section (see [state machines](#state-machines)) |
@@ -81,9 +81,10 @@ Modules are named `<App>.<Module>`, with nested modules as `<App>.<A>.<B>`; a ty
 | `query` | a read action with `filter`, `sort` and offset pagination |
 | computed projection field | a calculation on the source resource |
 | `interface rest` | AshJsonApi routes and a router served by Bandit (see [JSON:API](#jsonapi)) |
-| `role` | an `Ash.Policy.SimpleCheck` module `<App>.<Module>.Checks.<Role>` in `lib/<app>/<module>/checks/<role>.ex`, when actors are bound to exactly one entity with `is`; otherwise a task (see [roles](#roles)) |
+| `actor` | the record that acts: the resource of its `is` entity, a resource of its own or a struct (see [actors](#actors)) |
+| `role` | an `Ash.Policy.SimpleCheck` module `<App>.<Module>.Checks.<Role>` in `lib/<app>/<module>/checks/<role>.ex` (see [roles](#roles)) |
+| `tenant` | attribute multitenancy on the resources that belong to the tenant's entity (see [tenants](#tenants)) |
 | `event`, `external`, `usecase` | tasks: an Ash notifier, a client module or generic actions, a Reactor or generic action |
-| experience layer, actors, tenants | not generated; `todo` entries in the [registry](registry.md) |
 
 ### Types
 
@@ -219,11 +220,25 @@ test "transition draft -> placed moves from allowed states"
 ```
 
 
+## Actors
+
+An actor is the record Ash gets as `actor:`. Where it lives depends on the declaration:
+
+| Actor | Record |
+|---|---|
+| bound with `is Entity` | the entity's resource; the actor's fields become its attributes and relationships |
+| `human` without `is` | a resource of its own, `<App>.<Module>.<Actor>`, with its fields, a UUID primary key and the Postgres data layer |
+| `system` or `service` without `is` | a struct `%<App>.<Module>.<Actor>{}` with its fields (relationships as `<field>_id`) and `roles` set to the roles it declares |
+
+Every actor resource gets a private `roles` attribute (`{:array, :atom}`, not public, so nobody assigns roles to themselves through the API), empty by default and limited to the roles its actors carry with `constraints items: [one_of: [...]]`.
+
+`actor.is(Actor)` becomes a check `<App>.<Module>.Checks.<Actor>` that matches the actor's record. When several actors are bound to the same entity, their records look the same, and telling them apart is a task.
+
 ## Roles
 
-The resource of the entity that actors are bound to with `is` is the actor: it gets a private `roles` attribute (`{:array, :atom}`, not public, so nobody assigns roles to themselves through the API) and one calculation `:<role>?` per role condition. Each role becomes a check that holds when the actor has the role and the condition:
+Each role becomes a check with one `match?` clause per actor record that carries the role. The clause holds when the record has the role in `roles`, the roles the condition names with `actor.is` hold (their checks are called), and the rest of the condition holds, which becomes a calculation `:<role>?` on the actor resource:
 
-```appling
+```appling check
 module ops {
   entity User {
     disabled: Bool default false
@@ -252,8 +267,8 @@ defmodule Shop.Ops.Checks.Operator do
   def describe(_opts), do: "actor is Operator"
 
   @impl true
-  def match?(%Shop.Ops.User{} = actor, _context, _opts) do
-    actor = Ash.load!(actor, :operator?, authorize?: false)
+  def match?(%Shop.Ops.User{} = actor, context, _opts) do
+    actor = Ash.load!(actor, :operator?, authorize?: false, tenant: context.subject.tenant)
     :operator in (actor.roles || []) and actor.operator?
   end
 
@@ -261,21 +276,75 @@ defmodule Shop.Ops.Checks.Operator do
 end
 ```
 
-A policy whose condition only names roles, one `actor.is(Role)` per `||` branch, becomes an Ash policy on the resource, which then uses `Ash.Policy.Authorizer`. An entity policy applies to its operations (`action_type(:read)`, `delete` becomes `:destroy`, `always()` without operations), an action policy to its action:
+A record that cannot carry a role the condition names, or lacks a field it reads, gets no clause, so the check is false for it. A role that no actor carries is a check that is always false. Role conditions that do not translate, and conditions with more than `actor.is` on a struct actor, are tasks.
+
+## Tenants
+
+A tenant becomes Ash [attribute multitenancy](https://hexdocs.pm/ash/multitenancy.html). Every resource with a relationship to the tenant's entity is partitioned by that relationship:
+
+```elixir
+multitenancy do
+  strategy :attribute
+  attribute :customer_id
+end
+```
+
+Pass the id of the tenant record as `tenant:` to every query and change. Actor resources also get `global? true`, so an actor can be looked up before its tenant is known. In expressions, `tenant` becomes `^tenant()`. Resources that reach the tenant only through other relationships, such as an order line through its order, and resources with several relationships to tenant entities are tasks.
+
+## Policies
+
+Policies become `Ash.Policy.Authorizer` policies on the resource, which then lists the authorizer:
+
+| Policy on | Ash |
+|---|---|
+| an entity, with operations | `policy action_type(:read)`, a list for several, `delete` becomes `:destroy` |
+| an entity, without operations | `policy always()` |
+| an entity, with `fields` | `field_policy :total` or `field_policy [:total, :discount]` in `field_policies`, plus one `field_policy :*` that allows every other field |
+| an action on an entity | `policy action(:<action>)` on the entity's resource |
+| a query | `policy action(:<query>)` on the read action of the query |
+
+Each `||` branch of the condition grants: a branch with one check becomes `authorize_if`, a branch with `&&` becomes `forbid_unless` for each check but the last and `authorize_if` for the last, after every single check branch. `actor.is(X)` is the check module of `X`; any other condition is an `expr` check. In those, `actor.<field>` becomes `^actor(:<field>)`, and records compare by id: `customer == actor.account` becomes `customer_id == ^actor(:account_id)`, `this` becomes `id`.
+
+This is the `Order` resource of the [example](../../examples/sales.appling):
 
 ```elixir
 policies do
   policy action_type(:read) do
-    authorize_if Shop.Ops.Checks.Operator
+    authorize_if Shop.Crm.Checks.Clerk
+    forbid_unless Shop.Sales.Checks.Customer
+    authorize_if expr(customer_id == ^actor(:account_id))
+  end
+
+  policy action_type([:create, :update, :destroy]) do
+    authorize_if Shop.Crm.Checks.Clerk
+  end
+
+  policy action(:place_order) do
+    forbid_unless Shop.Sales.Checks.Customer
+    authorize_if expr(customer_id == ^actor(:account_id))
   end
 
   policy action(:cancel) do
-    authorize_if Shop.Ops.Checks.Operator
+    authorize_if Shop.Crm.Checks.Clerk
+  end
+end
+
+field_policies do
+  field_policy :total do
+    authorize_if Shop.Crm.Checks.Clerk
+    forbid_unless Shop.Sales.Checks.Customer
+    authorize_if expr(status != :draft)
+  end
+
+  field_policy :* do
+    authorize_if always()
   end
 end
 ```
 
-Ash forbids an action that no policy covers once a resource has policies, which matches the model: nothing is open by default. Policies with other conditions, field policies and policies of queries and use cases stay tasks.
+Ash forbids an action that no policy covers once a resource has policies, and requires every policy that applies to an action to pass. That matches the model: nothing is open by default, and the effective policy is the conjunction of the policies along the path, so an action needs both the entity's `update` policy and its own.
+
+Policies with more than one branch that has `&&`, conditions that do not translate, field policies that follow a relationship (Ash field policies cannot), field policies on other operations than `read`, policies of queries whose filter does not translate, of use cases and of actions without an entity stay tasks. Writing the policy test bodies is a task too.
 
 ## What becomes a task
 
@@ -286,10 +355,10 @@ Whatever cannot be translated is listed in the [registry](registry.md):
 - invariants, preconditions and guards over calculations, relationships or other resources, and guards when an action has several transitions
 - effects that create rows or emit events, and actions with several target states
 - actions with `consistency eventual`, and actions without an entity
-- policies that say more than which roles may act, roles without an `is` bound actor resource, role conditions that do not translate, events, externals and use cases
+- policies that do not translate (see [policies](#policies)), role conditions that do not translate, telling apart actors bound to the same entity, resources that reach the tenant only through relationships, events, externals and use cases
 - jobs on events, and jobs whose filter does not translate
 - authentication, rate limits and CORS of interfaces, and endpoints that do not fit the route patterns
-- flows, actors, tenants, and interfaces with a protocol other than `rest`
+- flows, and interfaces with a protocol other than `rest`
 
 ## Run the generated project
 
