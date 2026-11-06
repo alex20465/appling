@@ -1,0 +1,38 @@
+{
+  "name": "@appling/pty-host",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Appling pty host: a per-user daemon that owns the terminals, keeps them running after the app closes and replays their scrollback on attach",
+  "homepage": "https://www.appling.tools/docs/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alex20465/appling.git",
+    "directory": "packages/pty-host"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./out/index.d.ts",
+      "default": "./out/index.js"
+    }
+  },
+  "bin": {
+    "appling-pty-host": "./out/main.js"
+  },
+  "files": [
+    "out"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@xterm/addon-serialize": "0.14.0",
+    "@xterm/headless": "6.0.0",
+    "node-pty": "1.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "7.0.2"
+  },
+  "license": "MIT"
+}

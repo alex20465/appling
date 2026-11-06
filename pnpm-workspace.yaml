@@ -3,6 +3,7 @@ packages:
 allowBuilds:
   '@vscode/vsce-sign': true
   esbuild: true
+  node-pty: true
 minimumReleaseAgeExclude:
   - '@ai-sdk/anthropic@4.0.86'
   - '@ai-sdk/gateway@4.0.122'
