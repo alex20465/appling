@@ -277,6 +277,18 @@ end
 
 Ash forbids an action that no policy covers once a resource has policies, which matches the model: nothing is open by default. Policies with other conditions, field policies and policies of queries and use cases stay tasks.
 
+## Descriptions
+
+A [`does`](../language/descriptions.md) text goes into the generated code as documentation:
+
+| Element | Becomes |
+|---|---|
+| Entity | `@moduledoc` of the resource |
+| Value type | `@moduledoc` of the embedded resource |
+| Entity field | `description` of the attribute |
+
+Each text is also a [registry task](registry.md#status), which carries it for every other element.
+
 ## What becomes a task
 
 Whatever cannot be translated is listed in the [registry](registry.md):

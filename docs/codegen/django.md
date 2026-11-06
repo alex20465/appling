@@ -258,6 +258,20 @@ def is_operator(user):
 
 `User` extends `AbstractUser` and keeps the derived `active` as a property. The predicates are plain functions, so they also combine with django-rules (`is_operator | is_admin`); `rules.add_perm` is not generated.
 
+## Descriptions
+
+A [`does`](../language/descriptions.md) text goes into the generated code as documentation:
+
+| Element | Becomes |
+|---|---|
+| Entity, enum, value type, error | The class docstring |
+| Action, query, use case, role | The function docstring (for a role, of its predicate) |
+| Projection, external | The serializer or `Protocol` class docstring |
+| External operation | The docstring of its `Protocol` method |
+| Entity field | `help_text` of the model field |
+
+Each text is also a [registry task](registry.md#status).
+
 ## What becomes a task
 
 Whatever cannot be translated is listed in the [registry](registry.md):

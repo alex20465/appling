@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { annotation, children, pythonFile, task, template } from './files.js';
+import { annotation, children, documented, pythonFile, task, template } from './files.js';
 import { scope, storedFields } from './models.js';
 import { testSteps } from './tests.js';
 import { appOf, constantOf, lastOf, parentOf, python, q, snake, type PythonScope } from './python.js';
@@ -14,7 +14,7 @@ interface Code {
 }
 
 export function errorSteps(error: GraphNode): Step[] {
-    return [template(`${appOf(error.module)}/errors.py`, existing => pythonFile(existing ?? ERRORS, [], `class ${lastOf(error.qn)}(Exception):\n    pass`))];
+    return [template(`${appOf(error.module)}/errors.py`, existing => pythonFile(existing ?? ERRORS, [], documented(`class ${lastOf(error.qn)}(Exception):\n    pass`, error)))];
 }
 
 const ERRORS = 'class InvalidTransition(Exception):\n    """The state field does not allow this transition."""\n';
@@ -67,7 +67,7 @@ export function actionSteps(action: GraphNode, context: MapContext): Step[] {
         ...(code.lines.length ? code.lines : ['pass']).map(l => `    ${l}`)
     ].join('\n');
     const preconditionTests = preconditions.length ? testSteps(action, (action.props.preconditions as string[]).join('; '), preconditions.map((_, i) => `precondition_${i + 1}_is_enforced`), context) : [];
-    return [template(`${appOf(action.module)}/actions.py`, existing => pythonFile(existing, code.imports, body)), ...code.tasks, ...preconditionTests];
+    return [template(`${appOf(action.module)}/actions.py`, existing => pythonFile(existing, code.imports, documented(body, action))), ...code.tasks, ...preconditionTests];
 }
 
 export function transitionSteps(transition: GraphNode, context: MapContext): Step[] {

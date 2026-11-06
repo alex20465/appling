@@ -39,6 +39,7 @@ Requires `uv` on the PATH. Python and Django (6.1) are installed by uv into the 
 | `navigation`, `messages` | the menu of the base template, and labels per language |
 | `role` | a [django-rules](https://github.com/dfunckt/django-rules) predicate `is_<role>(user)` in `<app>/roles.py` (group membership and the role's condition), called wherever `actor.is(Role)` is translated; the entity actors are bound to with `is` extends `AbstractUser` and becomes `AUTH_USER_MODEL` |
 
+| `does` | the docstring of the generated class or function, `help_text` on model fields, and a registry task |
 | rules | a `TestCase` per invariant, policy, transition and action with preconditions in `<app>/tests.py`, one skipped method per case; writing their bodies is a registry task |
 
 Models with projections or interfaces also get Django REST framework. The project ends with `manage.py makemigrations`, so its migration history starts with the generated models.

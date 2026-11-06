@@ -8,6 +8,7 @@ export const SECTIONS = [
       "language/overview",
       "language/modules",
       "language/relevance",
+      "language/descriptions",
       "language/access",
       "language/domain",
       "language/behavior",

@@ -41,7 +41,9 @@ const canonical = print(document.parseResult.value as Model);
 | `printRange(node)` | The canonical text of one node in its document with the gaps around it: `{ start, end, text }` (`PrintedRange`) |
 | `modulePath(module)` | The dotted path of a module, such as `a.b` |
 | `projectionSourceEntity(projection)` | The entity behind a projection, also when its source is a query |
-| `ApplingScopeProvider` | The scope provider; `lookup(container, type, name)` resolves a dotted name as a reference would |
+| `ApplingScopeProvider` | The scope provider; `lookup(container, type, name)` resolves a dotted name as a reference would, `lookupElement(container, name)` an element of any kind |
+| `doesNames(node)`, `doesTargets(node, services)` | The `@Name` occurrences of a node's [`does`](../language/descriptions.md) text with their document offsets, and with the element each names |
+| `textBlockValue(raw)`, `printTextBlock(raw, indent, outer)` | The value of a `"""` text block, and its canonical spelling |
 | `ExpressionTyper` | Types expressions: `checkModel(model)` fills `types`, `targets` (the element each name stands for) and `problems` (`Problem[]`) |
 | `show(type)`, `typeOfRef(ref)` | The display name of a `Type`, such as `Money?`, and the `Type` a `TypeRef` declares |
 | `LAYER_OF`, `Layer` | The layer of every top level declaration type |
@@ -142,6 +144,7 @@ Planning and running:
 | Export | Purpose |
 |---|---|
 | `plan(graph, extension, name, options)` | The ordered steps and one registry entry per node (`Plan`) |
+| `doesTask(node)` | The registry task of a node's [`does`](../language/descriptions.md) text, which `plan` adds to its entry |
 | `describe(step)` | A one line description of a step, as `--plan` prints it |
 | `coverage(entries)` | The registry entries per node kind: generated, partial, todo and the number of tasks, plus a total (`Coverage`) |
 | `coverageTable(coverage)` | That coverage as the Markdown table `--plan` prints, the total with the generated share |

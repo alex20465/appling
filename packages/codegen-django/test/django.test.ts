@@ -111,3 +111,24 @@ test('roles become django-rules predicates, and the entity actors are bound to b
     expect(files['ops/actions.py']).toContain('is_operator(actor)');
     expect(entries['ops.Operator'].missing.map(m => m.what)).toEqual(['create the Django group Operator for the role']);
 });
+
+test('does texts become docstrings and help texts, and one registry task each', async () => {
+    const { files, entries } = await generate({
+        'shop.appling': `module shop {
+            entity Account does """
+                Someone who buys.
+                  Pays by "card".
+            """ {
+                email: String does "Login address"
+            }
+            action Close on Account does "Closes the @Account" { }
+            external Clerk { op Ban (id: String) does "Bans the user" }
+        }`
+    });
+    expect(files['shop/models.py']).toContain('class Account(models.Model):\n    """Someone who buys.\n      Pays by "card".\n    """\n    email = models.CharField(max_length=255, help_text="Login address")');
+    expect(files['shop/actions.py']).toContain('def close(account: Account, *, actor=None) -> None:\n    """Closes the @Account"""\n    pass');
+    expect(files['shop/externals.py']).toContain('    def ban(self, id: str) -> None:\n        """Bans the user"""\n        ...');
+    expect(entries['shop.Account'].missing.map(m => m.what)).toEqual(['check that Account matches its description: Someone who buys.\n  Pays by "card".']);
+    expect(entries['shop.Account.email'].status).toBe('partial');
+    expect(entries['shop.Close'].missing.map(m => m.what)).toContain('implement what Close does: Closes the @Account');
+});

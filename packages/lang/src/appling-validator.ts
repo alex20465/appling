@@ -6,6 +6,7 @@ import {
 } from './generated/ast.js';
 import { namedPaths, projectionSourceEntity } from './appling-scope.js';
 import { ExpressionTyper } from './appling-types.js';
+import { doesTargets } from './appling-does.js';
 import type { ApplingServices } from './appling-module.js';
 
 export type Layer = 'cross' | 'domain' | 'behavior' | 'application' | 'interface' | 'experience';
@@ -22,7 +23,7 @@ export const LAYER_OF: Record<string, Layer> = {
 export function registerValidationChecks(services: ApplingServices): void {
     const validator = new ApplingValidator(services);
     const checks: ValidationChecks<ApplingAstType> = {
-        Model: [validator.checkLayerReferences, validator.checkTypes],
+        Model: [validator.checkLayerReferences, validator.checkTypes, validator.checkDoesNames],
         Machine: validator.checkMachine,
         SetEffect: validator.checkSetEffect,
         Policy: validator.checkPolicyScope,
@@ -47,6 +48,24 @@ export class ApplingValidator {
                 accept('error',
                     `${LAYER_OF[from.$type]} element ${from.$type} may not reference ${LAYER_OF[to.$type]} element ${to.$type} "${ref.reference.$refText}".`,
                     { node, property: ref.property, index: ref.index });
+            }
+        }
+    }
+
+    /** `@Name` in a `does` text must name a visible element, within the layer rules of a reference. */
+    checkDoesNames(model: Model, accept: ValidationAcceptor): void {
+        for (const node of AstUtils.streamAst(model)) {
+            for (const { name, target } of doesTargets(node, this.services)) {
+                if (!target) {
+                    accept('error', `Unknown element "@${name}" in does.`, { node, property: 'does' });
+                    continue;
+                }
+                const from = memberOf(node);
+                const to = memberOf(target);
+                if (!from || !to || isModule(from) || !LAYER_OF[from.$type] || isAllowed(from, to)) continue;
+                accept('error',
+                    `${LAYER_OF[from.$type]} element ${from.$type} may not reference ${LAYER_OF[to.$type]} element ${to.$type} "@${name}".`,
+                    { node, property: 'does' });
             }
         }
     }

@@ -165,7 +165,7 @@ Both hold the element's own properties, without its name and without the element
 | | `props` | `data` |
 |---|---|---|
 | Purpose | Display, such as the IDE inspector | Tools, such as code generation extensions and AI |
-| Scalars (`label`, `modifiers`, `kind`, `verb`, `path`, and `link: true` on a [link entity](../language/domain.md#link-entities)) | As they are | As they are |
+| Scalars (`label`, `modifiers`, `kind`, `verb`, `path`, the [`does`](../language/descriptions.md) text, and `link: true` on a [link entity](../language/domain.md#link-entities)) | As they are | As they are |
 | Nested parts that are not elements (types, expressions, preconditions, steps, sorts) | Canonical source text, such as `"total >= 0"` | Objects with `$type` and their own properties |
 | References | Left out, they become edges | The qualified name of the target, or `null` when it does not resolve |
 | Expressions | Source text | [ExprData](#exprdata) with the computed `type` and, for names, the `target` |
@@ -219,7 +219,7 @@ Everything else folds into its element, for example types (`TypeRef`), expressio
 | Kind | Meaning |
 |---|---|
 | `contains` | From an element to each element directly inside it, looking through parts that are not elements |
-| `uses` | From an element to what a name in one of its expressions stands for: a field, an enum value, a parameter, a role and so on. A role's condition gives `uses` edges from the role, such as `ops.Operator` to `ops.User.active` |
+| `uses` | From an element to what a name in one of its expressions stands for: a field, an enum value, a parameter, a role and so on. A role's condition gives `uses` edges from the role, such as `ops.Operator` to `ops.User.active`. Each `@Name` of a [`does`](../language/descriptions.md#naming-elements) text is a `uses` edge too |
 | any other | A reference, named after the referencing property |
 
 The reference kinds, with the element the edge starts from:
