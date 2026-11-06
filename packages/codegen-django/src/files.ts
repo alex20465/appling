@@ -26,7 +26,7 @@ export function pythonFile(existing: string | undefined, imports: Iterable<strin
     return [mergeImports([...header, ...imports]).join('\n'), body, block].filter(Boolean).join('\n\n\n') + '\n';
 }
 
-const STANDARD_LIBRARY = ['datetime', 'decimal', 're', 'typing', 'uuid'];
+const STANDARD_LIBRARY = ['contextvars', 'datetime', 'decimal', 're', 'typing', 'uuid'];
 
 /** One line per module with its names sorted; standard library first, then Django and REST framework, then the project's apps. */
 function mergeImports(lines: string[]): string[] {
@@ -83,4 +83,14 @@ export function includeStep(app: string, file: string, prefix: string): Step {
     return template('config/urls.py', existing => existing!.includes(line) ? existing! : existing!
         .replace('from django.urls import path', 'from django.urls import include, path')
         .replace(/urlpatterns = \[\n([\s\S]*?)\]/, (_, paths) => `urlpatterns = [\n${paths}    ${line}\n]`));
+}
+
+/** Imports `<app>/<file>.py` in the app's `AppConfig.ready`, so its receivers are connected when Django starts. */
+export function importOnReady(module: string, file: string): Step {
+    const line = `        from . import ${file}  # noqa: F401`;
+    return template(`${appOf(module)}/apps.py`, existing => existing!.includes(line)
+        ? existing!
+        : existing!.includes('def ready(')
+            ? existing!.replace(/( +def ready\(self\):\n)/, `$1${line}\n`)
+            : `${existing!.trimEnd()}\n\n    def ready(self):\n${line}\n`);
 }

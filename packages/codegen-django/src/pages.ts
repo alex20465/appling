@@ -1,6 +1,7 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { pageSizeName, queryCode, sourcePath } from './application.js';
+import { pageSizeName, queryCall, queryCode, sourcePath } from './application.js';
+import { canName, enforced, fieldGuards, policyImport } from './access.js';
 import { children, includeStep, pythonFile, routesStep, task, template } from './files.js';
 import { appOf, lastOf, snake } from './python.js';
 
@@ -43,16 +44,16 @@ export function pageSteps(page: GraphNode, context: MapContext): Step[] {
                 tasks.push(task(`list ${lastOf(query.qn)} on ${lastOf(page.qn)}`));
                 continue;
             }
-            const columns = fields(component.projection!, component.picks, context, tasks);
+            const columns = fields(component.projection!, component.picks, context, tasks, 'row', imports);
             imports.add(`from ${appOf(query.module)}.queries import ${snake(lastOf(query.qn))}${query.data.pageSize ? `, ${pageSizeName(query)}` : ''}`);
             if (query.data.pageSize) imports.add('from django.core.paginator import Paginator');
             lines.push(
-                `rows = ${snake(lastOf(query.qn))}()`,
+                `rows = ${queryCall(query, 'request.user', context)}`,
                 ...(query.data.pageSize ? [`rows = Paginator(rows, ${pageSizeName(query)}).get_page(request.GET.get("page"))`] : []),
                 'components.append({',
                 '    "kind": "list",',
                 `    "columns": [${columns.map(c => `label(${JSON.stringify(c.key)}, ${JSON.stringify(c.title)})`).join(', ')}],`,
-                `    "items": [{"id": row.pk, "values": [${columns.map(c => `value(row, ${JSON.stringify(c.path)})`).join(', ')}]} for row in rows],`,
+                `    "items": [{"id": row.pk, "values": [${columns.map(c => c.value).join(', ')}]} for row in rows],`,
                 ...(query.data.pageSize ? ['    "page": rows,'] : []),
                 `    "actions": ${buttons},`,
                 '})'
@@ -64,13 +65,15 @@ export function pageSteps(page: GraphNode, context: MapContext): Step[] {
             }
             const entity = sourceEntity(component.projection!, context);
             imports.add(`from ${appOf(entity.module)}.models import ${lastOf(entity.qn)}`);
-            const columns = fields(component.projection!, component.picks, context, tasks);
+            const columns = fields(component.projection!, component.picks, context, tasks, 'record', imports);
+            if (enforced(context)) imports.add('from django.core.exceptions import PermissionDenied');
             lines.push(
                 `record = get_object_or_404(${lastOf(entity.qn)}, pk=id)`,
+                ...(enforced(context) ? [`if not ${policyImport(entity, canName(entity, 'read'), imports)}(request.user, record):`, '    raise PermissionDenied()'] : []),
                 'components.append({',
                 '    "kind": "detail",',
                 '    "id": record.pk,',
-                `    "fields": [${columns.map(c => `(label(${JSON.stringify(c.key)}, ${JSON.stringify(c.title)}), value(record, ${JSON.stringify(c.path)}))`).join(', ')}],`,
+                `    "fields": [${columns.map(c => `(label(${JSON.stringify(c.key)}, ${JSON.stringify(c.title)}), ${c.value})`).join(', ')}],`,
                 `    "actions": ${buttons},`,
                 '})'
             );
@@ -171,8 +174,11 @@ export function messagesSteps(messages: GraphNode): Step[] {
     return [template(`${appOf(messages.module)}/messages.py`, existing => `${(existing ?? 'LABELS = {}\n').trimEnd()}\nLABELS[${JSON.stringify(lastOf(messages.qn))}] = ${dict}\n`)];
 }
 
-function fields(projectionQn: string, picks: string[] | undefined, context: MapContext, tasks: Step[]): { key: string, title: string, path: string }[] {
+/** The shown fields of a projection; a field that a read policy guards shows None to actors that may not read it. */
+function fields(projectionQn: string, picks: string[] | undefined, context: MapContext, tasks: Step[], record: string, imports: Set<string>): { key: string, title: string, value: string }[] {
     const projection = context.node(projectionQn)!;
+    const entity = sourceEntity(projectionQn, context);
+    const guards = fieldGuards(entity, context);
     const chosen = picks?.length ? picks.map(p => context.node(p)!) : children(projection, context, 'ProjectionField');
     return chosen.flatMap(field => {
         const path = field.data.value ? sourcePath(field.data.value as ExprData, context) : lastOf(field.qn);
@@ -180,7 +186,9 @@ function fields(projectionQn: string, picks: string[] | undefined, context: MapC
             tasks.push(task(`show the computed field ${lastOf(field.qn)} of ${lastOf(projection.qn)} on pages`));
             return [];
         }
-        return [{ key: `${lastOf(projection.qn)}.${lastOf(field.qn)}`, title: title(lastOf(field.qn)), path }];
+        const guard = guards.get(path.split('.')[0]);
+        const value = `value(${record}, ${JSON.stringify(path)})`;
+        return [{ key: `${lastOf(projection.qn)}.${lastOf(field.qn)}`, title: title(lastOf(field.qn)), value: guard ? `(${value} if ${policyImport(entity, guard, imports)}(request.user, ${record}) else None)` : value }];
     });
 }
 
