@@ -1,42 +1,157 @@
-import { cpSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
+import { readCodeWorkspace, workspaceName, writeCodeWorkspace } from '../src/code-workspace.js';
 import { startIdeProcess, type IdeProcess } from '../src/ide-process.js';
 import { DEFAULT_KEYBINDINGS, loadKeybindings } from '../src/keybindings.js';
 import { Repos } from '../src/repos.js';
+import { readSession, restore, sessionOf, writeSession } from '../src/session.js';
+import { WALK_MS, Workspaces } from '../src/workspaces.js';
 
-test('a folder opened twice stays one repo and becomes active', () => {
+test('a folder registered twice stays one repo', () => {
     const repos = new Repos();
     expect(repos.add('/work/shop').added).toBe(true);
     expect(repos.add('/work/crm').added).toBe(true);
     expect(repos.add('/work/shop/').added).toBe(false);
     expect(repos.all().map(r => r.name)).toEqual(['shop', 'crm']);
-    expect(repos.active).toBe(resolve('/work/shop'));
+    expect(repos.close('/work/shop')?.name).toBe('shop');
+    expect(repos.get('/work/shop')).toBeUndefined();
 });
 
-test('closing the active repo activates its neighbour', () => {
-    const repos = new Repos();
-    ['/a', '/b', '/c'].forEach(f => repos.add(f));
-    repos.select('/b');
-    repos.close('/b');
-    expect(repos.active).toBe('/c');
-    repos.close('/c');
-    expect(repos.active).toBe('/a');
-    repos.close('/a');
-    expect(repos.active).toBeUndefined();
+const folders = (...paths: string[]) => paths.map(path => ({ path }));
+
+test('workspaces hold repos, a folder in two workspaces is one live repo, closing passes to the neighbour', () => {
+    const workspaces = new Workspaces();
+    expect(workspaces.open('/ws/client.code-workspace', folders('/a', '/b', '/a/')).added).toBe(true);
+    expect(workspaces.current()?.name).toBe('client');
+    expect(workspaces.current()?.folders.map(f => f.path)).toEqual(['/a', '/b']);
+    expect(workspaces.activeRepo()).toBe('/a');
+    workspaces.open('/ws/product.code-workspace', folders('/b', '/c'));
+    expect(workspaces.live()).toEqual(new Set(['/a', '/b', '/c']));
+    expect(workspaces.open('/ws/client.code-workspace', []).added).toBe(false);
+    expect(workspaces.active).toBe('/ws/client.code-workspace');
+
+    expect(workspaces.select('/b')).toBe(true);
+    expect(workspaces.active).toBe('/ws/client.code-workspace');
+    expect(workspaces.select('/c')).toBe(true);
+    expect(workspaces.active).toBe('/ws/product.code-workspace');
+    expect(workspaces.select('/nowhere')).toBe(false);
+
+    expect(workspaces.removeRepo('/ws/product.code-workspace', '/c')).toBe(true);
+    expect(workspaces.activeRepo()).toBe('/b');
+    expect(workspaces.live()).toEqual(new Set(['/a', '/b']));
+    workspaces.close('/ws/product.code-workspace');
+    expect(workspaces.active).toBe('/ws/client.code-workspace');
+    workspaces.close('/ws/client.code-workspace');
+    expect(workspaces.active).toBeUndefined();
+    expect(workspaces.live().size).toBe(0);
 });
 
-test('repos cycle with wrap around and are reached by position', () => {
-    const repos = new Repos();
-    ['/a', '/b', '/c'].forEach(f => repos.add(f));
-    repos.cycle(1);
-    expect(repos.active).toBe('/a');
-    repos.cycle(-1);
-    expect(repos.active).toBe('/c');
-    expect(repos.selectAt(1)).toBe(true);
-    expect(repos.active).toBe('/b');
-    expect(repos.selectAt(5)).toBe(false);
+test('repos are added to and moved between workspaces, and reached by position', () => {
+    const workspaces = new Workspaces();
+    workspaces.open('/ws/one.code-workspace', [{ path: '/a', name: 'Alpha' }]);
+    workspaces.open('/ws/two.code-workspace', []);
+    expect(workspaces.addRepo('/ws/two.code-workspace', '/b')).toBe(true);
+    expect(workspaces.addRepo('/ws/two.code-workspace', '/b')).toBe(false);
+    expect(workspaces.moveRepo('/a', '/ws/one.code-workspace', '/ws/two.code-workspace')).toBe(true);
+    expect(workspaces.get('/ws/one.code-workspace')?.folders).toEqual([]);
+    expect(workspaces.get('/ws/two.code-workspace')?.folders).toEqual([{ path: '/b' }, { path: '/a', name: 'Alpha' }]);
+    expect(workspaces.activeRepo()).toBe('/a');
+    expect(workspaces.moveRepo('/a', '/ws/two.code-workspace', '/ws/two.code-workspace')).toBe(false);
+    expect(workspaces.selectAt(0)).toBe(true);
+    expect(workspaces.activeRepo()).toBe('/b');
+    expect(workspaces.selectAt(5)).toBe(false);
+    expect(workspaces.selectWorkspaceAt(0)).toBe(true);
+    expect(workspaces.active).toBe('/ws/one.code-workspace');
+    workspaces.cycleWorkspace(-1);
+    expect(workspaces.active).toBe('/ws/two.code-workspace');
+    workspaces.cycleWorkspace(1);
+    expect(workspaces.active).toBe('/ws/one.code-workspace');
+});
+
+test('Ctrl+Tab walks the repos of every workspace in most recently used order', () => {
+    const workspaces = new Workspaces();
+    workspaces.open('/ws/one.code-workspace', folders('/a', '/b'));
+    workspaces.open('/ws/two.code-workspace', folders('/c'));
+    workspaces.select('/b');
+    workspaces.select('/a');
+    expect(workspaces.mostRecent()).toEqual(['/a', '/b', '/c']);
+    // one press toggles between the last two
+    expect(workspaces.stepRecent(1, 0)).toBe(true);
+    expect(workspaces.activeRepo()).toBe('/b');
+    expect(workspaces.stepRecent(1, 10_000)).toBe(true);
+    expect(workspaces.activeRepo()).toBe('/a');
+    // quick presses go further along the same order, across workspaces
+    workspaces.stepRecent(1, 20_000);
+    workspaces.stepRecent(1, 20_000 + WALK_MS / 2);
+    expect(workspaces.activeRepo()).toBe('/c');
+    expect(workspaces.active).toBe('/ws/two.code-workspace');
+    expect(workspaces.mostRecent()[0]).toBe('/c');
+    workspaces.stepRecent(-1, 20_000 + WALK_MS);
+    expect(workspaces.activeRepo()).toBe('/b');
+});
+
+test('workspace files read like VS Code: comments, trailing commas, relative paths, names and remote folders', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'appling-desktop-'));
+    const file = join(dir, 'client.code-workspace');
+    writeFileSync(file, [
+        '{',
+        '  // the repos of the client',
+        '  "folders": [',
+        '    { "path": "shop", "name": "Shop // web" },',
+        '    { "path": "../crm", },',
+        '    { "uri": "vscode-remote://ssh-remote+box/srv/api" },',
+        '  ],',
+        '  /* kept */ "settings": { "editor.tabSize": 2, "url": "http://x/*y*/" },',
+        '}'
+    ].join('\n'));
+    const workspace = readCodeWorkspace(file);
+    expect(workspaceName(file)).toBe('client');
+    expect(workspace.folders).toEqual([{ path: join(dir, 'shop'), name: 'Shop // web' }, { path: resolve(dir, '../crm') }]);
+    expect(workspace.data).toEqual({ settings: { 'editor.tabSize': 2, url: 'http://x/*y*/' } });
+
+    writeCodeWorkspace(file, [...workspace.folders, { path: join(dir, 'docs') }]);
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({
+        folders: [{ name: 'Shop // web', path: 'shop' }, { path: '../crm' }, { path: 'docs' }, { uri: 'vscode-remote://ssh-remote+box/srv/api' }],
+        settings: { 'editor.tabSize': 2, url: 'http://x/*y*/' }
+    });
+
+    const fresh = join(dir, 'nested', 'new.code-workspace');
+    writeCodeWorkspace(fresh, [{ path: dir }]);
+    expect(readCodeWorkspace(fresh).folders).toEqual([{ path: dir }]);
+
+    writeFileSync(file, '{ broken');
+    expect(() => writeCodeWorkspace(file, [])).toThrow();
+    expect(readFileSync(file, 'utf8')).toBe('{ broken');
+});
+
+test('a session restores workspaces, the shown repos, the active workspace and the recent order', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'appling-desktop-'));
+    const one = join(dir, 'one.code-workspace');
+    const two = join(dir, 'two.code-workspace');
+    writeCodeWorkspace(one, folders('/a', '/b'));
+    writeCodeWorkspace(two, folders('/c'));
+    const before = new Workspaces();
+    before.open(one, readCodeWorkspace(one).folders);
+    before.open(two, readCodeWorkspace(two).folders);
+    before.select('/b');
+    before.select('/c');
+    const file = join(dir, 'session.json');
+    writeSession(file, sessionOf(before));
+    // a workspace file changed outside the app, and one is gone
+    writeCodeWorkspace(two, folders('/c', '/d'));
+    const session = readSession(file)!;
+    session.workspaces.push(join(dir, 'gone.code-workspace'));
+
+    const after = new Workspaces();
+    expect(restore(session, after)).toEqual([`${join(dir, 'gone.code-workspace')}: the workspace file is gone`]);
+    expect(after.all().map(w => w.name)).toEqual(['one', 'two']);
+    expect(after.active).toBe(two);
+    expect(after.activeRepo()).toBe('/c');
+    expect(after.get(one)?.active).toBe('/b');
+    expect(after.mostRecent()).toEqual(['/c', '/b', '/a', '/d']);
+    expect(readSession(join(dir, 'missing.json'))).toBeUndefined();
 });
 
 test('keybindings override the defaults, unbind with null and report mistakes', () => {
@@ -51,6 +166,14 @@ test('keybindings override the defaults, unbind with null and report mistakes', 
     writeFileSync(file, '{ broken');
     expect(loadKeybindings(file).bindings).toEqual(DEFAULT_KEYBINDINGS);
     expect(loadKeybindings(file).problems).toHaveLength(1);
+});
+
+test('every default shortcut is valid and no two commands share one', () => {
+    const accelerators = Object.values(DEFAULT_KEYBINDINGS).filter(Boolean);
+    expect(new Set(accelerators).size).toBe(accelerators.length);
+    const file = join(mkdtempSync(join(tmpdir(), 'appling-desktop-')), 'keybindings.json');
+    writeFileSync(file, JSON.stringify(DEFAULT_KEYBINDINGS));
+    expect(loadKeybindings(file).problems).toEqual([]);
 });
 
 let ide: IdeProcess | undefined;
