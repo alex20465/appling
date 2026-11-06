@@ -2,7 +2,7 @@ import { basename, resolve } from 'node:path';
 
 export type RepoStatus = 'starting' | 'ready' | 'failed';
 
-/** A repo open in the app; its id is its absolute path. */
+/** A repo with a running (or failed) IDE server; its id is its absolute path. */
 export interface Repo {
     id: string;
     name: string;
@@ -11,27 +11,25 @@ export interface Repo {
     error?: string;
 }
 
-/** The repos open in the app, in rail order, and the active one. Pure state: the main process maps it onto views. */
+/** The repos that have an IDE server, whichever workspaces they belong to (see `Workspaces`). */
 export class Repos {
-    private readonly list: Repo[] = [];
-    active?: string;
+    private readonly map = new Map<string, Repo>();
 
-    all(): readonly Repo[] {
-        return this.list;
+    all(): Repo[] {
+        return [...this.map.values()];
     }
 
     get(id: string): Repo | undefined {
-        return this.list.find(r => r.id === id);
+        return this.map.get(resolve(id));
     }
 
-    /** Opens a folder and makes it active; a folder already open is only activated. Returns it and whether it is new. */
+    /** Registers a folder; one known already is returned as it is. Returns it and whether it is new. */
     add(folder: string): { repo: Repo, added: boolean } {
         const id = resolve(folder);
-        const existing = this.get(id);
-        this.active = id;
+        const existing = this.map.get(id);
         if (existing) return { repo: existing, added: false };
         const repo: Repo = { id, name: basename(id) || id, status: 'starting' };
-        this.list.push(repo);
+        this.map.set(id, repo);
         return { repo, added: true };
     }
 
@@ -40,31 +38,9 @@ export class Repos {
         if (repo) Object.assign(repo, change);
     }
 
-    /** Closes a repo; the active one passes to its right neighbour, or the left one at the end. */
     close(id: string): Repo | undefined {
-        const at = this.list.findIndex(r => r.id === id);
-        if (at < 0) return undefined;
-        const [repo] = this.list.splice(at, 1);
-        if (this.active === id) this.active = (this.list[at] ?? this.list[at - 1])?.id;
+        const repo = this.get(id);
+        if (repo) this.map.delete(repo.id);
         return repo;
-    }
-
-    select(id: string): boolean {
-        if (!this.get(id)) return false;
-        this.active = id;
-        return true;
-    }
-
-    /** Activates the n-th repo (0 based); false when there is none. */
-    selectAt(index: number): boolean {
-        const repo = this.list[index];
-        return repo ? this.select(repo.id) : false;
-    }
-
-    /** Activates the next (+1) or previous (-1) repo, wrapping around. */
-    cycle(step: 1 | -1): void {
-        if (!this.list.length) return;
-        const at = this.list.findIndex(r => r.id === this.active);
-        this.active = this.list[(at + step + this.list.length) % this.list.length].id;
     }
 }

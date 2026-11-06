@@ -12,16 +12,22 @@
 
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
-body { display: grid; grid-template-columns: 64px 1fr; background: var(--surface); color: var(--ink); font: 14px/1.5 system-ui, sans-serif; }
+/* The rail is 48px wide; main.ts places the repo views at the same offset (RAIL). */
+body { display: grid; grid-template-columns: 48px 1fr; background: var(--surface); color: var(--ink); font: 14px/1.5 system-ui, sans-serif; }
 
-.rail { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 0; border-right: 1px solid var(--line); background: var(--surface-raised); overflow-y: auto; }
-#repos { display: contents; }
-.repo { width: 40px; height: 40px; flex: none; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-elevated); color: var(--ink-muted); font: 600 13px/1 ui-monospace, monospace; cursor: pointer; }
-.repo:hover { color: var(--ink); }
-.repo.active { color: var(--ink); border-color: var(--leaf); box-shadow: inset 3px 0 0 var(--leaf); }
+.rail { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0; border-right: 1px solid var(--line); background: var(--surface-raised); overflow-y: auto; }
+.rail hr { width: 24px; margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
+#workspaces, #repos { display: contents; }
+.repo, .workspace { width: 34px; height: 34px; flex: none; border: 1px solid var(--line); background: var(--surface-elevated); color: var(--ink-muted); font: 600 12px/1 ui-monospace, monospace; cursor: pointer; }
+.repo { border-radius: 9px; }
+.workspace { border-radius: 50%; }
+.repo:hover, .workspace:hover { color: var(--ink); }
+.repo.active, .workspace.active { color: var(--ink); border-color: var(--leaf); }
+.repo.active { box-shadow: inset 3px 0 0 var(--leaf); }
+.workspace.active { background: var(--line); }
 .repo.starting { opacity: 0.6; }
 .repo.failed { border-color: var(--error); }
-.repo.add { border-style: dashed; font-size: 18px; }
+.add { border-style: dashed; font-size: 16px; }
 
 #stage { padding: 48px; overflow: auto; }
 #stage h1 { margin: 0 0 8px; font-size: 20px; }
