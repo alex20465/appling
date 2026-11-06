@@ -39,3 +39,9 @@ test('an enum value named with its enum is data like a bare value', async () => 
     expect(graph.nodes.find(n => n.qn === 'm.Key.scope')!.data.default).toEqual({ $type: 'NameExpr', name: 'operator', type: 'Scope', target: 'm.Scope.operator' });
     expect(graph.edges).toContainEqual({ from: 'm.Key.scope', to: 'm.Scope.operator', kind: 'uses' });
 });
+
+test('does is a prop and its @names are uses edges', async () => {
+    const graph = await graphOf({ 'm.appling': 'module m { entity Account { email: String } action Close on Account does "Closes @Account.email" { } }' });
+    expect(graph.nodes.find(n => n.qn === 'm.Close')!.props.does).toBe('Closes @Account.email');
+    expect(graph.edges).toContainEqual({ from: 'm.Close', to: 'm.Account.email', kind: 'uses' });
+});

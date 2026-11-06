@@ -27,8 +27,11 @@ module shop core {
     to: String?
   }
 
-  entity Product {
-    sku: String unique
+  entity Product does """
+    What the shop sells, ordered through @Line.
+      Prices are gross.
+  """ {
+    sku: String unique does "Stock keeping unit, printed on the label"
     title: String
     price: Money
     weight: Decimal
@@ -85,7 +88,7 @@ module shop core {
     amount: Money
   }
 
-  action PlaceOrder on Order core {
+  action PlaceOrder on Order core does "Places the @Order and emits @OrderPlaced" {
     input {
       when_at: DateTime
       coupon: String?
@@ -159,7 +162,7 @@ module shop core {
 
   external Payments peripheral {
     op Charge (amount: Money, reference: String) returns String errors Declined, Timeout
-    op Ping ()
+    op Ping () does "Checks that @Payments answers"
     op Refund (amount: Money)
   }
 

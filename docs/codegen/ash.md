@@ -346,6 +346,18 @@ Ash forbids an action that no policy covers once a resource has policies, and re
 
 Policies with more than one branch that has `&&`, conditions that do not translate, field policies that follow a relationship (Ash field policies cannot), field policies on other operations than `read`, policies of queries whose filter does not translate, of use cases and of actions without an entity stay tasks. Writing the policy test bodies is a task too.
 
+## Descriptions
+
+A [`does`](../language/descriptions.md) text goes into the generated code as documentation:
+
+| Element | Becomes |
+|---|---|
+| Entity | `@moduledoc` of the resource |
+| Value type | `@moduledoc` of the embedded resource |
+| Entity field | `description` of the attribute |
+
+Each text is also a [registry task](registry.md#status), which carries it for every other element.
+
 ## What becomes a task
 
 Whatever cannot be translated is listed in the [registry](registry.md):

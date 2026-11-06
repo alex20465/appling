@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { children, importOnReady, pythonFile, task, template } from './files.js';
+import { children, documented, importOnReady, pythonFile, task, template } from './files.js';
 import { actorFields, actorUserSteps, scope, storedFields, userModel } from './models.js';
 import { testSteps } from './tests.js';
 import { appOf, lastOf, parentOf, python, rolePredicate, snake, tenantGetter, wrap, type PythonScope } from './python.js';
@@ -53,7 +53,7 @@ export function roleSteps(role: GraphNode, context: MapContext): Step[] {
     const names = [name, ...carriers].map(n => JSON.stringify(n));
     const group = `user is not None and user.groups.filter(${names.length === 1 ? `name=${names[0]}` : `name__in=[${names.join(', ')}]`}).exists()`;
     const condition = role.data.condition ? python(role.data.condition as ExprData, { ...scope(context, imports), actor: 'user' }) : undefined;
-    const code = ['@rules.predicate', `def ${rolePredicate(role)}(user):`, `    return ${condition ? `${group} and ${wrap(condition)}` : group}`].join('\n');
+    const code = documented(['@rules.predicate', `def ${rolePredicate(role)}(user):`, `    return ${condition ? `${group} and ${wrap(condition)}` : group}`].join('\n'), role);
     return [
         template(`${appOf(role.module)}/roles.py`, existing => pythonFile(existing, imports, code)),
         ...groupStep(role),

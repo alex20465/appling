@@ -331,6 +331,20 @@ def cancel(order: Order, *, reason: str | None = None, actor=None) -> None:
 
 Views pass `request.user`, and REST framework and Django answer `PermissionDenied` with `403`. Code that calls with `actor=None`, such as jobs and event receivers, runs as the system and is not checked. Policy conditions without a Python translation deny (`return False`) and stay tasks; field policies that also cover writes are enforced on reads only, the rest is a task. Delete policies become `can_delete_<entity>`, which no generated code calls, since nothing in the model deletes; Django's `has_perm` and the admin do not use the functions.
 
+## Descriptions
+
+A [`does`](../language/descriptions.md) text goes into the generated code as documentation:
+
+| Element | Becomes |
+|---|---|
+| Entity, enum, value type, error | The class docstring |
+| Action, query, use case, role | The function docstring (for a role, of its predicate) |
+| Projection, external | The serializer or `Protocol` class docstring |
+| External operation | The docstring of its `Protocol` method |
+| Entity field | `help_text` of the model field |
+
+Each text is also a [registry task](registry.md#status).
+
 ## What becomes a task
 
 Whatever cannot be translated is listed in the [registry](registry.md):

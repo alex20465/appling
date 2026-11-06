@@ -4,6 +4,7 @@ import {
     type Module, type PartialLangiumCoreServices
 } from 'langium';
 import { ApplingGeneratedModule, ApplingGeneratedSharedModule } from './generated/module.js';
+import { ApplingValueConverter } from './appling-does.js';
 import { ApplingScopeComputation, ApplingScopeProvider } from './appling-scope.js';
 import { ApplingTokenBuilder } from './appling-tokens.js';
 import { registerValidationChecks } from './appling-validator.js';
@@ -12,7 +13,8 @@ export type ApplingServices = LangiumCoreServices;
 
 export const ApplingModule: Module<ApplingServices, PartialLangiumCoreServices> = {
     parser: {
-        TokenBuilder: () => new ApplingTokenBuilder()
+        TokenBuilder: () => new ApplingTokenBuilder(),
+        ValueConverter: () => new ApplingValueConverter()
     },
     references: {
         ScopeComputation: services => new ApplingScopeComputation(services),
