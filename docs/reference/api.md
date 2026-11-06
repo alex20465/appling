@@ -143,6 +143,8 @@ Planning and running:
 |---|---|
 | `plan(graph, extension, name, options)` | The ordered steps and one registry entry per node (`Plan`) |
 | `describe(step)` | A one line description of a step, as `--plan` prints it |
+| `coverage(entries)` | The registry entries per node kind: generated, partial, todo and the number of tasks, plus a total (`Coverage`) |
+| `coverageTable(coverage)` | That coverage as the Markdown table `--plan` prints, the total with the generated share |
 | `mapContext(graph, name, options)` | The `MapContext` passed to extensions |
 | `checkPrerequisites(prerequisites)` | One message per missing tool |
 | `runPlan(plan, out, log)` | Runs the steps into `out` and writes the registry |

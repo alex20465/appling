@@ -1,0 +1,247 @@
+[
+  {
+    "kind": "Action",
+    "generated": 0,
+    "partial": 3,
+    "todo": 0,
+    "tasks": 4
+  },
+  {
+    "kind": "Actor",
+    "generated": 0,
+    "partial": 0,
+    "todo": 3,
+    "tasks": 3
+  },
+  {
+    "kind": "CreateEffect",
+    "generated": 1,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0
+  },
+  {
+    "kind": "EmitEffect",
+    "generated": 3,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0
+  },
+  {
+    "kind": "Endpoint",
+    "generated": 4,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0
+  },
+  {
+    "kind": "Entity",
+    "generated": 6,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0
+  },
+  {
+    "kind": "Enum",
+    "generated": 1,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0
+  },
+  {
+    "kind": "EnumLiteral",
+    "generated": 4,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0
+  },
+  {
+    "kind": "ErrorDecl",
+    "generated": 4,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0
+  },
+  {
+    "kind": "Event",
+    "generated": 2,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0
+  },
+  {
+    "kind": "External",
+    "generated": 0,
+    "partial": 0,
+    "todo": 1,
+    "tasks": 1
+  },
+  {
+    "kind": "ExternalOperation",
+    "generated": 3,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0
+  },
+  {
+    "kind": "Field",
+    "generated": 38,
+    "partial": 0,
+    "todo": 2,
+    "tasks": 2
+  },
+  {
+    "kind": "Flow",
+    "generated": 0,
+    "partial": 0,
+    "todo": 1,
+    "tasks": 1
+  },
+  {
+    "kind": "Interface",
+    "generated": 0,
+    "partial": 0,
+    "todo": 3,
+    "tasks": 3
+  },
+  {
+    "kind": "Invariant",
+    "generated": 0,
+    "partial": 3,
+    "todo": 0,
+    "tasks": 3
+  },
+  {
+    "kind": "Job",
+    "generated": 0,
+    "partial": 0,
+    "todo": 2,
+    "tasks": 2
+  },
+  {
+    "kind": "Machine",
+    "generated": 1,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0
+  },
+  {
+    "kind": "Messages",
+    "generated": 0,
+    "partial": 0,
+    "todo": 1,
+    "tasks": 1
+  },
+  {
+    "kind": "Migration",
+    "generated": 0,
+    "partial": 0,
+    "todo": 1,
+    "tasks": 1
+  },
+  {
+    "kind": "Module",
+    "generated": 3,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0
+  },
+  {
+    "kind": "Navigation",
+    "generated": 0,
+    "partial": 0,
+    "todo": 1,
+    "tasks": 1
+  },
+  {
+    "kind": "Page",
+    "generated": 0,
+    "partial": 0,
+    "todo": 2,
+    "tasks": 2
+  },
+  {
+    "kind": "Param",
+    "generated": 10,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0
+  },
+  {
+    "kind": "Policy",
+    "generated": 0,
+    "partial": 7,
+    "todo": 0,
+    "tasks": 14
+  },
+  {
+    "kind": "Projection",
+    "generated": 0,
+    "partial": 0,
+    "todo": 2,
+    "tasks": 2
+  },
+  {
+    "kind": "ProjectionField",
+    "generated": 8,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0
+  },
+  {
+    "kind": "Query",
+    "generated": 0,
+    "partial": 0,
+    "todo": 2,
+    "tasks": 2
+  },
+  {
+    "kind": "Role",
+    "generated": 0,
+    "partial": 0,
+    "todo": 3,
+    "tasks": 3
+  },
+  {
+    "kind": "SetEffect",
+    "generated": 3,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0
+  },
+  {
+    "kind": "Tenant",
+    "generated": 0,
+    "partial": 0,
+    "todo": 1,
+    "tasks": 1
+  },
+  {
+    "kind": "Transition",
+    "generated": 0,
+    "partial": 3,
+    "todo": 0,
+    "tasks": 3
+  },
+  {
+    "kind": "UseCase",
+    "generated": 0,
+    "partial": 0,
+    "todo": 2,
+    "tasks": 2
+  },
+  {
+    "kind": "ValueType",
+    "generated": 2,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0
+  },
+  {
+    "kind": "total",
+    "generated": 93,
+    "partial": 16,
+    "todo": 27,
+    "tasks": 51
+  }
+]

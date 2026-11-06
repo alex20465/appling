@@ -192,10 +192,21 @@ appling generate --plan
   sales.Order: template: sales/models.py
   sales.Order.invariant["total never negative"]: template: sales/tests.py
   (project): command: uv run python manage.py makemigrations
+
+| kind | generated | partial | todo | tasks |
+|---|---|---|---|---|
+| Entity | 2 | 0 | 0 | 0 |
+| Enum | 1 | 0 | 0 | 0 |
+| EnumLiteral | 2 | 0 | 0 | 0 |
+| Field | 4 | 0 | 0 | 0 |
+| Invariant | 0 | 1 | 0 | 1 |
+| Module | 2 | 0 | 0 | 0 |
+| **total** | 11 (92%) | 1 | 0 | 1 |
+
 12 element(s): 11 generated, 1 partial, 0 todo
 ```
 
-`partial` means the element was generated with open tasks; here the invariant got a skipped test whose body is a registry task. See [Task registry](../codegen/registry.md).
+After the steps, a Markdown table counts the registry entries per element kind by status, with the number of registry tasks they leave; the total row gives the generated share. `partial` means the element was generated with open tasks; here the invariant got a skipped test whose body is a registry task. See [Task registry](../codegen/registry.md).
 
 ### Migrate
 

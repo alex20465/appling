@@ -59,6 +59,42 @@ export function plan(graph: Graph, extension: CodegenExtension, name: string, op
     return { extension: extension.name, test: extension.test, syncExclude: extension.syncExclude, steps: steps.map((s, i) => ({ s, i })).sort((a, b) => phase(a.s) - phase(b.s) || a.i - b.i).map(({ s }) => s), entries };
 }
 
+/** Registry entries of one node kind by status, and the registry tasks they leave. */
+export interface CoverageRow {
+    kind: string;
+    generated: number;
+    partial: number;
+    todo: number;
+    tasks: number;
+}
+
+export interface Coverage {
+    /** One row per node kind, sorted by kind. */
+    kinds: CoverageRow[];
+    total: CoverageRow;
+}
+
+/** Counts the entries of a plan per node kind and status: how much of the model an extension generates. */
+export function coverage(entries: RegistryEntry[]): Coverage {
+    const row = (kind: string, of: RegistryEntry[]): CoverageRow => ({
+        kind,
+        generated: of.filter(e => e.status === 'generated' || e.status === 'done').length,
+        partial: of.filter(e => e.status === 'partial').length,
+        todo: of.filter(e => e.status === 'todo').length,
+        tasks: of.reduce((sum, e) => sum + e.missing.length, 0)
+    });
+    const kinds = [...Map.groupBy(entries, e => e.kind)].sort(([a], [b]) => a.localeCompare(b)).map(([kind, of]) => row(kind, of));
+    return { kinds, total: row('total', entries) };
+}
+
+/** The coverage as a Markdown table, the last line being the total with the generated share. */
+export function coverageTable({ kinds, total }: Coverage): string {
+    const all = total.generated + total.partial + total.todo;
+    const share = all ? ` (${Math.round(total.generated / all * 100)}%)` : '';
+    const line = (r: CoverageRow, label = r.kind, suffix = '') => `| ${label} | ${r.generated}${suffix} | ${r.partial} | ${r.todo} | ${r.tasks} |`;
+    return ['| kind | generated | partial | todo | tasks |', '|---|---|---|---|---|', ...kinds.map(r => line(r)), line(total, '**total**', share)].join('\n');
+}
+
 export function describe(step: Step): string {
     switch (step.kind) {
         case 'command': return `command: ${step.run.join(' ')}${step.cwd ? ` (in ${step.cwd})` : ''}`;

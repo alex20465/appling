@@ -5,7 +5,7 @@ import { expect, test } from 'vitest';
 import type { Model } from '@appling/lang';
 import { buildGraph } from '@appling/model';
 import { buildWorkspace } from '../../lang/test/workspace.js';
-import { checkPrerequisites, plan, runPlan, type CodegenExtension } from '../src/index.js';
+import { checkPrerequisites, coverage, coverageTable, plan, runPlan, type CodegenExtension } from '../src/index.js';
 
 const MODEL = `module shop {
   enum Status { open done }
@@ -61,6 +61,21 @@ test('setup runs first and later phases run after every earlier step', async () 
     };
     expect(plan(await graph(), phased, 'shop').steps.map(s => `${s.node} ${s.step.kind === 'command' && s.step.run[0]}`))
         .toEqual(['(project) setup', 'shop.Status early', 'shop.Item late']);
+});
+
+test('coverage counts entries and tasks per kind', async () => {
+    const result = coverage(plan(await graph(), fake, 'shop').entries);
+    expect(result.kinds).toEqual([
+        { kind: 'Action', generated: 0, partial: 0, todo: 1, tasks: 1 },
+        { kind: 'Entity', generated: 1, partial: 0, todo: 0, tasks: 0 },
+        { kind: 'Enum', generated: 1, partial: 0, todo: 0, tasks: 0 },
+        { kind: 'EnumLiteral', generated: 2, partial: 0, todo: 0, tasks: 0 },
+        { kind: 'Field', generated: 1, partial: 0, todo: 0, tasks: 0 },
+        { kind: 'Invariant', generated: 0, partial: 1, todo: 0, tasks: 1 },
+        { kind: 'Module', generated: 1, partial: 0, todo: 0, tasks: 0 }
+    ]);
+    expect(result.total).toEqual({ kind: 'total', generated: 6, partial: 1, todo: 1, tasks: 2 });
+    expect(coverageTable(result).split('\n').at(-1)).toBe('| **total** | 6 (75%) | 1 | 1 | 2 |');
 });
 
 test('unmapped kinds become todo entries', async () => {

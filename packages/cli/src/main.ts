@@ -6,7 +6,7 @@ import { URI, type LangiumDocument } from 'langium';
 import { NodeFileSystem } from 'langium/node';
 import { createApplingServices, print, type ApplingServices, type Model } from '@appling/lang';
 import {
-    BASELINE, checkPrerequisites, describe, loadExtension, mergeGeneration, pendingChanges, plan, planMigrations, readApplied, readConfig, readRegistry,
+    BASELINE, checkPrerequisites, coverage, coverageTable, describe, loadExtension, mergeGeneration, pendingChanges, plan, planMigrations, readApplied, readConfig, readRegistry,
     runMigrations, runPlan, type Plan
 } from '@appling/codegen';
 import { buildGraph, dependencies, findApplingFiles, resolveReferences, Simulator, writeRelease, type Graph, type ResolvedReference } from '@appling/model';
@@ -169,6 +169,9 @@ async function generateTarget(graph: Graph, name: string, out: string, options: 
     if (onlyPlan) {
         console.log(`${name} -> ${out}`);
         for (const { node, step } of result.steps) console.log(`  ${node}: ${describe(step)}`);
+        console.log('');
+        console.log(coverageTable(coverage(result.entries)));
+        console.log('');
         console.log(summary(result));
         return false;
     }
