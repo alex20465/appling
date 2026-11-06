@@ -1,0 +1,32 @@
+{
+  "name": "@appling/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Appling Desktop: one native app for many repos, with the model canvas as the main area of each",
+  "homepage": "https://www.appling.tools/docs/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alex20465/appling.git",
+    "directory": "packages/desktop"
+  },
+  "type": "module",
+  "main": "./out/main.js",
+  "bin": {
+    "appling-desktop": "./out/bin.js"
+  },
+  "files": [
+    "out"
+  ],
+  "scripts": {
+    "build": "tsc && cp src/shell/index.html src/shell/shell.css out/shell/"
+  },
+  "dependencies": {
+    "@appling/ide": "workspace:*",
+    "electron": "44.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "7.0.2"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,30 @@
+:root {
+  --surface: #0c0a08;
+  --surface-raised: #14110d;
+  --surface-elevated: #1d1914;
+  --line: #2a241d;
+  --ink: #f7f2ea;
+  --ink-muted: #aaa092;
+  --leaf: #5cbf63;
+  --error: #e5684f;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { display: grid; grid-template-columns: 64px 1fr; background: var(--surface); color: var(--ink); font: 14px/1.5 system-ui, sans-serif; }
+
+.rail { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 0; border-right: 1px solid var(--line); background: var(--surface-raised); overflow-y: auto; }
+#repos { display: contents; }
+.repo { width: 40px; height: 40px; flex: none; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-elevated); color: var(--ink-muted); font: 600 13px/1 ui-monospace, monospace; cursor: pointer; }
+.repo:hover { color: var(--ink); }
+.repo.active { color: var(--ink); border-color: var(--leaf); box-shadow: inset 3px 0 0 var(--leaf); }
+.repo.starting { opacity: 0.6; }
+.repo.failed { border-color: var(--error); }
+.repo.add { border-style: dashed; font-size: 18px; }
+
+#stage { padding: 48px; overflow: auto; }
+#stage h1 { margin: 0 0 8px; font-size: 20px; }
+#stage p { color: var(--ink-muted); }
+#stage pre { max-height: 50vh; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-raised); white-space: pre-wrap; font-size: 12px; }
+.action { margin-right: 8px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-elevated); color: var(--ink); cursor: pointer; }

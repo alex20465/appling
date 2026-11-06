@@ -9,3 +9,9 @@ const root = resolve(args.find((a, i) => !a.startsWith('--') && args[i - 1] !== 
 
 const ide = await startIde(root, port);
 console.log(`Appling IDE for ${root} at ${ide.url}`);
+
+// Started by Appling Desktop with an IPC channel: report the URL and end with the app.
+if (process.send) {
+    process.send({ type: 'ready', url: ide.url });
+    process.once('disconnect', () => ide.close().finally(() => process.exit(0)));
+}
