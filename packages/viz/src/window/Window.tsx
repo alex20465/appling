@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Graph } from '@appling/model';
 import { FileLink } from '../canvas/Bubble.js';
 import { CardCanvas, FlowCanvas, ModelCanvas } from '../canvas/index.js';
-import { nextShow, type Bubble, type HostMessage, type Review, type Show, type WindowMessage } from '../protocol.js';
+import { nextShow, type Bubble, type Changes, type HostMessage, type Review, type Show, type Status, type WindowMessage } from '../protocol.js';
 import { cardView, DEFAULT_VIEW, flowView, GraphIndex, kindLabel, lensOf, memberText, relations, trailOf, viewFor, type ViewSettings } from '../views.js';
 
 interface Message {
@@ -23,6 +23,8 @@ export function Window() {
     const [settings, setSettings] = useState<ViewSettings>(DEFAULT_VIEW);
     const [thread, setThread] = useState<Message[]>([]);
     const [reviews, setReviews] = useState<{ id: string, review: Review }[]>([]);
+    const [changes, setChanges] = useState<Changes>();
+    const [steps, setSteps] = useState<Status[]>([]);
     const [connected, setConnected] = useState(true);
     const socket = useRef<WebSocket>(undefined);
     /** The view on screen, for the socket handler. */
@@ -45,6 +47,8 @@ export function Window() {
             if (message.type === 'reply') setThread(current => [...current, { from: 'claude', text: message.text }]);
             if (message.type === 'review') setReviews(current => [...current.filter(r => r.id !== message.id), { id: message.id, review: message.review }]);
             if (message.type === 'reviewed') setReviews(current => current.filter(r => r.id !== message.id));
+            if (message.type === 'changes') setChanges(message.changes);
+            if (message.type === 'status') setSteps(current => [...current, message.status]);
         };
         return () => ws.close();
     }, []);
@@ -102,6 +106,7 @@ export function Window() {
                 {!connected && <span className="errors-text">disconnected</span>}
                 <button className="close" aria-label="Close" onClick={() => window.close()}>×</button>
             </header>
+            {steps.length > 0 && <StatusBar steps={steps} />}
             {show?.note && <p className="note">{show.note}</p>}
             {bubbles.length > 0 && (
                 <nav className="bubble-tabs" aria-label="Bubbles">
@@ -118,10 +123,11 @@ export function Window() {
                 {!index || !show ? <div className="loading">Waiting for Claude</div>
                     : cards ? <CardCanvas index={index} cards={cards} selected={selected} bubbles={shownBubbles} step={step} onSelect={select} onOpenFile={openFile} />
                     : flow ? <FlowCanvas index={index} flow={flow} selected={selected} bubbles={shownBubbles} step={step} edgesOnClick={show.view === 'machine'} onSelect={select} onOpenFile={openFile} />
-                    : <ModelCanvas index={index} focus={show.focus} selected={selected} settings={settings} bubbles={shownBubbles} step={step} onSelect={select} onSettings={setSettings} onOpenFile={openFile} />}
+                    : <ModelCanvas index={index} focus={show.focus} selected={selected} settings={settings} bubbles={shownBubbles} changes={changes?.graph} step={step} onSelect={select} onSettings={setSettings} onOpenFile={openFile} />}
             </main>
             <section className="dock">
                 {reviews.map(({ id, review }) => <ReviewCard key={id} review={review} onDecide={decision => send({ type: 'decide', id, decision })} onOpenFile={openFile} />)}
+                {changes && <SessionChanges changes={changes} onOpen={open} onOpenFile={openFile} />}
                 {index && selected && <Details index={index} qn={selected} onOpen={open} />}
                 <div className="thread">
                     {thread.length === 0 && <p className="muted">Ask Claude about what you see. Questions reach a Claude Code session started with --dangerously-load-development-channels server:appling.</p>}
@@ -150,14 +156,37 @@ function Details({ index, qn, onOpen }: { index: GraphIndex, qn: string, onOpen(
     );
 }
 
-function ReviewCard({ review, onDecide, onOpenFile }: { review: Review, onDecide(decision: { accepted: true } | { accepted: false, comment?: string }): void, onOpenFile(file: string, line: number): void }) {
-    const [comment, setComment] = useState('');
-    const { added, removed, changed } = review.graph;
+/** The step the agent works on, its progress, and the earlier steps on hover. */
+function StatusBar({ steps }: { steps: Status[] }) {
+    const { text, done, total } = steps.at(-1)!;
     return (
-        <div className="proposal">
-            <strong>Proposed change</strong>
-            <p>{review.summary}</p>
-            {review.hunks.map((hunk, i) => (
+        <div className="status" title={steps.slice(0, -1).map(s => s.text).join('\n')} role="status">
+            <span className="status-text">{text}</span>
+            {total !== undefined && <span className="status-count">{done ?? 0} / {total}</span>}
+            {total !== undefined && <progress max={total} value={done ?? 0} />}
+        </div>
+    );
+}
+
+/** Every model change since the session started; elements that still exist open on click. */
+function SessionChanges({ changes, onOpen, onOpenFile }: { changes: Changes, onOpen(qn: string): void, onOpenFile(file: string, line: number): void }) {
+    const count = changes.graph.added.length + changes.graph.removed.length + changes.graph.changed.length;
+    if (!count) return null;
+    return (
+        <details className="changes">
+            <summary><strong>{count} change{count === 1 ? '' : 's'} this session</strong></summary>
+            <Diff changes={changes} onOpen={onOpen} onOpenFile={onOpenFile} />
+        </details>
+    );
+}
+
+function Diff({ changes: { hunks, graph }, onOpen, onOpenFile }: { changes: Changes, onOpen?(qn: string): void, onOpenFile(file: string, line: number): void }) {
+    const chip = (qn: string, sign: string, className?: string) => onOpen
+        ? <button key={qn} className={className} onClick={() => onOpen(qn)}>{sign} {qn}</button>
+        : <span key={qn} className={className}>{sign} {qn}</span>;
+    return (
+        <>
+            {hunks.map((hunk, i) => (
                 <pre key={i} className="hunk">
                     <div className="hunk-file"><FileLink file={hunk.file} line={hunk.line} onOpenFile={onOpenFile} /></div>
                     {hunk.removed.map((line, j) => <div key={`r${j}`} className="removed">- {line}</div>)}
@@ -165,10 +194,21 @@ function ReviewCard({ review, onDecide, onOpenFile }: { review: Review, onDecide
                 </pre>
             ))}
             <p className="graph-changes">
-                {added.map(qn => <span key={qn} className="added">+ {qn}</span>)}
-                {removed.map(qn => <span key={qn} className="removed">- {qn}</span>)}
-                {changed.map(qn => <span key={qn}>~ {qn}</span>)}
+                {graph.added.map(qn => chip(qn, '+', 'added'))}
+                {graph.removed.map(qn => <span key={qn} className="removed">- {qn}</span>)}
+                {graph.changed.map(qn => chip(qn, '~'))}
             </p>
+        </>
+    );
+}
+
+function ReviewCard({ review, onDecide, onOpenFile }: { review: Review, onDecide(decision: { accepted: true } | { accepted: false, comment?: string }): void, onOpenFile(file: string, line: number): void }) {
+    const [comment, setComment] = useState('');
+    return (
+        <div className="proposal">
+            <strong>Proposed change</strong>
+            <p>{review.summary}</p>
+            <Diff changes={review} onOpenFile={onOpenFile} />
             <input placeholder="Comment for Claude (optional)" value={comment} onChange={e => setComment(e.target.value)} />
             <div className="proposal-actions">
                 <button className="button" onClick={() => onDecide({ accepted: true })}>Accept</button>

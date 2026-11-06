@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { Visualizer } from '@appling/viz';
 import { createMcpServer, serveHttp } from './mcp.js';
+import { sessionChanges } from './visual.js';
 import { Project } from './project.js';
 
 const args = process.argv.slice(2);
@@ -14,7 +15,7 @@ if (httpIndex >= 0) {
     console.error(`Appling MCP server for ${root} at ${server.url}`);
 } else {
     const project = new Project(root);
-    const visualizer = new Visualizer({ root, graph: () => project.graph() });
+    const visualizer = new Visualizer({ root, graph: () => project.graph(), changes: sessionChanges(project) });
     const server = createMcpServer(root, { visualizer });
     server.server.onclose = () => visualizer.close();
     await server.connect(new StdioServerTransport());

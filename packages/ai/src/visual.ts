@@ -2,13 +2,24 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 import type { EditOperation } from '@appling/model';
-import type { Visualizer } from '@appling/viz';
+import type { Changes, Visualizer } from '@appling/viz';
 import { VIEW_KINDS, type ViewKind } from '@appling/viz/views';
-import { proposal } from './chat.js';
+import { graphDiff, hunks, proposal } from './chat.js';
+import type { Project } from './project.js';
 import { define, operationSchema, ProposalContext, type Tools } from './tools.js';
 
 /** What the visual tools need from the window, so tests can stand in for Electron. */
-export type VisualHost = Pick<Visualizer, 'show' | 'bubble' | 'selection' | 'reply' | 'review' | 'onAsk'>;
+export type VisualHost = Pick<Visualizer, 'show' | 'bubble' | 'selection' | 'reply' | 'review' | 'onAsk' | 'status'>;
+
+/** The model changes since this call: the window's live view of what a session changed. */
+export function sessionChanges(project: Project): () => Promise<Changes> {
+    const baseline = project.sources();
+    const before = project.graph(baseline);
+    return async () => {
+        const now = project.sources();
+        return { hunks: hunks(project.root, baseline, now), graph: graphDiff(await before, await project.graph(now)) };
+    };
+}
 
 const VIEWS = Object.keys(VIEW_KINDS) as [ViewKind, ...ViewKind[]];
 
@@ -16,7 +27,9 @@ export const VISUAL_INSTRUCTIONS = `The appling server can show the model in a f
 
 To walk the person through the model, show one node at a time: each node view adds the element to the tree on screen and unfolds it in place, so show next one of the elements that use it. Explain what happens at an element with visual_bubble, one bubble per step in the order of the explanation; the window shows one bubble at a time and numbers them, so the person steps through them. Pass code, file and line to hint how an element is implemented, such as from code_references.
 
-While the window is open, read what the person clicked with visual_selection when they say "this" or "the selected one", and change the model with propose_edits instead of edit so they can review the change in the window.
+While the window is open, read what the person clicked with visual_selection when they say "this" or "the selected one".
+
+The window shows every model change of the session as it happens: the declarations added and changed light up in the tree, which grows with them, and the window lists the changes with their text differences. So change the model with edit and write_model_file as usual; use propose_edits only when the person asks to review a change before it is written. During longer work, such as designing a model, generating the application or working through the registry, call visual_status at the start of each step with what you do and, when you know it, done and total, so the person follows the progress in the window instead of only in the terminal.
 
 Questions typed into the window arrive as <channel source="appling" ask_id="..." selected="..." view="...">. Look things up with the model tools, then answer with visual_reply, passing the ask_id; the answer appears in the window, not in the terminal.`;
 
@@ -66,6 +79,18 @@ export function visualTools(host: VisualHost): Tools {
             description: 'Answer a question the person typed into the floating window; the text appears there. Pass the ask_id of the channel message.',
             input: { text: z.string(), ask_id: z.string().optional() },
             run: async (_, input) => (host.reply(input.text, input.ask_id) ? { sent: true } : { sent: false, reason: 'The window is closed.' })
+        }),
+        visual_status: define({
+            description: 'Show in the floating window what you work on now, such as "Modeling the tasks module" or "Implementing registry task 3 of 12", opening it when needed; done and total draw the progress. Call it at the start of each step of a longer task; the window keeps the earlier steps. Model changes appear in the window by themselves.',
+            input: {
+                text: z.string().describe('The step, in a few words'),
+                done: z.number().int().min(0).optional().describe('Steps finished so far'),
+                total: z.number().int().min(1).optional().describe('All steps of the task')
+            },
+            run: async (_, input) => {
+                await host.status(input);
+                return { shown: true };
+            }
         }),
         propose_edits: define({
             description: 'Propose model changes for the person to review in the floating window: the operations are validated on a copy, shown as text and graph differences, and written only when the person accepts. Waits for the decision and returns it, with their comment when they reject.',

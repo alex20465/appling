@@ -6,8 +6,8 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
 import { expect, test } from 'vitest';
 import { writeRegistry } from '@appling/codegen';
-import type { Ask, Bubble, Decision, Review, Show } from '@appling/viz';
-import { chat, createMcpServer, MAX_ATTEMPTS, Project, type ChatEvent, type VisualHost } from '../src/index.js';
+import type { Ask, Bubble, Decision, Review, Show, Status } from '@appling/viz';
+import { chat, createMcpServer, MAX_ATTEMPTS, Project, sessionChanges, type ChatEvent, type VisualHost } from '../src/index.js';
 
 function workspace(): string {
     const root = mkdtempSync(join(tmpdir(), 'appling-ai-'));
@@ -109,6 +109,7 @@ function fakeWindow(decision: Decision) {
     const shown: Show[] = [];
     const bubbles: Bubble[] = [];
     const reviews: Review[] = [];
+    const steps: Status[] = [];
     const listeners: ((ask: Ask) => void)[] = [];
     const host: VisualHost = {
         show: async show => { shown.push(show); },
@@ -116,9 +117,10 @@ function fakeWindow(decision: Decision) {
         selection: () => ({ open: true, qn: 'sales.OrderStatus.placed', view: shown.at(-1) }),
         reply: () => true,
         review: async review => { reviews.push(review); return decision; },
-        onAsk: listener => { listeners.push(listener); }
+        onAsk: listener => { listeners.push(listener); },
+        status: async status => { steps.push(status); }
     };
-    return { host, shown, bubbles, reviews, ask: (ask: Ask) => listeners.forEach(l => l(ask)) };
+    return { host, shown, bubbles, reviews, steps, ask: (ask: Ask) => listeners.forEach(l => l(ask)) };
 }
 
 async function visualClient(root: string, host: VisualHost) {
@@ -148,6 +150,8 @@ test('with a visualizer the MCP server is a channel that shows views and forward
     expect(await text('visual_bubble', { target: 'sales.Nope', text: 'x' })).toEqual({ placed: false, reason: 'No element sales.Nope.' });
     expect(await text('visual_bubble', { target: 'sales.Order', text: 'x', file: 'missing.py', line: 1 })).toEqual({ placed: false, reason: 'No file missing.py relative to the model folder.' });
     expect(await text('visual_selection', {})).toMatchObject({ open: true, qn: 'sales.OrderStatus.placed' });
+    expect(await text('visual_status', { text: 'Implementing registry tasks', done: 2, total: 5 })).toEqual({ shown: true });
+    expect(window.steps).toEqual([{ text: 'Implementing registry tasks', done: 2, total: 5 }]);
     window.ask({ id: 'a1', text: 'Why?', selected: 'sales.OrderStatus.placed', view: window.shown[0] });
     await new Promise(done => setTimeout(done, 10));
     expect(notifications).toMatchObject([{
@@ -181,4 +185,14 @@ test('proposed edits are written only when the person accepts them in the window
     expect(await (await visualClient(other, rejecting.host)).text('propose_edits', { operations, summary: 'Add a phone number' })).toEqual({ accepted: false, comment: 'Not now' });
     expect(readFileSync(join(other, 'crm.appling'), 'utf8')).toBe(before);
     expect((await (await visualClient(other, rejecting.host)).text('propose_edits', { operations: [{ op: 'remove', target: 'crm.Nope' }], summary: 'x' })).ok).toBe(false);
+});
+
+test('session changes are the text and graph differences since the session started', async () => {
+    const root = workspace();
+    const project = new Project(root);
+    const changes = sessionChanges(project);
+    expect(await changes()).toEqual({ hunks: [], graph: { added: [], removed: [], changed: [] } });
+    const edit = await project.edit({ op: 'add', parent: 'crm.Account', source: 'phone: String?' });
+    if (edit.ok) project.write(edit.sources);
+    expect(await changes()).toMatchObject({ hunks: [{ file: 'crm.appling', added: ['    phone: String?'] }], graph: { added: ['crm.Account.phone'], removed: [] } });
 });

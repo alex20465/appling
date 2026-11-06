@@ -20,6 +20,7 @@
   },
   "files": [
     "out",
+    "rules",
     "skills",
     "language"
   ],

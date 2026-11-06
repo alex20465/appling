@@ -20,6 +20,7 @@ npx @appling/cli check models
 ## Usage
 
 ```sh
+appling init [folder] [--name <name>] [--agents <agents>] [--stack <stack>]
 appling check [files or folders...]
 appling fmt   [files or folders...]
 appling graph [files or folders...]
@@ -51,6 +52,31 @@ models/sales.appling:13:23 error A machine must govern an entity field marked "s
 ```
 
 The severity is `error` or `warning`. Only errors change the exit code. The full list of rules is on [Validation](../language/validation.md).
+
+## init
+
+Sets up a project for Appling and connects coding agents to it. It creates the folder when needed, writes `package.json` when there is none, installs `@appling/cli`, `@appling/ai` and the stack's code generation extension as development dependencies, then writes the starter model, the generate target and each agent's configuration. [Start a new project](../getting-started/new-project.md) lists every file it writes.
+
+```sh
+appling init [folder] [--name <name>] [--agents <agents>] [--stack <stack>]
+```
+
+| Argument | Default | Meaning |
+|---|---|---|
+| `folder` | the current folder | The project folder |
+| `--name` | asked | The project name: lower case letters, digits, `-` and `_`, starting with a letter |
+| `--agents` | asked | A comma separated list of `claude`, `codex`, `opencode`, `gemini` and `antigravity` |
+| `--stack` | asked | `django`, `ash`, `go`, `rust`, or `none` to decide later |
+
+`init` asks for what the flags leave open. Without a terminal it asks nothing and exits with 2 unless all three flags are given. The package manager is the one of the project's lockfile, else the one that ran `init` (`pnpm dlx`, `yarn dlx`, `bunx`), else npm. Running `init` again keeps existing settings and changes nothing.
+
+```sh
+npx @appling/cli init todo --name todo --agents claude,codex --stack none
+```
+
+```
+Appling is set up for Claude Code, Codex. Start your agent in todo and describe the application you want.
+```
 
 ## check
 
@@ -254,8 +280,8 @@ $ appling refs --check
 | Code | Meaning |
 |---|---|
 | 0 | No errors |
-| 1 | `check`, `graph`, `release`, `generate` or `refs` found errors in the model; `refs --check` found a reference that is not current; `release` got an invalid or existing version; `generate` has no targets, a missing prerequisite, a non empty output folder, a failing step, or (with `--migrate`) a target that was not generated; `fmt` skipped a file with syntax errors |
-| 2 | Unknown command, `release` without a version, `refs` without a qualified name or `--check`, or `simulate` without a known question and its arguments |
+| 1 | `init` was cancelled or the installation failed; `check`, `graph`, `release`, `generate` or `refs` found errors in the model; `refs --check` found a reference that is not current; `release` got an invalid or existing version; `generate` has no targets, a missing prerequisite, a non empty output folder, a failing step, or (with `--migrate`) a target that was not generated; `fmt` skipped a file with syntax errors |
+| 2 | Unknown command, `init` with an unknown flag or an invalid `--name`, `--agents` or `--stack`, or without a terminal and not every flag given, `release` without a version, `refs` without a qualified name or `--check`, or `simulate` without a known question and its arguments |
 
 Exit code 2 also prints the usage.
 

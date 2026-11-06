@@ -40,9 +40,14 @@ Over stdio the server also drives a floating window (`@appling/viz`, Electron; m
 | `visual_bubble` | Places a note on an element or member of the view, or a code example with its file and line |
 | `visual_selection` | The element selected in the window and the view on screen |
 | `visual_reply` | Answers a question typed into the window |
+| `visual_status` | Shows the step Claude works on, with its progress; the window also marks and lists every model change of the session as it happens |
 | `propose_edits` | Shows edit operations as a proposal in the window and writes them only when accepted |
 
 Every file and line in the window opens in your editor on click. Questions typed into the window reach the session as Claude Code channel messages. Channels are a research preview, so start Claude Code with `claude --dangerously-load-development-channels server:appling`.
+
+## Appling skill and rules
+
+`rules/appling.md` is a short, always loaded instruction: the model is the source of truth, every requirement goes through the model first, changes apply directly while only the model exists and go into model and code together once code exists, and the work shows in the visualization window. `skills/appling/SKILL.md` holds the knowledge: orient in the project, learn the language, design a new application layer by layer, generate it, and carry changes through model and code. `npx @appling/cli init` wires both into Claude Code, Codex, OpenCode, Gemini CLI and Antigravity CLI by reference into `node_modules`, so updating this package updates them.
 
 ## Registry skill
 

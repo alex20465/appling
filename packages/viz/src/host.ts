@@ -7,7 +7,8 @@ import { extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { Graph } from '@appling/model';
-import { nextShow, type Ask, type Bubble, type Decision, type HostMessage, type Review, type Show, type WindowMessage } from './protocol.js';
+import { nextShow, type Ask, type Bubble, type Changes, type Decision, type HostMessage, type Review, type Show, type Status, type WindowMessage } from './protocol.js';
+import { changeMarks, GraphIndex } from './views.js';
 
 const WINDOW = fileURLToPath(new URL('../dist/window/', import.meta.url));
 const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
@@ -21,6 +22,8 @@ export interface Launched {
 export interface VisualizerOptions {
     root: string;
     graph(): Promise<Graph>;
+    /** The model changes since the session started, for the live view; without it the window shows none. */
+    changes?(): Promise<Changes>;
     /** Starts the window on a URL; Electron by default. */
     launch?(url: string): Launched | Promise<Launched>;
     /** Opens a file at a line, for a file reference clicked in the window; the editor `launch-editor` finds by default. */
@@ -43,6 +46,7 @@ export class Visualizer {
     private current?: Show;
     private selected?: string;
     private bubbles: Bubble[] = [];
+    private steps: Status[] = [];
     private readonly clients = new Set<WebSocket>();
     private readonly reviews = new Map<string, { review: Review, resolve(decision: Decision): void }>();
     private readonly askListeners: ((ask: Ask) => void)[] = [];
@@ -54,6 +58,13 @@ export class Visualizer {
         this.selected = undefined;
         await this.open();
         this.broadcast({ type: 'show', show: this.current! });
+    }
+
+    /** Reports what the agent works on now; the window keeps the earlier steps. */
+    async status(status: Status): Promise<void> {
+        this.steps.push(status);
+        await this.open();
+        this.broadcast({ type: 'status', status });
     }
 
     /** Places a bubble on the view on screen; false when the window is closed. */
@@ -132,7 +143,11 @@ export class Visualizer {
         const watcher = watch(this.options.root, { recursive: true }, (_, file) => {
             if (!file?.endsWith('.appling') || file.split(sep).some(part => part.startsWith('.') || part === 'node_modules')) return;
             clearTimeout(timer);
-            timer = setTimeout(async () => this.broadcast({ type: 'graph', graph: await this.options.graph() }), 100);
+            timer = setTimeout(async () => {
+                const graph = await this.options.graph();
+                this.broadcast({ type: 'graph', graph });
+                await this.followChanges(graph);
+            }, 100);
         });
         await new Promise<void>(done => http.listen(0, '127.0.0.1', done));
         const port = (http.address() as { port: number }).port;
@@ -151,6 +166,20 @@ export class Visualizer {
         if (this.current) send({ type: 'show', show: this.current });
         for (const bubble of this.bubbles) send({ type: 'bubble', bubble });
         for (const [id, { review }] of this.reviews) send({ type: 'review', id, review });
+        for (const status of this.steps) send({ type: 'status', status });
+        if (this.options.changes) send({ type: 'changes', changes: await this.options.changes() });
+    }
+
+    /** Sends the session's changes and grows the tree on screen by the declarations they touch, unless another view is on screen. */
+    private async followChanges(graph: Graph): Promise<void> {
+        if (!this.options.changes) return;
+        const changes = await this.options.changes();
+        this.broadcast({ type: 'changes', changes });
+        if (this.current && this.current.view !== 'node') return;
+        const focus = [...changeMarks(new GraphIndex(graph), changes.graph).keys()];
+        if (focus.every(qn => this.current?.focus.includes(qn))) return;
+        this.view({ view: 'node', focus });
+        this.broadcast({ type: 'show', show: this.current! });
     }
 
     private receive(message: WindowMessage): void {
