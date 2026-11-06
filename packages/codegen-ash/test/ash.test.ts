@@ -125,3 +125,35 @@ test('roles become policy checks on the actor resource, and policies that only n
     const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
     expect(entries['ops.Order.policy[update]'].missing[0].what).toBe('add an Ash policy to ops.Order for update: actor.is(Operator) && note != ""');
 });
+
+test('does texts become the moduledoc and attribute descriptions, and one registry task each', async () => {
+    const result = await planFor({
+        'shop.appling': `module shop {
+            entity Item does "Something to sell, #{not} interpolated" { code: String does "Shelf code" }
+            value Address does """
+                Where it ships.
+                Second line.
+            """ { street: String }
+        }`
+    });
+    const template = (file: string) => result.steps.find(s => s.step.kind === 'template' && s.step.file === file)!.step;
+    const item = template('lib/shop/shop/item.ex');
+    const generated = 'defmodule Shop.Shop.Item do\n  attributes do\n    attribute :code, :string do\n      allow_nil? false\n    end\n  end\nend\n';
+    expect(item.kind === 'template' && item.write(generated)).toBe([
+        'defmodule Shop.Shop.Item do',
+        '  @moduledoc "Something to sell, \\#{not} interpolated"',
+        '',
+        '  attributes do',
+        '    attribute :code, :string do',
+        '      description "Shelf code"',
+        '      allow_nil? false',
+        '    end',
+        '  end',
+        'end',
+        ''
+    ].join('\n'));
+    const address = template('lib/shop/shop/address.ex');
+    expect(address.kind === 'template' && address.write(undefined)).toContain('defmodule Shop.Shop.Address do\n  @moduledoc """\n  Where it ships.\n  Second line.\n  """\n\n  use Ash.Resource');
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['shop.Item'].missing.map(m => m.what)).toEqual(['check that Item matches its description: Something to sell, #{not} interpolated']);
+});

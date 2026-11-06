@@ -50,6 +50,15 @@ module m {
 
 The allowed references are listed under [reference rules](overview.md#reference-rules). The layers in the message are spelled `cross`, `domain`, `behavior`, `application`, `interface` and `experience`.
 
+## Descriptions
+
+| Rule | Message |
+|---|---|
+| `@Name` in a `does` text names a visible element | `Unknown element "@<name>" in does.` |
+| `@Name` follows the layer order, except in a module's own description | `<layer> element <Kind> may not reference <layer> element <Kind> "@<name>".` |
+
+See [descriptions](descriptions.md#naming-elements).
+
 ## State machines
 
 | Rule | Message |

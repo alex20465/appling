@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { annotation, children, pythonFile, task, template } from './files.js';
+import { annotation, children, documented, pythonFile, task, template } from './files.js';
 import { testSteps } from './tests.js';
 import { appOf, constantOf, lastOf, parentOf, python, q, rolePredicate, wrap, type PythonScope } from './python.js';
 
@@ -32,20 +32,20 @@ export function installApp(app: string): Step {
 
 export function enumSteps(node: GraphNode, context: MapContext): Step[] {
     const literals = children(node, context).map(l => lastOf(l.qn));
-    const code = [`class ${lastOf(node.qn)}(models.TextChoices):`, ...literals.map(l => `    ${constantOf(l)} = ${JSON.stringify(l)}`)].join('\n');
+    const code = documented([`class ${lastOf(node.qn)}(models.TextChoices):`, ...literals.map(l => `    ${constantOf(l)} = ${JSON.stringify(l)}`)].join('\n'), node);
     return [template(`${appOf(node.module)}/enums.py`, existing => pythonFile(existing, ['from django.db import models'], code))];
 }
 
 export function valueSteps(node: GraphNode, context: MapContext): Step[] {
     const imports = new Set(['from typing import TypedDict']);
     const lines = children(node, context, 'Field').filter(f => !f.data.derived).map(f => `    ${lastOf(f.qn)}: ${annotation(f.data.type as TypeData, context, imports)}`);
-    const code = [`class ${lastOf(node.qn)}(TypedDict):`, ...(lines.length ? lines : ['    pass'])].join('\n');
+    const code = documented([`class ${lastOf(node.qn)}(TypedDict):`, ...(lines.length ? lines : ['    pass'])].join('\n'), node);
     return [template(`${appOf(node.module)}/values.py`, existing => pythonFile(existing, imports, code))];
 }
 
 export function entitySteps(entity: GraphNode, context: MapContext): Step[] {
     const imports = new Set(['from django.db import models']);
-    const code = modelClass(entity, context, imports);
+    const code = documented(modelClass(entity, context, imports), entity);
     const model = template(`${appOf(entity.module)}/models.py`, existing => pythonFile(existing, imports, code));
     if (userEntity(context) !== entity.qn) return [model];
     const setting = `AUTH_USER_MODEL = ${JSON.stringify(modelLabel(entity))}`;
@@ -64,7 +64,7 @@ export function roleSteps(role: GraphNode, context: MapContext): Step[] {
     const imports = new Set(['import rules']);
     const group = `user.groups.filter(name=${JSON.stringify(name)}).exists()`;
     const condition = role.data.condition ? python(role.data.condition as ExprData, { ...scope(context, imports), actor: 'user' }) : undefined;
-    const code = ['@rules.predicate', `def ${rolePredicate(role)}(user):`, `    return ${condition ? `${group} and ${wrap(condition)}` : group}`].join('\n');
+    const code = documented(['@rules.predicate', `def ${rolePredicate(role)}(user):`, `    return ${condition ? `${group} and ${wrap(condition)}` : group}`].join('\n'), role);
     return [
         template(`${appOf(role.module)}/roles.py`, existing => pythonFile(existing, imports, code)),
         task(`create the Django group ${name} for the role`),
@@ -127,6 +127,7 @@ export function djangoField(field: GraphNode, context: MapContext, imports: Set<
     const options: string[] = [];
     if (type.optional) options.push('null=True', 'blank=True');
     if (modifiers.includes('unique')) options.push('unique=True');
+    if (typeof field.data.does === 'string') options.push(`help_text=${JSON.stringify(field.data.does)}`);
     const fallback = defaultValue(field, context, imports);
     if (fallback !== undefined) options.push(`default=${fallback}`);
     const decl = type.decl ? context.node(type.decl) : undefined;

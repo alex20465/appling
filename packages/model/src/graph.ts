@@ -1,6 +1,6 @@
 import { AstUtils, isAstNode, isReference, type AstNode, type Reference, type ReferenceInfo } from 'langium';
 import {
-    ExpressionTyper, LAYER_OF, isCreateEffect, isEnumLiteral, isExport, isExpr, isMemberExpr, show, isEmitEffect, isEndpoint, isInvariant, isPolicy, isSetEffect, isTransition, modulePath, print,
+    ExpressionTyper, LAYER_OF, doesTargets, isCreateEffect, isEnumLiteral, isExport, isExpr, isMemberExpr, show, isEmitEffect, isEndpoint, isInvariant, isPolicy, isSetEffect, isTransition, modulePath, print,
     type ApplingServices, type Layer, type Model, type Module
 } from '@appling/lang';
 
@@ -130,6 +130,13 @@ export function buildGraph(models: Model[], services: ApplingServices): Graph {
             const referenced = AstUtils.getReferenceNodes(ref.reference)[0];
             const target = referenced && qns.get(referenced);
             if (target) add({ from: qn, to: target, kind: ref.property === 'decl' ? 'type' : ref.property });
+        }
+    }
+    // `@Name` in a `does` text uses the element it names.
+    for (const [node, qn] of qns) {
+        for (const { target } of doesTargets(node, services)) {
+            const to = target && qns.get(target);
+            if (to) add({ from: qn, to, kind: 'uses' });
         }
     }
     for (const [expr, target] of typer.targets) {

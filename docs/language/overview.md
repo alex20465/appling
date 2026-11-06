@@ -56,7 +56,7 @@ Identifiers start with a letter or an underscore, followed by letters, digits or
 
 Many keywords are also valid names, so fields such as `state`, `from` or `input` stay legal:
 
-`state`, `input`, `value`, `from`, `to`, `on`, `for`, `step`, `list`, `detail`, `form`, `route`, `run`, `actions`, `fields`, `role`, `event`, `action`, `query`, `page`, `timeout`, `sort`, `when`, `create`, `read`, `update`, `delete`, `per`, `flow`, `actor`, `tenant`, `set`, `op`, `human`, `system`, `service`, `asc`, `desc`, `remove`, `rename`, `retype`, `roles`, `second`, `minute`, `hour`, `link`, `core`, `supporting`, `peripheral`, `default`, `limit`, `messages`, `migration`, `is`.
+`state`, `input`, `value`, `from`, `to`, `on`, `for`, `step`, `list`, `detail`, `form`, `route`, `run`, `actions`, `fields`, `role`, `event`, `action`, `query`, `page`, `timeout`, `sort`, `when`, `create`, `read`, `update`, `delete`, `per`, `flow`, `actor`, `tenant`, `set`, `op`, `human`, `system`, `service`, `asc`, `desc`, `remove`, `rename`, `retype`, `roles`, `second`, `minute`, `hour`, `link`, `core`, `supporting`, `peripheral`, `default`, `limit`, `messages`, `migration`, `is`, `does`.
 
 Followed by `:`, such a keyword is always a name, so a field named `state` may follow a field that ends with a modifier: `code: String unique` then `state: Status state`.
 
@@ -69,6 +69,7 @@ There is no escape syntax for reserved words; pick another name, such as `entrie
 | Literal | Form | Example |
 |---|---|---|
 | String | Double quotes, backslash escapes | `"Total"`, `"say \"hi\""` |
+| Text block | Triple quotes, spans lines, only in [`does`](descriptions.md#text-blocks) | `"""` ... `"""` |
 | Number | Digits with an optional fraction | `50`, `0.5` |
 | Bool | `true`, `false` | `true` |
 | Null | `null` | `null` |
@@ -168,6 +169,7 @@ Other unnamed parts, such as preconditions, sort clauses, use case steps, page c
 |---|---|
 | [Modules](modules.md) | `module`, nested modules, `export`, references across modules and files |
 | [Relevance](relevance.md) | `core`, `supporting`, `peripheral` and the computed relevance score |
+| [Descriptions](descriptions.md) | `does`, text blocks, `@Name` in descriptions |
 | [Access](access.md) | `role`, `actor`, `tenant`, policies, `actor.is(...)`, narrowing |
 | [Domain](domain.md) | `enum`, `value`, `entity`, field types and modifiers, `invariant`, `policy` |
 | [Behavior](behavior.md) | `event`, `action`, `machine`, `job` |

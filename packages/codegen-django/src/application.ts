@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { annotation, children, pythonFile, task, template } from './files.js';
+import { annotation, children, docstring, pythonFile, task, template } from './files.js';
 import { scope, storedFields } from './models.js';
 import { appOf, lastOf, parentOf, python, q, snake, type PythonScope } from './python.js';
 
@@ -16,6 +16,7 @@ export function queryCode(query: GraphNode, context: MapContext, imports: Set<st
     return [
         ...(query.data.pageSize ? [`${pageSizeName(query)} = ${query.data.pageSize}`, '', ''] : []),
         `def ${snake(lastOf(query.qn))}():`,
+        ...docstring(query, '    '),
         `    return ${rows}`
     ].join('\n');
 }
@@ -52,6 +53,7 @@ export function projectionSteps(projection: GraphNode, context: MapContext): Ste
     }
     const code = [
         `class ${lastOf(projection.qn)}(serializers.ModelSerializer):`,
+        ...docstring(projection, '    '),
         ...declared,
         ...(declared.length ? [''] : []),
         '    class Meta:',
@@ -82,9 +84,9 @@ export function externalSteps(external: GraphNode, context: MapContext): Step[] 
     const methods = children(external, context, 'ExternalOperation').flatMap(op => {
         const params = children(op, context, 'Param').map(p => `${lastOf(p.qn)}: ${annotation(p.data.type as TypeData, context, imports)}`);
         const returns = op.data.returns ? annotation(op.data.returns as TypeData, context, imports) : 'None';
-        return ['', `    def ${snake(lastOf(op.qn))}(self, ${params.join(', ')}) -> ${returns}:`, '        ...'];
+        return ['', `    def ${snake(lastOf(op.qn))}(self, ${params.join(', ')}) -> ${returns}:`, ...docstring(op, '        '), '        ...'];
     });
-    const code = [`class ${lastOf(external.qn)}(Protocol):`, ...(methods.length ? methods.slice(1) : ['    pass'])].join('\n');
+    const code = [`class ${lastOf(external.qn)}(Protocol):`, ...docstring(external, '    '), ...(methods.length ? methods.slice(1) : ['    pass'])].join('\n');
     return [
         template(`${appOf(external.module)}/externals.py`, existing => pythonFile(existing, imports, code)),
         task(`implement a client for ${lastOf(external.qn)} and pass it to the use cases that call it`)
@@ -137,7 +139,7 @@ export function useCaseSteps(useCase: GraphNode, context: MapContext): Step[] {
             return `${snake(lastOf(e.qn))}: ${lastOf(e.qn)}`;
         })
     ];
-    const code = [`def ${snake(lastOf(useCase.qn))}(${signature.join(', ')}) -> None:`, ...(lines.length ? lines : ['pass']).map(l => `    ${l}`)].join('\n');
+    const code = [`def ${snake(lastOf(useCase.qn))}(${signature.join(', ')}) -> None:`, ...docstring(useCase, '    '), ...(lines.length ? lines : ['pass']).map(l => `    ${l}`)].join('\n');
     return [template(`${appOf(useCase.module)}/usecases.py`, existing => pythonFile(existing, imports, code)), ...tasks];
 }
 

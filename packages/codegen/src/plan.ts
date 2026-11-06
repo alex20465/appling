@@ -106,7 +106,11 @@ export function describe(step: Step): string {
 function entry(node: GraphNode, steps: Step[] | undefined, extension: string, context: MapContext): RegistryEntry {
     const tasks = (steps ?? []).filter(s => s.kind === 'task').map(s => s.what);
     if (!steps) tasks.push(`${extension} does not generate ${node.kind} yet`);
+    // Code exists when the node has its own steps or is covered by its parent's (`[]`) and leaves no task of its own.
     const work = (steps ?? []).filter(s => s.kind !== 'task');
+    const hasCode = work.length > 0 || (steps !== undefined && tasks.length === 0);
+    const does = doesTask(node);
+    if (does) tasks.push(does);
     const related = [
         ...context.outgoing(node.qn).filter(e => e.kind !== 'contains').map(e => ({ qn: e.to, kind: context.node(e.to)!.kind, edge: e.kind })),
         ...context.incoming(node.qn).filter(e => e.kind !== 'contains').map(e => ({ qn: e.from, kind: context.node(e.from)!.kind, edge: `${e.kind} by` }))
@@ -115,11 +119,22 @@ function entry(node: GraphNode, steps: Step[] | undefined, extension: string, co
         qn: node.qn,
         kind: node.kind,
         layer: node.layer,
-        status: tasks.length === 0 ? 'generated' : work.length ? 'partial' : 'todo',
+        status: tasks.length === 0 ? 'generated' : hasCode ? 'partial' : 'todo',
         steps: (steps ?? []).map(describe),
         files: work.flatMap(s => s.kind === 'template' ? [s.file] : s.kind === 'command' ? s.creates ?? [] : []),
         missing: tasks.map(what => ({ what, context: { props: node.props, related } }))
     };
+}
+
+/** Kinds whose `does` text describes work to implement; on every other kind it describes what to check. */
+const ACTING = new Set(['Action', 'Machine', 'Job', 'Query', 'External', 'ExternalOperation', 'UseCase']);
+
+/** The registry task of a node's `does` text, the same for every extension. */
+export function doesTask(node: GraphNode): string | undefined {
+    const text = node.data.does;
+    if (typeof text !== 'string' || !text.trim()) return undefined;
+    const name = node.qn.split('.').pop();
+    return ACTING.has(node.kind) ? `implement what ${name} does: ${text}` : `check that ${name} matches its description: ${text}`;
 }
 
 function rank(node: GraphNode): number {

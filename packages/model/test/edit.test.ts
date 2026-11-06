@@ -110,3 +110,19 @@ test('set replaces, inserts and removes a property', async () => {
     expect((await edit({ op: 'set', target: 'sales.Order.status', property: 'default', value: '' }))[SALES]).toContain('status: OrderStatus state\n');
     expect((await edit({ op: 'set', target: 'sales.Cancel', property: 'consistency', value: 'eventual' }))[SALES]).toContain('    consistency eventual\n');
 });
+
+test('does: set inserts, replaces and removes it, rename follows its @names', async () => {
+    const shop = uriOf('shop.appling');
+    const base = { [shop]: 'module shop {\n  entity Account {\n    email: String\n  }\n\n  action Close on Account does "Closes the @Account by @Account.email" {\n  }\n}\n' };
+    const run = async (source: Record<string, string>, operation: EditOperation) => {
+        const result = await applyEdit(source, operation);
+        if (!result.ok) throw new Error(result.errors.join('\n'));
+        return result.sources;
+    };
+    const set = await run(base, { op: 'set', target: 'shop.Account', property: 'does', value: '"Someone who buys"' });
+    expect(set[shop]).toContain('entity Account does "Someone who buys" {');
+    expect((await run(set, { op: 'set', target: 'shop.Account', property: 'does', value: '"A buyer"' }))[shop]).toContain('entity Account does "A buyer" {');
+    expect((await run(set, { op: 'set', target: 'shop.Account', property: 'does', value: '' }))[shop]).toContain('entity Account {');
+    expect((await run(base, { op: 'rename', target: 'shop.Account', name: 'Customer' }))[shop]).toContain('does "Closes the @Customer by @Customer.email"');
+    expect((await run(base, { op: 'rename', target: 'shop.Account.email', name: 'mail' }))[shop]).toContain('does "Closes the @Account by @Account.mail"');
+});
