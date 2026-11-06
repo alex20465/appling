@@ -1,0 +1,229 @@
+// Coverage fixture: uses every grammar construct, keyword and expression form at least once.
+// The codegen coverage tests plan it per extension; keep it valid (appling check) when the grammar grows.
+module shop core {
+  export Order, OpenOrders, OrderView, PlaceOrder
+
+  role Buyer
+  role Manager supporting { actor.is(party.Staff) && tenant != null }
+
+  actor human Shopper is party.Person roles Buyer, Manager core {
+    nickname: String?
+  }
+  actor system Clock
+  actor service Billing roles Manager peripheral
+
+  // L1 Domain
+  enum Status supporting {
+    draft
+    placed
+    paid
+    cancelled
+  }
+
+  value Address {
+    street: String
+    city: Text
+    zip: String?
+    to: String?
+  }
+
+  entity Product {
+    sku: String unique
+    title: String
+    price: Money
+    weight: Decimal
+    stock: Int default 0
+    available: Bool = stock > 0
+    released: Date?
+    warranty: Duration?
+    manual: File?
+    token: Uuid
+    tags: String[]
+  }
+
+  entity Order {
+    reference: String unique
+    buyer: party.Person
+    status: Status state default draft
+    address: Address
+    lines: Line[] owned
+    note: Text?
+    created_at: DateTime default now
+    placed_at: DateTime?
+    discount: Int default 0
+    total: Money = sum(lines.map(l, l.amount))
+    heavy: Bool = lines.filter(l, l.quantity >= 10).size() > 0
+
+    invariant "total never negative" { total >= 0 }
+    invariant "discount in range" { discount >= 0 && discount <= 100 && discount % 5 == 0 }
+    invariant "noted when cancelled" { status != cancelled || note != null }
+
+    policy { actor.is(party.Staff) }
+    policy read { actor.is(Buyer) && buyer.company == actor.company }
+    policy create, update, delete { actor.is(Manager) }
+    policy read fields total, discount { actor.is(Manager) || (actor.is(Buyer) && status in [placed, paid]) }
+  }
+
+  entity Line {
+    product: Product
+    quantity: Int
+    amount: Money = product.price * quantity
+  }
+
+  entity link Wishlist {
+    owner: party.Person
+    product: Product
+  }
+
+  // L2 Behavior
+  event OrderPlaced core {
+    order: Order
+  }
+
+  event PaymentReceived {
+    order: Order
+    amount: Money
+  }
+
+  action PlaceOrder on Order core {
+    input {
+      when_at: DateTime
+      coupon: String?
+    }
+    requires { lines.size() > 0 } else EmptyOrder
+    requires { when_at <= now + duration("1h") }
+    effect {
+      set placed_at = when_at
+      set discount = discount - 0
+      emit OrderPlaced { order = this }
+    }
+    errors EmptyOrder, TooLate
+    consistency atomic
+    policy { actor.is(Buyer) && buyer.company == actor.company }
+  }
+
+  action Cancel on Order {
+    input {
+      reason: String?
+    }
+    effect {
+      set note = reason
+    }
+    consistency eventual
+  }
+
+  action Restock {
+    input {
+      product: Product
+      count: Int
+    }
+    effect {
+      create Product { sku = "copy", title = product.title, price = product.price, weight = product.weight / 2, token = product.token, tags = [] }
+      emit PaymentReceived
+    }
+  }
+
+  machine OrderFlow on Order.status supporting {
+    transition draft -> placed via PlaceOrder effect { emit OrderPlaced { order = this } }
+    transition placed -> paid on PaymentReceived
+    transition draft, placed -> cancelled via Cancel when { status != paid && -discount < 1 && !has(note) }
+  }
+
+  job ExpireDrafts every "0 3 * * *" run Cancel where { status == draft && created_at < now - duration("720h") } peripheral
+  job OnPayment on PaymentReceived run Cancel
+
+  // L3 Application
+  query OpenOrders from Order core {
+    where { status in [placed, paid] && ["x", "y"] [0] != reference }
+    sort placed_at desc, reference asc, created_at
+    paginate 50
+    policy { actor.is(Manager) }
+  }
+
+  query Products from Product {
+  }
+
+  projection OrderView from Order {
+    reference
+    status
+    total
+    buyer_name = buyer.name
+    flagged = heavy == false
+    rounded = 1.5
+    ship_to = address.to
+  }
+
+  projection OpenView from OpenOrders supporting {
+    reference
+  }
+
+  external Payments peripheral {
+    op Charge (amount: Money, reference: String) returns String errors Declined, Timeout
+    op Ping ()
+    op Refund (amount: Money)
+  }
+
+  usecase Checkout (order: Order) core {
+    step PlaceOrder(order, now)
+    step Payments.Charge(order.total, order.reference) on Declined do Cancel(order) on Timeout do Payments.Refund(order.total)
+    step OpenOrders()
+    await PaymentReceived timeout "24h" do Cancel(order)
+    await OrderPlaced
+    policy { actor.is(Buyer) }
+  }
+
+  usecase Reorder (order: Order) {
+    step Checkout(order)
+  }
+
+  // L4 Interfaces
+  interface rest PublicApi core {
+    auth bearer
+    limit 100 per minute
+    cors "https://shop.example", "https://admin.example"
+    GET "/orders" -> OpenOrders as OrderView { reference, status, total }
+    GET "/orders/{id}" -> OpenOrders as OrderView
+    POST "/orders/{id}/place" -> PlaceOrder
+    POST "/checkout" -> Checkout
+  }
+
+  interface rest InternalApi {
+    limit 10 per second
+  }
+
+  interface rest BatchApi peripheral {
+    limit 1000 per hour
+  }
+
+  // L5 Experience
+  page Orders route "/orders" core {
+    list OpenOrders as OrderView { reference, status } actions Cancel, PlaceOrder
+    list OpenOrders as OrderView
+  }
+
+  page OrderDetail route "/orders/{id}" {
+    detail OrderView { reference, total } actions PlaceOrder
+    detail OrderView
+    form Cancel
+    form Checkout
+  }
+
+  navigation Main supporting {
+    "Orders" -> Orders {
+      "Detail" -> OrderDetail
+    }
+  }
+
+  flow CheckoutFlow for Checkout peripheral { Orders -> OrderDetail }
+
+  messages en supporting {
+    OrderView.total = "Total"
+    Status.draft = "Draft"
+  }
+
+  migration v2 {
+    rename Order.code -> reference
+    retype Order.total: Decimal -> Money
+    remove Order.legacy
+  }
+}

@@ -77,10 +77,22 @@ $ appling generate --plan examples
   sales.PublicApi: template: sales/urls.py
   sales.PublicApi: template: config/urls.py
   (project): command: uv run python manage.py makemigrations
-70 element(s): 45 generated, 15 partial, 10 todo
+
+| kind | generated | partial | todo | tasks |
+|---|---|---|---|---|
+| Action | 1 | 1 | 0 | 1 |
+| Actor | 0 | 0 | 1 | 1 |
+...
+| Policy | 0 | 6 | 0 | 12 |
+...
+| **total** | 49 (70%) | 17 | 4 | 28 |
+
+70 element(s): 49 generated, 17 partial, 4 todo
 ```
 
-Each line names the node that produced the step; `(project)` marks setup steps that run once. The last line counts the registry entries by status.
+Each line names the node that produced the step; `(project)` marks setup steps that run once. The table counts the registry entries per element kind by status and the registry tasks they leave, so you see where the extension still leaves work. The last line counts the registry entries by status.
+
+Each extension in this repository has a coverage test over a fixture that uses every construct of the language (`packages/lang/test/fixtures/constructs`). It compares this table with the committed `test/coverage.json` of the extension and fails when a kind generates less or leaves more tasks; after a gain, `pnpm vitest run -u` raises the baseline.
 
 ## Generate
 

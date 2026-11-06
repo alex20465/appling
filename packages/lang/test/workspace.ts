@@ -21,6 +21,14 @@ export function errors(documents: LangiumDocument[]): string[] {
 }
 
 export function examples(): Record<string, string> {
-    const dir = join(import.meta.dirname, '../../../examples');
+    return appling(join(import.meta.dirname, '../../../examples'));
+}
+
+/** The coverage fixture: every grammar construct, keyword and expression form at least once (checked in `constructs.test.ts`). */
+export function constructs(): Record<string, string> {
+    return appling(join(import.meta.dirname, 'fixtures/constructs'));
+}
+
+function appling(dir: string): Record<string, string> {
     return Object.fromEntries(readdirSync(dir).filter(f => f.endsWith('.appling') && !f.startsWith('.')).map(f => [f, readFileSync(join(dir, f), 'utf8')]));
 }

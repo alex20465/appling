@@ -57,7 +57,7 @@ pub fn place_order(order: &mut Order) -> Result<Vec<Event>, Error> {
 
 ## What becomes a task
 
-Queries, projections, interfaces, pages, flows, messages, use cases, external systems, jobs and policies, and derived fields, defaults, preconditions, guards and effects without a Rust translation, such as expressions over `actor`, string matching with `matches` and effects that create records.
+Queries, projections, interfaces, pages, flows, messages, use cases, external systems, jobs and policies, and derived fields, defaults, preconditions, guards and effects without a Rust translation, such as expressions over `actor`, string matching with `matches` and effects that create records. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
 
 ## Run the generated project
 

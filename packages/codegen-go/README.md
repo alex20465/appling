@@ -26,7 +26,7 @@ Requires Go 1.22 or later. Money and decimals use [shopspring/decimal](https://g
 | `errors` | `Err<Name>` variables |
 | rules | skipped tests in `<module>_test.go`; writing their bodies is a registry task |
 
-Queries, projections, interfaces, pages, use cases, external systems, jobs and policies become registry tasks: they need storage, HTTP and scheduling choices the model does not make. The project ends with `gofmt -w .`, and `go test ./...` is the registry's test command.
+Queries, projections, interfaces, pages, use cases, external systems, jobs and policies become registry tasks: they need storage, HTTP and scheduling choices the model does not make. The project ends with `gofmt -w .`, and `go test ./...` is the registry's test command. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
 
 ## License
 

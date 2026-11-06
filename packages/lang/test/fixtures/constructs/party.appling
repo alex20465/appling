@@ -1,0 +1,26 @@
+// Coverage fixture, second file: cross module and cross file references, a nested module.
+module party supporting {
+  export Company, Person, Staff
+
+  role Staff { actor.active }
+
+  entity Company peripheral {
+    name: String unique
+  }
+
+  entity Person core {
+    name: String
+    company: Company
+    active: Bool default true
+  }
+
+  tenant Workspace on Company
+
+  module directory {
+    export Listing
+
+    value Listing {
+      title: String
+    }
+  }
+}

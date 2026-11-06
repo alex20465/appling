@@ -82,7 +82,7 @@ func PlaceOrder(order *Order) ([]any, error) {
 
 ## What becomes a task
 
-Queries, projections, interfaces, pages, flows, messages, use cases, external systems, jobs and policies: they need storage, HTTP and scheduling decisions that the model leaves open. Also derived fields, defaults, preconditions, guards and effects that have no Go translation, such as expressions over `actor`, and effects that create records.
+Queries, projections, interfaces, pages, flows, messages, use cases, external systems, jobs and policies: they need storage, HTTP and scheduling decisions that the model leaves open. Also derived fields, defaults, preconditions, guards and effects that have no Go translation, such as expressions over `actor`, and effects that create records. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
 
 ## Run the generated project
 

@@ -93,7 +93,8 @@ export function externalSteps(external: GraphNode, context: MapContext): Step[] 
 
 interface Call {
     target: string;
-    args: ExprData[];
+    /** Left out by the graph when the call has no arguments. */
+    args?: ExprData[];
 }
 
 /** A use case becomes a function that calls its steps in order and handles the declared errors. */
@@ -142,7 +143,7 @@ export function useCaseSteps(useCase: GraphNode, context: MapContext): Step[] {
 
 function callCode(call: Call, context: MapContext, pyScope: PythonScope, externals: Set<GraphNode>): string | undefined {
     const target = context.node(call.target)!;
-    const args = call.args.map(a => python(a, pyScope));
+    const args = (call.args ?? []).map(a => python(a, pyScope));
     if (args.some(a => a === undefined)) return undefined;
     const name = snake(lastOf(target.qn));
     if (target.kind === 'Action') {

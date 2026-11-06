@@ -78,6 +78,7 @@ Every graph node has an entry, so the registry is also the coverage report and t
 | `checkPrerequisites(prerequisites)` | Messages for missing tools |
 | `readConfig(root)`, `loadExtension(name, root)` | Configuration and extension loading |
 | `describe(step)` | A one line description of a step |
+| `coverage(entries)`, `coverageTable(coverage)` | Registry entries and tasks per node kind and status, and that count as the Markdown table `--plan` prints |
 | `saveBaseline(out, exclude)`, `mergeGeneration(out, next, exclude)` | The generation baseline, and the three way merge of a fresh generation into a project |
 | `pendingChanges(graph, applied, stamp)`, `planMigrations(...)`, `runMigrations(...)`, `readApplied(out)` | Migration steps not yet applied to a generated project, and carrying them into it |
 

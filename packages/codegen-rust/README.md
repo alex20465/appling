@@ -25,7 +25,7 @@ Requires Rust 1.85 or later. The crate name is the project name in snake case.
 | `errors` | variants of the module's `Error` enum, next to `InvalidTransition` |
 | rules | `#[ignore]`d tests in the module's `tests`; writing their bodies is a registry task |
 
-Queries, projections, interfaces, pages, use cases, external systems, jobs and policies become registry tasks. `cargo test` is the registry's test command.
+Queries, projections, interfaces, pages, use cases, external systems, jobs and policies become registry tasks. `cargo test` is the registry's test command. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
 
 ## License
 
