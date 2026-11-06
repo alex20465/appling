@@ -15,6 +15,12 @@
       <button id="open" class="repo add" title="Add Folder to Workspace…" aria-label="Add Folder to Workspace">+</button>
     </nav>
     <main id="stage"></main>
+    <div id="switcher" hidden role="dialog" aria-label="Go to repo">
+      <div class="panel">
+        <input type="text" placeholder="Go to repo…" aria-label="Repo name" spellcheck="false" autocomplete="off" />
+        <ul role="listbox"></ul>
+      </div>
+    </div>
     <script type="module" src="./shell.js"></script>
   </body>
 </html>

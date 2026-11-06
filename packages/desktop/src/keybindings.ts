@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 export const COMMANDS = {
     open: 'Add Folder to Workspace…',
     closeRepo: 'Close Repo',
+    switcher: 'Go to Repo…',
     nextRepo: 'Recent Repo',
     previousRepo: 'Recent Repo, Backwards',
     ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`repo${i + 1}`, `Repo ${i + 1}`])),
@@ -13,6 +14,7 @@ export const COMMANDS = {
     nextWorkspace: 'Next Workspace',
     previousWorkspace: 'Previous Workspace',
     ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`workspace${i + 1}`, `Workspace ${i + 1}`])),
+    toggleRail: 'Toggle Rail',
     toggleSource: 'Toggle Source',
     reload: 'Reload Repo View',
     devTools: 'Toggle Developer Tools',
@@ -26,6 +28,7 @@ export type Keybindings = Record<string, string | null>;
 export const DEFAULT_KEYBINDINGS: Keybindings = {
     open: 'CmdOrCtrl+O',
     closeRepo: 'CmdOrCtrl+W',
+    switcher: 'CmdOrCtrl+P',
     nextRepo: 'Ctrl+Tab',
     previousRepo: 'Ctrl+Shift+Tab',
     ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`repo${i + 1}`, `CmdOrCtrl+${i + 1}`])),
@@ -35,6 +38,7 @@ export const DEFAULT_KEYBINDINGS: Keybindings = {
     nextWorkspace: 'CmdOrCtrl+PageDown',
     previousWorkspace: 'CmdOrCtrl+PageUp',
     ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`workspace${i + 1}`, `CmdOrCtrl+Alt+${i + 1}`])),
+    toggleRail: 'CmdOrCtrl+B',
     toggleSource: 'CmdOrCtrl+E',
     reload: 'CmdOrCtrl+R',
     devTools: 'CmdOrCtrl+Alt+I',
