@@ -178,4 +178,4 @@ module m {
 ```
 
 > [!NOTE]
-> The validator checks where policies may appear and that their conditions are Bool. It does not compute the effective policy; the [simulator](../tools/cli.md#simulate) does. Code generators turn each policy into a task in the [registry](../codegen/registry.md), except where a target can say it, such as a policy that only names roles in [Ash](../codegen/ash.md).
+> The validator checks where policies may appear and that their conditions are Bool. It does not compute the effective policy; the [simulator](../tools/cli.md#simulate) does. Code generators turn each policy into a task in the [registry](../codegen/registry.md), except where a target can say it, such as the policies [Ash](../codegen/ash.md#policies) generates.

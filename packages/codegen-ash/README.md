@@ -33,7 +33,10 @@ Requires Elixir 1.17 or later and the `igniter_new` archive (`mix archive.instal
 | scheduled `job` | an AshOban trigger with `where` and `scheduler_cron`; `now - duration("720h")` becomes `ago(720, :hour)` |
 | `query` | a read action with filter, sort and offset pagination |
 | computed projection field | a calculation on the source resource |
-| `role` | an `Ash.Policy.SimpleCheck` per role on the resource actors are bound to with `is` (a private `roles` attribute and a calculation per role condition); policies that only name roles become `authorize_if` lines with `Ash.Policy.Authorizer` |
+| `actor` | bound with `is`: the entity's resource holds its fields and a private `roles` attribute limited to the roles its actors carry; a `human` actor without `is`: a resource of its own with its fields and `roles`; a `system` or `service` actor without `is`: a struct whose `roles` are its roles; `actor.is(Actor)` becomes a check matching its record |
+| `role` | an `Ash.Policy.SimpleCheck` `<App>.<Module>.Checks.<Role>` with one clause per actor record that carries the role; the roles a condition names call their checks, the rest of the condition is a calculation `:<role>?` on the actor resource |
+| `tenant` | attribute multitenancy (`strategy :attribute`) on every resource with a relationship to the tenant's entity, `global? true` on actor resources; `tenant` in expressions becomes `^tenant()` |
+| `policy` | `Ash.Policy.Authorizer` policies: `action_type(...)` or `always()` for entity policies, `field_policy` for `fields` (plus a catch-all `field_policy :*`), `action(:name)` for actions and queries; each `\|\|` branch becomes `authorize_if`, a branch with `&&` becomes `forbid_unless` checks followed by `authorize_if`; conditions become `expr` checks with `^actor(...)` and records compared by id |
 | `interface rest` | AshJsonApi routes on the domain (`index` for queries with `default_fields` from picks, `patch` for update actions), served by Phoenix under `/api/json` when the model has pages, otherwise by a JSON:API router that Bandit serves on port 4000 |
 | `page`, `navigation`, `messages` | Phoenix LiveViews with lists, details, AshPhoenix forms and action buttons, navigation links and column labels; models with pages need the `phx_new` archive |
 | rules | skipped ExUnit tests in `test/<app>/<module>/<resource>_test.exs` for invariants, policies, transitions and preconditions; writing their bodies is a registry task |
@@ -44,7 +47,7 @@ The project ends with `mix ash.codegen initial_resources`, so migrations and res
 
 Machines, scheduled jobs and REST interfaces add `ash_state_machine`, `ash_oban`, and `ash_json_api` with `bandit` to the project.
 
-What cannot be translated becomes a registry task: many to many relationships, calculations over embedded lists, invariants and preconditions over calculations or other resources, policies that say more than which roles may act, events (Ash notifiers), externals and use cases (generic actions or Reactor), effects that create rows or emit events, jobs on events, authentication, rate limits and CORS.
+What cannot be translated becomes a registry task: many to many relationships, calculations over embedded lists, invariants and preconditions over calculations or other resources, policies with more than one `&&` branch, field policies that follow relationships, policies of use cases and of actions without an entity, resources that reach the tenant only through relationships, events (Ash notifiers), externals and use cases (generic actions or Reactor), effects that create rows or emit events, jobs on events, authentication, rate limits and CORS.
 
 ## License
 
