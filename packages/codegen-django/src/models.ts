@@ -2,7 +2,7 @@ import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
 import { annotation, children, pythonFile, task, template } from './files.js';
 import { testSteps } from './tests.js';
-import { appOf, constantOf, lastOf, parentOf, python, q, rolePredicate, wrap, type PythonScope } from './python.js';
+import { appOf, constantOf, lastOf, parentOf, python, q, type PythonScope } from './python.js';
 
 const PRIMITIVES: Record<string, string> = {
     String: 'models.CharField(max_length=255',
@@ -58,23 +58,76 @@ export function userEntity(context: MapContext): string | undefined {
     return bound.size === 1 ? [...bound][0] : undefined;
 }
 
-/** One django-rules predicate per role: the actor is in the role's group and the role's condition holds. */
-export function roleSteps(role: GraphNode, context: MapContext): Step[] {
-    const name = lastOf(role.qn);
-    const imports = new Set(['import rules']);
-    const group = `user.groups.filter(name=${JSON.stringify(name)}).exists()`;
-    const condition = role.data.condition ? python(role.data.condition as ExprData, { ...scope(context, imports), actor: 'user' }) : undefined;
-    const code = ['@rules.predicate', `def ${rolePredicate(role)}(user):`, `    return ${condition ? `${group} and ${wrap(condition)}` : group}`].join('\n');
+/** The Django user model that stores the actors and their fields. */
+export interface UserModel {
+    app: string;
+    name: string;
+    /** The entity the actors are bound to, when there is one. */
+    entity?: GraphNode;
+    /** Without a bound entity: the first actor with fields, which declares a `User` model for all of them. */
+    owner?: GraphNode;
+}
+
+/**
+ * The user model: the entity actors are bound to with `is`, or, when no actor is bound and some declare fields,
+ * a `User` model in the module of the first such actor. Undefined when actors are bound to several entities,
+ * or when the default `auth.User` will do.
+ */
+export function userModel(context: MapContext): UserModel | undefined {
+    const qn = userEntity(context);
+    if (qn) {
+        const entity = context.node(qn)!;
+        return { app: appOf(entity.module), name: lastOf(entity.qn), entity };
+    }
+    if (context.graph.nodes.some(n => n.kind === 'Actor' && n.data.entity)) return undefined;
+    const owner = context.graph.nodes.find(n => n.kind === 'Actor' && context.children(n.qn).some(c => c.kind === 'Field'));
+    if (!owner) return undefined;
+    const taken = context.children(owner.module).some(n => lastOf(n.qn) === 'User');
+    return { app: appOf(owner.module), name: taken ? 'ActorUser' : 'User', owner };
+}
+
+/** The fields declared on actors, one per name (the first declaration wins); stored on the user model. */
+export function actorFields(context: MapContext): GraphNode[] {
+    const byName = new Map<string, GraphNode>();
+    for (const actor of context.graph.nodes.filter(n => n.kind === 'Actor')) {
+        for (const field of children(actor, context, 'Field')) if (!byName.has(lastOf(field.qn))) byName.set(lastOf(field.qn), field);
+    }
+    return [...byName.values()];
+}
+
+/** The `AbstractUser` model of actors without a bound entity, holding the fields the actors declare. */
+export function actorUserSteps(user: UserModel, context: MapContext): Step[] {
+    const imports = new Set(['from django.db import models', 'from django.contrib.auth.models import AbstractUser']);
+    const lines = actorFieldLines(context, imports, new Set());
+    const code = [`class ${user.name}(AbstractUser):`, ...(lines.length ? lines : ['    pass'])].join('\n');
     return [
-        template(`${appOf(role.module)}/roles.py`, existing => pythonFile(existing, imports, code)),
-        task(`create the Django group ${name} for the role`),
-        ...(role.data.condition && !condition ? [task(`check the condition of ${name} in ${rolePredicate(role)}: ${role.props.condition}`)] : [])
+        template(`${user.app}/models.py`, existing => pythonFile(existing, imports, code)),
+        template('config/settings.py', existing => `${existing!.trimEnd()}\n\nAUTH_USER_MODEL = ${JSON.stringify(`${user.app}.${user.name}`)}\n`)
     ];
+}
+
+/** Model lines for the actor fields that the user model does not already have; all are optional, since not every actor declares them. */
+function actorFieldLines(context: MapContext, imports: Set<string>, existing: Set<string>): string[] {
+    const lines: string[] = [];
+    const fields = actorFields(context).filter(f => !existing.has(lastOf(f.qn)));
+    for (const field of fields.filter(f => !f.data.derived)) {
+        const optional = { ...field, data: { ...field.data, type: { ...(field.data.type as TypeData), optional: true } } };
+        lines.push(`    ${lastOf(field.qn)} = ${djangoField(optional, context, imports)}`);
+    }
+    for (const field of fields.filter(f => f.data.derived)) {
+        const code = property(field, context, imports);
+        if (code) lines.push('', '    @property', `    def ${lastOf(field.qn)}(self):`, `        return ${code}`);
+    }
+    return lines;
 }
 
 export function fieldSteps(field: GraphNode, context: MapContext): Step[] | undefined {
     const owner = context.node(parentOf(field.qn))!.kind;
     if (owner === 'Event') return [];
+    if (owner === 'Actor') {
+        if (!userModel(context)) return [task(`store the actor field ${lastOf(field.qn)}, for example on the user model`)];
+        return field.data.derived && !property(field, context, new Set()) ? [task(`implement the derived actor field ${lastOf(field.qn)} = ${field.props.derived}`)] : [];
+    }
     if (owner !== 'Entity' && owner !== 'ValueType') return undefined;
     const tasks: Step[] = [];
     if (field.data.derived && (owner === 'ValueType' || !property(field, context, new Set()))) {
@@ -91,16 +144,6 @@ export function invariantSteps(invariant: GraphNode, context: MapContext): Step[
     return [...rule, ...testSteps(invariant, String(invariant.props.condition), ['holds_for_valid_rows', 'rejects_violations'], context)];
 }
 
-export function policySteps(policy: GraphNode, context: MapContext): Step[] {
-    const operations = (policy.data.operations ?? []) as string[];
-    const fields = ((policy.data.fields ?? []) as string[]).map(lastOf);
-    const scope = `${operations.length ? operations.join(', ') : 'any'}${fields.length ? ` (fields ${fields.join(', ')})` : ''}`;
-    return [
-        task(`enforce the ${scope} policy of ${parentOf(policy.qn)}: ${policy.props.condition}`),
-        ...testSteps(policy, String(policy.props.condition), ['allows_permitted_actors', 'denies_other_actors'], context)
-    ];
-}
-
 function modelClass(entity: GraphNode, context: MapContext, imports: Set<string>): string {
     const name = lastOf(entity.qn);
     const fields = children(entity, context, 'Field');
@@ -110,13 +153,17 @@ function modelClass(entity: GraphNode, context: MapContext, imports: Set<string>
         const code = property(field, context, imports);
         if (code) lines.push('', '    @property', `    def ${lastOf(field.qn)}(self):`, `        return ${code}`);
     }
+    const user = userEntity(context) === entity.qn;
+    if (user) {
+        const own = actorFieldLines(context, imports, new Set(fields.map(f => lastOf(f.qn))));
+        if (own.length) lines.push(...(lines.length && own[0] !== '' ? [''] : []), ...own);
+    }
     const constraints = children(entity, context, 'Invariant').flatMap(invariant => {
         const condition = constraint(invariant, context);
         const id = `${appOf(entity.module)}_${name}_${String(invariant.data.label)}`.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
         return condition ? [`            models.CheckConstraint(condition=${condition}, name=${JSON.stringify(id)}),`] : [];
     });
     if (constraints.length) lines.push('', '    class Meta:', '        constraints = [', ...constraints, '        ]');
-    const user = userEntity(context) === entity.qn;
     if (user) imports.add('from django.contrib.auth.models import AbstractUser');
     return [`class ${name}(${user ? 'AbstractUser' : 'models.Model'}):`, ...(lines.length ? lines : ['    pass'])].join('\n');
 }
@@ -160,7 +207,7 @@ function defaultValue(field: GraphNode, context: MapContext, imports: Set<string
     return python(expr, scope(context, imports));
 }
 
-function property(field: GraphNode, context: MapContext, imports: Set<string>): string | undefined {
+export function property(field: GraphNode, context: MapContext, imports: Set<string>): string | undefined {
     return python(field.data.derived as ExprData, { ...scope(context, imports), self: 'self' });
 }
 

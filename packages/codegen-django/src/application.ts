@@ -1,6 +1,7 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
 import { annotation, children, pythonFile, task, template } from './files.js';
+import { enforced, fieldGuards, policyImport, queryGuard, useCaseGuard } from './access.js';
 import { scope, storedFields } from './models.js';
 import { appOf, lastOf, parentOf, python, q, snake, type PythonScope } from './python.js';
 
@@ -13,11 +14,18 @@ export function queryCode(query: GraphNode, context: MapContext, imports: Set<st
     imports.add(`from ${appOf(entity.module)}.models import ${lastOf(entity.qn)}`);
     if (filter) imports.add('from django.db import models');
     const rows = `${lastOf(entity.qn)}.objects${filter ? `.filter(${filter})` : '.all()'}${sorts.length ? `.order_by(${sorts.join(', ')})` : ''}`;
+    const guard = queryGuard(query, context, imports);
+    const body = guard.length ? [`rows = ${rows}`, ...guard, ...(guard.at(-1) === 'return rows.none()' ? [] : ['return rows'])] : [`return ${rows}`];
     return [
         ...(query.data.pageSize ? [`${pageSizeName(query)} = ${query.data.pageSize}`, '', ''] : []),
-        `def ${snake(lastOf(query.qn))}():`,
-        `    return ${rows}`
+        `def ${snake(lastOf(query.qn))}(${guard.length ? 'actor=None' : ''}):`,
+        ...body.map(l => `    ${l}`)
     ].join('\n');
+}
+
+/** A call of a query function, passing the actor when the query checks policies. */
+export function queryCall(query: GraphNode, actor: string, context: MapContext): string {
+    return `${snake(lastOf(query.qn))}(${enforced(context) ? `actor=${actor}` : ''})`;
 }
 
 export function pageSizeName(query: GraphNode): string {
@@ -39,6 +47,8 @@ export function projectionSteps(projection: GraphNode, context: MapContext): Ste
     const imports = new Set(['from rest_framework import serializers', `from ${appOf(entity.module)}.models import ${lastOf(entity.qn)}`]);
     const declared: string[] = [];
     const fields: string[] = [];
+    const hidden: string[] = [];
+    const guards = fieldGuards(entity, context);
     for (const field of children(projection, context, 'ProjectionField')) {
         const name = lastOf(field.qn);
         if (field.data.value) {
@@ -49,6 +59,9 @@ export function projectionSteps(projection: GraphNode, context: MapContext): Ste
             declared.push(`    ${name} = serializers.ReadOnlyField()`);
         }
         fields.push(JSON.stringify(name));
+        const path = field.data.value ? sourcePath(field.data.value as ExprData, context) : name;
+        const guard = path && guards.get(path.split('.')[0]);
+        if (guard) hidden.push(`        if ${JSON.stringify(name)} in data and not ${policyImport(entity, guard, imports)}(actor, instance):`, `            data[${JSON.stringify(name)}] = None`);
     }
     const code = [
         `class ${lastOf(projection.qn)}(serializers.ModelSerializer):`,
@@ -56,7 +69,18 @@ export function projectionSteps(projection: GraphNode, context: MapContext): Ste
         ...(declared.length ? [''] : []),
         '    class Meta:',
         `        model = ${lastOf(entity.qn)}`,
-        `        fields = [${fields.join(', ')}]`
+        `        fields = [${fields.join(', ')}]`,
+        ...(hidden.length ? [
+            '',
+            '    def to_representation(self, instance):',
+            '        """Hides the fields the requesting actor may not read; without a request nothing is hidden."""',
+            '        data = super().to_representation(instance)',
+            '        actor = getattr(self.context.get("request"), "user", None)',
+            '        if actor is None:',
+            '            return data',
+            ...hidden,
+            '        return data'
+        ] : [])
     ].join('\n');
     return [template(`${appOf(projection.module)}/serializers.py`, existing => pythonFile(existing, imports, code))];
 }
@@ -137,6 +161,7 @@ export function useCaseSteps(useCase: GraphNode, context: MapContext): Step[] {
             return `${snake(lastOf(e.qn))}: ${lastOf(e.qn)}`;
         })
     ];
+    lines.unshift(...useCaseGuard(useCase, context, pyScope));
     const code = [`def ${snake(lastOf(useCase.qn))}(${signature.join(', ')}) -> None:`, ...(lines.length ? lines : ['pass']).map(l => `    ${l}`)].join('\n');
     return [template(`${appOf(useCase.module)}/usecases.py`, existing => pythonFile(existing, imports, code)), ...tasks];
 }
@@ -160,7 +185,7 @@ function callCode(call: Call, context: MapContext, pyScope: PythonScope, externa
     }
     if (target.kind === 'Query') {
         pyScope.imports.add(`from ${appOf(target.module)}.queries import ${name}`);
-        return `${name}()`;
+        return queryCall(target, 'actor', context);
     }
     return undefined;
 }

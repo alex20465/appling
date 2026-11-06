@@ -8,10 +8,10 @@
   },
   {
     "kind": "Actor",
-    "generated": 0,
+    "generated": 3,
     "partial": 0,
-    "todo": 3,
-    "tasks": 3
+    "todo": 0,
+    "tasks": 0
   },
   {
     "kind": "CreateEffect",
@@ -85,10 +85,10 @@
   },
   {
     "kind": "Field",
-    "generated": 39,
+    "generated": 40,
     "partial": 0,
-    "todo": 1,
-    "tasks": 1
+    "todo": 0,
+    "tasks": 0
   },
   {
     "kind": "Flow",
@@ -172,7 +172,7 @@
     "generated": 0,
     "partial": 7,
     "todo": 0,
-    "tasks": 14
+    "tasks": 7
   },
   {
     "kind": "Projection",
@@ -197,10 +197,10 @@
   },
   {
     "kind": "Role",
-    "generated": 0,
-    "partial": 3,
+    "generated": 3,
+    "partial": 0,
     "todo": 0,
-    "tasks": 4
+    "tasks": 0
   },
   {
     "kind": "SetEffect",
@@ -211,10 +211,10 @@
   },
   {
     "kind": "Tenant",
-    "generated": 0,
+    "generated": 1,
     "partial": 0,
-    "todo": 1,
-    "tasks": 1
+    "todo": 0,
+    "tasks": 0
   },
   {
     "kind": "Transition",
@@ -239,9 +239,9 @@
   },
   {
     "kind": "total",
-    "generated": 101,
-    "partial": 25,
-    "todo": 10,
-    "tasks": 54
+    "generated": 109,
+    "partial": 22,
+    "todo": 5,
+    "tasks": 38
   }
 ]

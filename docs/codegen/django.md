@@ -36,7 +36,7 @@ The extension creates the project with uv and Django's own commands, then patche
 | Step | Command |
 |---|---|
 | Python project | `uv init --bare --name <name>` |
-| Dependencies | `uv add django~=6.1.0`, plus `djangorestframework~=3.16` when the model has projections or interfaces, and [`rules~=3.5`](https://github.com/dfunckt/django-rules) when it has roles |
+| Dependencies | `uv add django~=6.1.0`, plus `djangorestframework~=3.16` when the model has projections or interfaces, and [`rules~=3.5`](https://github.com/dfunckt/django-rules) when it has roles or actors |
 | Django project | `uv run django-admin startproject config .`, and `rest_framework` in `INSTALLED_APPS` when REST framework is installed |
 | Apps | `uv run python manage.py startapp <app>` per module, added to `INSTALLED_APPS` |
 | Migrations | `uv run python manage.py makemigrations`, as the very last step |
@@ -52,12 +52,14 @@ The app of a module is its qualified name with dots replaced by underscores: the
 | `module` | an app created by `startapp`, in `INSTALLED_APPS` |
 | `enum` | a `models.TextChoices` class in `<app>/enums.py`; each value becomes an upper case member, such as `DRAFT = "draft"` |
 | `value` | a `TypedDict` in `<app>/values.py` |
-| `entity` | a `models.Model` in `<app>/models.py`; the entity that actors are bound to with `is` (exactly one) extends `AbstractUser` instead, and `AUTH_USER_MODEL` in `config/settings.py` points at it |
+| `entity` | a `models.Model` in `<app>/models.py`; the entity that actors are bound to with `is` (exactly one) extends `AbstractUser` instead, and `AUTH_USER_MODEL` in `config/settings.py` points at it (see [actors](#actors)) |
 | stored field | a model field (see the next table) |
 | derived field | a `@property` that returns the expression translated to Python |
 | `invariant` | a `CheckConstraint` in `Meta.constraints`, named `<app>_<entity>_<label>`, when the condition compares stored fields with constants or other stored fields; a test class |
-| `policy` | a test class; enforcing it is a task |
-| `role` | a django-rules predicate `is_<role>(user)` in `<app>/roles.py`: the user is in the Django group of the role and the role's condition holds; creating the group is a task (see [roles](#roles)) |
+| `policy` | functions in `<app>/policies.py` that actions, queries, use cases, serializers and pages call (see [access](#access)); a test class |
+| `role` | a django-rules predicate `is_<role>(user)` in `<app>/roles.py` and a Django group (see [roles](#roles)) |
+| `actor` | a Django group, a predicate `is_<actor>(user)` in `<app>/actors.py`, and its fields on the user model (see [actors](#actors)) |
+| `tenant` | a context variable and a middleware in `<app>/tenants.py` (see [tenants](#tenants)) |
 | `event` | a `Signal` in `<app>/events.py` |
 | `errors` | exception classes in `<app>/errors.py`, which also defines `InvalidTransition` |
 | `action` | a function in `<app>/actions.py` (see [actions](#actions)) |
@@ -73,7 +75,7 @@ The app of a module is its qualified name with dots replaced by underscores: the
 | `page` | a view in `<app>/pages.py` and a route in `<app>/urls.py`, included at the site root (see [pages](#pages)) |
 | `navigation` | the menu of `<app>/templates/<app>/base.html` |
 | `messages` | labels in `<app>/messages.py`, used for the columns and fields of pages |
-| `flow`, actors, tenants | not generated; `todo` entries in the [registry](registry.md) |
+| `flow` | not generated; a `todo` entry in the [registry](registry.md) |
 
 ### Fields
 
@@ -207,6 +209,10 @@ build/shop/
     enums.py             enums
     values.py            value types
     errors.py            InvalidTransition and declared errors
+    roles.py, actors.py  role and actor predicates
+    groups.py            creates the groups of roles and actors after migrate
+    policies.py          entity policies
+    tenants.py           the current tenant and its middleware
     events.py            signals
     actions.py           actions
     handlers.py          receivers for event transitions and event jobs
@@ -233,7 +239,7 @@ An app only gets the files its module needs.
 
 ## Roles
 
-A role becomes one predicate, and `actor.is(Role)` calls it wherever an expression is translated, such as in a precondition: `is_operator(actor)`. The condition of the role reads the actor's fields as fields of the user model:
+A role becomes one predicate, and `actor.is(Role)` calls it wherever an expression is translated, such as in a precondition: `is_operator(actor)`. A user carries the role when they are in the Django group of the role or in the group of an actor that carries it. The condition of the role reads the actor's fields as fields of the user model:
 
 ```appling
 module ops {
@@ -253,17 +259,84 @@ import rules
 
 @rules.predicate
 def is_operator(user):
-    return user.groups.filter(name="Operator").exists() and user.active
+    return user is not None and user.groups.filter(name__in=["Operator", "Employee"]).exists() and user.active
 ```
 
 `User` extends `AbstractUser` and keeps the derived `active` as a property. The predicates are plain functions, so they also combine with django-rules (`is_operator | is_admin`); `rules.add_perm` is not generated.
+
+The groups of a module's roles and actors are listed in `<app>/groups.py`, whose `post_migrate` receiver creates them with `get_or_create`, so `migrate` sets them up. Assigning users to groups stays with you, for example in the admin.
+
+## Actors
+
+An actor becomes a Django group and a predicate in `<app>/actors.py`, which `actor.is(Employee)` calls:
+
+```python
+@rules.predicate
+def is_employee(user):
+    return user is not None and user.groups.filter(name="Employee").exists()
+```
+
+The current actor is the Django user. Fields declared on actors become fields of the user model, all optional (`null=True, blank=True`), since not every actor declares them; `actor.account` reads `user.account`. The user model is the entity the actors are bound to with `is` when there is exactly one. When no actor is bound and some declare fields, the module of the first such actor gets a `User(AbstractUser)` model (`ActorUser` when the module already has a `User`) and `AUTH_USER_MODEL` points at it. With actors bound to several entities, actor fields are tasks.
+
+## Tenants
+
+A tenant becomes `<app>/tenants.py`. `tenant` in an expression translates to `current_<tenant>()`, which reads a context variable; a middleware, appended to `MIDDLEWARE`, sets it for each request from the user model's field of the tenant's entity type, or to the user when the user model is that entity:
+
+```python
+class CompanyMiddleware:
+    """Sets the current tenant for each request: the account of the signed in user."""
+
+    def __call__(self, request):
+        token = _company.set(getattr(request.user, "account", None))
+        ...
+```
+
+Outside a request, such as in a job, the tenant is `None`. Without such a field, setting the tenant is a task. Rows are not filtered by tenant automatically; policies such as `account == tenant` do that.
+
+## Access
+
+Once the model has a policy, the generated code enforces every policy along the reference path, as [narrowing](../language/access.md#narrowing) describes, and nothing is open by default. A model without any policy generates no checks.
+
+Each entity gets functions in `<app>/policies.py`:
+
+| Function | True when |
+|---|---|
+| `can_<operation>_<entity>(actor, record)` | the actor is signed in and every whole record policy that covers the operation holds; `False` when none covers it |
+| `can_read_<entity>_<field>(actor, record)` | the entity can be read and every read policy with `fields` that names the field holds |
+| `readable_<entity>_rows(actor, rows)` | returns the queryset narrowed to the rows `can_read_<entity>` allows, as a `models.Q` when the read policies translate to lookups (`account == actor.account` becomes `models.Q(account=actor.account)`, `actor.is(Clerk)` a Q that matches every row or none), otherwise by testing each row |
+
+```python
+def can_update_order(actor, order) -> bool:
+    if not getattr(actor, "is_authenticated", False):
+        return False
+    return is_clerk(actor)
+```
+
+They are called where the model uses the element:
+
+| Element | Check |
+|---|---|
+| action | first, `can_update_<entity>` of its entity and its own policies; a `create` effect builds the record, checks `can_create_<entity>` and then saves it; a failed check raises `PermissionDenied` |
+| query | the query function takes `actor=None`, narrows the rows with `readable_<entity>_rows` and filters by its own policies |
+| use case | its own policies first; the steps check theirs |
+| projection | the serializer sets a field the actor may not read to `None` in `to_representation` |
+| page | a detail raises `PermissionDenied` when the record cannot be read; lists pass the user to the query; guarded fields show `None` |
+
+```python
+@transaction.atomic
+def cancel(order: Order, *, reason: str | None = None, actor=None) -> None:
+    if actor is not None and not (actor.is_authenticated and can_update_order(actor, order) and is_clerk(actor)):
+        raise PermissionDenied("Cancel")
+```
+
+Views pass `request.user`, and REST framework and Django answer `PermissionDenied` with `403`. Code that calls with `actor=None`, such as jobs and event receivers, runs as the system and is not checked. Policy conditions without a Python translation deny (`return False`) and stay tasks; field policies that also cover writes are enforced on reads only, the rest is a task. Delete policies become `can_delete_<entity>`, which no generated code calls, since nothing in the model deletes; Django's `has_perm` and the admin do not use the functions.
 
 ## What becomes a task
 
 Whatever cannot be translated is listed in the [registry](registry.md):
 
 - invariants over derived fields, lists or other entities, and derived fields or defaults that use `actor` or other context
-- policies, the Django groups of roles, and role conditions without a Python translation
+- policy and role conditions without a Python translation, and field policies on writes
 - preconditions, guards and effects without a Python translation
 - actions without any generated code, and actions with `consistency eventual`
 - the client of an external system
@@ -272,7 +345,7 @@ Whatever cannot be translated is listed in the [registry](registry.md):
 - authentication and CORS of interfaces, and endpoints that do not fit the view patterns
 - computed projection fields that are not a path over entity fields
 - row actions that need inputs, details and forms on pages without `{id}` in the route, navigation items to such pages, and flows
-- actors, tenants, and interfaces with a protocol other than `rest`
+- the tenant of a request when the user model has no field of the tenant's entity, actor fields when actors are bound to several entities, and interfaces with a protocol other than `rest`
 
 ## Run the generated project
 

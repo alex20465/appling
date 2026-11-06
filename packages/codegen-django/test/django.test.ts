@@ -10,7 +10,7 @@ async function generate(sources: Record<string, string>) {
     const { documents, services } = await buildWorkspace(sources);
     const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), django, 'shop');
     const files = new Map<string, string>([
-        ['config/settings.py', "INSTALLED_APPS = [\n    'django.contrib.admin',\n]\n"],
+        ['config/settings.py', "INSTALLED_APPS = [\n    'django.contrib.admin',\n]\n\nMIDDLEWARE = [\n    'django.contrib.auth.middleware.AuthenticationMiddleware',\n]\n"],
         ['config/urls.py', "from django.contrib import admin\nfrom django.urls import path\n\nurlpatterns = [\n    path('admin/', admin.site.urls),\n]\n"]
     ]);
     for (const { step } of result.steps) {
@@ -101,13 +101,120 @@ test('roles become django-rules predicates, and the entity actors are bound to b
         }`
     });
     expect(files['ops/roles.py']).toBe([
-        'import rules', '', '', '@rules.predicate', 'def is_operator(user):', '    return user.groups.filter(name="Operator").exists() and user.active',
-        '', '', '@rules.predicate', 'def is_viewer(user):', '    return user.groups.filter(name="Viewer").exists()', ''
+        'import rules', '', '', '@rules.predicate', 'def is_operator(user):', '    return user is not None and user.groups.filter(name__in=["Operator", "Employee"]).exists() and user.active',
+        '', '', '@rules.predicate', 'def is_viewer(user):', '    return user is not None and user.groups.filter(name__in=["Viewer", "Employee"]).exists()', ''
     ].join('\n'));
     expect(files['ops/models.py']).toContain('from django.contrib.auth.models import AbstractUser');
     expect(files['ops/models.py']).toContain('class User(AbstractUser):');
     expect(files['config/settings.py']).toContain('AUTH_USER_MODEL = "ops.User"');
     expect(files['ops/actions.py']).toContain('from ops.roles import is_operator');
     expect(files['ops/actions.py']).toContain('is_operator(actor)');
-    expect(entries['ops.Operator'].missing.map(m => m.what)).toEqual(['create the Django group Operator for the role']);
+    expect(files['ops/groups.py']).toContain('GROUPS = [\n    "Operator",\n    "Viewer",\n    "Employee",\n]');
+    expect(files['ops/apps.py']).toContain('    def ready(self):\n        from . import groups  # noqa: F401\n');
+    expect(entries['ops.Operator'].status).toBe('generated');
+    expect(entries['ops.Employee'].status).toBe('generated');
+});
+
+const ACCESS = `module shop {
+    role Clerk
+    role Customer
+    actor human Shopper roles Customer {
+        account: Account
+        nickname: String
+    }
+    actor human Employee roles Clerk
+    tenant Company on Account
+    entity Account {
+        name: String unique
+        policy read { actor.is(Clerk) || (actor.is(Customer) && actor.account == this) }
+    }
+    enum Status { draft placed }
+    entity Order {
+        account: Account
+        status: Status default draft
+        total: Money
+        policy read { actor.is(Clerk) || (actor.is(Customer) && account == actor.account) }
+        policy create, update, delete { actor.is(Clerk) && account == tenant }
+        policy read fields total { actor.is(Clerk) || (actor.is(Customer) && status != draft) }
+    }
+    entity Note {
+        text: String
+    }
+    action Place on Order {
+        policy { actor.is(Customer) && account == actor.account }
+    }
+    action Jot {
+        input { text: String }
+        effect { create Note { text = text } }
+    }
+    query Mine from Order {
+        where { status == placed }
+        policy { actor.is(Customer) && account == actor.account }
+    }
+    projection OrderView from Order {
+        status
+        total
+    }
+    usecase Close (order: Order) {
+        step Place(order)
+        policy { actor.is(Employee) }
+    }
+}`;
+
+test('actors, tenants and policies are generated and enforced', async () => {
+    const { files, entries } = await generate({ 'shop.appling': ACCESS });
+    expect(files['shop/models.py']).toContain([
+        'class User(AbstractUser):',
+        '    account = models.ForeignKey("shop.Account", on_delete=models.PROTECT, null=True, blank=True)',
+        '    nickname = models.CharField(max_length=255, null=True, blank=True)'
+    ].join('\n'));
+    expect(files['config/settings.py']).toContain('AUTH_USER_MODEL = "shop.User"');
+    expect(files['shop/actors.py']).toContain('def is_shopper(user):\n    return user is not None and user.groups.filter(name="Shopper").exists()');
+    expect(files['shop/roles.py']).toContain('user.groups.filter(name__in=["Customer", "Shopper"]).exists()');
+    expect(files['shop/tenants.py']).toContain('token = _company.set(getattr(request.user, "account", None))');
+    expect(files['config/settings.py']).toContain("MIDDLEWARE = [\n    'django.contrib.auth.middleware.AuthenticationMiddleware',\n    \"shop.tenants.CompanyMiddleware\",\n]");
+    expect(files['shop/policies.py']).toContain([
+        'def can_update_order(actor, order) -> bool:',
+        '    if not getattr(actor, "is_authenticated", False):',
+        '        return False',
+        '    return is_clerk(actor) and (order.account == current_company())'
+    ].join('\n'));
+    expect(files['shop/policies.py']).toContain('def can_read_order_total(actor, order) -> bool:\n    return can_read_order(actor, order) and (is_clerk(actor) or (is_customer(actor) and (order.status != Status.DRAFT)))');
+    expect(files['shop/policies.py']).toContain('return rows.filter(((models.Q(pk__isnull=False) if is_clerk(actor) else models.Q(pk__in=[]))) | (((models.Q(pk__isnull=False) if is_customer(actor) else models.Q(pk__in=[]))) & (models.Q(pk=getattr(actor.account, "pk", None)))))');
+    expect(files['shop/policies.py']).toContain('def can_read_note(actor, note) -> bool:\n    return False  # no policy grants read');
+    expect(files['shop/actions.py']).toContain([
+        'def place(order: Order, *, actor=None) -> None:',
+        '    if actor is not None and not (actor.is_authenticated and can_update_order(actor, order) and (is_customer(actor) and (order.account == actor.account))):',
+        '        raise PermissionDenied("Place")'
+    ].join('\n'));
+    expect(files['shop/actions.py']).toContain([
+        '    created = Note(text=text)',
+        '    if actor is not None and not can_create_note(actor, created):',
+        '        raise PermissionDenied("Jot")',
+        '    created.save()'
+    ].join('\n'));
+    expect(files['shop/queries.py']).toContain([
+        'def mine(actor=None):',
+        '    rows = Order.objects.filter(models.Q(status="placed"))',
+        '    if actor is None:',
+        '        return rows',
+        '    if not actor.is_authenticated:',
+        '        return rows.none()',
+        '    rows = readable_order_rows(actor, rows)',
+        '    rows = rows.filter(((models.Q(pk__isnull=False) if is_customer(actor) else models.Q(pk__in=[]))) & (models.Q(account=actor.account)))',
+        '    return rows'
+    ].join('\n'));
+    expect(files['shop/serializers.py']).toContain('        if "total" in data and not can_read_order_total(actor, instance):\n            data["total"] = None');
+    expect(files['shop/usecases.py']).toContain('    if actor is not None and not (actor.is_authenticated and is_employee(actor)):\n        raise PermissionDenied("Close")\n    place(order, actor=actor)');
+    for (const qn of ['shop.Shopper', 'shop.Shopper.account', 'shop.Employee', 'shop.Company', 'shop.Clerk']) expect(entries[qn].status, qn).toBe('generated');
+    for (const policy of Object.values(entries).filter(e => e.kind === 'Policy')) {
+        expect(policy.missing.map(m => m.what), policy.qn).toEqual([expect.stringMatching(/^write the test bodies of /)]);
+    }
+});
+
+test('a model without policies keeps open queries and actions', async () => {
+    const { files } = await generate({ 'shop.appling': 'module shop {\n role Clerk\n entity Order {\n note: String?\n }\n action Touch on Order {\n effect { set note = "seen" }\n }\n query All from Order {\n }\n}' });
+    expect(files['shop/policies.py']).toBeUndefined();
+    expect(files['shop/queries.py']).toContain('def all():\n    return Order.objects.all()');
+    expect(files['shop/actions.py']).not.toContain('PermissionDenied');
 });
