@@ -2,6 +2,102 @@
 
 exports[`examples generate Go packages for the domain and behavior layers 1`] = `
 {
+  "internal/access/access.go": "// Package access holds the actors, roles and tenant of the model and the checks its policies call.
+package access
+
+import (
+	"errors"
+	"slices"
+)
+
+// ErrForbidden is returned by an action when its policies do not grant it to the actor.
+var ErrForbidden = errors.New("forbidden")
+
+// Role is a role of the model, by qualified name.
+type Role string
+
+const (
+	// RoleClerk is the role crm.Clerk.
+	RoleClerk Role = "crm.Clerk"
+	// RoleCustomer is the role sales.Customer.
+	RoleCustomer Role = "sales.Customer"
+)
+
+// ActorType is a declared actor of the model, by qualified name.
+type ActorType string
+
+const (
+	// ActorShopper is the human actor sales.Shopper.
+	ActorShopper ActorType = "sales.Shopper"
+)
+
+// Actor is who acts: a declared actor with the roles it carries, the tenant it acts in, and the fields
+// the actors declare. A field is nil for actors that do not declare it; fields that hold records hold their ID.
+type Actor struct {
+	Type  ActorType \`json:"type"\`
+	Roles []Role    \`json:"roles"\`
+	// ID is the record the actor is stored as, for actors declared with \`is\`.
+	ID *int64 \`json:"id"\`
+	// Tenant is the ID of the crm.Account the actor acts in (the tenant crm.Company); nil when it acts across tenants.
+	Tenant *int64 \`json:"tenant"\`
+	// Account is the field account of sales.Shopper, the ID of a crm.Account.
+	Account *int64 \`json:"account"\`
+}
+
+// NewShopper returns the actor sales.Shopper with the roles it declares.
+func NewShopper() Actor {
+	return Actor{Type: ActorShopper, Roles: []Role{RoleCustomer}}
+}
+
+// Has reports whether the actor carries the role, without checking the role's condition.
+func (a Actor) Has(role Role) bool {
+	return slices.Contains(a.Roles, role)
+}
+
+// IsClerk reports whether the actor is crm.Clerk: it carries the role.
+func IsClerk(actor Actor) bool {
+	return actor.Has(RoleClerk)
+}
+
+// IsCustomer reports whether the actor is sales.Customer: it carries the role.
+func IsCustomer(actor Actor) bool {
+	return actor.Has(RoleCustomer)
+}
+
+// Value returns what an optional actor field points to, or the zero value when the actor does not have it.
+func Value[T any](p *T) T {
+	if p == nil {
+		var zero T
+		return zero
+	}
+	return *p
+}
+
+// Same reports whether a record ID of the actor refers to the record with the given ID.
+func Same(ref *int64, id int64) bool {
+	return ref != nil && *ref == id
+}
+
+// SameRef reports whether two record IDs of the actor refer to the same record.
+func SameRef(a, b *int64) bool {
+	return a != nil && b != nil && *a == *b
+}
+
+// Tenanted is a record that belongs to a crm.Account, the entity of the tenant crm.Company.
+type Tenanted interface {
+	// TenantID returns the ID of the crm.Account, and false when the record does not reach one.
+	TenantID() (int64, bool)
+}
+
+// InTenant reports whether the record belongs to the tenant the actor acts in. An actor without a tenant acts across tenants.
+func InTenant(actor Actor, record Tenanted) bool {
+	if actor.Tenant == nil {
+		return true
+	}
+	id, ok := record.TenantID()
+	return ok && id == *actor.Tenant
+}
+",
   "internal/crm/crm_test.go": "package crm
 
 import (
@@ -17,6 +113,38 @@ func TestAccountPolicyRead(t *testing.T) {
 
 
 // Package crm holds the crm module of the model.
+",
+  "internal/crm/policies.go": "package crm
+
+import (
+	"shop/internal/access"
+)
+
+
+// CanReadAccount reports whether the policies of crm.Account let the actor read the record.
+func CanReadAccount(actor access.Actor, account *Account) bool {
+	return access.InTenant(actor, account) && accountPolicyRead(actor, account)
+}
+
+// CanCreateAccount reports whether the policies of crm.Account let the actor create the record; no policy grants create.
+func CanCreateAccount(actor access.Actor, account *Account) bool {
+	return false
+}
+
+// CanUpdateAccount reports whether the policies of crm.Account let the actor update the record; no policy grants update.
+func CanUpdateAccount(actor access.Actor, account *Account) bool {
+	return false
+}
+
+// CanDeleteAccount reports whether the policies of crm.Account let the actor delete the record; no policy grants delete.
+func CanDeleteAccount(actor access.Actor, account *Account) bool {
+	return false
+}
+
+// accountPolicyRead is the policy crm.Account.policy[read]: actor.is(Clerk) || (actor.is(sales.Customer) && actor.account == this)
+func accountPolicyRead(actor access.Actor, account *Account) bool {
+	return access.IsClerk(actor) || (access.IsCustomer(actor) && access.Same(actor.Account, account.ID))
+}
 ",
   "internal/crm/support.go": "package crm
 
@@ -49,18 +177,27 @@ func (a *Account) Validate() error {
 	var errs []error
 	return errors.Join(errs...)
 }
+
+// TenantID returns the ID of the crm.Account this Account belongs to, for the tenant crm.Company.
+func (a *Account) TenantID() (int64, bool) {
+	return a.ID, true
+}
 ",
   "internal/sales/actions.go": "package sales
 
 import (
 	"fmt"
+	"shop/internal/access"
 	"time"
 )
 
 
 // PlaceOrder is the action sales.PlaceOrder. It returns the events it emits.
-func PlaceOrder(order *Order) ([]any, error) {
+func PlaceOrder(actor access.Actor, order *Order) ([]any, error) {
 	var events []any
+	if !CanPlaceOrder(actor, order) {
+		return nil, fmt.Errorf("%w: PlaceOrder", access.ErrForbidden)
+	}
 	if !(int64(len(order.Lines)) > 0) {
 		return nil, ErrEmptyOrder
 	}
@@ -76,8 +213,11 @@ func PlaceOrder(order *Order) ([]any, error) {
 }
 
 // Cancel is the action sales.Cancel. It returns the events it emits.
-func Cancel(order *Order, reason *string) ([]any, error) {
+func Cancel(actor access.Actor, order *Order, reason *string) ([]any, error) {
 	var events []any
+	if !CanCancel(actor, order, reason) {
+		return nil, fmt.Errorf("%w: Cancel", access.ErrForbidden)
+	}
 	switch {
 	case (order.Status == OrderStatusDraft || order.Status == OrderStatusPlaced) && (!(order.PaidAt != nil)):
 		order.Status = OrderStatusCancelled
@@ -138,6 +278,73 @@ func OrderFlowOnPaymentReceived(event PaymentReceived) ([]any, error) {
 		return nil, fmt.Errorf("%w: PaymentReceived from %s", ErrInvalidTransition, event.Order.Status)
 	}
 	return events, nil
+}
+",
+  "internal/sales/policies.go": "package sales
+
+import (
+	"shop/internal/access"
+)
+
+
+// CanReadOrder reports whether the policies of sales.Order let the actor read the record.
+func CanReadOrder(actor access.Actor, order *Order) bool {
+	return access.InTenant(actor, order) && orderPolicyRead(actor, order)
+}
+
+// CanReadOrderTotal reports whether the actor may read the field total of the record.
+func CanReadOrderTotal(actor access.Actor, order *Order) bool {
+	return CanReadOrder(actor, order) && orderPolicyReadFieldsTotal(actor, order)
+}
+
+// CanCreateOrder reports whether the policies of sales.Order let the actor create the record.
+func CanCreateOrder(actor access.Actor, order *Order) bool {
+	return access.InTenant(actor, order) && orderPolicyCreateUpdateDelete(actor, order)
+}
+
+// CanUpdateOrder reports whether the policies of sales.Order let the actor update the record.
+func CanUpdateOrder(actor access.Actor, order *Order) bool {
+	return access.InTenant(actor, order) && orderPolicyCreateUpdateDelete(actor, order)
+}
+
+// CanDeleteOrder reports whether the policies of sales.Order let the actor delete the record.
+func CanDeleteOrder(actor access.Actor, order *Order) bool {
+	return access.InTenant(actor, order) && orderPolicyCreateUpdateDelete(actor, order)
+}
+
+// orderPolicyRead is the policy sales.Order.policy[read]: actor.is(crm.Clerk) || (actor.is(Customer) && customer == actor.account)
+func orderPolicyRead(actor access.Actor, order *Order) bool {
+	return access.IsClerk(actor) || (access.IsCustomer(actor) && access.Same(actor.Account, order.Customer.ID))
+}
+
+// orderPolicyCreateUpdateDelete is the policy sales.Order.policy[create,update,delete]: actor.is(crm.Clerk)
+func orderPolicyCreateUpdateDelete(actor access.Actor, order *Order) bool {
+	return access.IsClerk(actor)
+}
+
+// orderPolicyReadFieldsTotal is the policy sales.Order.policy[read fields total]: actor.is(crm.Clerk) || (actor.is(Customer) && status != draft)
+func orderPolicyReadFieldsTotal(actor access.Actor, order *Order) bool {
+	return access.IsClerk(actor) || (access.IsCustomer(actor) && (order.Status != OrderStatusDraft))
+}
+
+// CanPlaceOrder reports whether the actor may run sales.PlaceOrder, including the update check of sales.Order.
+func CanPlaceOrder(actor access.Actor, order *Order) bool {
+	return CanUpdateOrder(actor, order) && placeOrderPolicy(actor, order)
+}
+
+// placeOrderPolicy is the policy sales.PlaceOrder.policy[]: actor.is(Customer) && customer == actor.account
+func placeOrderPolicy(actor access.Actor, order *Order) bool {
+	return access.IsCustomer(actor) && access.Same(actor.Account, order.Customer.ID)
+}
+
+// CanCancel reports whether the actor may run sales.Cancel, including the update check of sales.Order.
+func CanCancel(actor access.Actor, order *Order, reason *string) bool {
+	return CanUpdateOrder(actor, order) && cancelPolicy(actor, order, reason)
+}
+
+// cancelPolicy is the policy sales.Cancel.policy[]: actor.is(crm.Clerk)
+func cancelPolicy(actor access.Actor, order *Order, reason *string) bool {
+	return access.IsClerk(actor)
 }
 ",
   "internal/sales/sales_test.go": "package sales
@@ -255,6 +462,14 @@ func (o *Order) Validate() error {
 		errs = append(errs, errors.New("total never negative"))
 	}
 	return errors.Join(errs...)
+}
+
+// TenantID returns the ID of the crm.Account this Order belongs to, for the tenant crm.Company.
+func (o *Order) TenantID() (int64, bool) {
+	if o.Customer == nil {
+		return 0, false
+	}
+	return o.Customer.ID, true
 }
 ",
 }

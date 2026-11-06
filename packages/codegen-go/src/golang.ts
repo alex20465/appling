@@ -1,13 +1,25 @@
 import type { ExprData, GraphNode } from '@appling/model';
 
 /** What a translated expression is in Go, which decides the operators: decimals and times have methods. */
-type Kind = 'decimal' | 'time' | 'duration' | 'int' | 'string' | 'bool' | 'list' | 'null' | 'other';
+type Kind = 'decimal' | 'time' | 'duration' | 'int' | 'string' | 'bool' | 'list' | 'null' | 'other' | 'id';
 
 interface Go {
     code: string;
     kind: Kind;
     /** The code is a pointer to the value (an optional field), so reading it needs `*`. */
     pointer?: boolean;
+    /** How to read the value when it is not `*code`, such as `access.Value(actor.Active)`. */
+    read?: string;
+}
+
+/** The generated access package: the actor, role and tenant checks that policies and role conditions call. */
+export interface GoAccess {
+    /** The package name, such as `access`. */
+    pkg: string;
+    /** The import path, such as `shop/internal/access`. */
+    path: string;
+    /** The Go name of a role or actor, such as `Clerk`, prefixed with its module when the last name is not unique. */
+    name(qn: string): string;
 }
 
 export interface GoScope {
@@ -20,17 +32,27 @@ export interface GoScope {
     imports: Set<string>;
     /** The Go import path of a module, such as `shop/internal/crm`. */
     importOf(module: string): string;
+    /** The variable holding the current `access.Actor`, in policies and role conditions; without it `actor` and `tenant` do not translate. */
+    actor?: string;
+    access?: GoAccess;
 }
 
 const COMPARE: { [op: string]: string } = { '<': 'LessThan', '<=': 'LessThanOrEqual', '>': 'GreaterThan', '>=': 'GreaterThanOrEqual' };
 const ARITHMETIC: { [op: string]: string } = { '+': 'Add', '-': 'Sub', '*': 'Mul', '/': 'Div' };
 const UNITS: { [unit: string]: string } = { ms: 'time.Millisecond', s: 'time.Second', m: 'time.Minute', h: 'time.Hour', d: '24 * time.Hour' };
 
-/** Translates an expression to Go, or returns undefined when Go code cannot say it, such as a policy over `actor`. */
+/** Translates an expression to Go, or returns undefined when Go code cannot say it, such as `actor` outside a policy. */
 export function goExpr(expr: ExprData, scope: GoScope): string | undefined {
     const result = translate(expr, scope);
     return result && value(result);
 }
+
+/** The Go type of a primitive and the package it needs. */
+export const PRIMITIVES: { [name: string]: [string, string?] } = {
+    String: ['string'], Text: ['string'], Int: ['int64'], Bool: ['bool'], File: ['string'], Uuid: ['string'],
+    Decimal: ['decimal.Decimal', 'github.com/shopspring/decimal'], Money: ['decimal.Decimal', 'github.com/shopspring/decimal'],
+    Date: ['time.Time', 'time'], DateTime: ['time.Time', 'time'], Duration: ['time.Duration', 'time']
+};
 
 /** The Go type of an Appling type name as the typer shows it, such as `Money`, `Line[]` or `DateTime?`. */
 export function kindOf(type: string): Kind {
@@ -53,7 +75,9 @@ function translate(expr: ExprData, scope: GoScope): Go | undefined {
         }
         case 'BinaryExpr': return binary(expr, scope);
         case 'NameExpr': return expr.call ? call(expr, scope) : name(expr, scope);
-        case 'MemberExpr': return expr.call ? method(expr, scope) : member(expr, scope);
+        case 'MemberExpr':
+            if (isActor(expr.receiver!, scope)) return actorMember(expr, scope);
+            return expr.call ? method(expr, scope) : member(expr, scope);
         case 'IndexExpr': {
             const [list, index] = [translate(expr.receiver!, scope), translate(expr.index!, scope)];
             return list && index ? { code: `${value(list)}[${value(index)}]`, kind: kindOf(expr.type) } : undefined;
@@ -78,6 +102,11 @@ function binary(expr: ExprData, scope: GoScope): Go | undefined {
         const subject = left.kind === 'null' ? right : left;
         return { code: `${subject.code} ${op} nil`, kind: 'bool' };
     }
+    if (left.kind === 'id' || right.kind === 'id') {
+        const same = sameRecord(left, right, scope);
+        if (!same || (op !== '==' && op !== '!=')) return undefined;
+        return { code: op === '!=' ? `!${wrap(same)}` : same, kind: 'bool' };
+    }
     const kinds = [left.kind, right.kind];
     if (kinds.includes('decimal')) {
         const [a, b] = [decimal(left, scope), decimal(right, scope)];
@@ -100,6 +129,8 @@ function binary(expr: ExprData, scope: GoScope): Go | undefined {
 function name(expr: ExprData, scope: GoScope): Go | undefined {
     const id = expr.name!;
     if (scope.vars?.has(id)) return { code: id, kind: scope.vars.get(id)! };
+    if (isActor(expr, scope)) return scope.actor ? { code: `${scope.actor}.ID`, kind: 'id', pointer: true } : undefined;
+    if (expr.target && scope.node(expr.target)?.kind === 'Tenant') return scope.actor ? { code: `${scope.actor}.Tenant`, kind: 'id', pointer: true } : undefined;
     if (!expr.target) {
         if (id === 'this') return scope.self ? { code: scope.self, kind: 'other' } : undefined;
         if (id === 'now') {
@@ -120,7 +151,7 @@ function name(expr: ExprData, scope: GoScope): Go | undefined {
 function member(expr: ExprData, scope: GoScope): Go | undefined {
     const receiver = translate(expr.receiver!, scope);
     const target = expr.target ? scope.node(expr.target) : undefined;
-    if (!receiver || target?.kind !== 'Field' || !isRecordField(target, scope)) return undefined;
+    if (!receiver || receiver.kind === 'id' || target?.kind !== 'Field' || !isRecordField(target, scope)) return undefined;
     return { code: `${value(receiver)}.${pascal(expr.member!)}${target.data.derived ? '()' : ''}`, kind: kindOf(expr.type), pointer: optional(target) };
 }
 
@@ -192,11 +223,73 @@ function decimal(go: Go, scope: GoScope): string {
 }
 
 function value(go: Go): string {
-    return go.pointer ? `(*${go.code})` : go.code;
+    return go.read ?? (go.pointer ? `(*${go.code})` : go.code);
+}
+
+/** The name `actor` itself, not a lambda variable or a field that happens to be called so. */
+function isActor(expr: ExprData, scope: GoScope): boolean {
+    return expr.$type === 'NameExpr' && expr.name === 'actor' && !expr.target && !expr.call && !scope.vars?.has('actor');
+}
+
+/**
+ * `actor.is(X)` calls the role check `IsX` or compares the actor type; `actor.field` reads the field of the
+ * `access.Actor`, a pointer that is nil for actors without it. Fields that hold records hold their ID.
+ */
+function actorMember(expr: ExprData, scope: GoScope): Go | undefined {
+    const { actor, access } = scope;
+    if (!actor || !access) return undefined;
+    if (expr.call) {
+        const target = expr.member === 'is' && expr.args?.[0]?.target ? scope.node(expr.args[0].target) : undefined;
+        if (target?.kind === 'Role') return { code: `${accessName(`Is${access.name(target.qn)}`, scope)}(${actor})`, kind: 'bool' };
+        if (target?.kind === 'Actor') return { code: `${actor}.Type == ${accessName(`Actor${access.name(target.qn)}`, scope)}`, kind: 'bool' };
+        return undefined;
+    }
+    const target = expr.target ? scope.node(expr.target) : undefined;
+    const type = target?.kind === 'Field' ? target.data.type as { primitive?: string, decl?: string, many?: boolean } : undefined;
+    if (!type) return undefined;
+    const code = `${actor}.${pascal(expr.member!)}`;
+    if (type.many) return { code, kind: 'list' };
+    if (type.decl) return scope.node(type.decl)?.kind === 'Entity' ? { code, kind: 'id', pointer: true } : undefined;
+    return { code, kind: kindOf(type.primitive!), pointer: true, read: `${accessName('Value', scope)}(${code})` };
+}
+
+/** Whether a record ID of the actor (or the tenant) refers to a record: `access.Same(actor.Account, order.Customer.ID)`. */
+function sameRecord(left: Go, right: Go, scope: GoScope): string | undefined {
+    if (left.kind === 'id' && right.kind === 'id') return `${accessName('SameRef', scope)}(${left.code}, ${right.code})`;
+    const [id, record] = left.kind === 'id' ? [left, right] : [right, left];
+    if (record.kind !== 'other') return undefined;
+    const same = `${accessName('Same', scope)}(${id.code}, ${record.code}.ID)`;
+    return record.pointer ? `(${record.code} != nil && ${same})` : same;
+}
+
+/** A name from the access package, qualified outside it. */
+function accessName(name: string, scope: GoScope): string {
+    const access = scope.access!;
+    if (access.pkg === scope.pkg) return name;
+    scope.imports.add(access.path);
+    return `${access.pkg}.${name}`;
 }
 
 function wrap(code: string): string {
-    return /^[\w.]+(\(.*\))?$/.test(code) || /^\(.*\)$/.test(code) || /^".*"$/.test(code) ? code : `(${code})`;
+    return atomic(code) ? code : `(${code})`;
+}
+
+/**
+ * Whether the code needs no parentheses as an operand: names, calls and selectors (`a.B(x).C`), one
+ * parenthesized group or a string. Brackets are matched, so `f(a) && g(b)` is not atomic.
+ */
+function atomic(code: string): boolean {
+    if (/^"([^"\\]|\\.)*"$/.test(code)) return true;
+    let depth = 0;
+    for (let i = 0; i < code.length; i++) {
+        const c = code[i];
+        if (c === '"') {
+            for (i++; i < code.length && code[i] !== '"'; i++) if (code[i] === '\\') i++;
+        } else if ('([{'.includes(c)) depth++;
+        else if (')]}'.includes(c)) depth--;
+        else if (depth === 0 && !/[\w.]/.test(c)) return false;
+    }
+    return depth === 0;
 }
 
 function isRecordField(field: GraphNode, scope: GoScope): boolean {
