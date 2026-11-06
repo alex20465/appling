@@ -1,12 +1,9 @@
 import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
+import { accessFile, accessOf, accessSteps, actorFieldType, PRIMITIVES, tenantOf, tenantPaths } from './access.js';
 import { enumVariant, pascal, qualify, rustExpr, snake, type RustScope } from './rust.js';
 
-const PRIMITIVES: { [name: string]: string } = {
-    String: 'String', Text: 'String', Int: 'i64', Bool: 'bool', File: 'String', Uuid: 'String',
-    Decimal: 'rust_decimal::Decimal', Money: 'rust_decimal::Decimal',
-    Date: 'chrono::NaiveDate', DateTime: 'chrono::DateTime<chrono::Utc>', Duration: 'chrono::TimeDelta'
-};
+const OPERATIONS = ['read', 'create', 'update', 'delete'];
 
 const DERIVE = '#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]';
 
@@ -33,10 +30,14 @@ const extension: CodegenExtension = {
                 rustFile(node.module, text => text.replace(/(pub enum Event \{[\s\S]*?)(\n\})/, (_, head, end) => `${head}\n    ${last(node.qn)}(${last(node.qn)}),${end}`))
             ];
             case 'ErrorDecl': return [rustFile(node.module, text => text.includes(`    ${last(node.qn)},\n`) ? text : text.replace(/(pub enum Error \{[\s\S]*?)(\n\})/, (_, head, end) => `${head}\n    ${last(node.qn)},${end}`))];
-            case 'Entity': return [append(node.module, entityBlock(node, context))];
+            case 'Entity': return [append(node.module, entityBlock(node, context)), ...guardSteps(node, context)];
             case 'Field': return fieldSteps(node, context);
             case 'Invariant': return [...(validation(node, context) ? [] : [task(`check the invariant "${node.data.label}" in validate: ${node.props.condition}`)]), ...testSteps(node)];
-            case 'Policy': return [task(`enforce the policy ${node.qn}: ${node.props.condition}`), ...testSteps(node)];
+            case 'Policy': return [...policySteps(node, context), ...testSteps(node)];
+            case 'Role':
+            case 'Actor':
+            case 'Tenant':
+                return accessSteps(node, context);
             case 'Action': return actionSteps(node, context);
             case 'Machine': return machineSteps(node, context);
             case 'Transition': return testSteps(node);
@@ -49,11 +50,12 @@ const extension: CodegenExtension = {
             case 'ProjectionField':
             case 'Endpoint':
                 return [];
-            case 'Job':
             case 'Query':
+            case 'UseCase':
+                return [...guardSteps(node, context), task(`implement the ${node.kind.toLowerCase()} ${last(node.qn)} on top of the generated domain module, with the storage, HTTP and scheduling crates of your choice`)];
+            case 'Job':
             case 'Projection':
             case 'External':
-            case 'UseCase':
             case 'Interface':
             case 'Page':
             case 'Navigation':
@@ -78,6 +80,7 @@ function moduleSteps(module: GraphNode, context: MapContext): Step[] {
         '#[derive(Debug, Clone, PartialEq)]',
         'pub enum Error {',
         '    InvalidTransition { action: &\'static str, from: String },',
+        '    Forbidden { action: &\'static str },',
         '}',
         '',
         'impl std::fmt::Display for Error {',
@@ -159,12 +162,27 @@ function entityBlock(entity: GraphNode, context: MapContext): string {
         '    }',
         '}'
     );
+    const path = tenantPaths(context).get(entity.qn);
+    if (path) {
+        const tenant = tenantOf(context)!;
+        const hops = path.map(f => (f.data.type as TypeData).optional ? `${last(f.qn)}.as_ref()?` : last(f.qn));
+        lines.push(
+            '',
+            `impl ${accessPath(scope, 'Tenanted')} for ${name} {`,
+            `    /// The id of the ${tenant.data.entity} this ${name} belongs to, for the tenant ${tenant.qn}.`,
+            '    fn tenant_id(&self) -> Option<i64> {',
+            `        Some(${['self', ...hops].join('.')}.id)`,
+            '    }',
+            '}'
+        );
+    }
     return lines.join('\n');
 }
 
 function fieldSteps(field: GraphNode, context: MapContext): Step[] | undefined {
     const owner = context.node(parentOf(field.qn))!;
     if (owner.kind === 'Event' || owner.kind === 'ValueType') return [];
+    if (owner.kind === 'Actor') return actorFieldType(field, context) ? [] : [task(`add the field ${last(field.qn)} of ${owner.qn} to the Actor of the access module; enums and value types have no form there yet`)];
     if (owner.kind !== 'Entity') return undefined;
     const scope = { ...rustScope(owner, context), self: 'self' };
     const tasks: Step[] = [];
@@ -184,6 +202,8 @@ function actionSteps(action: GraphNode, context: MapContext): Step[] {
     const scope = { ...rustScope(action, context), self };
     const tasks: Step[] = [];
     const body: string[] = [];
+    const guard = guardOf(action, context);
+    if (guard) body.push(`if !${guard.name}(${guardArgs(guard, 'action', context)}) {`, `    return Err(Error::Forbidden { action: ${JSON.stringify(last(action.qn))} });`, '}');
     ((action.data.preconditions ?? []) as { condition: ExprData, error?: string }[]).forEach((precondition, i) => {
         const condition = rustExpr(precondition.condition, scope);
         if (!condition || !precondition.error) {
@@ -202,13 +222,145 @@ function actionSteps(action: GraphNode, context: MapContext): Step[] {
     });
     const code = [
         `/// The action ${action.qn}. It returns the events it emits.`,
-        `pub fn ${snake(last(action.qn))}(${[...(entity ? [`${self}: &mut ${last(entity.qn)}`] : []), ...params].join(', ')}) -> Result<Vec<Event>, Error> {`,
+        `pub fn ${snake(last(action.qn))}(${[...(guard ? [`actor: &${accessPath(scope, 'Actor')}`] : []), ...(entity ? [`${self}: &mut ${qualify(entity, scope)}`] : []), ...params].join(', ')}) -> Result<Vec<Event>, Error> {`,
         `    let ${emits ? 'mut ' : ''}events = Vec::new();`,
         ...body.map(l => `    ${l}`),
         '    Ok(events)',
         '}'
     ].join('\n');
-    return [append(action.module, code), ...tasks, ...testSteps(action)];
+    return [append(action.module, code), ...guardSteps(action, context), ...tasks, ...testSteps(action)];
+}
+
+/** What the policy checks of an element receive besides the actor: the record they guard and the inputs. */
+interface Guard {
+    /** The guarded record's entity: the entity itself, or the entity of the action or query. */
+    entity?: GraphNode;
+    params: GraphNode[];
+    /** The public check, such as `can_place_order`. */
+    name: string;
+}
+
+/**
+ * The public check of an element, when one applies: `can_<op>_<entity>` for an entity with policies,
+ * `can_<action>` when the action's own policies, its entity's update policies or the tenant guard it, and
+ * `can_<query>` and `can_<use case>` for their own policies.
+ */
+function guardOf(owner: GraphNode, context: MapContext): Guard | undefined {
+    const own = policiesOf(owner, context);
+    const entityQn = owner.kind === 'Entity' ? owner.qn : owner.data.entity as string | undefined;
+    const entity = entityQn ? context.node(entityQn) : undefined;
+    const applies = own.length > 0 || (owner.kind === 'Action' && !!entity && (policiesOf(entity, context).length > 0 || tenantPaths(context).has(entity.qn)));
+    if (!applies) return undefined;
+    const params = owner.kind === 'Action' || owner.kind === 'UseCase' ? context.children(owner.qn).filter(c => c.kind === 'Param') : [];
+    return { entity, params, name: `can_${snake(last(owner.qn))}` };
+}
+
+function policiesOf(owner: GraphNode, context: MapContext): GraphNode[] {
+    return context.children(owner.qn).filter(c => c.kind === 'Policy');
+}
+
+/** A parameter that a check borrows: a single, required record. Everything else is passed by value. */
+function borrowed(param: GraphNode, context: MapContext): boolean {
+    const type = param.data.type as TypeData;
+    return !!type.decl && !type.many && !type.optional && context.node(type.decl)?.kind === 'Entity';
+}
+
+/** The parameters of a check, with `_` before those the body does not read. */
+function guardSignature(guard: Guard, scope: RustScope, context: MapContext, body: string): string {
+    const used = (name: string) => new RegExp(`\\b${name}\\b`).test(body) ? name : `_${name}`;
+    return [
+        `${used('actor')}: &${accessPath(scope, 'Actor')}`,
+        ...(guard.entity ? [`${used(snake(last(guard.entity.qn)))}: &${qualify(guard.entity, scope)}`] : []),
+        ...guard.params.map(p => `${used(last(p.qn))}: ${borrowed(p, context) ? `&${qualify(context.node((p.data.type as TypeData).decl!)!, scope)}` : typeOf(p.data.type as TypeData, scope)}`)
+    ].join(', ');
+}
+
+/** The arguments of a call to a check: from an action, which holds the inputs by value, or from another check. */
+function guardArgs(guard: Guard, from: 'action' | 'check', context: MapContext): string {
+    return [
+        'actor',
+        ...(guard.entity ? [snake(last(guard.entity.qn))] : []),
+        ...guard.params.map(p => borrowed(p, context) ? (from === 'action' ? `&${last(p.qn)}` : last(p.qn)) : `${last(p.qn)}.clone()`)
+    ].join(', ');
+}
+
+/**
+ * The public checks of an element, combining its policies (and, for an action or a query, the update or read
+ * check of its entity, or the tenant) with `&&`. An entity gets one per operation, false where no policy grants
+ * it, and one per operation and field that a field policy narrows.
+ */
+function guardSteps(owner: GraphNode, context: MapContext): Step[] {
+    const guard = guardOf(owner, context);
+    if (!guard) return [];
+    const scope = rustScope(owner, context);
+    const args = guardArgs(guard, 'check', context);
+    const record = guard.entity && snake(last(guard.entity.qn));
+    const tenant = guard.entity && tenantPaths(context).has(guard.entity.qn) ? `${accessPath(scope, 'in_tenant')}(actor, ${record})` : undefined;
+    const policies = policiesOf(owner, context);
+    const call = (policy: GraphNode) => `${policyName(policy, context)}(${args})`;
+    const check = (doc: string, name: string, parts: string[]) => {
+        const body = parts.join(' && ');
+        return [`/// ${doc}`, `pub fn ${name}(${guardSignature(guard, scope, context, body)}) -> bool {`, `    ${body}`, '}'].join('\n');
+    };
+    const blocks: string[] = [];
+    if (owner.kind === 'Entity') {
+        const name = snake(last(owner.qn));
+        for (const op of OPERATIONS) {
+            const covering = policies.filter(p => covers(p, op) && !(p.data.fields as string[] | undefined)?.length);
+            blocks.push(check(
+                `Whether the policies of ${owner.qn} let the actor ${op} the record${covering.length ? '' : `; no policy grants ${op}`}.`,
+                `can_${op}_${name}`,
+                covering.length ? [...(tenant ? [tenant] : []), ...covering.map(call)] : ['false']
+            ));
+            const fields = [...new Set(policies.filter(p => covers(p, op)).flatMap(p => (p.data.fields ?? []) as string[]))];
+            for (const field of fields) {
+                const narrowing = policies.filter(p => covers(p, op) && ((p.data.fields ?? []) as string[]).includes(field));
+                blocks.push(check(`Whether the actor may ${op} the field ${last(field)} of the record.`, `can_${op}_${name}_${last(field)}`, [`can_${op}_${name}(${args})`, ...narrowing.map(call)]));
+            }
+        }
+    } else {
+        const op = owner.kind === 'Query' ? 'read' : 'update';
+        const entity = guard.entity;
+        const inherited = entity && owner.kind !== 'UseCase' && policiesOf(entity, context).length
+            ? [`${entity.module === owner.module ? '' : `crate::${entity.module.replaceAll('.', '::')}::`}can_${op}_${snake(last(entity.qn))}(actor, ${record})`]
+            : tenant ? [tenant] : [];
+        const what = owner.kind === 'Query' ? `read a record through ${owner.qn}` : `run ${owner.qn}`;
+        blocks.push(check(`Whether the actor may ${what}${inherited.length ? `, including the ${inherited[0] === tenant ? 'tenant' : op} check of ${entity!.qn}` : ''}.`, guard.name, [...inherited, ...policies.map(call)]));
+    }
+    return [append(owner.module, blocks.join('\n\n')), ...accessFile(context, accessOf(context))];
+}
+
+/** One function per policy, `<owner>_policy_<operations>`, with the arguments of its element's check; false with a task when Rust cannot say the condition. */
+function policySteps(policy: GraphNode, context: MapContext): Step[] {
+    const guard = guardOf(context.node(parentOf(policy.qn))!, context)!;
+    const scope: RustScope = { ...rustScope(policy, context), self: guard.entity && snake(last(guard.entity.qn)), actor: 'actor' };
+    const condition = rustExpr(policy.data.condition as ExprData, scope);
+    const name = policyName(policy, context);
+    const body = condition ?? 'false';
+    const code = [
+        `/// The policy ${policy.qn}: ${policy.props.condition}`,
+        `fn ${name}(${guardSignature(guard, scope, context, body)}) -> bool {`,
+        `    ${body}`,
+        '}'
+    ].join('\n');
+    return [append(policy.module, code), ...(condition ? [] : [task(`implement the policy ${policy.qn} in ${name}: ${policy.props.condition}`)])];
+}
+
+function policyName(policy: GraphNode, context: MapContext): string {
+    const owner = parentOf(policy.qn);
+    const words = /\[(.*)\]$/.exec(policy.qn)![1].split(/[^A-Za-z0-9]+/).filter(Boolean).map(w => `_${snake(w)}`).join('');
+    const same = policiesOf(context.node(owner)!, context).filter(p => p.qn === policy.qn);
+    return `${snake(last(owner))}_policy${words}${same.length > 1 ? `_${same.indexOf(policy) + 1}` : ''}`;
+}
+
+function covers(policy: GraphNode, op: string): boolean {
+    const operations = policy.data.operations as string[] | undefined;
+    return !operations?.length || operations.includes(op);
+}
+
+/** A path into the access module. */
+function accessPath(scope: RustScope, name: string): string {
+    return `crate::${scope.access!.module}::${name}`;
 }
 
 function transitionMatch(transitions: GraphNode[], self: string, label: string, scope: RustScope, context: MapContext, tasks: Step[]): string[] {
@@ -339,7 +491,7 @@ function rustFile(module: string, write: (text: string) => string): Step {
 }
 
 function rustScope(node: GraphNode, context: MapContext): RustScope {
-    return { node: context.node, module: node.module || node.qn };
+    return { node: context.node, module: node.module || node.qn, access: accessOf(context) };
 }
 
 function fieldsOf(node: GraphNode, context: MapContext): GraphNode[] {
