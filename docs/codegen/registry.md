@@ -5,7 +5,7 @@ description: The .appling/tasks.json file of a generated project, which records 
 
 Every generated project gets a task registry in `.appling/tasks.json`. It has one entry per element of the model, keyed by qualified name, with what produced the element and what is still missing. The registry is two things at once: the coverage report of the generator and the work queue for you or an AI assistant.
 
-Generation never leaves placeholders in the code. Work the generator cannot translate, such as a policy, a guard it cannot express, or a test body, is listed in the registry and nowhere else.
+Generation never leaves placeholders in the code. Work the generator cannot translate, such as a policy or a guard it cannot express, or a test body, is listed in the registry and nowhere else.
 
 ## File format
 

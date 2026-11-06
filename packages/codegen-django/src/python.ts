@@ -30,6 +30,7 @@ export function python(expr: ExprData, scope: PythonScope): string | undefined {
         }
         case 'BinaryExpr': {
             const [left, right] = [sub(expr.left!), sub(expr.right!)];
+            if (right === 'None' && (expr.op === '==' || expr.op === '!=')) return left && `${wrap(left)} ${expr.op === '==' ? 'is' : 'is not'} None`;
             return left && right && `${wrap(left)} ${OPERATORS[expr.op!] ?? expr.op} ${wrap(right)}`;
         }
         case 'IndexExpr': {
@@ -89,6 +90,10 @@ function name(expr: ExprData, scope: PythonScope): string | undefined {
     const target = expr.target ? scope.node(expr.target) : undefined;
     if (target?.kind === 'Field' && scope.node(parentOf(target.qn))?.kind === 'Entity') return scope.self && `${scope.self}.${id}`;
     if (target?.kind === 'Param') return id;
+    if (target?.kind === 'Tenant') {
+        scope.imports.add(`from ${appOf(target.module)}.tenants import ${tenantGetter(target)}`);
+        return `${tenantGetter(target)}()`;
+    }
     if (target?.kind === 'EnumLiteral') {
         const enumQn = parentOf(target.qn);
         const enumNode = scope.node(enumQn)!;
@@ -109,7 +114,7 @@ function member(expr: ExprData, scope: PythonScope): string | undefined {
         scope.imports.add('from decimal import Decimal');
         return `Decimal(${item})`;
     }
-    return owner === 'Entity' ? `${receiver}.${expr.member}` : undefined;
+    return owner === 'Entity' || owner === 'Actor' ? `${receiver}.${expr.member}` : undefined;
 }
 
 function call(expr: ExprData, scope: PythonScope): string | undefined {
@@ -133,8 +138,8 @@ function method(expr: ExprData, scope: PythonScope): string | undefined {
     const args = expr.args ?? [];
     if (expr.member === 'is' && receiver === scope.actor) {
         const role = args[0]?.target ? scope.node(args[0].target) : undefined;
-        if (role?.kind !== 'Role') return undefined;
-        scope.imports.add(`from ${appOf(role.module)}.roles import ${rolePredicate(role)}`);
+        if (role?.kind !== 'Role' && role?.kind !== 'Actor') return undefined;
+        scope.imports.add(`from ${appOf(role.module)}.${role.kind === 'Role' ? 'roles' : 'actors'} import ${rolePredicate(role)}`);
         return `${rolePredicate(role)}(${receiver})`;
     }
     if (['map', 'filter', 'exists', 'all'].includes(expr.member!)) {
@@ -170,8 +175,39 @@ function duration(text: string, scope: PythonScope): string | undefined {
     return `timedelta(${parts.map(([, amount, unit]) => `${DURATION_UNITS[unit]}=${amount}`).join(', ')})`;
 }
 
+/** Parenthesizes code unless it is one operand already: a name, a literal, or calls, indexes and attributes of one. */
 export function wrap(code: string): string {
-    return /^[\w.]+(\(.*\)|\[.*\])?$/.test(code) || /^".*"$/.test(code) ? code : `(${code})`;
+    if (/^"(?:[^"\\]|\\.)*"$/.test(code)) return code;
+    let i = /^[\w.]+/.exec(code)?.[0].length ?? 0;
+    if (!i) return `(${code})`;
+    while (i < code.length) {
+        const attribute = /^\.\w+/.exec(code.slice(i));
+        if (attribute) {
+            i += attribute[0].length;
+            continue;
+        }
+        if (code[i] !== '(' && code[i] !== '[') return `(${code})`;
+        const end = closing(code, i);
+        if (end < 0) return `(${code})`;
+        i = end + 1;
+    }
+    return code;
+}
+
+/** The index of the bracket that closes the one at `start`, skipping string literals; -1 when there is none. */
+function closing(code: string, start: number): number {
+    let depth = 0;
+    for (let i = start; i < code.length; i++) {
+        const c = code[i];
+        if (c === '"') {
+            for (i++; i < code.length && code[i] !== '"'; i++) if (code[i] === '\\') i++;
+        } else if (c === '(' || c === '[') {
+            depth++;
+        } else if (c === ')' || c === ']') {
+            if (--depth === 0) return i;
+        }
+    }
+    return -1;
 }
 
 function joined(parts: (string | undefined)[], combine: (parts: string[]) => string): string | undefined {
@@ -194,9 +230,14 @@ export function constantOf(name: string): string {
     return name.toUpperCase();
 }
 
-/** The django-rules predicate of a role, such as `is_operator`. */
+/** The django-rules predicate of a role or an actor, such as `is_operator`. */
 export function rolePredicate(role: GraphNode): string {
     return `is_${snake(lastOf(role.qn))}`;
+}
+
+/** The function that returns the current tenant, such as `current_company`. */
+export function tenantGetter(tenant: GraphNode): string {
+    return `current_${snake(lastOf(tenant.qn))}`;
 }
 
 export function snake(name: string): string {

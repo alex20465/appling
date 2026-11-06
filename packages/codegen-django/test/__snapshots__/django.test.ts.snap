@@ -8,6 +8,13 @@ exports[`examples generate apps, enums, value types and models 1`] = `
     'crm',
     'sales',
 ]
+
+MIDDLEWARE = [
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    "crm.tenants.CompanyMiddleware",
+]
+
+AUTH_USER_MODEL = "sales.User"
 ",
   "config/urls.py": "from django.contrib import admin
 from django.urls import include, path
@@ -23,6 +30,25 @@ urlpatterns = [
 
 class CrmConfig(AppConfig):
     name = 'crm'
+
+    def ready(self):
+        from . import groups  # noqa: F401
+",
+  "crm/groups.py": "from django.contrib.auth.models import Group
+from django.db.models.signals import post_migrate
+from django.dispatch import receiver
+
+
+GROUPS = [
+    "Clerk",
+]
+
+
+@receiver(post_migrate)
+def create_groups(sender, **kwargs) -> None:
+    """Creates the Django groups of the module's roles and actors."""
+    for name in GROUPS:
+        Group.objects.get_or_create(name=name)
 ",
   "crm/models.py": "from django.db import models
 
@@ -31,12 +57,65 @@ class Account(models.Model):
     name = models.CharField(max_length=255, unique=True)
     email = models.CharField(max_length=255)
 ",
+  "crm/policies.py": "from django.db import models
+from crm.roles import is_clerk
+from sales.roles import is_customer
+
+
+def can_read_account(actor, account) -> bool:
+    if not getattr(actor, "is_authenticated", False):
+        return False
+    return is_clerk(actor) or (is_customer(actor) and (actor.account == account))
+
+
+def can_create_account(actor, account) -> bool:
+    return False  # no policy grants create
+
+
+def can_update_account(actor, account) -> bool:
+    return False  # no policy grants update
+
+
+def can_delete_account(actor, account) -> bool:
+    return False  # no policy grants delete
+
+
+def readable_account_rows(actor, rows):
+    """Narrows a queryset of Account to the rows the actor may read."""
+    if not getattr(actor, "is_authenticated", False):
+        return rows.none()
+    return rows.filter(((models.Q(pk__isnull=False) if is_clerk(actor) else models.Q(pk__in=[]))) | (((models.Q(pk__isnull=False) if is_customer(actor) else models.Q(pk__in=[]))) & (models.Q(pk=getattr(actor.account, "pk", None)))))
+",
   "crm/roles.py": "import rules
 
 
 @rules.predicate
 def is_clerk(user):
-    return user.groups.filter(name="Clerk").exists()
+    return user is not None and user.groups.filter(name="Clerk").exists()
+",
+  "crm/tenants.py": "from contextvars import ContextVar
+
+
+_company: ContextVar = ContextVar("company", default=None)
+
+
+def current_company():
+    """The Account that is the current tenant, or None outside a request."""
+    return _company.get()
+
+
+class CompanyMiddleware:
+    """Sets the current tenant for each request: the account of the signed in user."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        token = _company.set(getattr(request.user, "account", None))
+        try:
+            return self.get_response(request)
+        finally:
+            _company.reset(token)
 ",
   "crm/tests.py": "from django.test import TestCase
 
@@ -50,16 +129,22 @@ class AccountReadPolicyTest(TestCase):
     def test_denies_other_actors(self):
         self.skipTest("registry task: crm.Account.policy[read]")
 ",
-  "sales/actions.py": "from django.db import transaction
+  "sales/actions.py": "from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.utils import timezone
+from crm.roles import is_clerk
 from sales.enums import OrderStatus
 from sales.errors import EmptyOrder, InvalidTransition
 from sales.events import order_placed
 from sales.models import Order
+from sales.policies import can_update_order
+from sales.roles import is_customer
 
 
 @transaction.atomic
 def place_order(order: Order, *, actor=None) -> None:
+    if actor is not None and not (actor.is_authenticated and can_update_order(actor, order) and (is_customer(actor) and (order.customer == actor.account))):
+        raise PermissionDenied("PlaceOrder")
     if not (len(order.lines) > 0):
         raise EmptyOrder()
     if order.status in (OrderStatus.DRAFT,):
@@ -73,11 +158,20 @@ def place_order(order: Order, *, actor=None) -> None:
 
 @transaction.atomic
 def cancel(order: Order, *, reason: str | None = None, actor=None) -> None:
+    if actor is not None and not (actor.is_authenticated and can_update_order(actor, order) and is_clerk(actor)):
+        raise PermissionDenied("Cancel")
     if order.status in (OrderStatus.DRAFT, OrderStatus.PLACED) and (not (order.paid_at is not None)):
         order.status = OrderStatus.CANCELLED
     else:
         raise InvalidTransition("cancel", order.status)
     order.save()
+",
+  "sales/actors.py": "import rules
+
+
+@rules.predicate
+def is_shopper(user):
+    return user is not None and user.groups.filter(name="Shopper").exists()
 ",
   "sales/api.py": "from django.shortcuts import get_object_or_404
 from rest_framework import generics, pagination, throttling, views
@@ -108,7 +202,7 @@ class PublicApiOpenOrders(generics.ListAPIView):
     throttle_classes = [PublicApiThrottle]
 
     def get_queryset(self):
-        return open_orders()
+        return open_orders(actor=self.request.user)
 
 
 class PublicApiPlaceOrder(views.APIView):
@@ -139,6 +233,7 @@ class SalesConfig(AppConfig):
 
     def ready(self):
         from . import handlers  # noqa: F401
+        from . import groups  # noqa: F401
 ",
   "sales/enums.py": "from django.db import models
 
@@ -175,6 +270,23 @@ from typing import Protocol
 class Payments(Protocol):
     def charge(self, amount: Decimal) -> str:
         ...
+",
+  "sales/groups.py": "from django.contrib.auth.models import Group
+from django.db.models.signals import post_migrate
+from django.dispatch import receiver
+
+
+GROUPS = [
+    "Customer",
+    "Shopper",
+]
+
+
+@receiver(post_migrate)
+def create_groups(sender, **kwargs) -> None:
+    """Creates the Django groups of the module's roles and actors."""
+    for name in GROUPS:
+        Group.objects.get_or_create(name=name)
 ",
   "sales/handlers.py": "from django.dispatch import receiver
 from sales.enums import OrderStatus
@@ -219,6 +331,7 @@ class Command(BaseCommand):
 LABELS["en"] = {"OrderSummary.total": "Total"}
 ",
   "sales/models.py": "from decimal import Decimal
+from django.contrib.auth.models import AbstractUser
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 from sales.enums import OrderStatus
@@ -236,8 +349,13 @@ class Order(models.Model):
     @property
     def total(self):
         return sum([Decimal(l["amount"]) for l in self.lines])
+
+
+class User(AbstractUser):
+    account = models.ForeignKey("crm.Account", on_delete=models.PROTECT, null=True, blank=True)
 ",
   "sales/pages.py": "from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import get_language
@@ -246,6 +364,7 @@ from sales.actions import cancel, place_order
 from sales.errors import EmptyOrder, InvalidTransition
 from sales.messages import LABELS
 from sales.models import Order
+from sales.policies import can_read_order, can_read_order_total
 from sales.queries import OPEN_ORDERS_PAGE_SIZE, open_orders
 
 
@@ -262,12 +381,12 @@ def label(key, default):
 
 def orders(request):
     components = []
-    rows = open_orders()
+    rows = open_orders(actor=request.user)
     rows = Paginator(rows, OPEN_ORDERS_PAGE_SIZE).get_page(request.GET.get("page"))
     components.append({
         "kind": "list",
         "columns": [label("OrderSummary.reference", "Reference"), label("OrderSummary.status", "Status"), label("OrderSummary.total", "Total")],
-        "items": [{"id": row.pk, "values": [value(row, "reference"), value(row, "status"), value(row, "total")]} for row in rows],
+        "items": [{"id": row.pk, "values": [value(row, "reference"), value(row, "status"), (value(row, "total") if can_read_order_total(request.user, row) else None)]} for row in rows],
         "page": rows,
         "actions": [{"label": "Cancel", "url": "/_actions/sales/cancel/"}],
     })
@@ -288,10 +407,12 @@ def run_cancel(request, id):
 def order_detail(request, id):
     components = []
     record = get_object_or_404(Order, pk=id)
+    if not can_read_order(request.user, record):
+        raise PermissionDenied()
     components.append({
         "kind": "detail",
         "id": record.pk,
-        "fields": [(label("OrderSummary.reference", "Reference"), value(record, "reference")), (label("OrderSummary.status", "Status"), value(record, "status")), (label("OrderSummary.total", "Total"), value(record, "total")), (label("OrderSummary.customer_name", "Customer name"), value(record, "customer.name"))],
+        "fields": [(label("OrderSummary.reference", "Reference"), value(record, "reference")), (label("OrderSummary.status", "Status"), value(record, "status")), (label("OrderSummary.total", "Total"), (value(record, "total") if can_read_order_total(request.user, record) else None)), (label("OrderSummary.customer_name", "Customer name"), value(record, "customer.name"))],
         "actions": [{"label": "PlaceOrder", "url": "/_actions/sales/place_order/"}, {"label": "Cancel", "url": "/_actions/sales/cancel/"}],
     })
     components.append({
@@ -313,25 +434,73 @@ def run_place_order(request, id):
         messages.error(request, "PlaceOrder failed: " + type(error).__name__)
     return redirect(request.POST.get("next") or "/")
 ",
+  "sales/policies.py": "from django.db import models
+from crm.roles import is_clerk
+from sales.enums import OrderStatus
+from sales.roles import is_customer
+
+
+def can_read_order(actor, order) -> bool:
+    if not getattr(actor, "is_authenticated", False):
+        return False
+    return is_clerk(actor) or (is_customer(actor) and (order.customer == actor.account))
+
+
+def can_create_order(actor, order) -> bool:
+    if not getattr(actor, "is_authenticated", False):
+        return False
+    return is_clerk(actor)
+
+
+def can_update_order(actor, order) -> bool:
+    if not getattr(actor, "is_authenticated", False):
+        return False
+    return is_clerk(actor)
+
+
+def can_delete_order(actor, order) -> bool:
+    if not getattr(actor, "is_authenticated", False):
+        return False
+    return is_clerk(actor)
+
+
+def can_read_order_total(actor, order) -> bool:
+    return can_read_order(actor, order) and (is_clerk(actor) or (is_customer(actor) and (order.status != OrderStatus.DRAFT)))
+
+
+def readable_order_rows(actor, rows):
+    """Narrows a queryset of Order to the rows the actor may read."""
+    if not getattr(actor, "is_authenticated", False):
+        return rows.none()
+    return rows.filter(((models.Q(pk__isnull=False) if is_clerk(actor) else models.Q(pk__in=[]))) | (((models.Q(pk__isnull=False) if is_customer(actor) else models.Q(pk__in=[]))) & (models.Q(customer=actor.account))))
+",
   "sales/queries.py": "from django.db import models
 from sales.models import Order
+from sales.policies import readable_order_rows
 
 
 OPEN_ORDERS_PAGE_SIZE = 50
 
 
-def open_orders():
-    return Order.objects.filter(models.Q(status__in=["placed", "paid"])).order_by("-placed_at")
+def open_orders(actor=None):
+    rows = Order.objects.filter(models.Q(status__in=["placed", "paid"])).order_by("-placed_at")
+    if actor is None:
+        return rows
+    if not actor.is_authenticated:
+        return rows.none()
+    rows = readable_order_rows(actor, rows)
+    return rows
 ",
   "sales/roles.py": "import rules
 
 
 @rules.predicate
 def is_customer(user):
-    return user.groups.filter(name="Customer").exists()
+    return user is not None and user.groups.filter(name__in=["Customer", "Shopper"]).exists()
 ",
   "sales/serializers.py": "from rest_framework import serializers
 from sales.models import Order
+from sales.policies import can_read_order_total
 
 
 class OrderSummary(serializers.ModelSerializer):
@@ -341,6 +510,16 @@ class OrderSummary(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = ["reference", "status", "total", "customer_name"]
+
+    def to_representation(self, instance):
+        """Hides the fields the requesting actor may not read; without a request nothing is hidden."""
+        data = super().to_representation(instance)
+        actor = getattr(self.context.get("request"), "user", None)
+        if actor is None:
+            return data
+        if "total" in data and not can_read_order_total(actor, instance):
+            data["total"] = None
+        return data
 ",
   "sales/templates/sales/base.html": "<!doctype html>
 <html lang="en">

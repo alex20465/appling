@@ -5,7 +5,8 @@ import { messagesSteps, navigationSteps, pageSteps } from './pages.js';
 import { externalSteps, projectionFieldSteps, projectionSteps, querySteps, useCaseSteps } from './application.js';
 import { actionSteps, errorSteps, eventSteps, jobSteps, machineSteps, transitionSteps } from './behavior.js';
 import { hasKind, task } from './files.js';
-import { entitySteps, enumSteps, fieldSteps, installApp, invariantSteps, moduleSteps, policySteps, roleSteps, valueSteps } from './models.js';
+import { actorSteps, entityPolicySteps, policySteps, roleSteps, tenantSteps } from './access.js';
+import { entitySteps, enumSteps, fieldSteps, installApp, invariantSteps, moduleSteps, valueSteps } from './models.js';
 
 const DJANGO = 'django~=6.1.0';
 const REST_FRAMEWORK = 'djangorestframework~=3.16';
@@ -24,7 +25,7 @@ const extension: CodegenExtension = {
             case 'Module': return moduleSteps(node);
             case 'Enum': return enumSteps(node, context);
             case 'ValueType': return valueSteps(node, context);
-            case 'Entity': return entitySteps(node, context);
+            case 'Entity': return [...entitySteps(node, context), ...entityPolicySteps(node, context)];
             case 'Field': return fieldSteps(node, context);
             case 'Invariant': return invariantSteps(node, context);
             case 'Policy': return policySteps(node, context);
@@ -53,6 +54,8 @@ const extension: CodegenExtension = {
             case 'Endpoint':
                 return [];
             case 'Role': return roleSteps(node, context);
+            case 'Actor': return actorSteps(node, context);
+            case 'Tenant': return tenantSteps(node, context);
             default: return undefined;
         }
     }
@@ -64,7 +67,7 @@ function setup(context: MapContext): Step[] {
     const api = hasKind(context, 'Projection', 'Interface');
     return [
         { kind: 'command', run: ['uv', 'init', '--bare', '--name', context.name], creates: ['pyproject.toml'] },
-        { kind: 'command', run: ['uv', 'add', DJANGO, ...(api ? [REST_FRAMEWORK] : []), ...(hasKind(context, 'Role') ? [RULES] : [])], creates: ['uv.lock'] },
+        { kind: 'command', run: ['uv', 'add', DJANGO, ...(api ? [REST_FRAMEWORK] : []), ...(hasKind(context, 'Role', 'Actor') ? [RULES] : [])], creates: ['uv.lock'] },
         { kind: 'command', run: ['uv', 'run', 'django-admin', 'startproject', 'config', '.'], creates: ['manage.py', 'config/'] },
         ...(api ? [installApp('rest_framework')] : []),
         { kind: 'command', run: ['uv', 'run', 'python', 'manage.py', 'makemigrations'], phase: 3 }
