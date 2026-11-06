@@ -1,13 +1,10 @@
 import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { camel, enumConstant, goExpr, pascal, qualify, type GoScope } from './golang.js';
+import { accessFile, accessOf, accessSteps, actorFieldType, tenantOf, tenantPaths } from './access.js';
+import { camel, enumConstant, goExpr, pascal, PRIMITIVES, qualify, type GoScope } from './golang.js';
 
 const DECIMAL = 'github.com/shopspring/decimal';
-const PRIMITIVES: { [name: string]: [string, string?] } = {
-    String: ['string'], Text: ['string'], Int: ['int64'], Bool: ['bool'], File: ['string'], Uuid: ['string'],
-    Decimal: ['decimal.Decimal', DECIMAL], Money: ['decimal.Decimal', DECIMAL],
-    Date: ['time.Time', 'time'], DateTime: ['time.Time', 'time'], Duration: ['time.Duration', 'time']
-};
+const OPERATIONS = ['read', 'create', 'update', 'delete'];
 
 const extension: CodegenExtension = {
     name: '@appling/codegen-go',
@@ -34,7 +31,11 @@ const extension: CodegenExtension = {
             case 'ErrorDecl': return [goFile(node.module, 'errors.go', context, new Set(['errors']), `// ${errorName(node)} is the declared error ${node.qn}.\nvar ${errorName(node)} = errors.New(${JSON.stringify(last(node.qn))})`)];
             case 'Field': return fieldSteps(node, context);
             case 'Invariant': return [...(validation(node, context) ? [] : [task(`check the invariant "${node.data.label}" in Validate: ${node.props.condition}`)]), ...testSteps(node, context)];
-            case 'Policy': return [task(`enforce the policy ${node.qn}: ${node.props.condition}`), ...testSteps(node, context)];
+            case 'Policy': return [...policySteps(node, context), ...testSteps(node, context)];
+            case 'Role':
+            case 'Actor':
+            case 'Tenant':
+                return accessSteps(node, context);
             case 'Action': return actionSteps(node, context);
             case 'Machine': return machineSteps(node, context);
             case 'Transition': return testSteps(node, context);
@@ -47,11 +48,12 @@ const extension: CodegenExtension = {
             case 'ProjectionField':
             case 'Endpoint':
                 return [];
-            case 'Job':
             case 'Query':
+            case 'UseCase':
+                return [...guardSteps(node, context), task(`implement the ${node.kind.toLowerCase()} ${last(node.qn)} on top of the generated domain package, with the storage, HTTP and scheduling libraries of your choice`)];
+            case 'Job':
             case 'Projection':
             case 'External':
-            case 'UseCase':
             case 'Interface':
             case 'Page':
             case 'Navigation':
@@ -80,6 +82,10 @@ function structStep(node: GraphNode, context: MapContext, file: string): Step {
 
 /** An entity becomes a struct with an ID, a constructor with the defaults, methods for derived fields, and Validate for the invariants. */
 function entitySteps(entity: GraphNode, context: MapContext): Step[] {
+    return [entityStep(entity, context), ...guardSteps(entity, context)];
+}
+
+function entityStep(entity: GraphNode, context: MapContext): Step {
     const imports = new Set<string>();
     const name = last(entity.qn);
     const receiver = name.charAt(0).toLowerCase();
@@ -102,12 +108,26 @@ function entitySteps(entity: GraphNode, context: MapContext): Step[] {
     });
     imports.add('errors');
     lines.push('', `// Validate checks the invariants of ${name}.`, `func (${receiver} *${name}) Validate() error {`, '\tvar errs []error', ...checks, '\treturn errors.Join(errs...)', '}');
-    return [goFile(entity.module, 'types.go', context, imports, lines.join('\n'))];
+    const path = tenantPaths(context).get(entity.qn);
+    if (path) {
+        const tenant = tenantOf(context)!;
+        const hops = path.map((_, i) => [receiver, ...path.slice(0, i + 1).map(f => pascal(last(f.qn)))].join('.'));
+        lines.push(
+            '',
+            `// TenantID returns the ID of the ${tenant.data.entity} this ${name} belongs to, for the tenant ${tenant.qn}.`,
+            `func (${receiver} *${name}) TenantID() (int64, bool) {`,
+            ...(hops.length ? [`\tif ${hops.map(h => `${h} == nil`).join(' || ')} {`, '\t\treturn 0, false', '\t}'] : []),
+            `\treturn ${hops.at(-1) ?? receiver}.ID, true`,
+            '}'
+        );
+    }
+    return goFile(entity.module, 'types.go', context, imports, lines.join('\n'));
 }
 
 function fieldSteps(field: GraphNode, context: MapContext): Step[] | undefined {
     const owner = context.node(parentOf(field.qn))!;
     if (owner.kind === 'Event' || owner.kind === 'ValueType') return [];
+    if (owner.kind === 'Actor') return actorFieldType(field, context, new Set()) ? [] : [task(`add the field ${last(field.qn)} of ${owner.qn} to the Actor of the access package; enums and value types have no form there yet`)];
     if (owner.kind !== 'Entity') return undefined;
     const scope = { ...goScope(owner, context, new Set()), self: 'x' };
     const tasks: Step[] = [];
@@ -133,6 +153,11 @@ function actionSteps(action: GraphNode, context: MapContext): Step[] {
     const scope = { ...goScope(action, context, imports), self };
     const tasks: Step[] = [];
     const body: string[] = ['var events []any'];
+    const guard = guardOf(action, context);
+    if (guard) {
+        imports.add('fmt');
+        body.push(`if !${guard.name}(${['actor', ...guard.args].join(', ')}) {`, `\treturn nil, fmt.Errorf("%w: ${last(action.qn)}", ${accessIn(scope, 'ErrForbidden')})`, '}');
+    }
     ((action.data.preconditions ?? []) as { condition: ExprData, error?: string }[]).forEach((precondition, i) => {
         const condition = goExpr(precondition.condition, scope);
         const text = (action.props.preconditions as string[])[i];
@@ -149,11 +174,139 @@ function actionSteps(action: GraphNode, context: MapContext): Step[] {
     for (const effect of context.children(action.qn).filter(c => c.kind.endsWith('Effect'))) body.push(...effectLines(effect, self, scope, context, tasks));
     body.push('return events, nil');
     const params = [
-        ...(entity ? [`${self} *${last(entity.qn)}`] : []),
+        ...(guard ? [`actor ${accessIn(scope, 'Actor')}`] : []),
+        ...(entity ? [`${self} ${typeOf({ $type: 'TypeRef', decl: entity.qn } as TypeData, scope)}`] : []),
         ...context.children(action.qn).filter(c => c.kind === 'Param').map(p => `${camel(last(p.qn))} ${typeOf(p.data.type as TypeData, scope)}`)
     ];
     const code = [`// ${last(action.qn)} is the action ${action.qn}. It returns the events it emits.`, `func ${last(action.qn)}(${params.join(', ')}) ([]any, error) {`, ...body.map(l => `\t${l}`), '}'].join('\n');
-    return [goFile(action.module, 'actions.go', context, imports, code), ...tasks, ...testSteps(action, context)];
+    return [goFile(action.module, 'actions.go', context, imports, code), ...guardSteps(action, context), ...tasks, ...testSteps(action, context)];
+}
+
+/** What the policy checks of an element receive besides the actor: the record they guard and the inputs. */
+interface Guard {
+    /** The guarded record's entity: the entity itself, or the entity of the action or query. */
+    entity?: GraphNode;
+    params: GraphNode[];
+    /** The argument names after `actor`. */
+    args: string[];
+    /** The exported check, such as `CanPlaceOrder`. */
+    name: string;
+}
+
+/**
+ * The exported check of an element, when one applies: `Can<Op><Entity>` for an entity with policies,
+ * `Can<Action>` when the action's own policies, its entity's update policies or the tenant guard it, and
+ * `Can<Query>` and `Can<UseCase>` for their own policies.
+ */
+function guardOf(owner: GraphNode, context: MapContext): Guard | undefined {
+    const own = policiesOf(owner, context);
+    const entityQn = owner.kind === 'Entity' ? owner.qn : owner.data.entity as string | undefined;
+    const entity = entityQn ? context.node(entityQn) : undefined;
+    const applies = own.length > 0 || (owner.kind === 'Action' && !!entity && (policiesOf(entity, context).length > 0 || tenantPaths(context).has(entity.qn)));
+    if (!applies) return undefined;
+    const params = owner.kind === 'Action' || owner.kind === 'UseCase' ? context.children(owner.qn).filter(c => c.kind === 'Param') : [];
+    return { entity, params, args: [...(entity ? [camel(last(entity.qn))] : []), ...params.map(p => camel(last(p.qn)))], name: `Can${last(owner.qn)}` };
+}
+
+function policiesOf(owner: GraphNode, context: MapContext): GraphNode[] {
+    return context.children(owner.qn).filter(c => c.kind === 'Policy');
+}
+
+function guardSignature(guard: Guard, scope: GoScope): string {
+    return [
+        `actor ${accessIn(scope, 'Actor')}`,
+        ...(guard.entity ? [`${camel(last(guard.entity.qn))} ${typeOf({ $type: 'TypeRef', decl: guard.entity.qn } as TypeData, scope)}`] : []),
+        ...guard.params.map(p => `${camel(last(p.qn))} ${typeOf(p.data.type as TypeData, scope)}`)
+    ].join(', ');
+}
+
+/**
+ * The exported checks of an element in its module's `policies.go`, combining its policies (and, for an action
+ * or a query, the update or read check of its entity, or the tenant) with `&&`. An entity gets one per operation,
+ * false where no policy grants it, and one per operation and field that a field policy narrows.
+ */
+function guardSteps(owner: GraphNode, context: MapContext): Step[] {
+    const guard = guardOf(owner, context);
+    if (!guard) return [];
+    const imports = new Set<string>();
+    const scope = goScope(owner, context, imports);
+    const signature = guardSignature(guard, scope);
+    const args = ['actor', ...guard.args].join(', ');
+    const record = guard.entity && camel(last(guard.entity.qn));
+    const tenant = guard.entity && tenantPaths(context).has(guard.entity.qn) ? `${accessIn(scope, 'InTenant')}(actor, ${record})` : undefined;
+    const policies = policiesOf(owner, context);
+    const call = (policy: GraphNode) => `${policyName(policy, context)}(${args})`;
+    const blocks: string[] = [];
+    if (owner.kind === 'Entity') {
+        const name = last(owner.qn);
+        for (const op of OPERATIONS) {
+            const covering = policies.filter(p => covers(p, op) && !(p.data.fields as string[] | undefined)?.length);
+            const parts = covering.length ? [...(tenant ? [tenant] : []), ...covering.map(call)] : ['false'];
+            blocks.push([
+                `// Can${pascal(op)}${name} reports whether the policies of ${owner.qn} let the actor ${op} the record${covering.length ? '' : `; no policy grants ${op}`}.`,
+                `func Can${pascal(op)}${name}(${signature}) bool {`, `\treturn ${parts.join(' && ')}`, '}'
+            ].join('\n'));
+            const fields = [...new Set(policies.filter(p => covers(p, op)).flatMap(p => (p.data.fields ?? []) as string[]))];
+            for (const field of fields) {
+                const narrowing = policies.filter(p => covers(p, op) && ((p.data.fields ?? []) as string[]).includes(field));
+                blocks.push([
+                    `// Can${pascal(op)}${name}${pascal(last(field))} reports whether the actor may ${op} the field ${last(field)} of the record.`,
+                    `func Can${pascal(op)}${name}${pascal(last(field))}(${signature}) bool {`, `\treturn ${[`Can${pascal(op)}${name}(${args})`, ...narrowing.map(call)].join(' && ')}`, '}'
+                ].join('\n'));
+            }
+        }
+    } else {
+        const op = owner.kind === 'Query' ? 'Read' : 'Update';
+        const entity = guard.entity;
+        const inherited = entity && owner.kind !== 'UseCase' && policiesOf(entity, context).length
+            ? [`${entity.module === owner.module ? '' : `${qualifyModule(entity.module, scope)}.`}Can${op}${last(entity.qn)}(actor, ${record})`]
+            : tenant ? [tenant] : [];
+        const what = owner.kind === 'Query' ? `read a record through ${owner.qn}` : `run ${owner.qn}`;
+        blocks.push([
+            `// ${guard.name} reports whether the actor may ${what}${inherited.length ? `, including the ${inherited[0] === tenant ? 'tenant' : op.toLowerCase()} check of ${entity!.qn}` : ''}.`,
+            `func ${guard.name}(${signature}) bool {`, `\treturn ${[...inherited, ...policies.map(call)].join(' && ')}`, '}'
+        ].join('\n'));
+    }
+    return [goFile(owner.module, 'policies.go', context, imports, blocks.join('\n\n')), accessFile(context, accessOf(context))];
+}
+
+/** One function per policy, `<owner>Policy<Operations>`, with the arguments of its element's check; false with a task when Go cannot say the condition. */
+function policySteps(policy: GraphNode, context: MapContext): Step[] {
+    const guard = guardOf(context.node(parentOf(policy.qn))!, context)!;
+    const imports = new Set<string>();
+    const scope: GoScope = { ...goScope(policy, context, imports), self: guard.entity && camel(last(guard.entity.qn)), actor: 'actor' };
+    const condition = goExpr(policy.data.condition as ExprData, scope);
+    const name = policyName(policy, context);
+    const code = [
+        `// ${name} is the policy ${policy.qn}: ${policy.props.condition}`,
+        `func ${name}(${guardSignature(guard, scope)}) bool {`,
+        `\treturn ${condition ?? 'false'}`,
+        '}'
+    ].join('\n');
+    return [goFile(policy.module, 'policies.go', context, imports, code), ...(condition ? [] : [task(`implement the policy ${policy.qn} in ${name}: ${policy.props.condition}`)])];
+}
+
+function policyName(policy: GraphNode, context: MapContext): string {
+    const owner = parentOf(policy.qn);
+    const words = /\[(.*)\]$/.exec(policy.qn)![1].split(/[^A-Za-z0-9]+/).filter(Boolean).map(pascal).join('');
+    const same = policiesOf(context.node(owner)!, context).filter(p => p.qn === policy.qn);
+    return `${camel(last(owner))}Policy${words}${same.length > 1 ? same.indexOf(policy) + 1 : ''}`;
+}
+
+function covers(policy: GraphNode, op: string): boolean {
+    const operations = policy.data.operations as string[] | undefined;
+    return !operations?.length || operations.includes(op);
+}
+
+/** A name from the access package, imported. */
+function accessIn(scope: GoScope, name: string): string {
+    scope.imports.add(scope.access!.path);
+    return `${scope.access!.pkg}.${name}`;
+}
+
+function qualifyModule(module: string, scope: GoScope): string {
+    scope.imports.add(scope.importOf(module));
+    return module.split('.').pop()!;
 }
 
 function transitionSwitch(transitions: GraphNode[], self: string, label: string, scope: GoScope, context: MapContext, tasks: Step[]): string[] {
@@ -267,7 +420,7 @@ function typeOf(type: TypeData, scope: GoScope): string {
 }
 
 function goScope(node: GraphNode, context: MapContext, imports: Set<string>): GoScope {
-    return { node: context.node, pkg: pkgOf(node.module || node.qn), imports, importOf: module => importPath(module, context) };
+    return { node: context.node, pkg: pkgOf(node.module || node.qn), imports, importOf: module => importPath(module, context), access: accessOf(context) };
 }
 
 /** Adds a block to a Go file of a module's package, merging its imports; gofmt formats the result at the end. */

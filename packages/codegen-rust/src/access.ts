@@ -1,0 +1,198 @@
+import type { MapContext, Step } from '@appling/codegen';
+import type { ExprData, GraphNode, TypeData } from '@appling/model';
+import { pascal, rustExpr, snake, type RustAccess, type RustScope } from './rust.js';
+
+export const PRIMITIVES: { [name: string]: string } = {
+    String: 'String', Text: 'String', Int: 'i64', Bool: 'bool', File: 'String', Uuid: 'String',
+    Decimal: 'rust_decimal::Decimal', Money: 'rust_decimal::Decimal',
+    Date: 'chrono::NaiveDate', DateTime: 'chrono::DateTime<chrono::Utc>', Duration: 'chrono::TimeDelta'
+};
+
+const DERIVE = '#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]';
+
+/**
+ * The access module: `Actor` (who acts, with its roles, tenant and the fields the actors declare), the `Role`
+ * and `ActorType` enums, one `is_<role>` check per role, and the tenant helpers. Fields that hold records hold
+ * their id, the same shape as the Go extension's access package.
+ */
+export function accessOf(context: MapContext): RustAccess {
+    const module = context.graph.nodes.some(n => n.kind === 'Module' && n.qn === 'access') ? 'access_control' : 'access';
+    return { module, name: qn => uniqueName(qn, context) };
+}
+
+/** The tenant when the workspace declares exactly one; only then does `tenant` mean something. */
+export function tenantOf(context: MapContext): GraphNode | undefined {
+    const tenants = context.graph.nodes.filter(n => n.kind === 'Tenant');
+    return tenants.length === 1 ? tenants[0] : undefined;
+}
+
+/**
+ * The entities that belong to the tenant, each with the fields that lead from it to the tenant's entity:
+ * the entity itself (no fields), and every entity with a single, not list, reference to one that belongs.
+ */
+export function tenantPaths(context: MapContext): Map<string, GraphNode[]> {
+    const tenant = tenantOf(context);
+    const paths = new Map<string, GraphNode[]>();
+    if (!tenant) return paths;
+    paths.set(tenant.data.entity as string, []);
+    const entities = context.graph.nodes.filter(n => n.kind === 'Entity');
+    for (let changed = true; changed;) {
+        changed = false;
+        const round = new Map<string, GraphNode[]>();
+        for (const entity of entities) {
+            if (paths.has(entity.qn)) continue;
+            const field = context.children(entity.qn).find(f => {
+                const type = f.data.type as TypeData | undefined;
+                return f.kind === 'Field' && !f.data.derived && type?.decl && !type.many && paths.has(type.decl);
+            });
+            if (field) round.set(entity.qn, [field, ...paths.get((field.data.type as TypeData).decl!)!]);
+        }
+        for (const [qn, path] of round) { paths.set(qn, path); changed = true; }
+    }
+    return paths;
+}
+
+/** The fields of the `Actor` struct by name: those the actors declare, then those of the entities they are stored as. */
+export function actorFields(context: MapContext): GraphNode[] {
+    const actors = context.graph.nodes.filter(n => n.kind === 'Actor');
+    const fields = new Map<string, GraphNode>();
+    for (const field of [
+        ...actors.flatMap(a => context.children(a.qn).filter(c => c.kind === 'Field')),
+        ...actors.flatMap(a => a.data.entity ? context.children(a.data.entity as string).filter(c => c.kind === 'Field') : [])
+    ]) {
+        const name = last(field.qn);
+        if (!fields.has(name) && !['actor_type', 'roles', 'id', 'tenant'].includes(name)) fields.set(name, field);
+    }
+    return [...fields.values()];
+}
+
+/** The Rust type of an actor field: `Option`s, so a field is `None` for actors without it; records by id. Undefined for enums and value types. */
+export function actorFieldType(field: GraphNode, context: MapContext): string | undefined {
+    const type = field.data.type as TypeData;
+    const base = type.primitive ? PRIMITIVES[type.primitive] : context.node(type.decl!)?.kind === 'Entity' ? 'i64' : undefined;
+    if (!base) return undefined;
+    return type.many ? `Vec<${base}>` : `Option<${base}>`;
+}
+
+/** The steps of a role, actor or tenant: the whole access file (each writes the same), plus tasks for what it cannot say. */
+export function accessSteps(node: GraphNode, context: MapContext): Step[] {
+    const access = accessOf(context);
+    const steps: Step[] = accessFile(context, access);
+    if (node.kind === 'Role' && node.data.condition && !roleCondition(node, context, access)) {
+        steps.push({ kind: 'task', what: `check the condition of ${last(node.qn)} in ${access.module}::is_${snake(access.name(node.qn))}: ${node.props.condition}` });
+    }
+    if (node.kind === 'Tenant' && !tenantOf(context)) {
+        steps.push({ kind: 'task', what: `decide how the tenant ${last(node.qn)} scopes the records; with several tenants, the generated Actor has no tenant` });
+    }
+    return steps;
+}
+
+/** `src/access.rs`, declared in `src/lib.rs`. */
+export function accessFile(context: MapContext, access: RustAccess): Step[] {
+    const declare = `pub mod ${access.module};`;
+    const crate = context.name.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    return [
+        { kind: 'template', file: 'src/lib.rs', write: existing => !existing || existing.includes('pub fn add(') ? `//! The ${crate} model, generated by Appling.\n\n${declare}\n` : existing.includes(declare) ? existing : `${existing.trimEnd()}\n${declare}\n` },
+        { kind: 'template', file: `src/${access.module}.rs`, write: () => accessCode(context, access) }
+    ];
+}
+
+function accessCode(context: MapContext, access: RustAccess): string {
+    const roles = context.graph.nodes.filter(n => n.kind === 'Role');
+    const actors = context.graph.nodes.filter(n => n.kind === 'Actor');
+    const tenant = tenantOf(context);
+    const tenantEntity = tenant && (tenant.data.entity as string);
+    const enumOf = (doc: string, name: string, nodes: GraphNode[], describe: (n: GraphNode) => string) => [
+        `/// ${doc}`,
+        '#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]',
+        `pub enum ${name} {`,
+        ...nodes.flatMap(n => [`    /// ${describe(n)}`, `    #[serde(rename = ${JSON.stringify(n.qn)})]`, `    ${access.name(n.qn)},`]),
+        '}'
+    ].join('\n');
+    const fields = actorFields(context).flatMap(field => {
+        const type = actorFieldType(field, context);
+        if (!type) return [];
+        const decl = (field.data.type as TypeData).decl;
+        return [`    /// The field ${last(field.qn)} of ${parentOf(field.qn)}${decl ? `, the id of a ${decl}` : ''}.`, `    pub ${last(field.qn)}: ${type},`];
+    });
+    const empty = actorFields(context).flatMap(field => {
+        const type = actorFieldType(field, context);
+        return type ? [`            ${last(field.qn)}: ${type.startsWith('Vec') ? 'Vec::new()' : 'None'},`] : [];
+    });
+    const blocks: string[] = [
+        `//! The actors, roles and tenant of the model and the checks its policies call.`,
+        enumOf('A role of the model.', 'Role', roles, r => `The role ${r.qn}.`),
+        enumOf('A declared actor of the model.', 'ActorType', actors, a => `The ${a.data.kind} actor ${a.qn}.`),
+        [
+            '/// Who acts: a declared actor with the roles it carries, the tenant it acts in, and the fields the actors',
+            '/// declare. A field is `None` for actors that do not declare it; fields that hold records hold their id.',
+            DERIVE,
+            'pub struct Actor {',
+            '    #[serde(rename = "type")]',
+            '    pub actor_type: ActorType,',
+            '    pub roles: Vec<Role>,',
+            '    /// The record the actor is stored as, for actors declared with `is`.',
+            '    pub id: Option<i64>,',
+            ...(tenant ? [`    /// The id of the ${tenantEntity} the actor acts in (the tenant ${tenant.qn}); \`None\` when it acts across tenants.`, '    pub tenant: Option<i64>,'] : []),
+            ...fields,
+            '}'
+        ].join('\n'),
+        [
+            'impl Actor {',
+            ...actors.flatMap(actor => [
+                `    /// The actor ${actor.qn} with the roles it declares.`,
+                `    pub fn ${snake(access.name(actor.qn))}() -> Self {`,
+                '        Self {',
+                `            actor_type: ActorType::${access.name(actor.qn)},`,
+                `            roles: vec![${((actor.data.roles ?? []) as string[]).map(r => `Role::${access.name(r)}`).join(', ')}],`,
+                '            id: None,',
+                ...(tenant ? ['            tenant: None,'] : []),
+                ...empty,
+                '        }',
+                '    }',
+                ''
+            ]),
+            '    /// Whether the actor carries the role, without checking the role\'s condition.',
+            '    pub fn has(&self, role: Role) -> bool {',
+            '        self.roles.contains(&role)',
+            '    }',
+            '}'
+        ].join('\n')
+    ];
+    for (const role of roles) {
+        const name = access.name(role.qn);
+        const condition = role.data.condition ? roleCondition(role, context, access) : undefined;
+        const body = !role.data.condition ? `actor.has(Role::${name})` : condition ? `actor.has(Role::${name}) && (${condition})` : 'false';
+        blocks.push([
+            `/// Whether the actor is ${role.qn}: it carries the role${role.data.condition ? ' and the role\'s condition holds' : ''}.`,
+            `pub fn is_${snake(name)}(${role.data.condition && !condition ? '_' : ''}actor: &Actor) -> bool {`,
+            `    ${body}`,
+            '}'
+        ].join('\n'));
+    }
+    if (tenant) blocks.push(
+        `/// A record that belongs to a ${tenantEntity}, the entity of the tenant ${tenant.qn}.\npub trait Tenanted {\n    /// The id of the ${tenantEntity}, \`None\` when the record does not reach one.\n    fn tenant_id(&self) -> Option<i64>;\n}`,
+        '/// Whether the record belongs to the tenant the actor acts in. An actor without a tenant acts across tenants.\npub fn in_tenant(actor: &Actor, record: &impl Tenanted) -> bool {\n    actor.tenant.is_none() || record.tenant_id() == actor.tenant\n}'
+    );
+    return `${blocks.join('\n\n')}\n`;
+}
+
+function roleCondition(role: GraphNode, context: MapContext, access: RustAccess): string | undefined {
+    const scope: RustScope = { node: context.node, module: access.module, actor: 'actor', access };
+    return rustExpr(role.data.condition as ExprData, scope);
+}
+
+/** The last name of a role or actor, or its module path and name when another role or actor has the same last name. */
+function uniqueName(qn: string, context: MapContext): string {
+    const node = context.node(qn)!;
+    const clash = context.graph.nodes.some(n => n.kind === node.kind && n.qn !== qn && last(n.qn) === last(qn));
+    return clash ? qn.split('.').map(pascal).join('') : pascal(last(qn));
+}
+
+function parentOf(qn: string): string {
+    return qn.slice(0, qn.lastIndexOf('.'));
+}
+
+function last(qn: string): string {
+    return qn.slice(qn.lastIndexOf('.') + 1);
+}
