@@ -31,6 +31,9 @@ Open the printed address in your browser. The package also installs the binary `
 
 The header shows the workspace folder, the release indicator (once a release exists) and either `valid` or the number of errors in the model.
 
+> [!NOTE]
+> Appling Desktop, a native app in development, runs this IDE once per repo. There the model canvas is the main area, the editor is folded away behind the **Source** button in the header, and the AI tab is left out: AI work runs through terminal agents connected to the [MCP server](ai.md#mcp-server).
+
 ## The editor
 
 The left pane is Monaco with one tab per file. It talks to an Appling language server that the IDE starts for the page, so you get the same features as in any [LSP editor](editors.md): diagnostics, completion, hover with kind, qualified name and layer, go to definition, references, rename and formatting into canonical form. References to files that are not open resolve, because the server loads the whole workspace folder.

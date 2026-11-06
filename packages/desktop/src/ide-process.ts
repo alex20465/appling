@@ -1,0 +1,56 @@
+import { spawn, type ChildProcess } from 'node:child_process';
+import { createRequire } from 'node:module';
+
+export interface IdeProcess {
+    url: string;
+    child: ChildProcess;
+    close(): void;
+}
+
+export interface IdeProcessOptions {
+    /** The Node binary; inside Electron its own executable with `ELECTRON_RUN_AS_NODE`. */
+    node?: string;
+    env?: NodeJS.ProcessEnv;
+    /** How long to wait for the server to report its URL. */
+    timeout?: number;
+    /** Called when the server ends on its own, such as after a crash. */
+    onExit?(code: number | null, stderr: string): void;
+}
+
+/** The IDE server's entry, `appling-ide`. */
+export function ideMain(): string {
+    return createRequire(import.meta.url).resolve('@appling/ide/out/server/main.js');
+}
+
+/**
+ * Starts the IDE server of one repo in its own process on a free port, so a failing repo cannot take the app down.
+ * The server reports its URL over the IPC channel and ends when that channel closes, also when the app is killed.
+ */
+export function startIdeProcess(root: string, options: IdeProcessOptions = {}): Promise<IdeProcess> {
+    const child = spawn(options.node ?? process.execPath, [ideMain(), root, '--port', '0'], {
+        stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+        env: options.env ?? process.env
+    });
+    let stderr = '';
+    child.stderr!.on('data', chunk => stderr = (stderr + chunk).slice(-4000));
+    let ready = false;
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => fail(new Error(`The IDE server for ${root} did not start within ${options.timeout ?? 30000}ms.`)), options.timeout ?? 30000);
+        const fail = (error: Error) => {
+            clearTimeout(timer);
+            child.kill();
+            reject(error);
+        };
+        child.once('error', fail);
+        child.on('message', (message: { type?: string, url?: string }) => {
+            if (message.type !== 'ready' || !message.url || ready) return;
+            ready = true;
+            clearTimeout(timer);
+            resolve({ url: message.url, child, close: () => child.connected ? child.disconnect() : child.kill() });
+        });
+        child.once('exit', code => {
+            if (!ready) return fail(new Error(`The IDE server for ${root} ended with code ${code}.${stderr ? `\n${stderr.trim()}` : ''}`));
+            options.onExit?.(code, stderr);
+        });
+    });
+}

@@ -10,7 +10,11 @@ import { Inspector } from './Inspector.js';
 import { Search } from './Search.js';
 import { applyTextEdits, modelTexts, monaco } from './monaco.js';
 
+/** Inside Appling Desktop (`?shell=desktop`) the canvas is the main area, the source is folded away and there is no chat. */
+const DESKTOP = new URLSearchParams(location.search).get('shell') === 'desktop';
+
 export function App() {
+    const [source, setSource] = useState(!DESKTOP);
     const [snapshot, setSnapshot] = useState<Snapshot>();
     const [selected, setSelected] = useState<string>();
     const [active, setActive] = useState<string>();
@@ -72,8 +76,9 @@ export function App() {
                     </button>
                 )}
                 <span className={snapshot.errors.length ? 'errors' : 'ok'}>{snapshot.errors.length ? `${snapshot.errors.length} error(s)` : 'valid'}</span>
+                {DESKTOP && <button className="button" aria-pressed={source} onClick={() => setSource(!source)}>{source ? 'Hide source' : 'Source'}</button>}
             </header>
-            <main className="panes">
+            <main className={`panes${source ? '' : ' no-source'}${DESKTOP ? ' desktop' : ''}`}>
                 <Editor
                     files={snapshot.files}
                     active={active}
@@ -87,11 +92,11 @@ export function App() {
                     <nav className="tabs" aria-label="Side panel">
                         <button className={side === 'search' ? 'active' : ''} onClick={() => setSide('search')}>Search</button>
                         <button className={side === 'inspector' ? 'active' : ''} onClick={() => setSide('inspector')}>Inspector</button>
-                        <button className={side === 'ai' ? 'active' : ''} onClick={() => setSide('ai')}>AI</button>
+                        {!DESKTOP && <button className={side === 'ai' ? 'active' : ''} onClick={() => setSide('ai')}>AI</button>}
                     </nav>
                     <div hidden={side !== 'search'} className="side-panel"><Search index={index} onSelect={select} /></div>
                     <div hidden={side !== 'inspector'} className="side-panel"><Inspector index={index} qn={selected} code={selected ? snapshot.code[selected] ?? [] : []} onSelect={select} onEdit={edit} /></div>
-                    <div hidden={side !== 'ai'} className="side-panel"><Chat onEdit={edit} onSelect={qn => select(qn, false)} /></div>
+                    {!DESKTOP && <div hidden={side !== 'ai'} className="side-panel"><Chat onEdit={edit} onSelect={qn => select(qn, false)} /></div>}
                 </div>
             </main>
         </div>
