@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { readCodeWorkspace } from './code-workspace.js';
-import { Workspaces } from './workspaces.js';
+import { Workspaces, type RailLayout } from './workspaces.js';
 
 /** What the app restores after a restart; written to `session.json` in the user data folder on every change. */
 export interface Session {
@@ -12,6 +12,10 @@ export interface Session {
     shown: Record<string, string>;
     /** Repos, the most recently shown first. */
     recent: string[];
+    /** The pinned and hidden repos per workspace file; their order is the file's folder order. */
+    rail: Record<string, RailLayout>;
+    /** Whether the rail is folded away. */
+    collapsed: boolean;
 }
 
 export function sessionOf(workspaces: Workspaces): Session {
@@ -19,7 +23,9 @@ export function sessionOf(workspaces: Workspaces): Session {
         workspaces: workspaces.all().map(w => w.id),
         active: workspaces.active,
         shown: Object.fromEntries(workspaces.all().filter(w => w.active).map(w => [w.id, w.active!])),
-        recent: workspaces.mostRecent()
+        recent: workspaces.mostRecent(),
+        rail: Object.fromEntries(workspaces.all().filter(w => w.pinned.length || w.hidden.length).map(w => [w.id, { pinned: [...w.pinned], hidden: [...w.hidden] }])),
+        collapsed: workspaces.collapsed
     };
 }
 
@@ -27,7 +33,11 @@ export function readSession(file: string): Session | undefined {
     if (!existsSync(file)) return undefined;
     try {
         const session = JSON.parse(readFileSync(file, 'utf8')) as Partial<Session>;
-        return Array.isArray(session.workspaces) ? { workspaces: session.workspaces, active: session.active, shown: session.shown ?? {}, recent: session.recent ?? [] } : undefined;
+        return Array.isArray(session.workspaces) ? {
+                workspaces: session.workspaces, active: session.active, shown: session.shown ?? {}, recent: session.recent ?? [],
+                rail: session.rail && typeof session.rail === 'object' ? session.rail : {}, collapsed: session.collapsed === true
+            }
+            : undefined;
     } catch {
         return undefined;
     }
@@ -40,7 +50,8 @@ export function writeSession(file: string, session: Session): void {
 
 /**
  * Reopens the workspaces of a session from their files, which may have changed since (in VS Code too), with the
- * repo shown per workspace, the active workspace and the most recently used order. Returns one problem per
+ * repo shown per workspace, the active workspace, the most recently used order, the pinned and hidden repos and the
+ * collapsed rail. Returns one problem per
  * workspace file that is gone or does not parse; those are left out.
  */
 export function restore(session: Session, workspaces: Workspaces): string[] {

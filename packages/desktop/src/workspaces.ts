@@ -9,6 +9,16 @@ export interface Workspace {
     folders: WorkspaceFolder[];
     /** The repo shown when the workspace is active. */
     active?: string;
+    /** Repos pinned to the top of the rail, kept in folder order. */
+    pinned: string[];
+    /** Repos left out of the rail (and of Ctrl+1..9); they keep running and the switcher still finds them. */
+    hidden: string[];
+}
+
+/** The pins and hidden repos of one workspace, as a session saves them. */
+export interface RailLayout {
+    pinned?: string[];
+    hidden?: string[];
 }
 
 /** How long after a most recently used step the next one continues the same walk instead of starting over. */
@@ -25,6 +35,8 @@ export class Workspaces {
     /** Repo ids, the most recently shown first. */
     private recent: string[] = [];
     private walk?: { order: string[], at: number, until: number };
+    /** Whether the rail is folded away, so the repo view takes the whole window. */
+    collapsed = false;
 
     all(): readonly Workspace[] {
         return this.list;
@@ -58,7 +70,7 @@ export class Workspaces {
             return { workspace: existing, added: false };
         }
         const unique = dedupe(folders);
-        const workspace: Workspace = { id, name: workspaceName(id), folders: unique, active: unique[0]?.path };
+        const workspace: Workspace = { id, name: workspaceName(id), folders: unique, active: unique[0]?.path, pinned: [], hidden: [] };
         this.list.push(workspace);
         this.touch(workspace.active);
         return { workspace, added: true };
@@ -95,6 +107,8 @@ export class Workspaces {
         const at = workspace ? workspace.folders.findIndex(f => f.path === path) : -1;
         if (!workspace || at < 0) return false;
         workspace.folders.splice(at, 1);
+        workspace.pinned = workspace.pinned.filter(r => r !== path);
+        workspace.hidden = workspace.hidden.filter(r => r !== path);
         if (workspace.active === path) {
             workspace.active = (workspace.folders[at] ?? workspace.folders[at - 1])?.path;
             if (workspace.id === this.active) this.touch(workspace.active);
@@ -136,9 +150,74 @@ export class Workspaces {
         return true;
     }
 
-    /** Shows the n-th repo (0 based) of the active workspace. */
+    /** The repos the rail shows for a workspace, in its order: pinned ones first, hidden ones left out. */
+    rail(workspaceId: string): WorkspaceFolder[] {
+        const workspace = this.get(workspaceId);
+        if (!workspace) return [];
+        const shown = workspace.folders.filter(f => !workspace.hidden.includes(f.path));
+        return [...shown.filter(f => workspace.pinned.includes(f.path)), ...shown.filter(f => !workspace.pinned.includes(f.path))];
+    }
+
+    /** Pins a repo to the top of its workspace's rail, or unpins it (false). Pinning shows a hidden repo again. */
+    pin(workspaceId: string, repo: string, pinned: boolean): boolean {
+        const workspace = this.get(workspaceId);
+        const path = resolve(repo);
+        if (!workspace?.folders.some(f => f.path === path) || workspace.pinned.includes(path) === pinned) return false;
+        workspace.pinned = pinned ? [...workspace.pinned, path] : workspace.pinned.filter(r => r !== path);
+        if (pinned) workspace.hidden = workspace.hidden.filter(r => r !== path);
+        return true;
+    }
+
+    /**
+     * Hides a repo from its workspace's rail, or shows it again (false). Hiding the shown repo shows the next one in
+     * the rail; a hidden repo keeps its server and view, and selecting it (through the switcher) works as before.
+     */
+    hide(workspaceId: string, repo: string, hidden: boolean): boolean {
+        const workspace = this.get(workspaceId);
+        const path = resolve(repo);
+        if (!workspace?.folders.some(f => f.path === path) || workspace.hidden.includes(path) === hidden) return false;
+        if (!hidden) {
+            workspace.hidden = workspace.hidden.filter(r => r !== path);
+            return true;
+        }
+        const rail = this.rail(workspace.id).map(f => f.path);
+        const at = rail.indexOf(path);
+        workspace.hidden = [...workspace.hidden, path];
+        workspace.pinned = workspace.pinned.filter(r => r !== path);
+        if (workspace.active === path) {
+            const next = rail[at + 1] ?? rail[at - 1];
+            if (next) {
+                workspace.active = next;
+                if (workspace.id === this.active) this.touch(next);
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Moves a repo in its workspace's folder order to just before `before` (to the end without it), as a drop in the
+     * rail does. It joins the group of the repo it lands next to: dropped on a pinned repo it is pinned, else unpinned.
+     */
+    reorder(workspaceId: string, repo: string, before?: string): boolean {
+        const workspace = this.get(workspaceId);
+        const path = resolve(repo);
+        const target = before === undefined ? undefined : resolve(before);
+        const from = workspace ? workspace.folders.findIndex(f => f.path === path) : -1;
+        if (!workspace || from < 0 || target === path) return false;
+        if (target !== undefined && !workspace.folders.some(f => f.path === target)) return false;
+        const [folder] = workspace.folders.splice(from, 1);
+        const to = target === undefined ? workspace.folders.length : workspace.folders.findIndex(f => f.path === target);
+        workspace.folders.splice(to, 0, folder);
+        const pinned = target !== undefined && workspace.pinned.includes(target);
+        workspace.pinned = workspace.pinned.filter(r => r !== path);
+        if (pinned) workspace.pinned.push(path);
+        workspace.pinned.sort((a, b) => workspace.folders.findIndex(f => f.path === a) - workspace.folders.findIndex(f => f.path === b));
+        return true;
+    }
+
+    /** Shows the n-th repo (0 based) of the active workspace's rail. */
     selectAt(index: number): boolean {
-        const folder = this.current()?.folders[index];
+        const folder = this.active ? this.rail(this.active)[index] : undefined;
         return folder ? this.select(folder.path, this.active) : false;
     }
 
@@ -177,11 +256,24 @@ export class Workspaces {
     }
 
     /** Sets the shown repo per workspace, the active workspace and the most recently used order at once, as a restored session. Unknown ids are skipped. */
-    arrange({ shown = {}, active, recent = [] }: { shown?: Record<string, string>, active?: string, recent?: string[] }): void {
+    arrange({ shown = {}, active, recent = [], rail = {}, collapsed }: {
+        shown?: Record<string, string>, active?: string, recent?: string[], rail?: Record<string, RailLayout>, collapsed?: boolean
+    }): void {
         for (const [id, repo] of Object.entries(shown)) {
             const workspace = this.get(id);
             if (workspace?.folders.some(f => f.path === resolve(repo))) workspace.active = resolve(repo);
         }
+        for (const [id, layout] of Object.entries(rail)) {
+            const workspace = this.get(id);
+            if (!workspace) continue;
+            const known = (repos: unknown) => Array.isArray(repos)
+                ? [...new Set(repos.filter((r): r is string => typeof r === 'string').map(r => resolve(r)))].filter(r => workspace.folders.some(f => f.path === r))
+                : [];
+            workspace.hidden = known(layout.hidden);
+            workspace.pinned = known(layout.pinned).filter(r => !workspace.hidden.includes(r))
+                .sort((a, b) => workspace.folders.findIndex(f => f.path === a) - workspace.folders.findIndex(f => f.path === b));
+        }
+        if (collapsed !== undefined) this.collapsed = collapsed;
         if (active && this.get(active)) this.active = resolve(active);
         this.recent = recent.map(r => resolve(r));
         this.forget();
