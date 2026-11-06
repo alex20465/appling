@@ -22,6 +22,10 @@ export function ashExpr(expr: ExprData, node: Lookup): string | undefined {
         case 'BinaryExpr': {
             const shift = relativeTime(expr);
             if (shift) return shift;
+            if (expr.op === '==' || expr.op === '!=') {
+                const references = [referenceId(expr.left!, node), referenceId(expr.right!, node)];
+                if (references.some(r => r && r !== 'nil') && references.every(Boolean)) return `${references[0]} ${expr.op} ${references[1]}`;
+            }
             const [left, right] = [sub(expr.left!), sub(expr.right!)];
             return left && right && `${wrap(left)} ${OPERATORS[expr.op!] ?? expr.op} ${wrap(right)}`;
         }
@@ -34,15 +38,58 @@ export function ashExpr(expr: ExprData, node: Lookup): string | undefined {
             const target = expr.target ? node(expr.target) : undefined;
             if (target?.kind === 'EnumLiteral') return `:${expr.name}`;
             if (target?.kind === 'Param') return `^arg(:${expr.name})`;
-            return target?.kind === 'Field' && node(parentOf(target.qn))?.kind === 'Entity' ? expr.name : undefined;
+            if (target?.kind === 'Tenant') return '^tenant()';
+            return target && isRecordField(target, node) ? expr.name : undefined;
         }
         case 'MemberExpr': {
-            const receiver = !expr.call && sub(expr.receiver!);
             const target = expr.target ? node(expr.target) : undefined;
+            if (isActor(expr.receiver) && !expr.call) return target && isRecordField(target, node) ? `^actor(:${expr.member})` : undefined;
+            const receiver = !expr.call && sub(expr.receiver!);
             return receiver && target?.kind === 'Field' && node(parentOf(target.qn))?.kind === 'Entity' ? `${receiver}.${expr.member}` : undefined;
         }
         default: return undefined;
     }
+}
+
+/** Whether an expression is the bare name `actor`. */
+export function isActor(expr: ExprData | undefined): boolean {
+    return expr?.$type === 'NameExpr' && expr.name === 'actor' && !expr.target && !expr.call;
+}
+
+/** A field of an entity or of an actor, which the actor's resource or struct holds. */
+function isRecordField(target: GraphNode, node: Lookup): boolean {
+    const owner = node(parentOf(target.qn))?.kind;
+    return target.kind === 'Field' && (owner === 'Entity' || owner === 'Actor');
+}
+
+/**
+ * A side of a comparison between records as the id Ash compares: `customer` becomes `customer_id`, `buyer.company`
+ * `buyer.company_id`, `actor.account` `^actor(:account_id)`, `actor` `^actor(:id)`, `this` `id`, `tenant` `^tenant()`
+ * and `null` `nil`. Undefined for anything that is not a record.
+ */
+function referenceId(expr: ExprData, node: Lookup): string | undefined {
+    if (expr.$type === 'NullExpr') return 'nil';
+    if (isActor(expr)) return '^actor(:id)';
+    if (expr.$type === 'NameExpr' && !expr.call) {
+        if (expr.name === 'this' && !expr.target) return 'id';
+        const target = expr.target ? node(expr.target) : undefined;
+        if (target?.kind === 'Tenant') return '^tenant()';
+        return target && isRelation(target, node) ? `${expr.name}_id` : undefined;
+    }
+    if (expr.$type === 'MemberExpr' && !expr.call) {
+        const target = expr.target ? node(expr.target) : undefined;
+        if (!target || !isRelation(target, node)) return undefined;
+        if (isActor(expr.receiver)) return `^actor(:${expr.member}_id)`;
+        const receiver = ashExpr(expr.receiver!, node);
+        return receiver && `${receiver}.${expr.member}_id`;
+    }
+    return undefined;
+}
+
+/** A single valued field whose type is an entity, a `belongs_to` relationship. */
+function isRelation(target: GraphNode, node: Lookup): boolean {
+    const type = target.data.type as { decl?: string, many?: boolean } | undefined;
+    return isRecordField(target, node) && !!type?.decl && !type.many && node(type.decl)?.kind === 'Entity';
 }
 
 /** Translates a condition over stored attributes to an Ash builtin validation, or undefined. */
@@ -99,7 +146,7 @@ function relativeTime(expr: ExprData): string | undefined {
 }
 
 function wrap(code: string): string {
-    return /^[\w.:]+(\(.*\))?$/.test(code) || /^".*"$/.test(code) || /^\[.*\]$/.test(code) ? code : `(${code})`;
+    return /^\^?[\w.:]+(\(.*\))?$/.test(code) || /^".*"$/.test(code) || /^\[.*\]$/.test(code) ? code : `(${code})`;
 }
 
 function joined(parts: (string | undefined)[], combine: (parts: string[]) => string): string | undefined {

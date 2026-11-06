@@ -18,11 +18,30 @@ config :shop, Oban,
 end
 ",
   "lib/shop/crm/account.ex": "defmodule Shop.Crm.Account do
-  use Ash.Resource, otp_app: :shop, domain: Shop.Crm
+  use Ash.Resource, otp_app: :shop, domain: Shop.Crm,
+    authorizers: [Ash.Policy.Authorizer]
 
   identities do
     identity :unique_name, [:name]
   end
+
+  policies do
+    policy action_type(:read) do
+      authorize_if Shop.Crm.Checks.Clerk
+      forbid_unless Shop.Sales.Checks.Customer
+      authorize_if expr(^actor(:account_id) == id)
+    end
+  end
+end
+",
+  "lib/shop/crm/checks/clerk.ex": "defmodule Shop.Crm.Checks.Clerk do
+  use Ash.Policy.SimpleCheck
+
+  @impl true
+  def describe(_opts), do: "actor is Clerk"
+
+  @impl true
+  def match?(_actor, _context, _opts), do: false
 end
 ",
   "lib/shop/sales.ex": "defmodule Shop.Sales do
@@ -44,8 +63,23 @@ end
   end
 end
 ",
+  "lib/shop/sales/checks/customer.ex": "defmodule Shop.Sales.Checks.Customer do
+  use Ash.Policy.SimpleCheck
+
+  @impl true
+  def describe(_opts), do: "actor is Customer"
+
+  @impl true
+  def match?(%Shop.Sales.Shopper{} = actor, _context, _opts) do
+    :customer in (actor.roles || [])
+  end
+
+  def match?(_actor, _context, _opts), do: false
+end
+",
   "lib/shop/sales/order.ex": "defmodule Shop.Sales.Order do
   use Ash.Resource, otp_app: :shop, domain: Shop.Sales, data_layer: AshPostgres.DataLayer,
+    authorizers: [Ash.Policy.Authorizer],
     extensions: [AshJsonApi.Resource, AshOban, AshStateMachine]
 
   actions do
@@ -91,6 +125,44 @@ end
     identity :unique_reference, [:reference]
   end
 
+  policies do
+    policy action_type(:read) do
+      authorize_if Shop.Crm.Checks.Clerk
+      forbid_unless Shop.Sales.Checks.Customer
+      authorize_if expr(customer_id == ^actor(:account_id))
+    end
+
+    policy action_type([:create, :update, :destroy]) do
+      authorize_if Shop.Crm.Checks.Clerk
+    end
+
+    policy action(:place_order) do
+      forbid_unless Shop.Sales.Checks.Customer
+      authorize_if expr(customer_id == ^actor(:account_id))
+    end
+
+    policy action(:cancel) do
+      authorize_if Shop.Crm.Checks.Clerk
+    end
+  end
+
+  field_policies do
+    field_policy :total do
+      authorize_if Shop.Crm.Checks.Clerk
+      forbid_unless Shop.Sales.Checks.Customer
+      authorize_if expr(status != :draft)
+    end
+
+    field_policy :* do
+      authorize_if always()
+    end
+  end
+
+  multitenancy do
+    strategy :attribute
+    attribute :customer_id
+  end
+
   state_machine do
     initial_states [:draft]
     default_initial_state :draft
@@ -123,6 +195,24 @@ end
 
   json_api do
     type "order"
+  end
+end
+",
+  "lib/shop/sales/shopper.ex": "defmodule Shop.Sales.Shopper do
+  use Ash.Resource, otp_app: :shop, domain: Shop.Sales, data_layer: AshPostgres.DataLayer
+
+  attributes do
+    attribute :roles, {:array, :atom} do
+      default []
+      constraints items: [one_of: [:customer]]
+      public? false
+    end
+  end
+
+  multitenancy do
+    strategy :attribute
+    attribute :account_id
+    global? true
   end
 end
 ",
@@ -318,15 +408,28 @@ exports[`examples plan domains, enums, embedded resources, resources and relatio
   "sales.Order.policy[read]: test/shop/sales/order_test.exs",
   "sales.Order.policy[create,update,delete]: test/shop/sales/order_test.exs",
   "sales.Order.policy[read fields total]: test/shop/sales/order_test.exs",
+  "crm.Clerk: lib/shop/crm/checks/clerk.ex",
+  "sales.Customer: lib/shop/sales/checks/customer.ex",
+  "sales.Shopper: mix ash.gen.resource Shop.Sales.Shopper --domain Shop.Sales --default-actions read,create,update,destroy --uuid-primary-key id --attribute roles:atom:array --extend postgres --timestamps --yes",
   "sales.PlaceOrder: test/shop/sales/order_test.exs",
   "sales.OrderFlow.transition[draft->placed]: test/shop/sales/order_test.exs",
   "sales.OrderFlow.transition[placed->paid]: test/shop/sales/order_test.exs",
   "sales.OrderFlow.transition[draft,placed->cancelled]: test/shop/sales/order_test.exs",
   "sales.Order.customer: mix ash.gen.resource Shop.Sales.Order --relationship belongs_to:customer:Shop.Crm.Account:required --yes",
+  "sales.Shopper.account: mix ash.gen.resource Shop.Sales.Shopper --relationship belongs_to:account:Shop.Crm.Account:required --yes",
   "crm.Account: lib/shop/crm/account.ex",
+  "crm.Account.policy[read]: lib/shop/crm/account.ex",
   "sales.Order: lib/shop/sales/order.ex",
+  "sales.Order.policy[read]: lib/shop/sales/order.ex",
+  "sales.Order.policy[create,update,delete]: lib/shop/sales/order.ex",
+  "sales.Order.policy[read fields total]: lib/shop/sales/order.ex",
+  "crm.Company: lib/shop/sales/order.ex",
+  "crm.Company: lib/shop/sales/shopper.ex",
+  "sales.Shopper: lib/shop/sales/shopper.ex",
   "sales.PlaceOrder: lib/shop/sales/order.ex",
+  "sales.PlaceOrder.policy[]: lib/shop/sales/order.ex",
   "sales.Cancel: lib/shop/sales/order.ex",
+  "sales.Cancel.policy[]: lib/shop/sales/order.ex",
   "sales.OrderFlow: lib/shop/sales/order.ex",
   "sales.ExpireDrafts: lib/shop/sales/order.ex",
   "sales.ExpireDrafts: config/config.exs",

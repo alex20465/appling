@@ -6,7 +6,9 @@ import { actionSteps, jobSteps, machineSteps } from './behavior.js';
 import { constant, lastOf, parentOf, validation } from './elixir.js';
 import { migrationSteps } from './migrations.js';
 import { hasPages, navigationSteps, pageSteps } from './pages.js';
-import { roleCalculations, rolePolicySteps, roleSteps, userEntity } from './roles.js';
+import { actorAttributeSpecs, actorFieldSteps, actorSteps, constrainRoles, homeAt, homeFields } from './actors.js';
+import { actorCheckSteps, policySteps, roleCalculations, roleSteps } from './roles.js';
+import { tenantSteps } from './tenants.js';
 import { testSteps } from './tests.js';
 import { app, attributeType, calculation, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, storedAttributes, task, typeModule } from './naming.js';
 
@@ -49,7 +51,7 @@ const extension: CodegenExtension = {
                 ...testSteps(node, owner(node, context), `invariant ${node.data.label}`, ['holds for valid records', 'rejects violations'], context)
             ];
             case 'Policy': return [
-                ...(rolePolicySteps(node, context) ?? [task(`add an Ash policy to ${parentOf(node.qn)} for ${(node.data.operations as string[] | undefined)?.join(', ') ?? 'any action'}: ${node.props.condition}`)]),
+                ...(policySteps(node, context) ?? [task(`add an Ash policy to ${parentOf(node.qn)} for ${(node.data.operations as string[] | undefined)?.join(', ') ?? 'any action'}: ${node.props.condition}`)]),
                 ...(context.node(parentOf(node.qn))!.kind === 'Entity'
                     ? testSteps(node, owner(node, context), lastOf(node.qn), ['allows permitted actors', 'denies other actors'], context)
                     : [])
@@ -69,6 +71,8 @@ const extension: CodegenExtension = {
             case 'External': return [task(`implement ${lastOf(node.qn)} as a client module or generic actions`)];
             case 'UseCase': return [task(`implement ${lastOf(node.qn)} as a Reactor or a generic action`)];
             case 'Role': return roleSteps(node, context);
+            case 'Actor': return [...actorSteps(node, context, patchResource), ...actorCheckSteps(node, context)];
+            case 'Tenant': return tenantSteps(node, context);
             case 'Param':
             case 'ErrorDecl':
             case 'SetEffect':
@@ -102,8 +106,8 @@ function entitySteps(entity: GraphNode, context: MapContext): Step[] {
         const type = f.data.type as TypeData;
         return [lastOf(f.qn), attributeType(type, context), ...(type.many ? ['array'] : []), ...(type.optional ? [] : ['required']), 'public'].join(':');
     });
-    // The roles of the actor resource are not public, so nobody assigns roles to themselves through the API.
-    if (userEntity(context)?.qn === entity.qn) specs.push('roles:atom:array');
+    // The fields of the actors bound to the entity, and their roles, which are not public, so nobody assigns roles to themselves through the API.
+    specs.push(...actorAttributeSpecs(entity, context));
     return [
         mix(['ash.gen.resource', typeModule(entity, context), '--domain', moduleName(entity.module, context),
             '--default-actions', 'read,create,update,destroy', '--uuid-primary-key', 'id', ...(specs.length ? ['--attribute', specs.join(',')] : []),
@@ -116,6 +120,7 @@ function fieldSteps(field: GraphNode, context: MapContext): Step[] | undefined {
     const owner = context.node(parentOf(field.qn))!;
     if (owner.kind === 'ValueType') return field.data.derived || field.data.default ? [task(`add ${lastOf(field.qn)} to the embedded resource: ${field.props.derived ?? field.props.default}`)] : [];
     if (owner.kind === 'Event') return [];
+    if (owner.kind === 'Actor') return actorFieldSteps(field, context);
     if (owner.kind !== 'Entity') return undefined;
     const type = field.data.type as TypeData;
     const target = relationTarget(field, context);
@@ -130,9 +135,11 @@ function fieldSteps(field: GraphNode, context: MapContext): Step[] | undefined {
     return tasks;
 }
 
-/** Adds defaults, identities, calculations and validations to the resource `ash.gen.resource` created. */
+/** Adds defaults, identities, calculations and validations to the resource `ash.gen.resource` created, for an entity or an actor. */
 function patchResource(text: string, entity: GraphNode, context: MapContext): string {
-    const fields = fieldsOf(entity, context);
+    const home = homeAt(entity, context);
+    const fields = home?.resource ? homeFields(home, context) : fieldsOf(entity, context);
+    if (home?.resource) text = constrainRoles(text, home);
     for (const field of fields) {
         const value = defaultValue(field, context);
         if (value !== undefined) text = text.replace(new RegExp(`(\\n([ \\t]*)attribute :${lastOf(field.qn)}, [^\\n]* do\\n)`), `$1$2  default ${value}\n`);
