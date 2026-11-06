@@ -1,11 +1,11 @@
 import { EventEmitter } from 'node:events';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { WebSocket } from 'ws';
 import type { Graph } from '@appling/model';
-import { Visualizer, type Ask, type HostMessage } from '../src/index.js';
+import { Visualizer, type Ask, type Changes, type HostMessage } from '../src/index.js';
 
 const GRAPH: Graph = { nodes: [], edges: [] } as unknown as Graph;
 
@@ -133,5 +133,37 @@ test('only the served window with its token may connect', async () => {
     const url = new URL(urls[0]);
     await expect(connect(`http://${url.host}/?token=wrong`)).rejects.toThrow();
     await expect(connect(urls[0], 'http://evil.example')).rejects.toThrow();
+    await visualizer.close();
+});
+
+test('the status of each step opens the window and reaches every window, the earlier steps included', async () => {
+    const { visualizer, urls } = host();
+    await visualizer.status({ text: 'Modeling the tasks module' });
+    await visualizer.status({ text: 'Implementing registry tasks', done: 2, total: 5 });
+    expect(urls).toHaveLength(1);
+    const window = await connect(urls[0]);
+    await window.next('status');
+    for (let i = 0; i < 100 && window.received.filter(m => m.type === 'status').length < 2; i++) await new Promise(done => setTimeout(done, 10));
+    expect(window.received.filter(m => m.type === 'status')).toEqual([
+        { type: 'status', status: { text: 'Modeling the tasks module' } },
+        { type: 'status', status: { text: 'Implementing registry tasks', done: 2, total: 5 } }
+    ]);
+    window.ws.close();
+    await visualizer.close();
+});
+
+test('a model file change sends the session changes and grows the node view by the declarations they touch', async () => {
+    const graph = { nodes: [{ qn: 'shop', kind: 'Module', props: {} }, { qn: 'shop.Item', kind: 'Entity', props: {} }], edges: [{ from: 'shop', to: 'shop.Item', kind: 'contains' }] } as unknown as Graph;
+    const changes: Changes = { hunks: [{ file: 'shop.appling', line: 2, removed: [], added: ['  entity Item {', '  }'] }], graph: { added: ['shop.Item'], removed: [], changed: [] } };
+    const urls: string[] = [];
+    const root = mkdtempSync(join(tmpdir(), 'appling-viz-'));
+    const visualizer = new Visualizer({ root, graph: async () => graph, changes: async () => changes, launch: url => { urls.push(url); return new FakeWindow(); } });
+    await visualizer.status({ text: 'Modeling the shop' });
+    const window = await connect(urls[0]);
+    expect(await window.next('changes')).toEqual({ type: 'changes', changes });
+    writeFileSync(join(root, 'shop.appling'), 'module shop {\n  entity Item {\n  }\n}\n');
+    expect(await window.next('show')).toEqual({ type: 'show', show: { view: 'node', focus: ['shop.Item'] } });
+    expect(window.received.filter(m => m.type === 'changes')).toHaveLength(2);
+    window.ws.close();
     await visualizer.close();
 });

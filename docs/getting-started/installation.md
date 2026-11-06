@@ -44,6 +44,8 @@ Then open `http://127.0.0.1:4410`. Pass `--port` to use another port. See [the I
 
 ## AI assistants
 
+To set up a new project with Claude Code, Codex, OpenCode, Gemini CLI or Antigravity CLI in one step, run `npx @appling/cli init`. See [Start a new project](new-project.md).
+
 The MCP server works with Claude Code, Claude Desktop and any other MCP client. For Claude Code, install it in the project and register it:
 
 ```sh

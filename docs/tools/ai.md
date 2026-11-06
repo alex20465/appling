@@ -6,6 +6,7 @@ description: Give AI assistants validated access to your model through the MCP s
 `@appling/ai` connects AI assistants to an Appling workspace. It has three parts:
 
 - an [MCP server](#mcp-server), `appling-mcp`, with tools to query the model, edit it through validated operations and work through a generated project's task registry,
+- the [appling skill and rules](#appling-skill-and-rules), which make a coding agent design and change the application through the model,
 - the [registry skill](#registry-skill), instructions for an agent that finishes a generated project one task at a time,
 - the [visualization window](#visualization-window), a floating window in which Claude Code shows you parts of the model, takes your questions and asks you to accept its changes,
 - the [IDE chat](#ide-chat), which runs the same model tools on a working copy and returns its changes as a proposal you review.
@@ -68,7 +69,7 @@ Use an absolute folder here, since the client decides the working directory.
 
 ## Tools
 
-The server registers twelve tools, and over stdio five more for the [visualization window](#visualization-window). Each returns its result as JSON text.
+The server registers twelve tools, and over stdio six more for the [visualization window](#visualization-window). Each returns its result as JSON text.
 
 ### Model tools
 
@@ -133,6 +134,23 @@ These two tools read and write the [code references](references.md) of the works
 ### The implement_next_task prompt
 
 The server also registers the MCP prompt `implement_next_task`. It carries the text of the registry skill below, so a client that supports prompts can start the workflow without installing the skill.
+
+## Appling skill and rules
+
+The package ships the instructions that make a coding agent work model first:
+
+| File | Loaded | Says |
+|---|---|---|
+| `rules/appling.md` | Always, from the agent's instructions | The model is the source of truth; every requirement goes through the model first; a design is a model, not code; the model changes only through the MCP tools; while only the model exists, changes apply without asking; once the code exists, model and code change together in both directions, through `appling generate --migrate` or `--sync` where generation covers the change and by hand otherwise; the work shows in the visualization window |
+| `skills/appling/SKILL.md` | When a request is about what the application does | How to find out where the project stands, learn the language with `language_reference`, design a new application layer by layer, verify it with `simulate`, generate and release it, carry a change through model and code, and explain the application from the model |
+
+Skills load only when the agent decides a request needs them; the rules are always in context and tell the agent to load the skill. [`appling init`](../getting-started/new-project.md) wires both into Claude Code, Codex, OpenCode, Gemini CLI and Antigravity CLI by reference into `node_modules/@appling/ai`, so updating the package updates them. To wire them by hand in Claude Code, import the rules in `CLAUDE.md` and link the skill:
+
+```sh
+echo '@node_modules/@appling/ai/rules/appling.md' >> CLAUDE.md
+mkdir -p .claude/skills
+ln -s ../../node_modules/@appling/ai/skills/appling .claude/skills/appling
+```
 
 ## Reverse engineering skill
 
@@ -207,9 +225,19 @@ claude --dangerously-load-development-channels server:appling
 
 Here `appling` is the name of the server in your MCP configuration. Without the flag, everything else works, and questions typed into the window are dropped.
 
+### Live changes and progress
+
+The window follows the session as it works:
+
+- **Progress.** Claude reports each step of a longer task with `visual_status`, such as "Modeling the tasks module" or "Implementing registry task 3 of 12". The strip below the title bar shows the current step with a progress bar when the step has a count; hovering it lists the earlier steps. The first status opens the window.
+- **Changes in the tree.** Every change of a model file marks the declarations it touches in the `node` view: green for a declaration added in this session, amber for one whose members or properties changed. While the `node` view is on screen, or no view yet, the tree also grows by every declaration the session touched, so you watch the model take shape. Another view on screen stays as it is.
+- **Session changes.** The dock lists every element added, removed and changed since the MCP server started, with the changed lines per file. Click an element to select it and open its view.
+
+The changes count from the files as they were when the MCP server started, whoever changed them: Claude, the IDE or your editor.
+
 ### Review changes in the window
 
-While the window is open, Claude proposes model changes with `propose_edits` instead of `edit`. The window shows the summary, the changed lines per file and the elements added, removed and changed. Accept writes the operations to the files; Reject leaves them unchanged and returns your optional comment to Claude. Closing the window rejects an open proposal.
+Claude changes the model with `edit` and the window shows the change as it happens. When you ask to review a change before it is written, Claude proposes it with `propose_edits`. The window shows the summary, the changed lines per file and the elements added, removed and changed. Accept writes the operations to the files; Reject leaves them unchanged and returns your optional comment to Claude. Closing the window rejects an open proposal.
 
 ### Visualization tools
 
@@ -219,6 +247,7 @@ While the window is open, Claude proposes model changes with `propose_edits` ins
 | `visual_bubble` | `target`: an element or member; `text`; `code?`; `file?` (relative to the model folder) and `line?` | `{ placed: true }`, or `{ placed: false, reason }` for an unknown element, a missing file, a line without its file or a closed window |
 | `visual_selection` | none | `{ open, qn?, view? }`: whether the window is open, the selected element and the view on screen |
 | `visual_reply` | `text`, `ask_id?` | `{ sent: true }`, or `{ sent: false, reason }` when the window is closed |
+| `visual_status` | `text`: the current step; `done?`, `total?`: the progress | `{ shown: true }`; opens the window when it is closed |
 | `propose_edits` | `operations`: [edit operations](../reference/edit-operations.md); `summary` | After your decision: `{ accepted: true, ok: true, changed }`, `{ accepted: false, comment? }`, or `{ ok: false, operation, errors }` when an operation is invalid before review |
 
 A question from the window arrives in the session as a channel message with the attributes `ask_id`, `selected` (the selected element) and `view` (the view and its focus).

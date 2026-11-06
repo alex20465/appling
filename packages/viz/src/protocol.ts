@@ -26,6 +26,16 @@ export interface Review {
     graph: { added: string[], removed: string[], changed: string[] };
 }
 
+/** The model changes since the session started, in the shape of a review. */
+export type Changes = Omit<Review, 'summary'>;
+
+/** What the agent works on now; with `done` and `total`, how far along it is. */
+export interface Status {
+    text: string;
+    done?: number;
+    total?: number;
+}
+
 export type Decision = { accepted: true } | { accepted: false, comment?: string };
 
 export interface Ask {
@@ -41,7 +51,9 @@ export type HostMessage =
     | { type: 'bubble', bubble: Bubble }
     | { type: 'reply', text: string, askId?: string }
     | { type: 'review', id: string, review: Review }
-    | { type: 'reviewed', id: string };
+    | { type: 'reviewed', id: string }
+    | { type: 'changes', changes: Changes }
+    | { type: 'status', status: Status };
 
 export type WindowMessage =
     | { type: 'select', qn?: string, view: Show }

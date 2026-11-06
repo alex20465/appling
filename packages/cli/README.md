@@ -1,6 +1,6 @@
 # @appling/cli
 
-Command line tool to check, format and inspect Appling models (`.appling` files).
+Command line tool to set up, check, format and inspect Appling models (`.appling` files).
 
 Appling is a declarative language that describes a business or web application in five layers: domain, behavior, application, interfaces and experience. The language itself lives in [`@appling/lang`](https://www.npmjs.com/package/@appling/lang).
 
@@ -19,6 +19,7 @@ npx @appling/cli check models
 ## Usage
 
 ```sh
+appling init [folder] [--name <name>] [--agents <agents>] [--stack <stack>]
 appling check [files or folders...]
 appling fmt   [files or folders...]
 appling graph [files or folders...]
@@ -33,6 +34,14 @@ appling refs <qualified name | --check> [files or folders...]
 Folders are searched recursively for `.appling` files. Hidden folders and `node_modules` are skipped. Without a path, the current folder is used.
 
 All files are loaded as one workspace, so references between modules resolve across files.
+
+### init
+
+Sets up a new project: writes `package.json` if missing, installs `@appling/cli`, `@appling/ai` and the stack's extension, writes a starter module and the generate target, and connects the chosen coding agents (`claude`, `codex`, `opencode`, `gemini`, `antigravity`) to the Appling MCP server, the `appling` skill and its rules, all referenced from `node_modules`. It asks for what the flags leave open; `--stack` takes `django`, `ash`, `go`, `rust` or `none`.
+
+```sh
+npx @appling/cli init todo --name todo --agents claude,codex --stack django
+```
 
 ### check
 
@@ -106,8 +115,8 @@ $ appling refs --check
 | Code | Meaning |
 |---|---|
 | 0 | No errors |
-| 1 | `check`, `graph`, `release`, `generate` or `refs` found errors, `refs --check` found a reference that is not current, `release` found an invalid or existing version, `generate` failed, or `fmt` skipped a file with syntax errors |
-| 2 | Unknown command, `release` without a version, or `refs` without a qualified name or `--check` |
+| 1 | `init` was cancelled or the installation failed, `check`, `graph`, `release`, `generate` or `refs` found errors, `refs --check` found a reference that is not current, `release` found an invalid or existing version, `generate` failed, or `fmt` skipped a file with syntax errors |
+| 2 | Unknown command, `init` with an invalid flag or without a terminal and not every flag given, `release` without a version, or `refs` without a qualified name or `--check` |
 
 ## License
 

@@ -4,7 +4,7 @@ import { buildGraph, Simulator } from '@appling/model';
 import { buildWorkspace, examples } from '../../lang/test/workspace.js';
 import { layoutFlow } from '../src/layout.js';
 import {
-    abilities, actionSummary, anchorOf, cardView, elementAt, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, policyText, relations, revealPath, search, trailOf, viewFor,
+    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, policyText, relations, revealPath, search, trailOf, viewFor,
     type Card, type Flow, type TreeNode
 } from '../src/views.js';
 
@@ -160,6 +160,12 @@ test('relations lift members to declarations and group them by layer', async () 
     expect(grouped('sales.PlaceOrder', 'usedBy')).toEqual({
         behavior: ['sales.OrderFlow'], application: ['sales.Checkout'], interface: ['sales.PublicApi'], experience: ['sales.OrderDetail']
     });
+});
+
+test('change marks lift members to their declaration and skip removed elements', async () => {
+    const index = await indexOf(examples());
+    const marks = changeMarks(index, { added: ['sales.OrderFlow', 'sales.Order.placed_at', 'sales.Gone'], changed: ['crm.Account', 'sales.OrderFlow'] });
+    expect(Object.fromEntries(marks)).toEqual({ 'sales.OrderFlow': 'added', 'sales.Order': 'changed', 'crm.Account': 'changed' });
 });
 
 test('the element at an offset is the innermost one', () => {

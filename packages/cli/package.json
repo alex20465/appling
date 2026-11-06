@@ -22,6 +22,7 @@
     "@appling/codegen": "workspace:*",
     "@appling/lang": "workspace:*",
     "@appling/model": "workspace:*",
+    "@clack/prompts": "1.8.1",
     "langium": "4.4.0"
   },
   "devDependencies": {

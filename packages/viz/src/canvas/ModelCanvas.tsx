@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { layoutTree, type Placed } from '../layout.js';
 import { relevanceLevel } from '@appling/model/relevance';
 import type { Bubble } from '../protocol.js';
-import { anchorOf, growTree, kindLabel, LENSES, revealPath, trailOf, type GraphIndex, type Lens, type TreeNode, type ViewSettings } from '../views.js';
+import { anchorOf, changeMarks, growTree, kindLabel, LENSES, revealPath, trailOf, type GraphIndex, type Lens, type TreeNode, type ViewSettings } from '../views.js';
 import { BubbleView, LooseBubbles, memberOf, type BubbleStep } from './Bubble.js';
 
 interface CanvasProps {
@@ -14,6 +14,8 @@ interface CanvasProps {
     selected?: string;
     settings: ViewSettings;
     bubbles?: Bubble[];
+    /** Elements added and changed, such as since the session started; their declarations are marked. */
+    changes?: { added: string[], changed: string[] };
     /** The place of the shown bubble among all, for its back and next buttons. */
     step?: BubbleStep;
     onSelect(qn: string): void;
@@ -45,7 +47,7 @@ const LABEL: Record<TreeNode['type'], number> = { seed: 0, module: 210, group: 1
  * The model as a tree that grows from a seed: modules first, then the declarations of the lens, then on every
  * unfold what uses the unfolded declaration. Only what you unfold is drawn.
  */
-export function ModelCanvas({ index, name, focus, selected, settings, bubbles = [], onSelect, onSettings, onOpenFile, step }: CanvasProps) {
+export function ModelCanvas({ index, name, focus, selected, settings, bubbles = [], changes, onSelect, onSettings, onOpenFile, step }: CanvasProps) {
     const box = useRef<HTMLDivElement>(null);
     const drag = useRef<{ x: number, y: number, moved: boolean }>(undefined);
     const [camera, setCamera] = useState<Camera>({ x: 0, y: 0, k: 1 });
@@ -66,6 +68,7 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
     const here = byId.get(current) ?? byId.get('~')!;
     const lit = new Set(lineage(here).map(p => p.node.id));
     const chosen = selected && index.declaration(selected);
+    const marks = useMemo(() => changes ? changeMarks(index, changes) : new Map<string, string>(), [index, changes]);
 
     const replant = () => {
         const next = initial(index, settings, focus);
@@ -226,7 +229,7 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
                         <path key={`branch ${p.node.id}`} className={`branch${lit.has(p.node.id) ? ' lit' : ''}`} pathLength={1} style={{ d: `path("${branch(p)}")` } as React.CSSProperties} />
                     ))}
                     {placed.map(p => (
-                        <TreeItem key={p.node.id} placed={p} current={p.node.id === current} chosen={!!chosen && p.node.qn === chosen} unfolded={!!p.node.children} onPress={press} />
+                        <TreeItem key={p.node.id} placed={p} current={p.node.id === current} chosen={!!chosen && p.node.qn === chosen} unfolded={!!p.node.children} mark={p.node.qn && marks.get(p.node.qn)} onPress={press} />
                     ))}
                 </g>
             </svg>
@@ -264,11 +267,11 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
     );
 }
 
-function TreeItem({ placed, current, chosen, unfolded, onPress }: { placed: Placed, current: boolean, chosen: boolean, unfolded: boolean, onPress(node: TreeNode): void }) {
+function TreeItem({ placed, current, chosen, unfolded, mark, onPress }: { placed: Placed, current: boolean, chosen: boolean, unfolded: boolean, mark?: string, onPress(node: TreeNode): void }) {
     const { node, x, y } = placed;
     const r = radius(node);
     const bud = node.count > 0 && !node.cycle && !unfolded;
-    const classes = ['tree-item', node.type, node.type !== 'seed' && relevanceLevel(node.relevance), node.layer && `layer-${node.layer}`, current && 'current', chosen && 'chosen', node.cycle && 'cycle', unfolded && 'open'];
+    const classes = ['tree-item', node.type, node.type !== 'seed' && relevanceLevel(node.relevance), node.layer && `layer-${node.layer}`, current && 'current', chosen && 'chosen', node.cycle && 'cycle', unfolded && 'open', mark];
     return (
         <g
             className={classes.filter(Boolean).join(' ')}

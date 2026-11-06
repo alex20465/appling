@@ -10,9 +10,11 @@ import {
     runMigrations, runPlan, type Plan
 } from '@appling/codegen';
 import { buildGraph, dependencies, findApplingFiles, resolveReferences, Simulator, writeRelease, type Graph, type ResolvedReference } from '@appling/model';
+import { init } from './init.js';
 
 const USAGE = [
-    'Usage: appling <check|fmt|graph> [files or folders...]',
+    'Usage: appling init [folder] [--name <name>] [--agents <claude,codex,opencode,gemini,antigravity>] [--stack <django|ash|go|rust|none>]',
+    '       appling <check|fmt|graph> [files or folders...]',
     '       appling release <version> [files or folders...]',
     '       appling generate [--plan | --migrate | --sync] [files or folders...]',
     '       appling simulate <reach <machine> <state> | actors <action> | risks <action>> [files or folders...]',
@@ -20,6 +22,7 @@ const USAGE = [
 ].join('\n');
 
 async function main([command, ...args]: string[]): Promise<number> {
+    if (command === 'init') return init(args);
     const question = command === 'simulate' ? args.slice(0, args[0] === 'reach' ? 3 : 2) : command === 'refs' ? args.slice(0, 1) : [];
     if (!['check', 'fmt', 'graph', 'release', 'generate', 'simulate', 'refs'].includes(command) || ((command === 'release' || command === 'refs') && !args[0])
         || (command === 'simulate' && (!['reach', 'actors', 'risks'].includes(question[0]) || question.some(a => !a)))) {

@@ -266,6 +266,16 @@ export class GraphIndex {
     }
 }
 
+/** The declarations a model change touches: `added` when the declaration itself is new, else `changed`. Removed elements are no longer in the graph. */
+export function changeMarks(index: GraphIndex, changes: { added: string[], changed: string[] }): Map<string, 'added' | 'changed'> {
+    const marks = new Map<string, 'added' | 'changed'>();
+    for (const qn of changes.added) if (index.nodes.has(qn) && index.declaration(qn) === qn) marks.set(qn, 'added');
+    for (const qn of [...changes.added, ...changes.changed]) {
+        if (index.nodes.has(qn) && !marks.has(index.declaration(qn))) marks.set(index.declaration(qn), 'changed');
+    }
+    return marks;
+}
+
 export type ViewKind = 'machine' | 'action' | 'usecase' | 'event' | 'node';
 
 /** The element kinds each view is drawn for; the views of one kind come before `node`, which draws any declaration. */
