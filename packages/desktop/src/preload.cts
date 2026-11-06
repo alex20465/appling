@@ -11,5 +11,11 @@ contextBridge.exposeInMainWorld('appling', {
     open: () => ipcRenderer.send('open'),
     newWorkspace: () => ipcRenderer.send('newWorkspace'),
     repoMenu: (repo: string) => ipcRenderer.send('repoMenu', repo),
-    workspaceMenu: (id: string) => ipcRenderer.send('workspaceMenu', id)
+    workspaceMenu: (id: string) => ipcRenderer.send('workspaceMenu', id),
+    pin: (workspace: string, repo: string, pinned: boolean) => ipcRenderer.send('pin', workspace, repo, pinned),
+    reorder: (workspace: string, repo: string, before?: string) => ipcRenderer.send('reorder', workspace, repo, before),
+    toggleRail: () => ipcRenderer.send('toggleRail'),
+    onSwitcher: (callback: () => void) => ipcRenderer.on('switcher', () => callback()),
+    switch: (query: string) => ipcRenderer.invoke('switch', query),
+    closeSwitcher: () => ipcRenderer.send('closeSwitcher')
 });

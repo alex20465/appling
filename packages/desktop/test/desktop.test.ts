@@ -7,6 +7,7 @@ import { startIdeProcess, type IdeProcess } from '../src/ide-process.js';
 import { DEFAULT_KEYBINDINGS, loadKeybindings } from '../src/keybindings.js';
 import { Repos } from '../src/repos.js';
 import { readSession, restore, sessionOf, writeSession } from '../src/session.js';
+import { fuzzyMatch, switcherEntries } from '../src/switcher.js';
 import { WALK_MS, Workspaces } from '../src/workspaces.js';
 
 test('a folder registered twice stays one repo', () => {
@@ -92,6 +93,85 @@ test('Ctrl+Tab walks the repos of every workspace in most recently used order', 
     expect(workspaces.activeRepo()).toBe('/b');
 });
 
+test('repos are pinned to the top, hidden from the rail and Ctrl+1..9, and reordered by a drop', () => {
+    const workspaces = new Workspaces();
+    const ws = '/ws/one.code-workspace';
+    workspaces.open(ws, folders('/a', '/b', '/c', '/d'));
+    const rail = () => workspaces.rail(ws).map(f => f.path);
+    expect(workspaces.pin(ws, '/c', true)).toBe(true);
+    expect(workspaces.pin(ws, '/c', true)).toBe(false);
+    expect(workspaces.pin(ws, '/nowhere', true)).toBe(false);
+    expect(rail()).toEqual(['/c', '/a', '/b', '/d']);
+    expect(workspaces.selectAt(0)).toBe(true);
+    expect(workspaces.activeRepo()).toBe('/c');
+
+    // hiding the shown repo shows its rail neighbour; the hidden one keeps running and is still selectable
+    expect(workspaces.hide(ws, '/c', true)).toBe(true);
+    expect(workspaces.get(ws)?.pinned).toEqual([]);
+    expect(workspaces.activeRepo()).toBe('/a');
+    expect(rail()).toEqual(['/a', '/b', '/d']);
+    expect(workspaces.live().has('/c')).toBe(true);
+    workspaces.selectAt(2);
+    expect(workspaces.activeRepo()).toBe('/d');
+    expect(workspaces.select('/c')).toBe(true);
+    // pinning shows a hidden repo again
+    expect(workspaces.pin(ws, '/c', true)).toBe(true);
+    expect(workspaces.get(ws)?.hidden).toEqual([]);
+
+    // a drop moves the folder (and so the file's order) and joins the group it lands in
+    expect(workspaces.reorder(ws, '/d', '/c')).toBe(true);
+    expect(workspaces.get(ws)?.folders.map(f => f.path)).toEqual(['/a', '/b', '/d', '/c']);
+    expect(workspaces.get(ws)?.pinned).toEqual(['/d', '/c']);
+    expect(rail()).toEqual(['/d', '/c', '/a', '/b']);
+    expect(workspaces.reorder(ws, '/c', '/a')).toBe(true);
+    expect(rail()).toEqual(['/d', '/c', '/a', '/b']);
+    expect(workspaces.get(ws)?.pinned).toEqual(['/d']);
+    expect(workspaces.reorder(ws, '/d')).toBe(true);
+    expect(rail()).toEqual(['/c', '/a', '/b', '/d']);
+    expect(workspaces.reorder(ws, '/d', '/d')).toBe(false);
+    expect(workspaces.reorder(ws, '/d', '/nowhere')).toBe(false);
+
+    // removing a repo forgets its pin
+    workspaces.pin(ws, '/a', true);
+    workspaces.hide(ws, '/b', true);
+    workspaces.removeRepo(ws, '/a');
+    workspaces.removeRepo(ws, '/b');
+    expect(workspaces.get(ws)).toMatchObject({ pinned: [], hidden: [] });
+});
+
+test('the fuzzy match prefers word starts and runs, and finds every character in order', () => {
+    expect(fuzzyMatch('', 'anything')).toEqual({ score: 0, positions: [] });
+    expect(fuzzyMatch('xyz', 'appling')).toBeUndefined();
+    expect(fuzzyMatch('ai', 'appling-ai')?.positions).toEqual([8, 9]);
+    expect(fuzzyMatch('ws', 'appling-workspace-switcher')?.positions).toEqual([8, 18]);
+    expect(fuzzyMatch('wS', 'myWorkSpace')?.positions).toEqual([2, 6]);
+    expect(fuzzyMatch('bc', 'xbc-b')?.positions).toEqual([1, 2]);
+    expect(fuzzyMatch('a p', 'appling')?.positions).toEqual([0, 1]);
+    expect(fuzzyMatch('shop', 'shop')!.score).toBeGreaterThan(fuzzyMatch('shop', 'workshop')!.score);
+    expect(fuzzyMatch('shop', 'shop')!.score).toBeGreaterThan(fuzzyMatch('shop', 'shop-legacy')!.score);
+});
+
+test('the switcher lists every repo of every workspace: recent first without a query, best match with one', () => {
+    const workspaces = new Workspaces();
+    workspaces.open('/ws/client.code-workspace', [{ path: '/work/shop' }, { path: '/work/crm', name: 'CRM' }]);
+    workspaces.open('/ws/product.code-workspace', folders('/work/shop-api', '/work/billing'));
+    workspaces.hide('/ws/product.code-workspace', '/work/billing', true);
+    workspaces.select('/work/shop-api');
+    workspaces.select('/work/crm');
+    const name = (path: string, folderName?: string) => folderName ?? path.split('/').pop()!;
+    const lines = (query: string) => switcherEntries(workspaces, name, query).map(e => `${e.workspaceName}:${e.name}`);
+
+    expect(lines('')).toEqual(['product:shop-api', 'client:shop', 'product:billing', 'client:CRM']);
+    expect(switcherEntries(workspaces, name, '').at(-1)).toMatchObject({ active: true, repo: '/work/crm' });
+    expect(switcherEntries(workspaces, name, 'bil')[0]).toMatchObject({ hidden: true, positions: [0, 1, 2] });
+    expect(lines('shop')).toEqual(['client:shop', 'product:shop-api']);
+    expect(lines('sa')).toEqual(['product:shop-api']);
+    // the workspace name matches too, below the repo names
+    expect(lines('product')).toEqual(['product:billing', 'product:shop-api']);
+    expect(lines('client crm')[0]).toBe('client:CRM');
+    expect(lines('zzz')).toEqual([]);
+});
+
 test('workspace files read like VS Code: comments, trailing commas, relative paths, names and remote folders', () => {
     const dir = mkdtempSync(join(tmpdir(), 'appling-desktop-'));
     const file = join(dir, 'client.code-workspace');
@@ -137,6 +217,9 @@ test('a session restores workspaces, the shown repos, the active workspace and t
     before.open(two, readCodeWorkspace(two).folders);
     before.select('/b');
     before.select('/c');
+    before.pin(one, '/b', true);
+    before.hide(one, '/a', true);
+    before.collapsed = true;
     const file = join(dir, 'session.json');
     writeSession(file, sessionOf(before));
     // a workspace file changed outside the app, and one is gone
@@ -151,6 +234,9 @@ test('a session restores workspaces, the shown repos, the active workspace and t
     expect(after.activeRepo()).toBe('/c');
     expect(after.get(one)?.active).toBe('/b');
     expect(after.mostRecent()).toEqual(['/c', '/b', '/a', '/d']);
+    expect(after.get(one)).toMatchObject({ pinned: ['/b'], hidden: ['/a'] });
+    expect(after.get(two)).toMatchObject({ pinned: [], hidden: [] });
+    expect(after.collapsed).toBe(true);
     expect(readSession(join(dir, 'missing.json'))).toBeUndefined();
 });
 
