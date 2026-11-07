@@ -19,6 +19,7 @@ node packages/cli/out/main.js graph [paths...]   # semantic graph as JSON
 pnpm test                   # vitest over packages/*/test
 pnpm vitest run packages/lang/test/validation.test.ts -t "name"   # one file, one test
 pnpm vitest run -u          # update snapshots (model, codegen-django, codegen-ash)
+node scripts/bench/check-scaling.mjs [copies...]   # time `check` on N copies of examples/ (catches superlinear validation)
 node packages/ide/out/server/main.js examples   # the IDE on http://127.0.0.1:4410 (ask the user to start it)
 pnpm --filter @appling/lang build   # rebuild only the language after grammar changes
 ```

@@ -1,4 +1,4 @@
-import { AstUtils, type AstNode, type ValidationAcceptor, type ValidationChecks } from 'langium';
+import { AstUtils, WorkspaceCache, type AstNode, type ValidationAcceptor, type ValidationChecks } from 'langium';
 import {
     isAction, isBinaryExpr, isBoolExpr, isEntity, isMemberExpr, isNameExpr, isEnum, isMachine, isMigration, isModule, isValueType,
     type ApplingAstType, type Endpoint, type Machine, type Migration, type MigrationStep, type Model,
@@ -35,7 +35,12 @@ export function registerValidationChecks(services: ApplingServices): void {
 
 export class ApplingValidator {
 
-    constructor(private readonly services: ApplingServices) { }
+    /** The machines of the workspace by the field they govern, rebuilt when a document changes. */
+    private readonly machines: WorkspaceCache<string, Map<AstNode, Machine[]>>;
+
+    constructor(private readonly services: ApplingServices) {
+        this.machines = new WorkspaceCache(services.shared);
+    }
 
     checkLayerReferences(model: Model, accept: ValidationAcceptor): void {
         for (const node of AstUtils.streamAst(model)) {
@@ -65,8 +70,7 @@ export class ApplingValidator {
             accept('error', 'A machine must govern an entity field marked "state" with an enum type.', { node: machine, property: 'field' });
             return;
         }
-        const others = this.allNodes().filter(isMachine).filter(m => m !== machine && m.field.ref === field);
-        if (others.length > 0) {
+        if ((this.machinesByField().get(field)?.length ?? 0) > 1) {
             accept('error', `State field ${field.name} is already owned by another machine.`, { node: machine, property: 'field' });
         }
         const states = new Set(enumDecl.literals.map(l => l.name));
@@ -124,10 +128,18 @@ export class ApplingValidator {
         }
     }
 
-    private allNodes(): AstNode[] {
-        return this.services.shared.workspace.LangiumDocuments.all
-            .flatMap(doc => AstUtils.streamAst(doc.parseResult.value))
-            .toArray();
+    private machinesByField(): Map<AstNode, Machine[]> {
+        return this.machines.get('byField', () => {
+            const byField = new Map<AstNode, Machine[]>();
+            const machines = this.services.shared.workspace.LangiumDocuments.all
+                .flatMap(doc => AstUtils.streamAst(doc.parseResult.value))
+                .filter(isMachine);
+            for (const machine of machines) {
+                const field = machine.field.ref;
+                if (field) byField.set(field, [...(byField.get(field) ?? []), machine]);
+            }
+            return byField;
+        });
     }
 }
 
