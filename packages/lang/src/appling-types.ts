@@ -180,6 +180,10 @@ export class ExpressionTyper {
             if (binding.target) this.targets.set(expr, binding.target);
             return binding.type;
         }
+        if (expr.name === 'tenant') {
+            const declared = this.tenants.length === 0 ? 'declares no tenant' : `declares ${this.tenants.length} tenants`;
+            return this.problem(expr, `"tenant" needs exactly one tenant in the workspace, which ${declared}.`, 'name');
+        }
         if (AstUtils.getContainerOfType(expr, isRole)) return this.problem(expr, `A role condition reads only actor, tenant and now, not "${expr.name}".`, 'name');
         return this.problem(expr, `Unknown name "${expr.name}".`, 'name');
     }

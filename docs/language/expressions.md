@@ -97,7 +97,7 @@ Names in expressions are not references. They resolve by the position of the exp
 |---|---|---|
 | `actor` | The current actor | The actor; its fields are those declared by any actor in the workspace, and those of the entities actors are bound to with `is` |
 | `now` | The current time | `DateTime` |
-| `tenant` | The current tenant | The entity of the single declared [tenant](access.md#tenants); unknown when there is none or more than one |
+| `tenant` | The current tenant | The entity of the single declared [tenant](access.md#tenants); an error when there is none or more than one |
 
 ### Per position
 

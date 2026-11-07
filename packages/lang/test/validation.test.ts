@@ -152,3 +152,10 @@ test('an external with settings or secrets is used', async () => {
     expect(await warningsOf('module m { external Mail { secret key: String op Send () } usecase U { step Mail.Send() } }')).not.toContain(message);
     expect(await warningsOf('module m { external Mail { secret key: String } interface rest Api { auth bearer from Mail } }')).not.toContain(message);
 });
+
+test('tenant needs exactly one tenant in the workspace', async () => {
+    expect(await check(`module m { role Clerk { tenant != null } }`))
+        .toContain('"tenant" needs exactly one tenant in the workspace, which declares no tenant.');
+    expect(await check(`module m { entity A { } entity B { } tenant TA on A tenant TB on B ${ORDER} action Edit on Order { policy { tenant != null } } }`))
+        .toContain('"tenant" needs exactly one tenant in the workspace, which declares 2 tenants.');
+});

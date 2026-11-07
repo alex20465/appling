@@ -77,7 +77,7 @@ A tenant names the entity that partitions the data, such as the company an accou
 tenant Company on Account
 ```
 
-When the workspace declares exactly one tenant, the name `tenant` is available in every expression and has the type of that entity. With no tenant or with several, `tenant` is an unknown name.
+When the workspace declares exactly one tenant, the name `tenant` is available in every expression and has the type of that entity. With no tenant or with several, reading `tenant` is an error: `"tenant" needs exactly one tenant in the workspace, which declares no tenant.`
 
 ## Policies
 
