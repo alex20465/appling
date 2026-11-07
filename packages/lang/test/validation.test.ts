@@ -29,6 +29,13 @@ test('state field has one machine', async () => {
         .toContain('State field status is already owned by another machine.');
 });
 
+test('state field ownership is reported on every machine and not for a single one', async () => {
+    const owned = 'State field status is already owned by another machine.';
+    const both = await check(`module m { ${ORDER} machine A on Order.status { } machine B on Order.status { } }`);
+    expect(both.filter(e => e.includes(owned))).toHaveLength(2);
+    expect(await check(`module m { ${ORDER} machine A on Order.status { } }`)).not.toContain(owned);
+});
+
 test('transition states are enum values', async () => {
     expect(await check(`module m { ${ORDER} machine Flow on Order.status { transition open -> closed via Close } }`))
         .toContain('"closed" is not a value of Status.');
