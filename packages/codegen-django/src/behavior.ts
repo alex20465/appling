@@ -1,9 +1,10 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { annotation, children, pythonFile, task, template } from './files.js';
+import { annotation, children, importOnReady, pythonFile, task, template } from './files.js';
+import { actionGuard, enforced, guardedCreate } from './access.js';
 import { scope, storedFields } from './models.js';
 import { testSteps } from './tests.js';
-import { appOf, constantOf, lastOf, parentOf, python, q, snake, type PythonScope } from './python.js';
+import { appOf, constantOf, lastOf, parentOf, python, q, snake, wrap, type PythonScope } from './python.js';
 
 interface Code {
     lines: string[];
@@ -11,6 +12,8 @@ interface Code {
     tasks: Step[];
     /** Whether the code changes the instance, so it has to be saved. */
     changes?: boolean;
+    /** The action the code belongs to, which checks the create policies of what it creates; undefined outside actions. */
+    action?: string;
 }
 
 export function errorSteps(error: GraphNode): Step[] {
@@ -25,12 +28,14 @@ export function eventSteps(event: GraphNode): Step[] {
 
 /** An action becomes a function in `actions.py`: preconditions, state transitions and effects, in one transaction. */
 export function actionSteps(action: GraphNode, context: MapContext): Step[] {
-    const code: Code = { lines: [], imports: new Set(), tasks: [] };
+    const code: Code = { lines: [], imports: new Set(), tasks: [], action: lastOf(action.qn) };
     const entity = action.data.entity ? context.node(action.data.entity as string) : undefined;
     const instance = entity && snake(lastOf(entity.qn));
     const inputs = children(action, context, 'Param');
     const pyScope: PythonScope = { ...scope(context, code.imports), self: instance, actor: 'actor' };
     if (entity) code.imports.add(`from ${appOf(entity.module)}.models import ${lastOf(entity.qn)}`);
+    const guard = actionGuard(action, context, pyScope);
+    code.lines.push(...guard);
 
     const preconditions = (action.data.preconditions ?? []) as { condition: ExprData, error?: string }[];
     preconditions.forEach((precondition, i) => {
@@ -47,7 +52,7 @@ export function actionSteps(action: GraphNode, context: MapContext): Step[] {
     if (transitions.length && instance) transitionChain(transitions, instance, snake(lastOf(action.qn)), context, pyScope, code);
     for (const effect of children(action, context).filter(c => c.kind.endsWith('Effect'))) effectLines(effect, instance, context, pyScope, code);
     if (instance && code.changes) code.lines.push(`${instance}.save()`);
-    if (!code.lines.length) code.tasks.push(task(`implement the action ${lastOf(action.qn)}`));
+    if (code.lines.length === guard.length) code.tasks.push(task(`implement the action ${lastOf(action.qn)}`));
 
     const atomic = action.data.consistency !== 'eventual';
     if (atomic) code.imports.add('from django.db import transaction');
@@ -94,7 +99,7 @@ function transitionChain(transitions: GraphNode[], instance: string, label: stri
             else code.tasks.push(task(`check the guard ${transition.props.guard} of ${lastOf(transition.qn)}`));
         }
         code.lines.push(`${i === 0 ? 'if' : 'elif'} ${condition}:`);
-        const branch: Code = { lines: [], imports: code.imports, tasks: code.tasks };
+        const branch: Code = { lines: [], imports: code.imports, tasks: code.tasks, action: code.action };
         for (const effect of children(transition, context)) effectLines(effect, instance, context, pyScope, branch);
         branch.lines.push(`${state} = ${enumName}.${constantOf(transition.data.to as string)}`);
         code.lines.push(...branch.lines.map(l => `    ${l}`));
@@ -124,7 +129,8 @@ function effectLines(effect: GraphNode, instance: string | undefined, context: M
     const args = assignments.map(([name, v]) => `${name}=${v}`).join(', ');
     if (effect.kind === 'CreateEffect') {
         code.imports.add(`from ${appOf(target.module)}.models import ${lastOf(target.qn)}`);
-        code.lines.push(`${lastOf(target.qn)}.objects.create(${args})`);
+        if (code.action && enforced(context)) code.lines.push(...guardedCreate(target, args, code.action, context, code.imports));
+        else code.lines.push(`${lastOf(target.qn)}.objects.create(${args})`);
     } else {
         const signal = snake(lastOf(target.qn));
         code.imports.add(`from ${appOf(target.module)}.events import ${signal}`);
@@ -160,16 +166,9 @@ export function machineSteps(machine: GraphNode, context: MapContext): Step[] {
         code.lines.push(`${instance}.save()`);
         const name = `${snake(lastOf(machine.qn))}_on_${snake(lastOf(eventQn))}`;
         const body = [`@receiver(${snake(lastOf(eventQn))})`, `def ${name}(sender, ${instance}, **kwargs) -> None:`, ...code.lines.map(l => `    ${l}`)].join('\n');
-        steps.push(template(`${appOf(machine.module)}/handlers.py`, existing => pythonFile(existing, code.imports, body)), connectHandlers(machine.module), ...code.tasks);
+        steps.push(template(`${appOf(machine.module)}/handlers.py`, existing => pythonFile(existing, code.imports, body)), importOnReady(machine.module, 'handlers'), ...code.tasks);
     }
     return steps;
-}
-
-/** Imports `handlers.py` when Django starts, so the receivers are connected. */
-function connectHandlers(module: string): Step {
-    return template(`${appOf(module)}/apps.py`, existing => existing!.includes('def ready(')
-        ? existing!
-        : `${existing!.trimEnd()}\n\n    def ready(self):\n        from . import handlers  # noqa: F401\n`);
 }
 
 /** A scheduled job becomes a Django task and a management command for the scheduler; an event job becomes a receiver. */
@@ -216,9 +215,5 @@ export function jobSteps(job: GraphNode, context: MapContext): Step[] {
         `def ${name}(sender, ${variable}, **kwargs) -> None:`,
         ...(condition === 'True' ? [`    ${snake(lastOf(action.qn))}(${variable})`] : [`    if ${condition}:`, `        ${snake(lastOf(action.qn))}(${variable})`])
     ].join('\n');
-    return [template(`${app}/handlers.py`, existing => pythonFile(existing, imports, body)), connectHandlers(job.module)];
-}
-
-export function wrap(code: string): string {
-    return /^[\w.]+(\(.*\))?$/.test(code) ? code : `(${code})`;
+    return [template(`${app}/handlers.py`, existing => pythonFile(existing, imports, body)), importOnReady(job.module, 'handlers')];
 }

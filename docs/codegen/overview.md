@@ -81,13 +81,13 @@ $ appling generate --plan examples
 | kind | generated | partial | todo | tasks |
 |---|---|---|---|---|
 | Action | 1 | 1 | 0 | 1 |
-| Actor | 0 | 0 | 1 | 1 |
+| Actor | 1 | 0 | 0 | 0 |
 ...
-| Policy | 0 | 6 | 0 | 12 |
+| Policy | 0 | 6 | 0 | 6 |
 ...
-| **total** | 49 (70%) | 17 | 4 | 28 |
+| **total** | 54 (77%) | 15 | 1 | 17 |
 
-70 element(s): 49 generated, 17 partial, 4 todo
+70 element(s): 54 generated, 15 partial, 1 todo
 ```
 
 Each line names the node that produced the step; `(project)` marks setup steps that run once. The table counts the registry entries per element kind by status and the registry tasks they leave, so you see where the extension still leaves work. The last line counts the registry entries by status.
@@ -145,6 +145,6 @@ The registry has one entry per graph node, with a status:
 | `partial` | The element was generated, with open tasks. |
 | `todo` | Nothing was generated; the entry holds only tasks. |
 
-An extension returns no steps at all for a kind it does not handle. That node becomes a `todo` entry with the task `<extension> does not generate <Kind> yet`. Neither built in extension maps the experience layer, so pages, navigation, flows and messages are always `todo` entries: the registry carries them as open work with their model context. The same holds for actors and tenants.
+An extension returns no steps at all for a kind it does not handle. That node becomes a `todo` entry with the task `<extension> does not generate <Kind> yet`. A kind an extension does not map, such as actors and tenants in Ash, stays a `todo` entry: the registry carries it as open work with its model context.
 
 Read [the registry](registry.md) for the entry format and how to work through it.

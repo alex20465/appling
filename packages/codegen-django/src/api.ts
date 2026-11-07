@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { GraphNode } from '@appling/model';
-import { pageSizeName, queryCode } from './application.js';
+import { pageSizeName, queryCall, queryCode } from './application.js';
 import { children, includeStep, pythonFile, routesStep, task, template } from './files.js';
 import { appOf, lastOf, snake } from './python.js';
 
@@ -69,7 +69,7 @@ function endpointView(endpoint: GraphNode, name: string, throttle: string | unde
             ...throttles,
             '',
             '    def get_queryset(self):',
-            `        return ${snake(lastOf(target.qn))}()`
+            `        return ${queryCall(target, 'self.request.user', context)}`
         );
         return { name, code: lines.join('\n') };
     }
