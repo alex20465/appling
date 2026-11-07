@@ -1,16 +1,18 @@
 ---
 title: Code generation
-description: How appling generate turns a validated model into a draft project for a target framework, once, and records the open work in a task registry.
+description: How appling generate turns a validated model into a draft project for a target framework or language, once, and records the open work in a task registry.
 ---
 
-Code generation turns your model into a draft project for a target framework, such as Django or Ash. It runs once per project: it creates a new project in an empty folder and never overwrites one. Everything the generator cannot translate becomes a task in the project's [task registry](registry.md), so the draft never hides open work behind placeholders.
+Code generation turns your model into a draft project for a target framework or language, such as Django, Ash, Go or Rust. It runs once per project: it creates a new project in an empty folder and never overwrites one. Everything the generator cannot translate becomes a task in the project's [task registry](registry.md), so the draft never hides open work behind placeholders.
 
-Generation goes through installable extensions. Each extension is a map from model elements to steps; the core plans the steps, runs them and writes the registry. Two extensions ship with Appling:
+Generation goes through installable extensions. Each extension is a map from model elements to steps; the core plans the steps, runs them and writes the registry. Four extensions ship with Appling:
 
 | Extension | Target |
 |---|---|
 | [`@appling/codegen-django`](django.md) | Django 6.1 with uv, REST framework for interfaces |
 | [`@appling/codegen-ash`](ash.md) | Ash 3 on Elixir with AshPostgres, created through Igniter |
+| [`@appling/codegen-go`](go.md) | Plain Go packages for the domain and behavior layers |
+| [`@appling/codegen-rust`](rust.md) | A Rust library crate for the domain and behavior layers |
 
 You can write your own; see [writing an extension](extensions.md).
 
@@ -68,26 +70,33 @@ $ appling generate --plan examples
   sales: command: uv run python manage.py startapp sales
   sales: template: config/settings.py
   crm.Account: template: crm/models.py
+  crm.Account: template: crm/policies.py
   crm.Account.policy[read]: template: crm/tests.py
   sales.OrderStatus: template: sales/enums.py
   sales.Line: template: sales/values.py
   sales.Order: template: sales/models.py
+  sales.Order: template: sales/policies.py
+  ...
+  crm.Clerk: template: crm/roles.py
+  crm.Employee: template: crm/actors.py
   ...
   sales.PublicApi: template: sales/api.py
-  sales.PublicApi: template: sales/urls.py
+  sales.PublicApi: template: sales/api_urls.py
   sales.PublicApi: template: config/urls.py
   (project): command: uv run python manage.py makemigrations
 
 | kind | generated | partial | todo | tasks |
 |---|---|---|---|---|
 | Action | 1 | 1 | 0 | 1 |
-| Actor | 1 | 0 | 0 | 0 |
+| Actor | 2 | 0 | 0 | 0 |
 ...
-| Policy | 0 | 6 | 0 | 6 |
+| Policy | 0 | 7 | 0 | 7 |
 ...
-| **total** | 54 (77%) | 15 | 1 | 17 |
+| Tenant | 1 | 0 | 0 | 0 |
+...
+| **total** | 55 (76%) | 16 | 1 | 18 |
 
-70 element(s): 54 generated, 15 partial, 1 todo
+72 element(s): 55 generated, 16 partial, 1 todo
 ```
 
 Each line names the node that produced the step; `(project)` marks setup steps that run once. The table counts the registry entries per element kind by status and the registry tasks they leave, so you see where the extension still leaves work. The last line counts the registry entries by status.
@@ -133,7 +142,7 @@ Steps run in a fixed order:
 1. Setup steps of the extension, which create the project.
 2. The steps of every node, by layer: modules first, then domain, cross cutting (roles, actors, tenants), behavior, application, interfaces and experience. Within a layer, nodes keep their order in the model.
 
-A step can carry a `phase`. All steps of phase 0 run first, then phase 1, and so on; within a phase the order above holds. Later phases are for work that needs every element of an earlier one: Ash adds relationships in phase 1, once every resource exists, and both built in extensions create the initial database migrations in the last phase, after every model file is complete.
+A step can carry a `phase`. All steps of phase 0 run first, then phase 1, and so on; within a phase the order above holds. Later phases are for work that needs every element of an earlier one: Ash adds relationships in phase 1, once every resource exists, and the Django and Ash extensions create the initial database migrations in the last phase, after every model file is complete.
 
 ## What each element becomes
 
@@ -145,6 +154,19 @@ The registry has one entry per graph node, with a status:
 | `partial` | The element was generated, with open tasks. |
 | `todo` | Nothing was generated; the entry holds only tasks. |
 
-An extension returns no steps at all for a kind it does not handle. That node becomes a `todo` entry with the task `<extension> does not generate <Kind> yet`. A kind an extension does not map, such as actors and tenants in Ash, stays a `todo` entry: the registry carries it as open work with its model context.
+An extension returns no steps at all for a kind it does not handle. That node becomes a `todo` entry with the task `<extension> does not generate <Kind> yet`: the registry carries it as open work with its model context.
+
+## Access
+
+All four extensions generate [roles, actors, tenants and policies](../language/access.md):
+
+| Extension | Roles and actors | Tenant | Policies |
+|---|---|---|---|
+| [Django](django.md#roles) | django-rules predicates and Django groups; actor fields on the user model | a context variable set by a middleware | `can_<operation>_<entity>` functions, called by actions, queries and views |
+| [Ash](ash.md#actors) | policy check modules; actors as resources or structs with a private `roles` attribute | attribute multitenancy | `Ash.Policy.Authorizer` policies on the resources |
+| [Go](go.md#access) | an `access` package with `Role` and `ActorType` constants and `Is<Role>` checks | `Actor.Tenant` and `InTenant` | `Can...` checks; actions call them first |
+| [Rust](rust.md#access) | an `access` module with `Role` and `ActorType` enums and `is_<role>` checks | `Actor::tenant` and `in_tenant` | `can_...` checks; actions call them first |
+
+They share one rule: once a model has any policy, every operation that no policy covers is denied, because nothing is open by default. A model without any policy generates no checks. Each target page describes what its policies become and which conditions stay registry tasks.
 
 Read [the registry](registry.md) for the entry format and how to work through it.
