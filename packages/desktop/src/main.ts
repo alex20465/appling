@@ -3,6 +3,7 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell, WebContentsView, type MenuItemConstructorOptions } from 'electron';
 import { EXTENSION, readCodeWorkspace, writeCodeWorkspace } from './code-workspace.js';
+import { gitBranch, headFile } from './git.js';
 import { startIdeProcess, type IdeProcess } from './ide-process.js';
 import { COMMANDS, loadKeybindings } from './keybindings.js';
 import { Repos } from './repos.js';
@@ -37,6 +38,7 @@ if (!app.requestSingleInstanceLock({ paths: initial })) {
     app.on('window-all-closed', () => app.quit());
     app.on('will-quit', () => {
         for (const process of processes.values()) process.close();
+        for (const watcher of heads.values()) watcher.close();
         keybindingsWatcher?.close();
     });
 }
@@ -45,6 +47,8 @@ const workspaces = new Workspaces();
 const repos = new Repos();
 const views = new Map<string, WebContentsView>();
 const processes = new Map<string, IdeProcess>();
+/** Watchers of each repo's git `HEAD`, so the rail follows checkouts made anywhere. */
+const heads = new Map<string, FSWatcher>();
 let window: BrowserWindow | undefined;
 let keybindingsWatcher: FSWatcher | undefined;
 /** While the switcher is open the repo views are hidden, so the shell page (which draws it) is on top. */
@@ -147,7 +151,10 @@ function persist(id: string): void {
 function changed(): void {
     const live = workspaces.live();
     for (const repo of live) {
-        if (repos.add(repo).added) launch(repo);
+        if (repos.add(repo).added) {
+            watchBranch(repo);
+            launch(repo);
+        }
     }
     for (const repo of repos.all()) {
         if (!live.has(repo.id)) stop(repo.id);
@@ -163,11 +170,16 @@ async function launch(id: string): Promise<void> {
         const ide = await startIdeProcess(id, {
             node: process.execPath,
             env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+            onStatus: ({ errors }) => {
+                if (processes.get(id) !== ide && processes.has(id)) return;
+                repos.update(id, { errors });
+                refresh();
+            },
             onExit: (code, stderr) => {
                 if (processes.get(id) !== ide) return;
                 processes.delete(id);
                 drop(id);
-                repos.update(id, { status: 'failed', url: undefined, error: `The IDE server ended with code ${code}.${stderr ? `\n${stderr.trim()}` : ''}` });
+                repos.update(id, { status: 'failed', url: undefined, errors: undefined, error: `The IDE server ended with code ${code}.${stderr ? `\n${stderr.trim()}` : ''}` });
                 refresh();
             }
         });
@@ -186,8 +198,28 @@ function retry(id: string): void {
     if (repo?.status === 'failed') launch(repo.id);
 }
 
+/** Reads a repo's branch now and again whenever its git `HEAD` changes (git replaces the file, so the folder is watched). */
+function watchBranch(id: string): void {
+    repos.update(id, { branch: gitBranch(id) });
+    const head = headFile(id);
+    if (!head) return;
+    try {
+        heads.set(id, watch(dirname(head), (_, name) => {
+            if (name !== 'HEAD') return;
+            const branch = gitBranch(id);
+            if (repos.get(id)?.branch === branch) return;
+            repos.update(id, { branch });
+            refresh();
+        }));
+    } catch {
+        // the rail then shows the branch from the start only
+    }
+}
+
 function stop(id: string): void {
     repos.close(id);
+    heads.get(id)?.close();
+    heads.delete(id);
     processes.get(id)?.close();
     processes.delete(id);
     drop(id);
@@ -324,12 +356,15 @@ function state() {
             id: w.id,
             name: w.name,
             hidden: w.hidden.length,
+            // summed over every repo of the workspace, hidden ones included
+            errors: w.folders.reduce((sum, f) => sum + (repos.get(f.path)?.errors ?? 0), 0),
             repos: w.folders.filter(f => workspaces.rail(w.id).includes(f) || (w === current && f.path === shownHidden))
                 .sort((a, b) => Number(!w.pinned.includes(a.path)) - Number(!w.pinned.includes(b.path)))
                 .map(f => {
                     const repo = repos.get(f.path);
                     return {
                         id: f.path, name: repoName(f.path, f.name), status: repo?.status ?? 'starting', error: repo?.error,
+                        errors: repo?.errors ?? 0, branch: repo?.branch,
                         pinned: w.pinned.includes(f.path), hidden: w.hidden.includes(f.path)
                     };
                 })

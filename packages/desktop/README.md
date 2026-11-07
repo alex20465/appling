@@ -2,7 +2,7 @@
 
 Appling Desktop: one native app for many repos. Repos are grouped into workspaces, each repo gets its own Appling IDE server and a view that stays alive while you switch, with the model canvas, search and inspector as its main area.
 
-In development (epic #15); the package is private until the first release. This is the shell with workspaces: the rail (collapsible, with pinned, reordered and hidden repos), one IDE server per repo, `.code-workspace` files, session restore, the fuzzy switcher, the app menu and rebindable shortcuts. Cloning, repo status in the rail, terminals, agent sessions, the code view and packaging follow.
+In development (epic #15); the package is private until the first release. This is the shell with workspaces: the rail (collapsible, with pinned, reordered and hidden repos), one IDE server per repo, `.code-workspace` files, session restore, the fuzzy switcher, the app menu and rebindable shortcuts. The rail shows each repo's validation errors and git branch. Cloning, agent, task and unsaved file status in the rail, terminals, agent sessions, the code view and packaging follow.
 
 ## Run it
 
@@ -29,6 +29,8 @@ The rail is 48px wide: workspaces on top, the repos of the active workspace belo
 
 - **Pinned** repos (a green dot) stay at the top of the rail, in their workspace's folder order.
 - **Hidden** repos leave the rail and `CmdOrCtrl+1..9`, which count the rail's repos. They keep their server and view, and the switcher still finds them; a hidden repo you switch to shows on the rail with a dotted border while it is shown. Pinning a hidden repo shows it again.
+- **Validation errors** of a repo's model show as a red count in the corner of its button; a workspace's button shows the sum over all its repos, hidden ones included. The count follows every saved change of a `.appling` file.
+- The **git branch** (a short commit while the head is detached) is in the repo's tooltip and follows checkouts made anywhere, also in a terminal outside the app. Worktrees and submodules (a `.git` file) work too.
 - **Drag** a repo onto another to place it before that one; it joins the group (pinned or not) of the repo it lands on. Drop it on the `+` below the repos to move it to the end. The new order is written to the workspace file's `folders`, so VS Code shows it too.
 
 Pins, hidden repos and the collapsed rail are part of the session, not of the workspace file.
@@ -44,8 +46,8 @@ The open workspaces, the repo shown in each, the active workspace, the most rece
 ## How it works
 
 - `bin.ts` resolves the paths and starts Electron detached with `main.js -- <paths>`. The main process takes Electron's single instance lock with the paths as additional data; a second instance hands them to the first through `second-instance` and quits.
-- `workspaces.ts` holds the pure state (open workspaces, the shown repo per workspace, pins and hidden repos, the rail order, the collapsed rail, the most recently used order); `switcher.ts` ranks the switcher's lines (`fuzzyMatch`, `switcherEntries`); `code-workspace.ts` reads and writes the files; `session.ts` saves and restores the session; `repos.ts` tracks the repos that have a server.
-- Every repo runs `appling-ide <folder> --port 0` in its own child process (Electron's binary with `ELECTRON_RUN_AS_NODE`), so a failing repo cannot take the app down. The server reports its URL over the IPC channel and ends when the channel closes, also when the app is killed. A server that ends shows its error with Retry and Close.
+- `workspaces.ts` holds the pure state (open workspaces, the shown repo per workspace, pins and hidden repos, the rail order, the collapsed rail, the most recently used order); `switcher.ts` ranks the switcher's lines (`fuzzyMatch`, `switcherEntries`); `code-workspace.ts` reads and writes the files; `session.ts` saves and restores the session; `repos.ts` tracks the repos that have a server; `git.ts` reads the branch from `HEAD` without running git, and the main process watches that file's folder.
+- Every repo runs `appling-ide <folder> --port 0` in its own child process (Electron's binary with `ELECTRON_RUN_AS_NODE`), so a failing repo cannot take the app down. The server reports its URL over the IPC channel, then `{ type: 'status', errors }` at start and after every model change, and ends when the channel closes, also when the app is killed. A server that ends shows its error with Retry and Close.
 - The window holds the shell page (`src/shell`: the 48px rail with workspaces on top and the repos of the active workspace below, and the empty and error states) and one `WebContentsView` per repo loading `<ide url>/?shell=desktop`: the IDE client with the canvas as the main area, the source folded away behind **Source** and no AI chat. Views of inactive repos are hidden, not destroyed. A view may navigate only within its own server; `https` links open in the browser.
 - The shell talks to the main process only through the preload bridge (`preload.cts`); every page runs sandboxed with context isolation.
 

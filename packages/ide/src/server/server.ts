@@ -11,6 +11,7 @@ import { createApplingLspServices } from '@appling/lang/lsp';
 import { chat, languageModel, modelSettings } from '@appling/ai';
 import { applyEdit, latestRelease, readReleases, REFERENCES, type EditOperation } from '@appling/model';
 import type { ModelMessage } from 'ai';
+import type { Snapshot } from '../shared/snapshot.js';
 import { readView, snapshot, writeView } from './workspace.js';
 
 const CLIENT = fileURLToPath(new URL('../../dist/client/', import.meta.url));
@@ -24,8 +25,13 @@ export interface Ide {
     close(): Promise<void>;
 }
 
+export interface IdeOptions {
+    /** Called with every snapshot the server pushes after a model file changed. */
+    onSnapshot?(snapshot: Snapshot): void;
+}
+
 /** Serves the IDE for one workspace folder on 127.0.0.1. */
-export async function startIde(root: string, port = 0): Promise<Ide> {
+export async function startIde(root: string, port = 0, options: IdeOptions = {}): Promise<Ide> {
     const events = new Set<WebSocket>();
     let origins: string[] = [];
 
@@ -50,8 +56,10 @@ export async function startIde(root: string, port = 0): Promise<Ide> {
         if (file !== REFERENCES && (!file?.endsWith('.appling') || file.split(sep).some(part => part.startsWith('.') || part === 'node_modules'))) return;
         clearTimeout(timer);
         timer = setTimeout(async () => {
-            const message = JSON.stringify({ type: 'snapshot', snapshot: await snapshot(root) });
+            const current = await snapshot(root);
+            const message = JSON.stringify({ type: 'snapshot', snapshot: current });
             events.forEach(ws => ws.send(message));
+            options.onSnapshot?.(current);
         }, 100);
     });
 

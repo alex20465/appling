@@ -9,6 +9,10 @@ export interface Repo {
     status: RepoStatus;
     url?: string;
     error?: string;
+    /** Validation errors of its model, as its server last reported them. */
+    errors?: number;
+    /** The checked out branch (a short commit while detached); undefined outside git. */
+    branch?: string;
 }
 
 /** The repos that have an IDE server, whichever workspaces they belong to (see `Workspaces`). */
