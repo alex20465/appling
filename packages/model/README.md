@@ -61,7 +61,7 @@ if (result.ok) {
 | Operation | Does |
 |---|---|
 | `{ op: 'add', parent, source }` | Inserts a declaration, such as `note: Text?` or `requires { ... } else E`, at the last position inside the parent where it parses |
-| `{ op: 'rename', target, name }` | Renames the element and everything that names it: references (also as part of qualified names such as `crm.Account`), names in expressions, transitions over a renamed enum value, export lists, message keys, and projection fields copied from a renamed field |
+| `{ op: 'rename', target, name }` | Renames the element and everything that names it: references (also as part of qualified names such as `crm.Account`), names in expressions and `@Name` in `does` texts, transitions over a renamed enum value, export lists, message keys, and projection fields copied from a renamed field |
 | `{ op: 'retype', target, type }` | Replaces the type of a field or parameter |
 | `{ op: 'remove', target }` | Removes the element, with its separating comma in a list and its name in the module's export list |
 | `{ op: 'set', target, property, value }` | Replaces a property's text, removes it (with its keyword) when the value is empty, or inserts it with its keyword when it is absent |

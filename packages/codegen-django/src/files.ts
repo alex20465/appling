@@ -13,6 +13,25 @@ export function template(file: string, write: (existing: string | undefined) => 
     return { kind: 'template', file, write };
 }
 
+/** A Python docstring holding a node's `does` text, as lines at the given indentation; none without a text. */
+export function docstring(node: GraphNode, indent: string): string[] {
+    const text = node.data.does;
+    if (typeof text !== 'string' || !text.trim()) return [];
+    const escaped = text.replace(/\\/g, '\\\\').replace(/"(?="")|"$/g, '\\"');
+    const lines = escaped.split('\n');
+    if (lines.length === 1) return [`${indent}"""${escaped}"""`];
+    return [`${indent}"""${lines[0]}`, ...lines.slice(1).map(l => l ? indent + l : ''), `${indent}"""`];
+}
+
+/** Puts the node's docstring under the first `class` or `def` line of the code. */
+export function documented(code: string, node: GraphNode): string {
+    const lines = code.split('\n');
+    const at = lines.findIndex(l => /^\s*(class|def) .*:$/.test(l));
+    if (at < 0) return code;
+    const indent = `${lines[at].match(/^\s*/)![0]}    `;
+    return [...lines.slice(0, at + 1), ...docstring(node, indent), ...lines.slice(at + 1)].join('\n');
+}
+
 export function task(what: string): Step {
     return { kind: 'task', what };
 }

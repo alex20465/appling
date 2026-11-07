@@ -97,6 +97,7 @@ Rename changes only name tokens, never the layout. It follows every place that n
 
 - references, also as one segment of a qualified name, such as `Account` in `crm.Account`, or `Order` in `Order.status`, and the module's `export` lists, whose names are references to its members,
 - names in expressions, such as `total` in an invariant or a bare enum value used as a default,
+- `@Name` in [`does`](../language/descriptions.md#naming-elements) texts, such as `Account` in `@Account.email`,
 - transitions of machines over a renamed enum value (`transition draft -> placed`),
 - message keys that name the element, such as `Order.total = "Total"`,
 - projection fields without a value that copy an entity field by name: they are renamed with the field.
@@ -153,7 +154,7 @@ Remove does not remove what still refers to the element; the edit is rejected in
 | Field | Meaning |
 |---|---|
 | `target` | The qualified name of the element |
-| `property` | A property name as the graph's `props` shows it, such as `default`, `derived`, `condition`, `modifiers`, `label`, `preconditions` or `schedule` |
+| `property` | A property name as the graph's `props` shows it, such as `default`, `derived`, `condition`, `modifiers`, `label`, `preconditions`, `schedule` or `does` |
 | `value` | Appling source for the property; empty removes it |
 
 Set covers three cases:
@@ -164,7 +165,7 @@ Set covers three cases:
 | present | empty | Removes the property with its keyword: `status: OrderStatus state default draft` becomes `status: OrderStatus state` |
 | absent | not empty | Inserts it with its keyword where it parses: `set` of `modifiers` to `unique` on `total` gives `total: Money unique` |
 
-The element is printed canonically afterwards. Set is rejected with `Cannot set <property> on <kind>.` when the value cannot be placed. For a list property such as `modifiers` or `preconditions`, the value replaces the whole list, from its first to its last item.
+The element is printed canonically afterwards. Set is rejected with `Cannot set <property> on <kind>.` when the value cannot be placed. For a list property such as `modifiers` or `preconditions`, the value replaces the whole list, from its first to its last item. A [`does`](../language/descriptions.md) value is a string with its quotes, `'"Someone who buys"'`, or a text block.
 
 ## Rejection rules
 

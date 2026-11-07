@@ -160,3 +160,23 @@ export function parentOf(qn: string): string {
 export function lastOf(qn: string): string {
     return qn.slice(qn.lastIndexOf('.') + 1);
 }
+
+/** An Elixir string literal, without interpolation. */
+export function elixirString(text: string): string {
+    return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/#\{/g, '\\#{').replace(/\n/g, '\\n')}"`;
+}
+
+/** The `@moduledoc` lines of a node's `does` text, a heredoc when it spans lines; none without a text. */
+export function moduledoc(node: GraphNode): string {
+    const text = node.data.does;
+    if (typeof text !== 'string' || !text.trim()) return '';
+    if (!text.includes('\n')) return `  @moduledoc ${elixirString(text)}\n\n`;
+    const body = text.replace(/\\/g, '\\\\').replace(/#\{/g, '\\#{').replace(/"""/g, '\\"""').split('\n').map(l => l ? `  ${l}` : '').join('\n');
+    return `  @moduledoc """\n${body}\n  """\n\n`;
+}
+
+/** Puts the node's `@moduledoc` first in the module. */
+export function withModuledoc(text: string, node: GraphNode): string {
+    const doc = moduledoc(node);
+    return doc ? text.replace(/^(defmodule [^\n]* do\n)/, head => head + doc) : text;
+}

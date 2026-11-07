@@ -4,7 +4,7 @@
     "generated": 1,
     "partial": 2,
     "todo": 0,
-    "tasks": 2
+    "tasks": 3
   },
   {
     "kind": "Actor",
@@ -36,10 +36,10 @@
   },
   {
     "kind": "Entity",
-    "generated": 6,
-    "partial": 0,
+    "generated": 5,
+    "partial": 1,
     "todo": 0,
-    "tasks": 0
+    "tasks": 1
   },
   {
     "kind": "Enum",
@@ -78,17 +78,17 @@
   },
   {
     "kind": "ExternalOperation",
-    "generated": 3,
-    "partial": 0,
+    "generated": 2,
+    "partial": 1,
     "todo": 0,
-    "tasks": 0
+    "tasks": 1
   },
   {
     "kind": "Field",
-    "generated": 40,
-    "partial": 0,
+    "generated": 39,
+    "partial": 1,
     "todo": 0,
-    "tasks": 0
+    "tasks": 1
   },
   {
     "kind": "Flow",
@@ -239,9 +239,9 @@
   },
   {
     "kind": "total",
-    "generated": 109,
-    "partial": 22,
+    "generated": 106,
+    "partial": 25,
     "todo": 5,
-    "tasks": 38
+    "tasks": 42
   }
 ]

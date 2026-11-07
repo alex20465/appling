@@ -1,6 +1,6 @@
 import { AstUtils, CstUtils, GrammarAST, GrammarUtils, URI, type AstNode, type CstNode, type LangiumDocument, type LeafCstNode } from 'langium';
 import {
-    ExpressionTyper, LAYER_OF, buildSources, errorsOf, isEntity, isEnumLiteral, isField, isMachine, isMemberExpr, isMessages,
+    ExpressionTyper, LAYER_OF, buildSources, doesTargets, errorsOf, isEntity, isEnumLiteral, isField, isMachine, isMemberExpr, isMessages,
     isMigration, isModule, isProjection, isRenameStep, modulePath, printRange, projectionSourceEntity,
     type MigrationStep, type Model, type Workspace
 } from '@appling/lang';
@@ -148,7 +148,7 @@ function insertionPoints(parent: AstNode): number[] {
     return [...new Set([...braces, ...children])].sort((a, b) => b - a);
 }
 
-/** Renames an element and everything that names it: references (exports included), names in expressions, transitions, message keys. */
+/** Renames an element and everything that names it: references (exports included), names in expressions and `does` texts, transitions, message keys. */
 function renameSplices(workspace: Workspace, node: AstNode, name: string): Splice[] {
     const models = modelsOf(workspace);
     const typer = new ExpressionTyper(workspace.services);
@@ -175,6 +175,16 @@ function renameSplices(workspace: Workspace, node: AstNode, name: string): Splic
             if (!step) continue;
             const property = isMemberExpr(step) ? 'member' : 'name';
             if ((step as unknown as Record<string, unknown>)[property] === old) splices.push(tokenSplice(step, property, name));
+        }
+        for (const source of all) {
+            for (const { name: written, offset, target } of doesTargets(source, workspace.services)) {
+                const depth = depthBelow(target, renamed);
+                const segments = written.split('.');
+                const index = segments.length - 1 - depth;
+                if (depth < 0 || segments[index] !== old) continue;
+                const start = offset + segments.slice(0, index).reduce((n, s) => n + s.length + 1, 0);
+                splices.push({ uri: uriOf(source), start, end: start + old.length, text: name });
+            }
         }
         if (isEnumLiteral(renamed)) {
             for (const machine of all.filter(isMachine).filter(m => m.field.ref?.type.decl?.ref === renamed.$container)) {

@@ -51,7 +51,7 @@ The server loads every `.appling` file in the workspace folders the editor sends
 When the workspace folder is reached through a symlink and the editor opens a file under its real path, the server still keeps one document per file: the opened path replaces the copy it read from disk. Without that every declaration would exist twice, which shows as false errors such as `Unknown name "tenant".`.
 
 > [!NOTE]
-> Rename in the language server changes the declaration and its references. Export lists are references too, so it covers them. It does not follow names inside expressions (`total` in `{ total >= 0 }`), transitions over enum values or message keys. The `rename` [edit operation](../reference/edit-operations.md#rename), used by the IDE inspector and the [AI tools](ai.md), follows all of them.
+> Rename in the language server changes the declaration and its references. Export lists are references too, so it covers them. It does not follow names inside expressions (`total` in `{ total >= 0 }`), transitions over enum values, `@Name` in `does` texts or message keys. The `rename` [edit operation](../reference/edit-operations.md#rename), used by the IDE inspector and the [AI tools](ai.md), follows all of them.
 
 ## Connect an editor
 

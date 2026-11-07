@@ -3,7 +3,7 @@ import type { ExprData, GraphNode, TypeData } from '@appling/model';
 import { interfaceSteps } from './api.js';
 import { projectionFieldSteps, querySteps } from './application.js';
 import { actionSteps, jobSteps, machineSteps } from './behavior.js';
-import { constant, lastOf, parentOf, validation } from './elixir.js';
+import { constant, elixirString, lastOf, parentOf, validation, withModuledoc } from './elixir.js';
 import { migrationSteps } from './migrations.js';
 import { hasPages, navigationSteps, pageSteps } from './pages.js';
 import { actorAttributeSpecs, actorFieldSteps, actorSteps, constrainRoles, homeAt, homeFields } from './actors.js';
@@ -143,7 +143,9 @@ function patchResource(text: string, entity: GraphNode, context: MapContext): st
     for (const field of fields) {
         const value = defaultValue(field, context);
         if (value !== undefined) text = text.replace(new RegExp(`(\\n([ \\t]*)attribute :${lastOf(field.qn)}, [^\\n]* do\\n)`), `$1$2  default ${value}\n`);
+        if (typeof field.data.does === 'string') text = text.replace(new RegExp(`(\\n([ \\t]*)attribute :${lastOf(field.qn)}, [^\\n]* do\\n)`), (_, head: string, indent: string) => `${head}${indent}  description ${elixirString(field.data.does as string)}\n`);
     }
+    text = withModuledoc(text, entity);
     const blocks = [
         block('identities', fields.filter(f => ((f.data.modifiers ?? []) as string[]).includes('unique')).map(f => `identity :unique_${lastOf(f.qn)}, [:${lastOf(f.qn)}]`)),
         block('calculations', [...fields.flatMap(f => calculation(f, context) ?? []), ...roleCalculations(entity, context)]),
@@ -176,6 +178,6 @@ function embedded(node: GraphNode, context: MapContext): string {
         const elixirType = type.many ? `{:array, ${attributeType(type, context, true)}}` : attributeType(type, context, true);
         return `    attribute :${lastOf(f.qn)}, ${elixirType}, allow_nil?: ${type.optional ? 'true' : 'false'}, public?: true\n`;
     });
-    return `defmodule ${typeModule(node, context)} do\n  use Ash.Resource, data_layer: :embedded\n\n  attributes do\n${attributes.join('')}  end\nend\n`;
+    return withModuledoc(`defmodule ${typeModule(node, context)} do\n  use Ash.Resource, data_layer: :embedded\n\n  attributes do\n${attributes.join('')}  end\nend\n`, node);
 }
 

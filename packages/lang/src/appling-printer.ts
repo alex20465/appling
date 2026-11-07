@@ -1,5 +1,6 @@
 import { AstUtils, CstUtils, GrammarUtils, type AstNode, type LeafCstNode } from 'langium';
 import { Expr, isModel, reflection } from './generated/ast.js';
+import { printTextBlock } from './appling-does.js';
 
 /**
  * Canonical text form. Every gap between two tokens gets exactly one spelling, so
@@ -67,7 +68,9 @@ function render(root: AstNode): { out: string, leaves: RenderedLeaf[] } {
             out += separator(prev, leaf, depth, opened, closed);
         }
         leaves.push({ leaf, gapStart, textStart: out.length });
-        out += leaf.text;
+        // A text block's lines sit one level deeper than the line it starts on, the closing quotes on that level.
+        const depth = braces.filter(Boolean).length;
+        out += leaf.tokenType.name === 'TEXT_BLOCK' ? printTextBlock(leaf.text, INDENT.repeat(depth + 1), INDENT.repeat(depth)) : leaf.text;
         opened = false;
         if (!leaf.hidden && leaf.text === '{') {
             opened = BLOCKS.has(leaf.astNode.$type) && !INLINE_BRACES_AFTER.has(prev?.text ?? '');

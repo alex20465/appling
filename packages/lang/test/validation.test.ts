@@ -82,6 +82,21 @@ test('a policy grants by role', async () => {
     expect(await warnings('false')).toEqual([]);
 });
 
+test('does names visible elements', async () => {
+    expect(await check(`module m { ${ORDER} action Edit on Order does "Edits @Order.note, not @Missing" { } }`))
+        .toEqual(['Unknown element "@Missing" in does.']);
+    expect(await check(`module m { ${ORDER} action Edit on Order does "Mails ops@shop.example about @Order and @Status.open." { } }`))
+        .toEqual([]);
+    expect(await check(`module a { export X entity X { } } module b { action Use does "Reads @a.X, not @a.Y" { } }`))
+        .toEqual(['Unknown element "@a.Y" in does.']);
+});
+
+test('does names follow the layer rules', async () => {
+    expect(await check(`module m { external Mail { op Send () } ${ORDER} action Edit on Order does "Calls @Mail.Send" { } }`))
+        .toContain('behavior element Action may not reference application element External "@Mail.Send".');
+    expect(await check(`module m { external Mail { op Send () } usecase Notify does "Calls @Mail.Send" { } }`)).toEqual([]);
+});
+
 test('a role condition reads only actor, tenant and now', async () => {
     expect(await check(`module m { ${ORDER} role Clerk { status == open } }`))
         .toContain('A role condition reads only actor, tenant and now, not "status".');

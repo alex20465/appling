@@ -43,6 +43,7 @@ Requires `uv` on the PATH. Python and Django (6.1) are installed by uv into the 
 | `policy` | entity policies become `can_<operation>_<entity>(actor, record)`, `can_read_<entity>_<field>` and `readable_<entity>_rows(actor, rows)` in `<app>/policies.py`; actions, queries and use cases check them and their own policies and raise `PermissionDenied`, serializers and pages hide fields the actor may not read. Calls with `actor=None` (jobs, receivers) are not checked; a model without policies generates no checks |
 | groups | the groups of roles and actors are created after `migrate` by a `post_migrate` receiver in `<app>/groups.py` |
 
+| `does` | the docstring of the generated class or function, `help_text` on model fields, and a registry task |
 | rules | a `TestCase` per invariant, policy, transition and action with preconditions in `<app>/tests.py`, one skipped method per case; writing their bodies is a registry task |
 
 Models with projections or interfaces also get Django REST framework. The project ends with `manage.py makemigrations`, so its migration history starts with the generated models.

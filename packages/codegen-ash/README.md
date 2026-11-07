@@ -39,6 +39,7 @@ Requires Elixir 1.17 or later and the `igniter_new` archive (`mix archive.instal
 | `policy` | `Ash.Policy.Authorizer` policies: `action_type(...)` or `always()` for entity policies, `field_policy` for `fields` (plus a catch-all `field_policy :*`), `action(:name)` for actions and queries; each `\|\|` branch becomes `authorize_if`, a branch with `&&` becomes `forbid_unless` checks followed by `authorize_if`; conditions become `expr` checks with `^actor(...)` and records compared by id |
 | `interface rest` | AshJsonApi routes on the domain (`index` for queries with `default_fields` from picks, `patch` for update actions), served by Phoenix under `/api/json` when the model has pages, otherwise by a JSON:API router that Bandit serves on port 4000 |
 | `page`, `navigation`, `messages` | Phoenix LiveViews with lists, details, AshPhoenix forms and action buttons, navigation links and column labels; models with pages need the `phx_new` archive |
+| `does` | `@moduledoc` of resources and embedded resources, `description` of attributes, and a registry task |
 | rules | skipped ExUnit tests in `test/<app>/<module>/<resource>_test.exs` for invariants, policies, transitions and preconditions; writing their bodies is a registry task |
 
 The project ends with `mix ash.codegen initial_resources`, so migrations and resource snapshots start with the generated resources.

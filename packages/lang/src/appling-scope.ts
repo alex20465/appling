@@ -51,6 +51,11 @@ export class ApplingScopeProvider extends DefaultScopeProvider {
         return this.scopeOf(container, type).getElement(name)?.node;
     }
 
+    /** Resolves a dotted name to an element of any kind, as visible from the container (`@Name` in `does`). */
+    lookupElement(container: AstNode, name: string): AstNode | undefined {
+        return this.scopeOf(container).getElement(name)?.node;
+    }
+
     override getScope(context: ReferenceInfo): Scope {
         const node = context.container;
         if (context.property === 'picks' && (isEndpoint(node) || isListView(node) || isDetailView(node))) {
@@ -72,12 +77,12 @@ export class ApplingScopeProvider extends DefaultScopeProvider {
         return super.getScope(context);
     }
 
-    private scopeOf(container: AstNode, type: string): Scope {
+    private scopeOf(container: AstNode, type?: string): Scope {
         const symbols = AstUtils.getDocument(container).localSymbols;
         const local: AstNode[] = [];
         for (let node: AstNode | undefined = container; node; node = node.$container) local.push(node);
         return local.reverse().reduce<Scope>((outer, node) => symbols?.has(node)
-            ? this.createScope(symbols.getStream(node).filter(d => this.reflection.isSubtype(d.type, type)), outer)
+            ? this.createScope(symbols.getStream(node).filter(d => !type || this.reflection.isSubtype(d.type, type)), outer)
             : outer, new MultiMapScope(this.indexManager.allElements(type)));
     }
 
