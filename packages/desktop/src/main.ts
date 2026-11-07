@@ -7,9 +7,10 @@ import { startIdeProcess, type IdeProcess } from './ide-process.js';
 import { COMMANDS, loadKeybindings } from './keybindings.js';
 import { Repos } from './repos.js';
 import { readSession, restore, sessionOf, writeSession } from './session.js';
+import { switcherEntries } from './switcher.js';
 import { Workspaces } from './workspaces.js';
 
-/** The width of the rail on the left; every repo view fills the rest of the window. */
+/** The width of the rail on the left (none while it is collapsed); every repo view fills the rest of the window. */
 const RAIL = 48;
 const SHELL = fileURLToPath(new URL('./shell/index.html', import.meta.url));
 const PRELOAD = fileURLToPath(new URL('./preload.cjs', import.meta.url));
@@ -46,6 +47,8 @@ const views = new Map<string, WebContentsView>();
 const processes = new Map<string, IdeProcess>();
 let window: BrowserWindow | undefined;
 let keybindingsWatcher: FSWatcher | undefined;
+/** While the switcher is open the repo views are hidden, so the shell page (which draws it) is on top. */
+let switcherOpen = false;
 
 function userFile(...parts: string[]): string {
     return join(app.getPath('userData'), ...parts);
@@ -67,7 +70,11 @@ function start(): void {
     window.on('resize', layout);
     window.loadFile(SHELL);
 
-    ipcMain.on('select', (_event, repo: string, workspace?: string) => workspaces.select(repo, workspace) && changed());
+    ipcMain.on('select', (_event, repo: string, workspace?: string) => {
+        const selected = workspaces.select(repo, workspace);
+        if (switcherOpen) closeSwitcher();
+        if (selected) changed();
+    });
     ipcMain.on('selectWorkspace', (_event, id: string) => workspaces.selectWorkspace(id) && changed());
     ipcMain.on('close', (_event, repo: string) => closeRepo(repo));
     ipcMain.on('open', () => addFolderDialog());
@@ -75,6 +82,15 @@ function start(): void {
     ipcMain.on('retry', (_event, id: string) => retry(id));
     ipcMain.on('repoMenu', (_event, repo: string) => repoMenu(repo));
     ipcMain.on('workspaceMenu', (_event, id: string) => workspaceMenu(id));
+    ipcMain.on('pin', (_event, workspace: string, repo: string, pinned: boolean) => workspaces.pin(workspace, repo, pinned) && changed());
+    ipcMain.on('hide', (_event, workspace: string, repo: string, hidden: boolean) => workspaces.hide(workspace, repo, hidden) && changed());
+    ipcMain.on('reorder', (_event, workspace: string, repo: string, before?: string) => {
+        if (workspaces.reorder(workspace, repo, before)) persist(workspace);
+        changed();
+    });
+    ipcMain.on('toggleRail', () => toggleRail());
+    ipcMain.on('closeSwitcher', () => closeSwitcher());
+    ipcMain.handle('switch', (_event, query: string) => switcherEntries(workspaces, repoName, typeof query === 'string' ? query : ''));
     ipcMain.handle('state', () => state());
 
     watchKeybindings();
@@ -239,7 +255,11 @@ function repoMenu(repo: string): void {
     const from = workspaces.current();
     if (!window || !from) return;
     const others = workspaces.all().filter(w => w.id !== from.id);
+    const pinned = from.pinned.includes(repo);
     Menu.buildFromTemplate([
+        { label: pinned ? 'Unpin' : 'Pin to Top', click: () => workspaces.pin(from.id, repo, !pinned) && changed() },
+        { label: 'Hide from Rail', click: () => workspaces.hide(from.id, repo, true) && changed() },
+        { type: 'separator' },
         {
             label: 'Move to Workspace', enabled: others.length > 0,
             submenu: others.map(to => ({
@@ -260,6 +280,11 @@ function workspaceMenu(id: string): void {
     const workspace = workspaces.get(id);
     if (!window || !workspace) return;
     Menu.buildFromTemplate([
+        {
+            label: 'Hidden Repos', enabled: workspace.hidden.length > 0,
+            submenu: workspace.hidden.map(repo => ({ label: `Show ${repoName(repo, workspace.folders.find(f => f.path === repo)?.name)}`, click: () => workspaces.hide(workspace.id, repo, false) && changed() }))
+        },
+        { type: 'separator' },
         { label: 'Reveal Workspace File', click: () => shell.showItemInFolder(workspace.id) },
         { type: 'separator' },
         { label: 'Close Workspace', click: () => closeWorkspace(workspace.id) }
@@ -270,7 +295,7 @@ function workspaceMenu(id: string): void {
 function refresh(): void {
     if (!window) return;
     const active = workspaces.activeRepo();
-    for (const [id, view] of views) view.setVisible(id === active);
+    for (const [id, view] of views) view.setVisible(id === active && !switcherOpen);
     layout();
     const repo = active ? repos.get(active) : undefined;
     const workspace = workspaces.current();
@@ -281,22 +306,59 @@ function refresh(): void {
 function layout(): void {
     if (!window) return;
     const [width, height] = window.getContentSize();
-    for (const view of views.values()) view.setBounds({ x: RAIL, y: 0, width: Math.max(0, width - RAIL), height });
+    const rail = workspaces.collapsed ? 0 : RAIL;
+    for (const view of views.values()) view.setBounds({ x: rail, y: 0, width: Math.max(0, width - rail), height });
+}
+
+/** A repo's name in the rail and the switcher: the workspace file's display name, else the folder's name. */
+function repoName(path: string, folderName?: string): string {
+    return folderName ?? repos.get(path)?.name ?? (basename(path) || path);
 }
 
 function state() {
+    const current = workspaces.current();
+    // the shown repo stays on the rail while it is hidden, so you can see where you are
+    const shownHidden = current?.active && current.hidden.includes(current.active) ? current.active : undefined;
     return {
         workspaces: workspaces.all().map(w => ({
             id: w.id,
             name: w.name,
-            repos: w.folders.map(f => {
-                const repo = repos.get(f.path);
-                return { id: f.path, name: f.name ?? repo?.name ?? basename(f.path), status: repo?.status ?? 'starting', error: repo?.error };
-            })
+            hidden: w.hidden.length,
+            repos: w.folders.filter(f => workspaces.rail(w.id).includes(f) || (w === current && f.path === shownHidden))
+                .sort((a, b) => Number(!w.pinned.includes(a.path)) - Number(!w.pinned.includes(b.path)))
+                .map(f => {
+                    const repo = repos.get(f.path);
+                    return {
+                        id: f.path, name: repoName(f.path, f.name), status: repo?.status ?? 'starting', error: repo?.error,
+                        pinned: w.pinned.includes(f.path), hidden: w.hidden.includes(f.path)
+                    };
+                })
         })),
         active: workspaces.active,
-        repo: workspaces.activeRepo()
+        repo: workspaces.activeRepo(),
+        collapsed: workspaces.collapsed
     };
+}
+
+function toggleRail(): void {
+    workspaces.collapsed = !workspaces.collapsed;
+    changed();
+}
+
+/** Opens the switcher over the shell page; the shell asks for its lines through `switch` and picks with `select`. */
+function openSwitcher(): void {
+    if (!window || switcherOpen) return;
+    switcherOpen = true;
+    refresh();
+    window.webContents.focus();
+    window.webContents.send('switcher');
+}
+
+function closeSwitcher(): void {
+    if (!switcherOpen) return;
+    switcherOpen = false;
+    refresh();
+    activeView()?.webContents.focus();
 }
 
 function activeView(): WebContentsView | undefined {
@@ -307,6 +369,7 @@ function activeView(): WebContentsView | undefined {
 const actions: Record<string, () => void> = {
     open: () => addFolderDialog(),
     closeRepo: () => { const repo = workspaces.activeRepo(); if (repo) closeRepo(repo); },
+    switcher: () => switcherOpen ? closeSwitcher() : openSwitcher(),
     nextRepo: () => workspaces.stepRecent(1, Date.now()) && changed(),
     previousRepo: () => workspaces.stepRecent(-1, Date.now()) && changed(),
     ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`repo${i + 1}`, () => workspaces.selectAt(i) && changed()])),
@@ -316,6 +379,7 @@ const actions: Record<string, () => void> = {
     nextWorkspace: () => { workspaces.cycleWorkspace(1); changed(); },
     previousWorkspace: () => { workspaces.cycleWorkspace(-1); changed(); },
     ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`workspace${i + 1}`, () => workspaces.selectWorkspaceAt(i) && changed()])),
+    toggleRail: () => toggleRail(),
     toggleSource: () => activeView()?.webContents.executeJavaScript(`document.querySelector('.bar button[aria-pressed]')?.click()`),
     reload: () => activeView()?.webContents.reload(),
     devTools: () => (activeView()?.webContents ?? window?.webContents)?.toggleDevTools(),
@@ -354,8 +418,8 @@ function buildMenu(): void {
             ]
         },
         { role: 'editMenu' },
-        { label: 'View', submenu: [item('toggleSource'), item('reload'), item('devTools'), { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' }] },
-        { label: 'Repo', submenu: [item('nextRepo'), item('previousRepo'), { type: 'separator' }, ...numbered('repo')] },
+        { label: 'View', submenu: [item('toggleRail'), item('toggleSource'), item('reload'), item('devTools'), { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' }] },
+        { label: 'Repo', submenu: [item('switcher'), { type: 'separator' }, item('nextRepo'), item('previousRepo'), { type: 'separator' }, ...numbered('repo')] },
         { label: 'Workspace', submenu: [item('nextWorkspace'), item('previousWorkspace'), { type: 'separator' }, ...numbered('workspace')] }
     ];
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));

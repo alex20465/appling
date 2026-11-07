@@ -28,6 +28,23 @@ body { display: grid; grid-template-columns: 48px 1fr; background: var(--surface
 .repo.starting { opacity: 0.6; }
 .repo.failed { border-color: var(--error); }
 .add { border-style: dashed; font-size: 16px; }
+.repo.pinned { position: relative; }
+.repo.pinned::after { content: ''; position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--leaf); }
+.repo.hidden { border-style: dotted; }
+/* Collapsed: the rail is gone and main.ts places the repo views at the left edge. */
+body.collapsed { grid-template-columns: 0 1fr; }
+body.collapsed .rail { display: none; }
+
+#switcher { position: fixed; inset: 0; display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; background: rgb(0 0 0 / 0.45); }
+#switcher[hidden] { display: none; }
+#switcher .panel { width: min(560px, 90vw); border: 1px solid var(--line); border-radius: 10px; background: var(--surface-raised); box-shadow: 0 16px 48px rgb(0 0 0 / 0.5); overflow: hidden; }
+#switcher input { width: 100%; padding: 12px 14px; border: 0; border-bottom: 1px solid var(--line); outline: none; background: transparent; color: var(--ink); font: inherit; font-size: 15px; }
+#switcher ul { max-height: 50vh; margin: 0; padding: 4px; list-style: none; overflow-y: auto; }
+#switcher li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+#switcher li.selected { background: var(--surface-elevated); box-shadow: inset 3px 0 0 var(--leaf); }
+#switcher li.empty { color: var(--ink-muted); cursor: default; }
+#switcher .where { color: var(--ink-muted); font-size: 12px; white-space: nowrap; }
+#switcher mark { background: none; color: var(--leaf); font-weight: 600; }
 
 #stage { padding: 48px; overflow: auto; }
 #stage h1 { margin: 0 0 8px; font-size: 20px; }
