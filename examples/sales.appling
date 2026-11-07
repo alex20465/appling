@@ -34,7 +34,8 @@ module sales {
     invariant "total never negative" { total >= 0 }
 
     policy read { actor.is(crm.Clerk) || (actor.is(Customer) && customer == actor.account) }
-    policy create, update, delete { actor.is(crm.Clerk) }
+    policy create, delete { actor.is(crm.Clerk) }
+    policy update { actor.is(crm.Clerk) || (actor.is(Customer) && customer == actor.account && status == draft) }
     policy read fields total { actor.is(crm.Clerk) || (actor.is(Customer) && status != draft) }
   }
 

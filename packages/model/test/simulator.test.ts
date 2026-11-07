@@ -54,8 +54,8 @@ test('actor.is(Role) holds when the actor carries the role and the role conditio
 
 test('actors are judged by action and entity update policies', async () => {
     const sim = await simulator(examples());
-    // The examples restrict updates of orders to clerks, so a shopper cannot place an order: a finding for the model.
-    expect(sim.actors('sales.PlaceOrder')).toEqual([{ actor: 'sales.Shopper', verdict: 'no' }]);
+    // A clerk may update orders but not place them; a shopper may place their own draft orders, depending on the record.
+    expect(sim.actors('sales.PlaceOrder')).toEqual([{ actor: 'crm.Employee', verdict: 'no' }, { actor: 'sales.Shopper', verdict: 'depends' }]);
 });
 
 test('access lists what one actor may do, with policies added up along the reference path', async () => {
@@ -67,10 +67,10 @@ test('access lists what one actor may do, with policies added up along the refer
         'crm.Account delete': 'no',
         'sales.Order read': 'depends sales.Order.policy[read]',
         'sales.Order read total': 'depends sales.Order.policy[read] & sales.Order.policy[read fields total]',
-        'sales.Order update': 'no sales.Order.policy[create,update,delete]',
-        'sales.PlaceOrder': 'no sales.PlaceOrder.policy[] & sales.Order.policy[create,update,delete]',
+        'sales.Order update': 'depends sales.Order.policy[update]',
+        'sales.PlaceOrder': 'depends sales.PlaceOrder.policy[] & sales.Order.policy[update]',
         'sales.OpenOrders': 'depends sales.Order.policy[read]',
-        'sales.Checkout': 'no sales.PlaceOrder.policy[] & sales.Order.policy[create,update,delete] & sales.Cancel.policy[]',
+        'sales.Checkout': 'no sales.PlaceOrder.policy[] & sales.Order.policy[update] & sales.Cancel.policy[]',
         'sales.Orders': 'depends sales.Order.policy[read]',
         'sales.OrderDetail': 'depends sales.Order.policy[read]'
     });

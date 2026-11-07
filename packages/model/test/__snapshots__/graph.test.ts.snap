@@ -11,12 +11,22 @@ exports[`graph of examples 1`] = `
     {
       "from": "crm",
       "kind": "contains",
+      "to": "crm.Employee",
+    },
+    {
+      "from": "crm",
+      "kind": "contains",
       "to": "crm.Account",
     },
     {
       "from": "crm",
       "kind": "contains",
       "to": "crm.Company",
+    },
+    {
+      "from": "crm.Employee",
+      "kind": "roles",
+      "to": "crm.Clerk",
     },
     {
       "from": "crm.Account",
@@ -246,7 +256,12 @@ exports[`graph of examples 1`] = `
     {
       "from": "sales.Order",
       "kind": "contains",
-      "to": "sales.Order.policy[create,update,delete]",
+      "to": "sales.Order.policy[create,delete]",
+    },
+    {
+      "from": "sales.Order",
+      "kind": "contains",
+      "to": "sales.Order.policy[update]",
     },
     {
       "from": "sales.Order",
@@ -639,9 +654,39 @@ exports[`graph of examples 1`] = `
       "to": "sales.Shopper.account",
     },
     {
-      "from": "sales.Order.policy[create,update,delete]",
+      "from": "sales.Order.policy[create,delete]",
       "kind": "uses",
       "to": "crm.Clerk",
+    },
+    {
+      "from": "sales.Order.policy[update]",
+      "kind": "uses",
+      "to": "crm.Clerk",
+    },
+    {
+      "from": "sales.Order.policy[update]",
+      "kind": "uses",
+      "to": "sales.Customer",
+    },
+    {
+      "from": "sales.Order.policy[update]",
+      "kind": "uses",
+      "to": "sales.Order.customer",
+    },
+    {
+      "from": "sales.Order.policy[update]",
+      "kind": "uses",
+      "to": "sales.Shopper.account",
+    },
+    {
+      "from": "sales.Order.policy[update]",
+      "kind": "uses",
+      "to": "sales.Order.status",
+    },
+    {
+      "from": "sales.Order.policy[update]",
+      "kind": "uses",
+      "to": "sales.OrderStatus.draft",
     },
     {
       "from": "sales.Order.policy[read fields total]",
@@ -783,6 +828,22 @@ exports[`graph of examples 1`] = `
       "qn": "crm.Clerk",
     },
     {
+      "data": {
+        "kind": "human",
+        "roles": [
+          "crm.Clerk",
+        ],
+      },
+      "kind": "Actor",
+      "layer": "cross",
+      "level": "medium",
+      "module": "crm",
+      "props": {
+        "kind": "human",
+      },
+      "qn": "crm.Employee",
+    },
+    {
       "data": {},
       "kind": "Entity",
       "layer": "domain",
@@ -891,7 +952,7 @@ exports[`graph of examples 1`] = `
                   "type": "actor",
                 },
                 "target": "sales.Shopper.account",
-                "type": "Account",
+                "type": "Account?",
               },
               "op": "==",
               "right": {
@@ -1404,7 +1465,7 @@ exports[`graph of examples 1`] = `
                   "type": "actor",
                 },
                 "target": "sales.Shopper.account",
-                "type": "Account",
+                "type": "Account?",
               },
               "type": "Bool",
             },
@@ -1456,7 +1517,6 @@ exports[`graph of examples 1`] = `
         },
         "operations": [
           "create",
-          "update",
           "delete",
         ],
       },
@@ -1468,11 +1528,125 @@ exports[`graph of examples 1`] = `
         "condition": "actor.is(crm.Clerk)",
         "operations": [
           "create",
-          "update",
           "delete",
         ],
       },
-      "qn": "sales.Order.policy[create,update,delete]",
+      "qn": "sales.Order.policy[create,delete]",
+    },
+    {
+      "data": {
+        "condition": {
+          "$type": "BinaryExpr",
+          "left": {
+            "$type": "MemberExpr",
+            "args": [
+              {
+                "$type": "MemberExpr",
+                "member": "Clerk",
+                "receiver": {
+                  "$type": "NameExpr",
+                  "name": "crm",
+                  "type": "unknown",
+                },
+                "target": "crm.Clerk",
+                "type": "unknown",
+              },
+            ],
+            "call": true,
+            "member": "is",
+            "receiver": {
+              "$type": "NameExpr",
+              "name": "actor",
+              "type": "actor",
+            },
+            "type": "Bool",
+          },
+          "op": "||",
+          "right": {
+            "$type": "BinaryExpr",
+            "left": {
+              "$type": "BinaryExpr",
+              "left": {
+                "$type": "MemberExpr",
+                "args": [
+                  {
+                    "$type": "NameExpr",
+                    "name": "Customer",
+                    "target": "sales.Customer",
+                    "type": "unknown",
+                  },
+                ],
+                "call": true,
+                "member": "is",
+                "receiver": {
+                  "$type": "NameExpr",
+                  "name": "actor",
+                  "type": "actor",
+                },
+                "type": "Bool",
+              },
+              "op": "&&",
+              "right": {
+                "$type": "BinaryExpr",
+                "left": {
+                  "$type": "NameExpr",
+                  "name": "customer",
+                  "target": "sales.Order.customer",
+                  "type": "Account",
+                },
+                "op": "==",
+                "right": {
+                  "$type": "MemberExpr",
+                  "member": "account",
+                  "receiver": {
+                    "$type": "NameExpr",
+                    "name": "actor",
+                    "type": "actor",
+                  },
+                  "target": "sales.Shopper.account",
+                  "type": "Account?",
+                },
+                "type": "Bool",
+              },
+              "type": "Bool",
+            },
+            "op": "&&",
+            "right": {
+              "$type": "BinaryExpr",
+              "left": {
+                "$type": "NameExpr",
+                "name": "status",
+                "target": "sales.Order.status",
+                "type": "OrderStatus",
+              },
+              "op": "==",
+              "right": {
+                "$type": "NameExpr",
+                "name": "draft",
+                "target": "sales.OrderStatus.draft",
+                "type": "OrderStatus",
+              },
+              "type": "Bool",
+            },
+            "type": "Bool",
+          },
+          "type": "Bool",
+        },
+        "operations": [
+          "update",
+        ],
+      },
+      "kind": "Policy",
+      "layer": "domain",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "condition": "actor.is(crm.Clerk) || (actor.is(Customer) && customer == actor.account && status == draft)",
+        "operations": [
+          "update",
+        ],
+      },
+      "qn": "sales.Order.policy[update]",
     },
     {
       "data": {
@@ -1727,7 +1901,7 @@ exports[`graph of examples 1`] = `
                 "type": "actor",
               },
               "target": "sales.Shopper.account",
-              "type": "Account",
+              "type": "Account?",
             },
             "type": "Bool",
           },

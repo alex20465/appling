@@ -27,6 +27,8 @@ const (
 type ActorType string
 
 const (
+	// ActorEmployee is the human actor crm.Employee.
+	ActorEmployee ActorType = "crm.Employee"
 	// ActorShopper is the human actor sales.Shopper.
 	ActorShopper ActorType = "sales.Shopper"
 )
@@ -42,6 +44,11 @@ type Actor struct {
 	Tenant *int64 \`json:"tenant"\`
 	// Account is the field account of sales.Shopper, the ID of a crm.Account.
 	Account *int64 \`json:"account"\`
+}
+
+// NewEmployee returns the actor crm.Employee with the roles it declares.
+func NewEmployee() Actor {
+	return Actor{Type: ActorEmployee, Roles: []Role{RoleClerk}}
 }
 
 // NewShopper returns the actor sales.Shopper with the roles it declares.
@@ -299,17 +306,17 @@ func CanReadOrderTotal(actor access.Actor, order *Order) bool {
 
 // CanCreateOrder reports whether the policies of sales.Order let the actor create the record.
 func CanCreateOrder(actor access.Actor, order *Order) bool {
-	return access.InTenant(actor, order) && orderPolicyCreateUpdateDelete(actor, order)
+	return access.InTenant(actor, order) && orderPolicyCreateDelete(actor, order)
 }
 
 // CanUpdateOrder reports whether the policies of sales.Order let the actor update the record.
 func CanUpdateOrder(actor access.Actor, order *Order) bool {
-	return access.InTenant(actor, order) && orderPolicyCreateUpdateDelete(actor, order)
+	return access.InTenant(actor, order) && orderPolicyUpdate(actor, order)
 }
 
 // CanDeleteOrder reports whether the policies of sales.Order let the actor delete the record.
 func CanDeleteOrder(actor access.Actor, order *Order) bool {
-	return access.InTenant(actor, order) && orderPolicyCreateUpdateDelete(actor, order)
+	return access.InTenant(actor, order) && orderPolicyCreateDelete(actor, order)
 }
 
 // orderPolicyRead is the policy sales.Order.policy[read]: actor.is(crm.Clerk) || (actor.is(Customer) && customer == actor.account)
@@ -317,9 +324,14 @@ func orderPolicyRead(actor access.Actor, order *Order) bool {
 	return access.IsClerk(actor) || (access.IsCustomer(actor) && access.Same(actor.Account, order.Customer.ID))
 }
 
-// orderPolicyCreateUpdateDelete is the policy sales.Order.policy[create,update,delete]: actor.is(crm.Clerk)
-func orderPolicyCreateUpdateDelete(actor access.Actor, order *Order) bool {
+// orderPolicyCreateDelete is the policy sales.Order.policy[create,delete]: actor.is(crm.Clerk)
+func orderPolicyCreateDelete(actor access.Actor, order *Order) bool {
 	return access.IsClerk(actor)
+}
+
+// orderPolicyUpdate is the policy sales.Order.policy[update]: actor.is(crm.Clerk) || (actor.is(Customer) && customer == actor.account && status == draft)
+func orderPolicyUpdate(actor access.Actor, order *Order) bool {
+	return access.IsClerk(actor) || ((access.IsCustomer(actor) && access.Same(actor.Account, order.Customer.ID)) && (order.Status == OrderStatusDraft))
 }
 
 // orderPolicyReadFieldsTotal is the policy sales.Order.policy[read fields total]: actor.is(crm.Clerk) || (actor.is(Customer) && status != draft)
@@ -362,8 +374,12 @@ func TestOrderPolicyRead(t *testing.T) {
 	t.Skip("registry task: sales.Order.policy[read]")
 }
 
-func TestOrderPolicyCreateUpdateDelete(t *testing.T) {
-	t.Skip("registry task: sales.Order.policy[create,update,delete]")
+func TestOrderPolicyCreateDelete(t *testing.T) {
+	t.Skip("registry task: sales.Order.policy[create,delete]")
+}
+
+func TestOrderPolicyUpdate(t *testing.T) {
+	t.Skip("registry task: sales.Order.policy[update]")
 }
 
 func TestOrderPolicyReadFieldsTotal(t *testing.T) {

@@ -86,7 +86,7 @@ test('the simulate tool answers behavior questions and reports unknown elements 
     await Promise.all([createMcpServer(root).connect(serverTransport), client.connect(clientTransport)]);
     const ask = async (args: Record<string, unknown>) => JSON.parse(((await client.callTool({ name: 'simulate', arguments: args })).content as { text: string }[])[0].text);
     expect((await ask({ question: 'reach', machine: 'sales.OrderFlow', state: 'cancelled' })).path.map((p: { trigger: string }) => p.trigger)).toEqual(['Cancel']);
-    expect(await ask({ question: 'actors', action: 'sales.Cancel' })).toEqual([{ actor: 'sales.Shopper', verdict: 'no' }]);
+    expect(await ask({ question: 'actors', action: 'sales.Cancel' })).toEqual([{ actor: 'crm.Employee', verdict: 'yes' }, { actor: 'sales.Shopper', verdict: 'no' }]);
     expect(await ask({ question: 'run', action: 'sales.Cancel', record: { status: 'draft' }, actor: 'sales.Shopper' })).toMatchObject({ allowed: 'no', outcome: 'refused' });
     expect(await ask({ question: 'risks', action: 'sales.Nope' })).toEqual({ error: 'No element sales.Nope.' });
 });

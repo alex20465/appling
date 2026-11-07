@@ -315,8 +315,15 @@ policies do
     authorize_if expr(customer_id == ^actor(:account_id))
   end
 
-  policy action_type([:create, :update, :destroy]) do
+  policy action_type([:create, :destroy]) do
     authorize_if Shop.Crm.Checks.Clerk
+  end
+
+  policy action_type(:update) do
+    authorize_if Shop.Crm.Checks.Clerk
+    forbid_unless Shop.Sales.Checks.Customer
+    forbid_unless expr(customer_id == ^actor(:account_id))
+    authorize_if expr(status == :draft)
   end
 
   policy action(:place_order) do
