@@ -2,12 +2,88 @@
 
 exports[`examples generate a Rust crate for the domain and behavior layers 1`] = `
 {
+  "src/access.rs": "//! The actors, roles and tenant of the model and the checks its policies call.
+
+/// A role of the model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Role {
+    /// The role crm.Clerk.
+    #[serde(rename = "crm.Clerk")]
+    Clerk,
+    /// The role sales.Customer.
+    #[serde(rename = "sales.Customer")]
+    Customer,
+}
+
+/// A declared actor of the model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ActorType {
+    /// The human actor sales.Shopper.
+    #[serde(rename = "sales.Shopper")]
+    Shopper,
+}
+
+/// Who acts: a declared actor with the roles it carries, the tenant it acts in, and the fields the actors
+/// declare. A field is \`None\` for actors that do not declare it; fields that hold records hold their id.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Actor {
+    #[serde(rename = "type")]
+    pub actor_type: ActorType,
+    pub roles: Vec<Role>,
+    /// The record the actor is stored as, for actors declared with \`is\`.
+    pub id: Option<i64>,
+    /// The id of the crm.Account the actor acts in (the tenant crm.Company); \`None\` when it acts across tenants.
+    pub tenant: Option<i64>,
+    /// The field account of sales.Shopper, the id of a crm.Account.
+    pub account: Option<i64>,
+}
+
+impl Actor {
+    /// The actor sales.Shopper with the roles it declares.
+    pub fn shopper() -> Self {
+        Self {
+            actor_type: ActorType::Shopper,
+            roles: vec![Role::Customer],
+            id: None,
+            tenant: None,
+            account: None,
+        }
+    }
+
+    /// Whether the actor carries the role, without checking the role's condition.
+    pub fn has(&self, role: Role) -> bool {
+        self.roles.contains(&role)
+    }
+}
+
+/// Whether the actor is crm.Clerk: it carries the role.
+pub fn is_clerk(actor: &Actor) -> bool {
+    actor.has(Role::Clerk)
+}
+
+/// Whether the actor is sales.Customer: it carries the role.
+pub fn is_customer(actor: &Actor) -> bool {
+    actor.has(Role::Customer)
+}
+
+/// A record that belongs to a crm.Account, the entity of the tenant crm.Company.
+pub trait Tenanted {
+    /// The id of the crm.Account, \`None\` when the record does not reach one.
+    fn tenant_id(&self) -> Option<i64>;
+}
+
+/// Whether the record belongs to the tenant the actor acts in. An actor without a tenant acts across tenants.
+pub fn in_tenant(actor: &Actor, record: &impl Tenanted) -> bool {
+    actor.tenant.is_none() || record.tenant_id() == actor.tenant
+}
+",
   "src/crm.rs": "//! The module crm of the model.
 
 /// The errors of this module's actions.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {
     InvalidTransition { action: &'static str, from: String },
+    Forbidden { action: &'static str },
 }
 
 impl std::fmt::Display for Error {
@@ -48,6 +124,38 @@ impl Account {
     }
 }
 
+impl crate::access::Tenanted for Account {
+    /// The id of the crm.Account this Account belongs to, for the tenant crm.Company.
+    fn tenant_id(&self) -> Option<i64> {
+        Some(self.id)
+    }
+}
+
+/// Whether the policies of crm.Account let the actor read the record.
+pub fn can_read_account(actor: &crate::access::Actor, account: &Account) -> bool {
+    crate::access::in_tenant(actor, account) && account_policy_read(actor, account)
+}
+
+/// Whether the policies of crm.Account let the actor create the record; no policy grants create.
+pub fn can_create_account(_actor: &crate::access::Actor, _account: &Account) -> bool {
+    false
+}
+
+/// Whether the policies of crm.Account let the actor update the record; no policy grants update.
+pub fn can_update_account(_actor: &crate::access::Actor, _account: &Account) -> bool {
+    false
+}
+
+/// Whether the policies of crm.Account let the actor delete the record; no policy grants delete.
+pub fn can_delete_account(_actor: &crate::access::Actor, _account: &Account) -> bool {
+    false
+}
+
+/// The policy crm.Account.policy[read]: actor.is(Clerk) || (actor.is(sales.Customer) && actor.account == this)
+fn account_policy_read(actor: &crate::access::Actor, account: &Account) -> bool {
+    crate::access::is_clerk(actor) || (crate::access::is_customer(actor) && (actor.account == Some(account.id)))
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -59,6 +167,7 @@ mod tests {
 
 pub mod crm;
 pub mod sales;
+pub mod access;
 ",
   "src/sales.rs": "//! The module sales of the model.
 
@@ -66,6 +175,7 @@ pub mod sales;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {
     InvalidTransition { action: &'static str, from: String },
+    Forbidden { action: &'static str },
     EmptyOrder,
     Declined,
 }
@@ -149,6 +259,53 @@ impl Order {
     }
 }
 
+impl crate::access::Tenanted for Order {
+    /// The id of the crm.Account this Order belongs to, for the tenant crm.Company.
+    fn tenant_id(&self) -> Option<i64> {
+        Some(self.customer.id)
+    }
+}
+
+/// Whether the policies of sales.Order let the actor read the record.
+pub fn can_read_order(actor: &crate::access::Actor, order: &Order) -> bool {
+    crate::access::in_tenant(actor, order) && order_policy_read(actor, order)
+}
+
+/// Whether the actor may read the field total of the record.
+pub fn can_read_order_total(actor: &crate::access::Actor, order: &Order) -> bool {
+    can_read_order(actor, order) && order_policy_read_fields_total(actor, order)
+}
+
+/// Whether the policies of sales.Order let the actor create the record.
+pub fn can_create_order(actor: &crate::access::Actor, order: &Order) -> bool {
+    crate::access::in_tenant(actor, order) && order_policy_create_update_delete(actor, order)
+}
+
+/// Whether the policies of sales.Order let the actor update the record.
+pub fn can_update_order(actor: &crate::access::Actor, order: &Order) -> bool {
+    crate::access::in_tenant(actor, order) && order_policy_create_update_delete(actor, order)
+}
+
+/// Whether the policies of sales.Order let the actor delete the record.
+pub fn can_delete_order(actor: &crate::access::Actor, order: &Order) -> bool {
+    crate::access::in_tenant(actor, order) && order_policy_create_update_delete(actor, order)
+}
+
+/// The policy sales.Order.policy[read]: actor.is(crm.Clerk) || (actor.is(Customer) && customer == actor.account)
+fn order_policy_read(actor: &crate::access::Actor, order: &Order) -> bool {
+    crate::access::is_clerk(actor) || (crate::access::is_customer(actor) && (actor.account == Some(order.customer.id)))
+}
+
+/// The policy sales.Order.policy[create,update,delete]: actor.is(crm.Clerk)
+fn order_policy_create_update_delete(actor: &crate::access::Actor, _order: &Order) -> bool {
+    crate::access::is_clerk(actor)
+}
+
+/// The policy sales.Order.policy[read fields total]: actor.is(crm.Clerk) || (actor.is(Customer) && status != draft)
+fn order_policy_read_fields_total(actor: &crate::access::Actor, order: &Order) -> bool {
+    crate::access::is_clerk(actor) || (crate::access::is_customer(actor) && (order.status != OrderStatus::Draft))
+}
+
 /// The event sales.OrderPlaced.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct OrderPlaced {
@@ -162,8 +319,11 @@ pub struct PaymentReceived {
 }
 
 /// The action sales.PlaceOrder. It returns the events it emits.
-pub fn place_order(order: &mut Order) -> Result<Vec<Event>, Error> {
+pub fn place_order(actor: &crate::access::Actor, order: &mut Order) -> Result<Vec<Event>, Error> {
     let mut events = Vec::new();
+    if !can_place_order(actor, order) {
+        return Err(Error::Forbidden { action: "PlaceOrder" });
+    }
     if !((order.lines.len() as i64) > 0) {
         return Err(Error::EmptyOrder);
     }
@@ -178,9 +338,22 @@ pub fn place_order(order: &mut Order) -> Result<Vec<Event>, Error> {
     Ok(events)
 }
 
+/// Whether the actor may run sales.PlaceOrder, including the update check of sales.Order.
+pub fn can_place_order(actor: &crate::access::Actor, order: &Order) -> bool {
+    can_update_order(actor, order) && place_order_policy(actor, order)
+}
+
+/// The policy sales.PlaceOrder.policy[]: actor.is(Customer) && customer == actor.account
+fn place_order_policy(actor: &crate::access::Actor, order: &Order) -> bool {
+    crate::access::is_customer(actor) && (actor.account == Some(order.customer.id))
+}
+
 /// The action sales.Cancel. It returns the events it emits.
-pub fn cancel(order: &mut Order, _reason: Option<String>) -> Result<Vec<Event>, Error> {
+pub fn cancel(actor: &crate::access::Actor, order: &mut Order, reason: Option<String>) -> Result<Vec<Event>, Error> {
     let events = Vec::new();
+    if !can_cancel(actor, order, reason.clone()) {
+        return Err(Error::Forbidden { action: "Cancel" });
+    }
     match order.status {
         OrderStatus::Draft | OrderStatus::Placed if !order.paid_at.is_some() => {
             order.status = OrderStatus::Cancelled;
@@ -188,6 +361,16 @@ pub fn cancel(order: &mut Order, _reason: Option<String>) -> Result<Vec<Event>, 
         _ => return Err(Error::InvalidTransition { action: "Cancel", from: format!("{:?}", order.status) }),
     }
     Ok(events)
+}
+
+/// Whether the actor may run sales.Cancel, including the update check of sales.Order.
+pub fn can_cancel(actor: &crate::access::Actor, order: &Order, reason: Option<String>) -> bool {
+    can_update_order(actor, order) && cancel_policy(actor, order, reason.clone())
+}
+
+/// The policy sales.Cancel.policy[]: actor.is(crm.Clerk)
+fn cancel_policy(actor: &crate::access::Actor, _order: &Order, _reason: Option<String>) -> bool {
+    crate::access::is_clerk(actor)
 }
 
 /// Applies the transitions of sales.OrderFlow that PaymentReceived triggers.

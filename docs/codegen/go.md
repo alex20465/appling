@@ -3,7 +3,7 @@ title: Go
 description: Generate plain Go packages for the domain and behavior layers of a model, ready to put behind your own storage and HTTP code.
 ---
 
-The `@appling/codegen-go` extension writes one Go package per module, without a framework. It covers what Go can express without choosing libraries for you: types, invariants, derived fields, actions with their state transitions, errors and events. The rest becomes [registry](registry.md) tasks.
+The `@appling/codegen-go` extension writes one Go package per module, without a framework. It covers what Go can express without choosing libraries for you: types, invariants, derived fields, actions with their state transitions, errors and events, and access: actors, roles, the tenant and the policies as pure checks. The rest becomes [registry](registry.md) tasks.
 
 ## Requirements
 
@@ -29,9 +29,11 @@ The Go module path is the project name: the `name` option, or the output folder'
 | `value`, `event` | a struct with JSON tags |
 | `entity` | a struct with an `ID int64`, `New<Entity>()` setting the defaults, one method per derived field, and `Validate() error` checking the invariants |
 | field types | `string`, `int64`, `bool`, `decimal.Decimal`, `time.Time`, `time.Duration`; enums and value types by name, entities as `*Entity`, lists as slices, optional fields as pointers |
-| `action` | a function `<Action>(entity, inputs...) ([]any, error)`: preconditions return the declared errors, the state transition returns an error wrapping `ErrInvalidTransition` when the state does not allow it, effects change the record, and emitted events are returned |
+| `action` | a function `<Action>(entity, inputs...) ([]any, error)`: preconditions return the declared errors, the state transition returns an error wrapping `ErrInvalidTransition` when the state does not allow it, effects change the record, and emitted events are returned. When a policy applies, it takes the actor first and returns an error wrapping `access.ErrForbidden` unless `Can<Action>` holds |
 | `machine` | transitions on an event become `<Machine>On<Event>(event) ([]any, error)` |
 | `errors` | `var Err<Name> = errors.New(...)` |
+| `role`, `actor`, `tenant` | the `access` package, see [Access](#access) |
+| `policy` | a function per policy and the `Can...` checks in `policies.go`, see [Policies](#policies) |
 | invariants, policies, transitions, preconditions | skipped tests in `<module>_test.go` |
 
 Expressions are translated with their types: decimals use `Add`, `GreaterThanOrEqual` and friends, times use `Before`, `After` and `Add`, `sum(lines.map(l, l.amount))` becomes a loop, and `has(field)` checks the pointer.
@@ -63,8 +65,11 @@ func (o *Order) Total() decimal.Decimal {
 }
 
 // PlaceOrder is the action sales.PlaceOrder. It returns the events it emits.
-func PlaceOrder(order *Order) ([]any, error) {
+func PlaceOrder(actor access.Actor, order *Order) ([]any, error) {
 	var events []any
+	if !CanPlaceOrder(actor, order) {
+		return nil, fmt.Errorf("%w: PlaceOrder", access.ErrForbidden)
+	}
 	if !(int64(len(order.Lines)) > 0) {
 		return nil, ErrEmptyOrder
 	}
@@ -80,9 +85,49 @@ func PlaceOrder(order *Order) ([]any, error) {
 }
 ```
 
+## Access
+
+[Roles, actors and the tenant](../language/access.md) become the package `internal/access` (`accessctl` when the model has a module named `access`). It imports none of the model's packages, so every module can import it without a cycle; that is why fields holding records hold their ID.
+
+| Model | Go |
+|---|---|
+| `role` | a `Role` constant (`RoleClerk`) and `Is<Role>(actor Actor) bool`: the actor carries the role and the role's condition holds |
+| `actor` | an `ActorType` constant (`ActorShopper`) and `New<Actor>()`, an `Actor` with the declared roles |
+| actor fields, fields of the `is` entity | fields of `Actor`, pointers that are nil for actors without them; records as `*int64` IDs |
+| `tenant` | `Actor.Tenant`, the ID of the tenant's entity, the `Tenanted` interface and `InTenant(actor, record)`; every entity that reaches the tenant's entity through single references gets `TenantID() (int64, bool)` |
+
+A role or actor name that is not unique across modules is prefixed with its module path (`RoleCrmClerk`). An actor without a tenant (`Tenant` nil) acts across tenants. Actor fields typed with an enum or a value type are not generated yet; each is a registry task.
+
+## Policies
+
+Each policy becomes an unexported function in its module's `policies.go`, such as `orderPolicyRead(actor, order)`, translated like any expression: `actor.is(Clerk)` calls `access.IsClerk(actor)`, `actor.account` reads `actor.Account`, and `customer == actor.account` compares IDs with `access.Same`. The exported checks combine them with `&&`:
+
+| Element | Checks |
+|---|---|
+| `entity` with policies | `Can<Op><Entity>(actor, record)` for `Read`, `Create`, `Update` and `Delete`, false for an operation no policy grants; `Can<Op><Entity><Field>` for the fields a field policy narrows. A record in the tenant also needs `InTenant` |
+| `action` | `Can<Action>(actor, record, inputs...)`: the update check of its entity (or the tenant check when the entity has no policies) and the action's own policies; the action calls it first |
+| `query` | `Can<Query>(actor, record)`: the read check of its entity and the query's own policies, for the storage layer to apply per record |
+| `usecase` | `Can<UseCase>(actor, params...)` from its own policies |
+
+Actions without a policy on themselves or their entity, and outside a tenant, take no actor and check nothing. A policy whose condition has no Go translation returns false, so it grants nothing until you write it; the registry lists it as a task.
+
+```go
+// CanPlaceOrder reports whether the actor may run sales.PlaceOrder, including the update check of sales.Order.
+func CanPlaceOrder(actor access.Actor, order *Order) bool {
+	return CanUpdateOrder(actor, order) && placeOrderPolicy(actor, order)
+}
+
+// placeOrderPolicy is the policy sales.PlaceOrder.policy[]: actor.is(Customer) && customer == actor.account
+func placeOrderPolicy(actor access.Actor, order *Order) bool {
+	return access.IsCustomer(actor) && access.Same(actor.Account, order.Customer.ID)
+}
+```
+
+The tests of the policies stay skipped, with writing their bodies as registry tasks.
+
 ## What becomes a task
 
-Queries, projections, interfaces, pages, flows, messages, use cases, external systems, jobs and policies: they need storage, HTTP and scheduling decisions that the model leaves open. Also derived fields, defaults, preconditions, guards and effects that have no Go translation, such as expressions over `actor`, and effects that create records. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
+Queries, projections, interfaces, pages, flows, messages, use cases, external systems and jobs: they need storage, HTTP and scheduling decisions that the model leaves open. Queries and use cases with policies still get their `Can...` check. Also derived fields, defaults, preconditions, guards, policies and effects that have no Go translation, such as `actor` outside a policy or a role, and effects that create records. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
 
 ## Run the generated project
 

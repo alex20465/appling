@@ -8,10 +8,10 @@
   },
   {
     "kind": "Actor",
-    "generated": 0,
+    "generated": 3,
     "partial": 0,
-    "todo": 3,
-    "tasks": 3
+    "todo": 0,
+    "tasks": 0
   },
   {
     "kind": "CreateEffect",
@@ -85,10 +85,10 @@
   },
   {
     "kind": "Field",
-    "generated": 39,
+    "generated": 40,
     "partial": 0,
-    "todo": 1,
-    "tasks": 1
+    "todo": 0,
+    "tasks": 0
   },
   {
     "kind": "Flow",
@@ -172,7 +172,7 @@
     "generated": 0,
     "partial": 7,
     "todo": 0,
-    "tasks": 14
+    "tasks": 7
   },
   {
     "kind": "Projection",
@@ -191,16 +191,16 @@
   {
     "kind": "Query",
     "generated": 0,
-    "partial": 0,
-    "todo": 2,
+    "partial": 1,
+    "todo": 1,
     "tasks": 2
   },
   {
     "kind": "Role",
-    "generated": 0,
+    "generated": 3,
     "partial": 0,
-    "todo": 3,
-    "tasks": 3
+    "todo": 0,
+    "tasks": 0
   },
   {
     "kind": "SetEffect",
@@ -211,10 +211,10 @@
   },
   {
     "kind": "Tenant",
-    "generated": 0,
+    "generated": 1,
     "partial": 0,
-    "todo": 1,
-    "tasks": 1
+    "todo": 0,
+    "tasks": 0
   },
   {
     "kind": "Transition",
@@ -226,8 +226,8 @@
   {
     "kind": "UseCase",
     "generated": 0,
-    "partial": 0,
-    "todo": 2,
+    "partial": 1,
+    "todo": 1,
     "tasks": 2
   },
   {
@@ -239,9 +239,9 @@
   },
   {
     "kind": "total",
-    "generated": 94,
-    "partial": 16,
-    "todo": 26,
-    "tasks": 51
+    "generated": 102,
+    "partial": 18,
+    "todo": 16,
+    "tasks": 36
   }
 ]

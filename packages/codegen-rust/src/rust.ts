@@ -1,12 +1,22 @@
 import type { ExprData, GraphNode } from '@appling/model';
 
-type Kind = 'decimal' | 'time' | 'duration' | 'int' | 'string' | 'bool' | 'list' | 'null' | 'other';
+type Kind = 'decimal' | 'time' | 'duration' | 'int' | 'string' | 'bool' | 'list' | 'null' | 'other' | 'id';
 
 interface Rust {
     code: string;
     kind: Kind;
     /** The code is an `Option` (an optional field), so reading the value needs `.unwrap()`. */
     option?: boolean;
+    /** How to read the value when it is not `code.unwrap()`, such as `actor.active.clone().unwrap_or_default()`. */
+    read?: string;
+}
+
+/** The generated access module: the actor, role and tenant checks that policies and role conditions call. */
+export interface RustAccess {
+    /** The module name, such as `access`. */
+    module: string;
+    /** The Rust name of a role or actor, such as `Clerk`, prefixed with its module when the last name is not unique. */
+    name(qn: string): string;
 }
 
 export interface RustScope {
@@ -16,11 +26,14 @@ export interface RustScope {
     /** The Rust module the code is written in, to qualify names from other modules. */
     module: string;
     vars?: Map<string, Kind>;
+    /** The variable holding the current `&Actor`, in policies and role conditions; without it `actor` and `tenant` do not translate. */
+    actor?: string;
+    access?: RustAccess;
 }
 
 const UNITS: { [unit: string]: string } = { ms: 'milliseconds', s: 'seconds', m: 'minutes', h: 'hours', d: 'days' };
 
-/** Translates an expression to Rust, or returns undefined when Rust code cannot say it, such as a policy over `actor`. */
+/** Translates an expression to Rust, or returns undefined when Rust code cannot say it, such as `actor` outside a policy. */
 export function rustExpr(expr: ExprData, scope: RustScope): string | undefined {
     const result = translate(expr, scope);
     return result && value(result);
@@ -44,7 +57,9 @@ function translate(expr: ExprData, scope: RustScope): Rust | undefined {
         }
         case 'BinaryExpr': return binary(expr, scope);
         case 'NameExpr': return expr.call ? call(expr, scope) : name(expr, scope);
-        case 'MemberExpr': return expr.call ? method(expr, scope) : member(expr, scope);
+        case 'MemberExpr':
+            if (isActor(expr.receiver!, scope)) return actorMember(expr, scope);
+            return expr.call ? method(expr, scope) : member(expr, scope);
         case 'IndexExpr': {
             const [list, index] = [translate(expr.receiver!, scope), translate(expr.index!, scope)];
             return list && index ? { code: `${value(list)}[${value(index)} as usize]`, kind: kindOf(expr.type) } : undefined;
@@ -68,6 +83,11 @@ function binary(expr: ExprData, scope: RustScope): Rust | undefined {
         return { code: `${subject.code}.${op === '==' ? 'is_none' : 'is_some'}()`, kind: 'bool' };
     }
     if (op === '&&' || op === '||') return { code: `${wrap(value(left))} ${op} ${wrap(value(right))}`, kind: 'bool' };
+    if (left.kind === 'id' || right.kind === 'id') {
+        const same = sameRecord(left, right);
+        if (!same || (op !== '==' && op !== '!=')) return undefined;
+        return { code: op === '!=' ? `!${wrap(same)}` : same, kind: 'bool' };
+    }
     const decimal = left.kind === 'decimal' || right.kind === 'decimal';
     const [a, b] = decimal ? [toDecimal(left), toDecimal(right)] : [value(left), value(right)];
     const comparison = ['==', '!=', '<', '<=', '>', '>='].includes(op);
@@ -78,6 +98,8 @@ function binary(expr: ExprData, scope: RustScope): Rust | undefined {
 function name(expr: ExprData, scope: RustScope): Rust | undefined {
     const id = expr.name!;
     if (scope.vars?.has(id)) return { code: id, kind: scope.vars.get(id)! };
+    if (isActor(expr, scope)) return scope.actor ? { code: `${scope.actor}.id`, kind: 'id', option: true } : undefined;
+    if (expr.target && scope.node(expr.target)?.kind === 'Tenant') return scope.actor ? { code: `${scope.actor}.tenant`, kind: 'id', option: true } : undefined;
     if (!expr.target) {
         if (id === 'this') return scope.self ? { code: scope.self, kind: 'other' } : undefined;
         if (id === 'now') return { code: 'chrono::Utc::now()', kind: 'time' };
@@ -95,7 +117,7 @@ function name(expr: ExprData, scope: RustScope): Rust | undefined {
 function member(expr: ExprData, scope: RustScope): Rust | undefined {
     const receiver = translate(expr.receiver!, scope);
     const target = expr.target ? scope.node(expr.target) : undefined;
-    if (!receiver || target?.kind !== 'Field' || !isRecordField(target, scope)) return undefined;
+    if (!receiver || receiver.kind === 'id' || target?.kind !== 'Field' || !isRecordField(target, scope)) return undefined;
     return { code: `${value(receiver)}.${expr.member}${target.data.derived ? '()' : ''}`, kind: kindOf(expr.type), option: optional(target) };
 }
 
@@ -149,11 +171,69 @@ function toDecimal(rust: Rust): string {
 }
 
 function value(rust: Rust): string {
-    return rust.option ? `${rust.code}.unwrap()` : rust.code;
+    return rust.read ?? (rust.option ? `${rust.code}.unwrap()` : rust.code);
+}
+
+/** The name `actor` itself, not a closure variable or a field that happens to be called so. */
+function isActor(expr: ExprData, scope: RustScope): boolean {
+    return expr.$type === 'NameExpr' && expr.name === 'actor' && !expr.target && !expr.call && !scope.vars?.has('actor');
+}
+
+/**
+ * `actor.is(X)` calls the role check `is_x` or compares the actor type; `actor.field` reads the field of the
+ * `Actor`, an `Option` that is `None` for actors without it. Fields that hold records hold their id.
+ */
+function actorMember(expr: ExprData, scope: RustScope): Rust | undefined {
+    const { actor, access } = scope;
+    if (!actor || !access) return undefined;
+    if (expr.call) {
+        const target = expr.member === 'is' && expr.args?.[0]?.target ? scope.node(expr.args[0].target) : undefined;
+        if (target?.kind === 'Role') return { code: `${accessPath(`is_${snake(access.name(target.qn))}`, scope)}(${actor})`, kind: 'bool' };
+        if (target?.kind === 'Actor') return { code: `${actor}.actor_type == ${accessPath(`ActorType::${access.name(target.qn)}`, scope)}`, kind: 'bool' };
+        return undefined;
+    }
+    const target = expr.target ? scope.node(expr.target) : undefined;
+    const type = target?.kind === 'Field' ? target.data.type as { primitive?: string, decl?: string, many?: boolean } : undefined;
+    if (!type) return undefined;
+    const code = `${actor}.${expr.member}`;
+    if (type.many) return { code, kind: 'list' };
+    if (type.decl) return scope.node(type.decl)?.kind === 'Entity' ? { code, kind: 'id', option: true } : undefined;
+    return { code, kind: kindOf(type.primitive!), option: true, read: `${code}.clone().unwrap_or_default()` };
+}
+
+/** Whether a record id of the actor (or the tenant) refers to a record: `actor.account == Some(order.customer.id)`. */
+function sameRecord(left: Rust, right: Rust): string | undefined {
+    if (left.kind === 'id' && right.kind === 'id') return `(${left.code}.is_some() && ${left.code} == ${right.code})`;
+    const [id, record] = left.kind === 'id' ? [left, right] : [right, left];
+    if (record.kind !== 'other') return undefined;
+    return record.option ? `(${id.code}.is_some() && ${id.code} == ${record.code}.as_ref().map(|r| r.id))` : `${id.code} == Some(${record.code}.id)`;
+}
+
+/** A path into the access module, qualified outside it. */
+function accessPath(name: string, scope: RustScope): string {
+    return scope.access!.module === scope.module ? name : `crate::${scope.access!.module}::${name}`;
 }
 
 function wrap(code: string): string {
-    return /^[\w.:]+(\(.*\))?$/.test(code) || /^\(.*\)$/.test(code) || /^".*"$/.test(code) || /^\[.*\]$/.test(code) ? code : `(${code})`;
+    return atomic(code) ? code : `(${code})`;
+}
+
+/**
+ * Whether the code needs no parentheses as an operand: paths, calls and fields (`a::b(x).c`), one bracketed
+ * group or a string. Brackets are matched, so `f(a) && g(b)` is not atomic.
+ */
+function atomic(code: string): boolean {
+    if (/^"([^"\\]|\\.)*"$/.test(code)) return true;
+    let depth = 0;
+    for (let i = 0; i < code.length; i++) {
+        const c = code[i];
+        if (c === '"') {
+            for (i++; i < code.length && code[i] !== '"'; i++) if (code[i] === '\\') i++;
+        } else if ('([{'.includes(c)) depth++;
+        else if (')]}'.includes(c)) depth--;
+        else if (depth === 0 && !/[\w.:]/.test(c)) return false;
+    }
+    return depth === 0;
 }
 
 function isRecordField(field: GraphNode, scope: RustScope): boolean {
