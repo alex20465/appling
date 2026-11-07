@@ -1,7 +1,7 @@
 import { AstUtils, WorkspaceCache, type AstNode, type ValidationAcceptor, type ValidationChecks } from 'langium';
 import {
-    isAction, isBinaryExpr, isBoolExpr, isEntity, isMemberExpr, isNameExpr, isEnum, isMachine, isMigration, isModule, isValueType,
-    type ApplingAstType, type Endpoint, type Machine, type Migration, type MigrationStep, type Model,
+    isAction, isBinaryExpr, isBoolExpr, isEntity, isExternal, isExternalOperation, isMemberExpr, isNameExpr, isEnum, isMachine, isMigration, isModule, isValueType,
+    type ApplingAstType, type Endpoint, type External, type ExternalKey, type Interface, type Machine, type Migration, type MigrationStep, type Model,
     type Expr, type Policy, type Projection, type RenameStep, type SetEffect
 } from './generated/ast.js';
 import { namedPaths, projectionSourceEntity } from './appling-scope.js';
@@ -29,7 +29,10 @@ export function registerValidationChecks(services: ApplingServices): void {
         Policy: validator.checkPolicyScope,
         Projection: validator.checkProjectionFields,
         Endpoint: validator.checkEndpointShape,
-        Migration: validator.checkMigration
+        Migration: validator.checkMigration,
+        ExternalKey: validator.checkExternalKey,
+        External: validator.checkExternalUsed,
+        Interface: validator.checkInterfaceSource
     };
     services.validation.ValidationRegistry.register(checks, validator);
 }
@@ -39,8 +42,12 @@ export class ApplingValidator {
     /** The machines of the workspace by the field they govern, rebuilt when a document changes. */
     private readonly machines: WorkspaceCache<string, Map<AstNode, Machine[]>>;
 
+    /** The externals some reference names, itself or through one of its operations, rebuilt when a document changes. */
+    private readonly usedExternals: WorkspaceCache<string, Set<AstNode>>;
+
     constructor(private readonly services: ApplingServices) {
         this.machines = new WorkspaceCache(services.shared);
+        this.usedExternals = new WorkspaceCache(services.shared);
     }
 
     checkLayerReferences(model: Model, accept: ValidationAcceptor): void {
@@ -128,6 +135,41 @@ export class ApplingValidator {
         if (endpoint.target.ref?.$type === 'Query' && !endpoint.projection) {
             accept('error', 'An endpoint exposes query results only through a projection: add "as <Projection>".', { node: endpoint, property: 'target' });
         }
+    }
+
+    checkExternalKey(key: ExternalKey, accept: ValidationAcceptor): void {
+        if (!key.type.primitive || key.type.many) {
+            accept('error', `A ${key.kind} has a primitive type, not ${key.type.$cstNode?.text ?? 'this one'}.`, { node: key, property: 'type' });
+        }
+    }
+
+    checkExternalUsed(external: External, accept: ValidationAcceptor): void {
+        if (external.keys.length === 0 || this.externalsInUse().has(external)) return;
+        accept('warning', `External ${external.name} declares settings or secrets, but nothing calls or names it.`, { node: external, property: 'name' });
+    }
+
+    checkInterfaceSource(api: Interface, accept: ValidationAcceptor): void {
+        if (api.protocol !== 'webhook') return;
+        if (!api.source) {
+            accept('error', `A webhook interface names its vendor: "interface webhook ${api.name} from <External>".`, { node: api, property: 'name' });
+        }
+        if (api.endpoints.length === 0) accept('warning', `Webhook interface ${api.name} has no endpoints.`, { node: api, property: 'name' });
+    }
+
+    private externalsInUse(): Set<AstNode> {
+        return this.usedExternals.get('used', () => {
+            const used = new Set<AstNode>();
+            for (const doc of this.services.shared.workspace.LangiumDocuments.all) {
+                for (const node of AstUtils.streamAst(doc.parseResult.value)) {
+                    for (const ref of AstUtils.streamReferences(node)) {
+                        const target = AstUtils.getReferenceNodes(ref.reference)[0];
+                        if (isExternal(target)) used.add(target);
+                        if (isExternalOperation(target)) used.add(target.$container);
+                    }
+                }
+            }
+            return used;
+        });
     }
 
     checkMigration(migration: Migration, accept: ValidationAcceptor): void {

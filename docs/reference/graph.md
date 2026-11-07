@@ -192,7 +192,7 @@ Named elements:
 | `Machine`, `Job` | `machine`, `job` |
 | `Query` | `query` |
 | `Projection`, `ProjectionField` | `projection` and its fields |
-| `External`, `ExternalOperation` | `external` and its `op` |
+| `External`, `ExternalKey`, `ExternalOperation` | `external`, its `setting` and `secret` keys (`props.kind` is `setting` or `secret`) and its `op` |
 | `UseCase` | `usecase` |
 | `Interface` | `interface` |
 | `Page`, `Navigation`, `Flow`, `Messages` | `page`, `navigation`, `flow`, `messages` |

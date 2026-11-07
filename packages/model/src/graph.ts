@@ -66,7 +66,7 @@ export interface Dependency {
 /** Element kinds that become graph nodes. Everything else folds into the props of the nearest element. */
 const NAMED = new Set([
     'Module', 'Role', 'Actor', 'Tenant', 'Enum', 'EnumLiteral', 'ValueType', 'Entity', 'Field', 'Event', 'Action',
-    'Param', 'ErrorDecl', 'Machine', 'Job', 'Query', 'Projection', 'ProjectionField', 'External', 'ExternalOperation',
+    'Param', 'ErrorDecl', 'Machine', 'Job', 'Query', 'Projection', 'ProjectionField', 'External', 'ExternalKey', 'ExternalOperation',
     'UseCase', 'Interface', 'Page', 'Navigation', 'Flow', 'Messages', 'Migration'
 ]);
 

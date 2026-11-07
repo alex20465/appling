@@ -48,8 +48,8 @@ module sales {
 | Cross cutting | `module`, `export`, `role`, `actor`, `tenant`, `migration` |
 | L1 Domain | `enum`, `value`, `entity` (or `entity link` for a secondary entity such as a join record) with fields, `invariant`, `policy` |
 | L2 Behavior | `event`, `action`, `machine`, `job` |
-| L3 Application | `query`, `projection`, `external`, `usecase` |
-| L4 Interfaces | `interface <protocol>` with endpoints |
+| L3 Application | `query`, `projection`, `external` (with `op`, `setting` and `secret` keys), `usecase` |
+| L4 Interfaces | `interface <protocol>` with endpoints; `auth <scheme> from <External>` and `interface webhook <Name> from <External>` name the vendor |
 | L5 Experience | `page` with `list`, `detail`, `form`; `navigation`, `flow`, `messages` |
 
 A module or declaration may state its relevance to the business before its opening brace: `core`, `supporting` or `peripheral` (`entity Quote core { ... }`, `module observability peripheral { ... }`). A module's level applies to its members unless they state their own.

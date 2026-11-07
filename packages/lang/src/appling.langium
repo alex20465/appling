@@ -161,7 +161,11 @@ ProjectionField:
     name=Ident ('=' value=Expr)? ('does' does=(TEXT_BLOCK | STRING))?;
 
 External:
-    'external' name=Ident relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{' operations+=ExternalOperation* '}';
+    'external' name=Ident relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{' (operations+=ExternalOperation | keys+=ExternalKey)* '}';
+
+// What the vendor behind an external needs: a typed setting or secret, never its value.
+ExternalKey:
+    kind=('setting' | 'secret') name=Ident ':' type=TypeRef ('does' does=(TEXT_BLOCK | STRING))?;
 
 ExternalOperation:
     'op' name=Ident '(' (params+=Param (',' params+=Param)*)? ')'
@@ -194,8 +198,8 @@ type Callable = Action | Query | UseCase | ExternalOperation;
 // L4 Interfaces
 
 Interface:
-    'interface' protocol=Ident name=Ident relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{'
-        ('auth' auth=Ident)?
+    'interface' protocol=Ident name=Ident ('from' source=[External:QualifiedName])? relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{'
+        ('auth' auth=Ident ('from' authBy=[External:QualifiedName])?)?
         ('limit' rateLimit=NUMBER 'per' rateUnit=('second' | 'minute' | 'hour'))?
         ('cors' origins+=STRING (',' origins+=STRING)*)?
         endpoints+=Endpoint*
@@ -308,7 +312,8 @@ Ident returns string:
     | 'page' | 'timeout' | 'sort' | 'when' | 'create' | 'read' | 'update' | 'delete' | 'per'
     | 'flow' | 'actor' | 'tenant' | 'set' | 'op' | 'human' | 'system' | 'service' | 'asc'
     | 'desc' | 'remove' | 'rename' | 'retype' | 'roles' | 'second' | 'minute' | 'hour' | 'link'
-    | 'core' | 'supporting' | 'peripheral' | 'default' | 'limit' | 'messages' | 'migration' | 'is' | 'does';
+    | 'core' | 'supporting' | 'peripheral' | 'default' | 'limit' | 'messages' | 'migration' | 'is' | 'does'
+    | 'setting' | 'secret';
 
 hidden terminal WS: /\s+/;
 terminal ID: /[_a-zA-Z][\w]*/;

@@ -72,6 +72,26 @@ external Payments {
 
 A use case calls an operation by its path: `Payments.Charge(order.total)`.
 
+### Settings and secrets
+
+An external also declares what the vendor behind it needs to work: the keys, never their values. Values and where they come from (environment variables, a vault, hosts) stay out of the model.
+
+```appling
+external Clerk {
+  setting region: String does "The region of the Clerk instance"
+  secret secret_key: String does "API keys page of the Clerk dashboard"
+  op GetUser (id: String) returns String
+}
+```
+
+| Part | Meaning |
+|---|---|
+| `setting name: Type` | A configuration value the vendor needs |
+| `secret name: Type` | A credential; the graph marks it with `kind: "secret"` |
+| `does "..."` | Where to find or how to choose the value, optional |
+
+The type is a primitive (`String`, `Int`, `Bool`, `Duration`, ...), optional with `?`; anything else is an error: `A secret has a primitive type, not String[].` Expressions do not read keys. An external that declares keys but that no step calls and no interface names gets a warning: `External Clerk declares settings or secrets, but nothing calls or names it.` Interfaces name an external with [`auth <scheme> from <External>`](interfaces.md#vendors) or `interface webhook <Name> from <External>`.
+
 ## Use cases
 
 A use case is the single process concept: it orchestrates actions, queries, external operations and events into one application level operation, which may run for a long time.

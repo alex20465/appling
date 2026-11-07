@@ -120,3 +120,35 @@ test('a union of actor field types rejects what none of them fits', async () => 
     expect(result).toContain('Operator "==" does not apply to String and Customer | Vendor.');
     expect(result).toContain('Customer | Vendor has no field "missing".');
 });
+
+async function warningsOf(text: string): Promise<string[]> {
+    const documents = await build({ 'test.appling': text });
+    return documents.flatMap(d => d.diagnostics ?? []).filter(d => d.severity === 2).map(d => d.message);
+}
+
+test('a setting or secret has a primitive type', async () => {
+    expect(await check('module m { enum Region { eu us } external Mail { secret key: String[] setting region: Region op Send () } usecase U { step Mail.Send() } }'))
+        .toEqual(['A secret has a primitive type, not String[].', 'A setting has a primitive type, not Region.']);
+    expect(await check('module m { external Mail { secret key: String setting timeout: Duration? op Send () } usecase U { step Mail.Send() } }')).toEqual([]);
+});
+
+test('auth and interfaces name an external', async () => {
+    expect(await check('module m { interface rest Api { auth bearer from Missing } }'))
+        .toContain("Could not resolve reference to External named 'Missing'.");
+    expect(await check('module m { query Q from Missing { } interface rest Api from Q { } }'))
+        .toContain("Could not resolve reference to External named 'Q'.");
+});
+
+test('a webhook interface names its vendor and has endpoints', async () => {
+    expect(await check('module m { action A { } interface webhook Events { POST "/hooks" -> A } }'))
+        .toEqual(['A webhook interface names its vendor: "interface webhook Events from <External>".']);
+    expect(await warningsOf('module m { external Mail { secret key: String } interface webhook Events from Mail { } }'))
+        .toContain('Webhook interface Events has no endpoints.');
+});
+
+test('an external with settings or secrets is used', async () => {
+    const message = 'External Mail declares settings or secrets, but nothing calls or names it.';
+    expect(await warningsOf('module m { external Mail { secret key: String op Send () } }')).toContain(message);
+    expect(await warningsOf('module m { external Mail { secret key: String op Send () } usecase U { step Mail.Send() } }')).not.toContain(message);
+    expect(await warningsOf('module m { external Mail { secret key: String } interface rest Api { auth bearer from Mail } }')).not.toContain(message);
+});
