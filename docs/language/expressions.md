@@ -45,7 +45,7 @@ Parentheses group as usual.
 
 ## Types
 
-Every expression has a type: a primitive (`String`, `Text`, `Int`, `Decimal`, `Money`, `Bool`, `Date`, `DateTime`, `Duration`, `File`, `Uuid`), an enum, a value type, an entity, a list of one of these, or the current actor. Any of them can be optional, written with `?`.
+Every expression has a type: a primitive (`String`, `Text`, `Int`, `Decimal`, `Money`, `Bool`, `Date`, `DateTime`, `Duration`, `File`, `Uuid`), an enum, a value type, an entity, a list of one of these, or the current actor. Any of them can be optional, written with `?`. An actor field that actors declare with different types has the union of those types, such as `Customer | Vendor` (see [actors](access.md#actors)); a comparison, an assignment or a condition accepts it when one of the types fits.
 
 | Group | Types |
 |---|---|

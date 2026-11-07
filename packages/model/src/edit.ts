@@ -167,7 +167,7 @@ function renameSplices(workspace: Workspace, node: AstNode, name: string): Splic
                 if (depth >= 0 && segment?.text === old) splices.push(leafSplice(segment, name));
             }
         }
-        for (const [expr, target] of typer.targets) {
+        for (const [expr, target] of [...typer.targets].flatMap(([e, t]) => (typer.candidates.get(e) ?? [t]).map(c => [e, c] as const))) {
             let depth = depthBelow(target, renamed);
             if (depth < 0) continue;
             let step: AstNode | undefined = expr;

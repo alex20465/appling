@@ -14,6 +14,8 @@ export type Type = (
     | { kind: 'decl'; decl: Entity | ValueType | Enum }
     | { kind: 'list'; item: Type }
     | { kind: 'actor' }
+    /** `actor.f` when actors declare `f` with different types: any of them. */
+    | { kind: 'union'; types: Type[] }
     | { kind: 'null' }
     | { kind: 'error' }
 ) & { optional?: boolean };
@@ -64,6 +66,8 @@ export class ExpressionTyper {
     readonly types = new Map<Expr, Type>();
     /** For names, members and effect assignments: the element they stand for. */
     readonly targets = new Map<AstNode, AstNode>();
+    /** For members that stand for more than one field (`actor.f` declared by several actors): every one, the first is in `targets`. */
+    readonly candidates = new Map<AstNode, AstNode[]>();
     readonly problems: Problem[] = [];
     private readonly actors: Actor[];
     private readonly tenants: Tenant[];
@@ -185,12 +189,14 @@ export class ExpressionTyper {
         if (qualified) return qualified;
         const receiver = this.infer(expr.receiver, env);
         if (receiver.kind === 'error') return ERROR;
-        const fields = this.fieldsOf(receiver);
-        const field = fields?.find(f => f.name === expr.member);
-        if (!field) return this.problem(expr, `${show(receiver)} has no field "${expr.member}".`, 'member');
-        this.targets.set(expr, field);
-        const partial = receiver.kind === 'actor' && this.actors.some(a => !actorFields(a).some(f => f.name === expr.member));
-        const type = typeOfRef(field.type);
+        const sources = this.fieldSources(receiver);
+        const fields = [...new Set(sources?.flatMap(list => list.filter(f => f.name === expr.member)))];
+        if (!fields.length) return this.problem(expr, `${show(receiver)} has no field "${expr.member}".`, 'member');
+        this.targets.set(expr, fields[0]);
+        if (fields.length > 1) this.candidates.set(expr, fields);
+        // Optional when some actor or some type of a union has no such field.
+        const partial = sources!.some(list => !list.some(f => f.name === expr.member));
+        const type = union(fields.map(f => typeOfRef(f.type)));
         return receiver.optional || partial ? { ...type, optional: true } : type;
     }
 
@@ -301,9 +307,14 @@ export class ExpressionTyper {
         return expr.member === 'filter' ? { kind: 'list', item } : primitive('Bool');
     }
 
-    private fieldsOf(type: Type): Field[] | undefined {
-        if (type.kind === 'actor') return this.actors.flatMap(actorFields);
-        if (type.kind === 'decl' && !isEnum(type.decl)) return type.decl.fields;
+    /** The field lists a member of the type may come from: one per actor, one per type of a union. */
+    private fieldSources(type: Type): Field[][] | undefined {
+        if (type.kind === 'actor') return this.actors.map(actorFields);
+        if (type.kind === 'decl' && !isEnum(type.decl)) return [type.decl.fields];
+        if (type.kind === 'union') {
+            const lists = type.types.map(t => this.fieldSources(t));
+            return lists.some(l => l === undefined) ? undefined : lists.flatMap(l => l!);
+        }
         return undefined;
     }
 
@@ -388,6 +399,10 @@ export function show(type: Type): string {
         case 'primitive': return type.name + optional;
         case 'decl': return type.decl.name + optional;
         case 'list': return `${show(type.item)}[]${optional}`;
+        case 'union': {
+            const types = type.types.map(show).join(' | ');
+            return optional ? `(${types})?` : types;
+        }
         case 'error': return 'unknown';
         default: return type.kind;
     }
@@ -401,7 +416,16 @@ function is(type: Type, ...names: string[]): type is Type & { kind: 'primitive';
     return type.kind === 'primitive' && names.includes(type.name);
 }
 
+/** One type, or a union of the distinct ones (as shown, ignoring optional). */
+function union(types: Type[]): Type {
+    const distinct = [...new Map(types.map(t => [show({ ...t, optional: false }), t])).values()];
+    if (distinct.length === 1) return types.some(t => t.optional) ? { ...distinct[0], optional: true } : distinct[0];
+    return { kind: 'union', types: distinct.map(t => ({ ...t, optional: false })), optional: types.some(t => t.optional) };
+}
+
 function comparable(a: Type, b: Type): boolean {
+    if (a.kind === 'union') return a.types.some(t => comparable(t, b));
+    if (b.kind === 'union') return b.types.some(t => comparable(a, t));
     if (a.kind === 'error' || b.kind === 'error' || a.kind === 'null' || b.kind === 'null') return true;
     if (is(a, ...NUMERIC) && is(b, ...NUMERIC)) return true;
     if (is(a, ...TEXT) && is(b, ...TEXT)) return true;
@@ -414,6 +438,7 @@ function comparable(a: Type, b: Type): boolean {
 function assignable(value: Type, target: Type): boolean {
     if (value.kind === 'error' || target.kind === 'error') return true;
     if (value.kind === 'null') return target.optional === true;
+    if (value.kind === 'union') return value.types.some(t => assignable(value.optional ? { ...t, optional: true } : t, target));
     if (is(target, ...NUMERIC) && is(value, ...NUMERIC)) return NUMERIC.indexOf(value.name) <= NUMERIC.indexOf(target.name);
     if (value.kind === 'list' && target.kind === 'list') return assignable(value.item, target.item);
     return comparable(value, target) && value.kind === target.kind;

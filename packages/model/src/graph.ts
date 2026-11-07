@@ -141,8 +141,10 @@ export function buildGraph(models: Model[], services: ApplingServices): Graph {
     }
     for (const [expr, target] of typer.targets) {
         const owner = parentElement(expr, qns);
-        const to = qns.get(target);
-        if (owner && to) add({ from: qns.get(owner)!, to, kind: 'uses' });
+        for (const each of typer.candidates.get(expr) ?? [target]) {
+            const to = qns.get(each);
+            if (owner && to) add({ from: qns.get(owner)!, to, kind: 'uses' });
+        }
     }
     return { nodes, edges };
 }

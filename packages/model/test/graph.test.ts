@@ -45,3 +45,20 @@ test('does is a prop and its @names are uses edges', async () => {
     expect(graph.nodes.find(n => n.qn === 'm.Close')!.props.does).toBe('Closes @Account.email');
     expect(graph.edges).toContainEqual({ from: 'm.Close', to: 'm.Account.email', kind: 'uses' });
 });
+
+test('actor.f declared by several actors uses every candidate field', async () => {
+    const graph = await graphOf({ 'shop.appling': `module shop {
+      role Buyer
+      role Seller
+      entity Customer { name: String }
+      entity Vendor { name: String }
+      actor human Shopper roles Buyer { account: Customer }
+      actor human Merchant roles Seller { account: Vendor }
+      entity Offer {
+        vendor: Vendor
+        policy read { actor.is(Seller) && vendor == actor.account }
+      }
+    }` });
+    const uses = graph.edges.filter(e => e.kind === 'uses' && e.to.endsWith('.account')).map(e => e.to).sort();
+    expect(uses).toEqual(['shop.Merchant.account', 'shop.Shopper.account']);
+});
