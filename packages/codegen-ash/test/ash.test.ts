@@ -221,6 +221,55 @@ test('tenants partition resources, and policies compare records by id, read the 
     expect(entries['org.Task.policy[read fields note]'].missing[0].what).toBe('add an Ash policy to org.Task for read: actor.is(Member) && project.company == tenant');
 });
 
+test('once the model has a policy, every resource denies what no policy covers, and jobs bypass the policies', async () => {
+    const source = (policies: boolean) => ({
+        'ops.appling': `module ops {
+            role Clerk
+            enum Status { open done }
+            entity Tag { name: String }
+            entity Ticket {
+                status: Status default open
+                note: String?
+                ${policies ? `policy read { actor.is(Clerk) }
+                policy update { actor.is(Clerk) && note.size() > 1 }
+                policy read, update fields note { actor.is(Clerk) }` : ''}
+            }
+            action Close on Ticket { effect { set status = done } }
+            job Sweep every "0 * * * *" run Close where { status == open }
+            actor human Agent roles Clerk { level: Int }
+        }`
+    });
+    const resource = (name: string) => `defmodule Shop.Ops.${name} do\n  use Ash.Resource,\n    domain: Shop.Ops\nend\n`;
+    const run = async (policies: boolean) => {
+        const result = await planFor(source(policies));
+        const write = (name: string) => result.steps.reduce((current, { step }) => step.kind === 'template' && step.file === `lib/shop/ops/${snake(name)}.ex` ? step.write(current) : current, resource(name));
+        return { write, entries: Object.fromEntries(result.entries.map(e => [e.qn, e])) };
+    };
+    const snake = (name: string) => name.toLowerCase();
+    const deny = '  policies do\n    policy always() do\n      forbid_if always()\n    end\n  end\n';
+
+    const open = await run(false);
+    for (const name of ['Tag', 'Ticket', 'Agent']) expect(open.write(name)).not.toContain('Ash.Policy.Authorizer');
+
+    const { write, entries } = await run(true);
+    // A resource that no policy covers keeps its default actions, all forbidden; so does an actor's own resource.
+    for (const name of ['Tag', 'Agent']) {
+        expect(write(name)).toContain('    domain: Shop.Ops,\n    authorizers: [Ash.Policy.Authorizer]\n');
+        expect(write(name)).toContain(deny);
+    }
+    const ticket = write('Ticket');
+    expect(ticket).toContain('authorizers: [Ash.Policy.Authorizer]');
+    expect(ticket).not.toContain('policy always() do');
+    // The bypass comes first, so the AshOban scheduler and worker run as the system.
+    expect(ticket).toContain('  policies do\n    bypass AshOban.Checks.AshObanInteraction do\n      authorize_if always()\n    end\n\n    policy action_type(:read) do\n');
+    // A condition that does not translate forbids until the task is done.
+    expect(ticket).toContain('    policy action_type(:update) do\n      forbid_if always()\n    end\n');
+    expect(entries['ops.Ticket.policy[update]'].missing.map(m => m.what)).toContain('add an Ash policy to ops.Ticket for update: actor.is(Clerk) && note.size() > 1');
+    // Field policies guard reads; their writes are a task.
+    expect(ticket).toContain('    field_policy :note do\n      authorize_if Shop.Ops.Checks.Clerk\n    end\n');
+    expect(Object.values(entries).find(e => e.qn.startsWith('ops.Ticket.policy[') && e.qn.includes('fields'))!.missing.map(m => m.what)).toContain('guard writes of note on ops.Ticket for update, which Ash field policies do not cover: actor.is(Clerk)');
+});
+
 test('does texts become the moduledoc and attribute descriptions, and one registry task each', async () => {
     const result = await planFor({
         'shop.appling': `module shop {
