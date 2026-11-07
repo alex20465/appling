@@ -358,6 +358,11 @@ func CanCancel(actor access.Actor, order *Order, reason *string) bool {
 func cancelPolicy(actor access.Actor, order *Order, reason *string) bool {
 	return access.IsClerk(actor)
 }
+
+// CanOpenOrders reports whether the actor may read a record through sales.OpenOrders, including the read check of sales.Order.
+func CanOpenOrders(actor access.Actor, order *Order) bool {
+	return CanReadOrder(actor, order)
+}
 ",
   "internal/sales/sales_test.go": "package sales
 

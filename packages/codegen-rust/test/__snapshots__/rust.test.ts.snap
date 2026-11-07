@@ -98,6 +98,8 @@ pub fn in_tenant(actor: &Actor, record: &impl Tenanted) -> bool {
 pub enum Error {
     InvalidTransition { action: &'static str, from: String },
     Forbidden { action: &'static str },
+    /// A precondition without a declared error does not hold.
+    Precondition { action: &'static str, condition: &'static str },
 }
 
 impl std::fmt::Display for Error {
@@ -190,6 +192,8 @@ pub mod access;
 pub enum Error {
     InvalidTransition { action: &'static str, from: String },
     Forbidden { action: &'static str },
+    /// A precondition without a declared error does not hold.
+    Precondition { action: &'static str, condition: &'static str },
     EmptyOrder,
     Declined,
 }
@@ -348,7 +352,7 @@ pub fn place_order(actor: &crate::access::Actor, order: &mut Order) -> Result<Ve
     }
     match order.status {
         OrderStatus::Draft => {
-            events.push(Event::OrderPlaced(OrderPlaced { order: Box::new(order.clone()) }));
+            events.push(Event::OrderPlaced(OrderPlaced { order: Box::new((*order).clone()) }));
             order.status = OrderStatus::Placed;
         }
         _ => return Err(Error::InvalidTransition { action: "PlaceOrder", from: format!("{:?}", order.status) }),
@@ -403,6 +407,11 @@ pub fn order_flow_on_payment_received(event: &mut PaymentReceived) -> Result<Vec
         _ => return Err(Error::InvalidTransition { action: "PaymentReceived", from: format!("{:?}", order.status) }),
     }
     Ok(events)
+}
+
+/// Whether the actor may read a record through sales.OpenOrders, including the read check of sales.Order.
+pub fn can_open_orders(actor: &crate::access::Actor, order: &Order) -> bool {
+    can_read_order(actor, order)
 }
 
 #[cfg(test)]

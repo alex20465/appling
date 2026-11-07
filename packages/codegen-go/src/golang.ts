@@ -47,6 +47,16 @@ export function goExpr(expr: ExprData, scope: GoScope): string | undefined {
     return result && value(result);
 }
 
+/**
+ * Translates an expression for an assignment: `value` reads it (`*p` for a pointer), `raw` is the code as it is
+ * (the pointer itself for an optional field or input), `null` marks the literal `null` and `empty` the empty list `[]`.
+ */
+export function goTerm(expr: ExprData, scope: GoScope): { value: string, raw: string, pointer: boolean, null: boolean, empty?: boolean } | undefined {
+    if (expr.$type === 'ListExpr' && !expr.items?.length) return { value: '', raw: '', pointer: false, null: false, empty: true };
+    const result = translate(expr, scope);
+    return result && { value: value(result), raw: result.code, pointer: !!result.pointer, null: result.kind === 'null' };
+}
+
 /** The Go type of a primitive and the package it needs. */
 export const PRIMITIVES: { [name: string]: [string, string?] } = {
     String: ['string'], Text: ['string'], Int: ['int64'], Bool: ['bool'], File: ['string'], Uuid: ['string'],

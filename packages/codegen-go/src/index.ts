@@ -1,7 +1,7 @@
 import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
 import { accessFile, accessOf, accessSteps, actorFieldType, tenantOf, tenantPaths } from './access.js';
-import { camel, enumConstant, goExpr, pascal, PRIMITIVES, qualify, type GoScope } from './golang.js';
+import { camel, enumConstant, goExpr, goTerm, pascal, PRIMITIVES, qualify, type GoScope } from './golang.js';
 
 const DECIMAL = 'github.com/shopspring/decimal';
 const OPERATIONS = ['read', 'create', 'update', 'delete'];
@@ -170,15 +170,18 @@ function actionSteps(action: GraphNode, context: MapContext): Step[] {
         body.push(`if !(${condition}) {`, `\treturn nil, ${error}`, '}');
     });
     const transitions = context.graph.nodes.filter(n => n.kind === 'Transition' && n.data.action === action.qn);
-    if (transitions.length && self) body.push(...transitionSwitch(transitions, self, last(action.qn), scope, context, tasks));
-    for (const effect of context.children(action.qn).filter(c => c.kind.endsWith('Effect'))) body.push(...effectLines(effect, self, scope, context, tasks));
+    const creating: Creating = { action: last(action.qn), entities: new Map() };
+    if (transitions.length && self) body.push(...transitionSwitch(transitions, self, last(action.qn), scope, context, tasks, creating));
+    for (const effect of context.children(action.qn).filter(c => c.kind.endsWith('Effect'))) body.push(...effectLines(effect, self, scope, context, tasks, creating));
     body.push('return events, nil');
     const params = [
-        ...(guard ? [`actor ${accessIn(scope, 'Actor')}`] : []),
+        ...(guard || enforced(context) ? [`actor ${accessIn(scope, 'Actor')}`] : []),
         ...(entity ? [`${self} ${typeOf({ $type: 'TypeRef', decl: entity.qn } as TypeData, scope)}`] : []),
-        ...context.children(action.qn).filter(c => c.kind === 'Param').map(p => `${camel(last(p.qn))} ${typeOf(p.data.type as TypeData, scope)}`)
+        ...context.children(action.qn).filter(c => c.kind === 'Param').map(p => `${camel(last(p.qn))} ${typeOf(p.data.type as TypeData, scope)}`),
+        ...[...creating.entities.values()].map(e => `create${last(e.qn)} func(${typeOf({ $type: 'TypeRef', decl: e.qn } as TypeData, scope)}) error`)
     ];
-    const code = [`// ${last(action.qn)} is the action ${action.qn}. It returns the events it emits.`, `func ${last(action.qn)}(${params.join(', ')}) ([]any, error) {`, ...body.map(l => `\t${l}`), '}'].join('\n');
+    const stores = creating.entities.size ? ` The records it creates go to the create functions, which store them.` : '';
+    const code = [`// ${last(action.qn)} is the action ${action.qn}. It returns the events it emits.${stores}`, `func ${last(action.qn)}(${params.join(', ')}) ([]any, error) {`, ...body.map(l => `\t${l}`), '}'].join('\n');
     return [goFile(action.module, 'actions.go', context, imports, code), ...guardSteps(action, context), ...tasks, ...testSteps(action, context)];
 }
 
@@ -194,18 +197,33 @@ interface Guard {
 }
 
 /**
- * The exported check of an element, when one applies: `Can<Op><Entity>` for an entity with policies,
- * `Can<Action>` when the action's own policies, its entity's update policies or the tenant guard it, and
- * `Can<Query>` and `Can<UseCase>` for their own policies.
+ * The exported check of an element, when one applies. Once the model has any policy, every entity gets
+ * `Can<Op><Entity>`, every action `Can<Action>` (its entity's update check and its own policies; an action
+ * without an entity that only creates records leaves the check to the create check of the created entity),
+ * and every query `Can<Query>` (its entity's read check and its own policies); what no policy covers is
+ * denied. A use case gets `Can<UseCase>` for its own policies. Without policies, only the tenant guards actions.
  */
 function guardOf(owner: GraphNode, context: MapContext): Guard | undefined {
     const own = policiesOf(owner, context);
     const entityQn = owner.kind === 'Entity' ? owner.qn : owner.data.entity as string | undefined;
     const entity = entityQn ? context.node(entityQn) : undefined;
-    const applies = own.length > 0 || (owner.kind === 'Action' && !!entity && (policiesOf(entity, context).length > 0 || tenantPaths(context).has(entity.qn)));
+    const applies = own.length > 0 || (enforced(context)
+        ? owner.kind === 'Entity' || owner.kind === 'Query' || (owner.kind === 'Action' && (!!entity || !creates(owner, context)))
+        : owner.kind === 'Action' && !!entity && tenantPaths(context).has(entity.qn));
     if (!applies) return undefined;
     const params = owner.kind === 'Action' || owner.kind === 'UseCase' ? context.children(owner.qn).filter(c => c.kind === 'Param') : [];
     return { entity, params, args: [...(entity ? [camel(last(entity.qn))] : []), ...params.map(p => camel(last(p.qn)))], name: `Can${last(owner.qn)}` };
+}
+
+/** Whether the model has any policy: then an operation that no policy covers is denied. */
+function enforced(context: MapContext): boolean {
+    return context.graph.nodes.some(n => n.kind === 'Policy');
+}
+
+/** Whether an action, or a transition it runs, creates a record. */
+function creates(action: GraphNode, context: MapContext): boolean {
+    const transitions = context.graph.nodes.filter(n => n.kind === 'Transition' && n.data.action === action.qn);
+    return [action, ...transitions].some(n => context.children(n.qn).some(c => c.kind === 'CreateEffect'));
 }
 
 function policiesOf(owner: GraphNode, context: MapContext): GraphNode[] {
@@ -222,8 +240,9 @@ function guardSignature(guard: Guard, scope: GoScope): string {
 
 /**
  * The exported checks of an element in its module's `policies.go`, combining its policies (and, for an action
- * or a query, the update or read check of its entity, or the tenant) with `&&`. An entity gets one per operation,
- * false where no policy grants it, and one per operation and field that a field policy narrows.
+ * or a query, the update or read check of its entity, or the tenant) with `&&`, false when there is nothing to
+ * combine. An entity gets one per operation, false where no policy grants it, and one per operation and field
+ * that a field policy narrows.
  */
 function guardSteps(owner: GraphNode, context: MapContext): Step[] {
     const guard = guardOf(owner, context);
@@ -258,13 +277,14 @@ function guardSteps(owner: GraphNode, context: MapContext): Step[] {
     } else {
         const op = owner.kind === 'Query' ? 'Read' : 'Update';
         const entity = guard.entity;
-        const inherited = entity && owner.kind !== 'UseCase' && policiesOf(entity, context).length
+        const inherited = entity && owner.kind !== 'UseCase' && enforced(context)
             ? [`${entity.module === owner.module ? '' : `${qualifyModule(entity.module, scope)}.`}Can${op}${last(entity.qn)}(actor, ${record})`]
             : tenant ? [tenant] : [];
         const what = owner.kind === 'Query' ? `read a record through ${owner.qn}` : `run ${owner.qn}`;
+        const parts = [...inherited, ...policies.map(call)];
         blocks.push([
-            `// ${guard.name} reports whether the actor may ${what}${inherited.length ? `, including the ${inherited[0] === tenant ? 'tenant' : op.toLowerCase()} check of ${entity!.qn}` : ''}.`,
-            `func ${guard.name}(${signature}) bool {`, `\treturn ${[...inherited, ...policies.map(call)].join(' && ')}`, '}'
+            `// ${guard.name} reports whether the actor may ${what}${inherited.length ? `, including the ${inherited[0] === tenant ? 'tenant' : op.toLowerCase()} check of ${entity!.qn}` : ''}${parts.length ? '' : '; no policy grants it'}.`,
+            `func ${guard.name}(${signature}) bool {`, `\treturn ${parts.length ? parts.join(' && ') : 'false'}`, '}'
         ].join('\n'));
     }
     return [goFile(owner.module, 'policies.go', context, imports, blocks.join('\n\n')), accessFile(context, accessOf(context))];
@@ -309,7 +329,7 @@ function qualifyModule(module: string, scope: GoScope): string {
     return module.split('.').pop()!;
 }
 
-function transitionSwitch(transitions: GraphNode[], self: string, label: string, scope: GoScope, context: MapContext, tasks: Step[]): string[] {
+function transitionSwitch(transitions: GraphNode[], self: string, label: string, scope: GoScope, context: MapContext, tasks: Step[], creating?: Creating): string[] {
     const machine = context.node(parentOf(transitions[0].qn))!;
     const field = context.node(machine.data.field as string)!;
     const enumNode = context.node((field.data.type as TypeData).decl!)!;
@@ -324,7 +344,7 @@ function transitionSwitch(transitions: GraphNode[], self: string, label: string,
             else tasks.push(task(`check the guard ${transition.props.guard} of ${last(transition.qn)}`));
         }
         lines.push(`case ${condition}:`);
-        for (const effect of context.children(transition.qn)) lines.push(...effectLines(effect, self, scope, context, tasks).map(l => `\t${l}`));
+        for (const effect of context.children(transition.qn)) lines.push(...effectLines(effect, self, scope, context, tasks, creating).map(l => `\t${l}`));
         lines.push(`\t${state} = ${enumConstant(context.node(`${enumNode.qn}.${transition.data.to}`)!, scope)}`);
     }
     scope.imports.add('fmt');
@@ -334,28 +354,103 @@ function transitionSwitch(transitions: GraphNode[], self: string, label: string,
     return lines;
 }
 
-function effectLines(effect: GraphNode, self: string | undefined, scope: GoScope, context: MapContext, tasks: Step[]): string[] {
+/** The records an action creates: each created entity becomes a `create<Entity>` function parameter that stores one. */
+interface Creating {
+    action: string;
+    entities: Map<string, GraphNode>;
+}
+
+function effectLines(effect: GraphNode, self: string | undefined, scope: GoScope, context: MapContext, tasks: Step[], creating?: Creating): string[] {
     if (effect.kind === 'SetEffect') {
         const field = context.node(effect.data.field as string)!;
-        const value = goExpr(effect.data.value as ExprData, scope);
-        if (!value || !self) {
+        const value = self && assigned(field, effect.data.value as ExprData, scope);
+        if (!value) {
             tasks.push(task(`apply the effect set ${last(field.qn)} = ${effect.props.value}`));
             return [];
         }
-        const code = coerce(value, field);
-        return [`${self}.${pascal(last(field.qn))} = ${(field.data.type as TypeData).optional ? `ptr(${code})` : code}`];
+        return [`${self}.${pascal(last(field.qn))} = ${value}`];
     }
     if (effect.kind === 'EmitEffect') {
         const event = context.node(effect.data.event as string)!;
-        const assignments = ((effect.data.assignments ?? []) as { name: string, value: ExprData }[]).map(a => [a.name, goExpr(a.value, scope)]);
-        if (assignments.some(([, v]) => !v)) {
-            tasks.push(task(`emit ${last(event.qn)}`));
+        const given = new Map(((effect.data.assignments ?? []) as { name: string, value: ExprData }[]).map(a => [a.name, a.value]));
+        const values: string[] = [];
+        const missing: string[] = [];
+        for (const field of fieldsOf(event, context).filter(f => !f.data.derived)) {
+            const type = field.data.type as TypeData;
+            const expr = given.get(last(field.qn));
+            const value = expr && assigned(field, expr, scope);
+            if (value) values.push(`${pascal(last(field.qn))}: ${value}`);
+            else if (expr || (!type.optional && !type.many)) missing.push(last(field.qn));
+        }
+        if (missing.length) {
+            tasks.push(task(`emit ${last(event.qn)} with its fields ${missing.join(', ')}, which the model does not give or Go cannot say`));
             return [];
         }
-        return [`events = append(events, ${qualify(event, scope)}{${assignments.map(([n, v]) => `${pascal(n!)}: ${v}`).join(', ')}})`];
+        return [`events = append(events, ${qualify(event, scope)}{${values.join(', ')}})`];
+    }
+    if (effect.kind === 'CreateEffect') {
+        const entity = context.node(effect.data.entity as string)!;
+        const lines = creating && createLines(effect, entity, scope, context, creating);
+        if (lines) return lines;
+        const check = enforced(context) && runByActor(effect, context) ? `, after checking ${entity.module === scope.pkg ? '' : `${pkgOf(entity.module)}.`}CanCreate${last(entity.qn)}(actor, record)` : '';
+        tasks.push(task(`create the ${last(entity.qn)} through your storage layer${check}`));
+        return [];
     }
     tasks.push(task(`apply the effect ${last(effect.qn)}, for example through your storage layer`));
     return [];
+}
+
+/**
+ * A create effect in an action: a block that builds the record with `New<Entity>` and the given fields, checks
+ * `CanCreate<Entity>` once the model has policies, and hands the record to `create<Entity>`. Undefined when a
+ * required field without default is not given or a value does not translate.
+ */
+function createLines(effect: GraphNode, entity: GraphNode, scope: GoScope, context: MapContext, creating: Creating): string[] | undefined {
+    const given = new Map(((effect.data.assignments ?? []) as { name: string, value: ExprData }[]).map(a => [a.name, a.value]));
+    const lines: string[] = [];
+    for (const field of fieldsOf(entity, context).filter(f => !f.data.derived)) {
+        const type = field.data.type as TypeData;
+        const expr = given.get(last(field.qn));
+        if (!expr) {
+            if (!type.optional && !type.many && !field.data.default) return undefined;
+            continue;
+        }
+        const value = assigned(field, expr, scope);
+        if (!value) return undefined;
+        lines.push(`created.${pascal(last(field.qn))} = ${value}`);
+    }
+    const name = qualify(entity, scope);
+    const constructor = name.includes('.') ? name.replace(/\.(\w+)$/, '.New$1') : `New${name}`;
+    const check = enforced(context) ? [
+        `if !${entity.module === effect.module ? '' : `${qualifyModule(entity.module, scope)}.`}CanCreate${last(entity.qn)}(actor, created) {`,
+        `\treturn nil, fmt.Errorf("%w: ${creating.action}", ${accessIn(scope, 'ErrForbidden')})`,
+        '}'
+    ] : [];
+    if (check.length) scope.imports.add('fmt');
+    creating.entities.set(entity.qn, entity);
+    return ['{', ...[`created := ${constructor}()`, ...lines, ...check, `if err := create${last(entity.qn)}(created); err != nil {`, '\treturn nil, err', '}'].map(l => `\t${l}`), '}'];
+}
+
+/** Whether an effect runs in an action, which takes the actor, rather than in a transition on an event. */
+function runByActor(effect: GraphNode, context: MapContext): boolean {
+    const owner = context.node(effect.qn.slice(0, effect.qn.lastIndexOf('.effect[')));
+    return owner?.kind === 'Action' || (owner?.kind === 'Transition' && !!owner.data.action);
+}
+
+/**
+ * An expression as the value of a field: records are pointers already, an optional field takes a pointer as it
+ * is and a value through `ptr`, and number literals become decimals for decimal fields.
+ */
+function assigned(field: GraphNode, expr: ExprData, scope: GoScope): string | undefined {
+    const term = goTerm(expr, scope);
+    if (!term) return undefined;
+    const type = field.data.type as TypeData;
+    const entity = !!type.decl && scope.node(type.decl)?.kind === 'Entity';
+    if (term.null) return type.optional || type.many || entity ? 'nil' : undefined;
+    if (term.empty && type.many) return `${typeOf(type, scope)}{}`;
+    if (entity || type.many) return term.raw;
+    if (type.optional) return term.pointer ? term.raw : `ptr(${coerce(term.value, field)})`;
+    return coerce(term.value, field);
 }
 
 /** Transitions on an event become a function that applies them to the record the event carries. */

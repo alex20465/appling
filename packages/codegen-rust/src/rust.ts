@@ -39,6 +39,16 @@ export function rustExpr(expr: ExprData, scope: RustScope): string | undefined {
     return result && value(result);
 }
 
+/**
+ * Translates an expression for an assignment: `value` reads it (`x.unwrap()` for an `Option`), `raw` is the code as
+ * it is (the `Option` itself for an optional field or input), `null` marks the literal `null` and `empty` the empty list `[]`.
+ */
+export function rustTerm(expr: ExprData, scope: RustScope): { value: string, raw: string, option: boolean, null: boolean, empty?: boolean } | undefined {
+    if (expr.$type === 'ListExpr' && !expr.items?.length) return { value: '', raw: '', option: false, null: false, empty: true };
+    const result = translate(expr, scope);
+    return result && { value: value(result), raw: result.code, option: !!result.option, null: result.kind === 'null' };
+}
+
 export function kindOf(type: string): Kind {
     const base = type.replace(/\?$/, '');
     if (base.endsWith('[]')) return 'list';
