@@ -73,6 +73,7 @@ test('behavior, queries and the JSON:API are patched into the generated modules'
         ['lib/shop/sales/order.ex', 'defmodule Shop.Sales.Order do\n  use Ash.Resource, otp_app: :shop, domain: Shop.Sales, data_layer: AshPostgres.DataLayer\n\n  actions do\n    defaults [:read, :destroy]\n  end\n\n  attributes do\n    attribute :status, Shop.Sales.OrderStatus do\n      allow_nil? false\n    end\n  end\nend\n'],
         ['lib/shop/sales.ex', 'defmodule Shop.Sales do\n  use Ash.Domain,\n    otp_app: :shop\n\n  resources do\n    resource Shop.Sales.Order\n  end\nend\n'],
         ['lib/shop/crm/account.ex', 'defmodule Shop.Crm.Account do\n  use Ash.Resource, otp_app: :shop, domain: Shop.Crm\nend\n'],
+        ['lib/shop/sales/shopper.ex', 'defmodule Shop.Sales.Shopper do\n  use Ash.Resource, otp_app: :shop, domain: Shop.Sales, data_layer: AshPostgres.DataLayer\n\n  attributes do\n    attribute :roles, {:array, :atom} do\n      public? false\n    end\n  end\nend\n'],
         ['config/config.exs', 'import Config\n\nconfig :shop, Oban,\n  engine: Oban.Engines.Basic,\n  queues: [default: 10],\n  repo: Shop.Repo\n'],
         ['lib/shop_web/router.ex', 'defmodule ShopWeb.Router do\n  use ShopWeb, :router\n\n  scope "/", ShopWeb do\n    pipe_through :browser\n\n    get "/", PageController, :home\n  end\nend\n'],
         ['lib/shop_web/ash_json_api_router.ex', 'defmodule ShopWeb.AshJsonApiRouter do\n  use AshJsonApi.Router,\n    domains: [],\n    open_api: "/open_api"\nend\n'],
@@ -113,7 +114,7 @@ test('roles become policy checks on the actor resource, and policies that only n
     const write = (file: string, text: string) => result.steps.reduce((current, { step }) => step.kind === 'template' && step.file === file ? step.write(current) : current, text);
     expect(write('lib/shop/ops/checks/operator.ex', '')).toBe([
         'defmodule Shop.Ops.Checks.Operator do', '  use Ash.Policy.SimpleCheck', '', '  @impl true', '  def describe(_opts), do: "actor is Operator"', '',
-        '  @impl true', '  def match?(%Shop.Ops.User{} = actor, _context, _opts) do', '    actor = Ash.load!(actor, :operator?, authorize?: false)',
+        '  @impl true', '  def match?(%Shop.Ops.User{} = actor, context, _opts) do', '    actor = Ash.load!(actor, :operator?, authorize?: false, tenant: context.subject.tenant)',
         '    :operator in (actor.roles || []) and actor.operator?', '  end', '', '  def match?(_actor, _context, _opts), do: false', 'end', ''
     ].join('\n'));
     expect(write('lib/shop/ops/checks/viewer.ex', '')).toContain('    :viewer in (actor.roles || [])\n  end');
@@ -121,7 +122,101 @@ test('roles become policy checks on the actor resource, and policies that only n
     expect(write('lib/shop/ops/user.ex', 'defmodule Shop.Ops.User do\n  use Ash.Resource\nend\n')).toContain('    calculate :active, :boolean, expr(not disabled)\n    calculate :operator?, :boolean, expr(active)\n');
     const order = write('lib/shop/ops/order.ex', 'defmodule Shop.Ops.Order do\n  use Ash.Resource,\n    domain: Shop.Ops\nend\n');
     expect(order).toContain('  use Ash.Resource,\n    domain: Shop.Ops,\n    authorizers: [Ash.Policy.Authorizer]\n');
-    expect(order).toContain('  policies do\n    policy action_type(:read) do\n      authorize_if Shop.Ops.Checks.Operator\n      authorize_if Shop.Ops.Checks.Viewer\n    end\n\n    policy action(:cancel) do\n      authorize_if Shop.Ops.Checks.Operator\n    end\n  end\n');
+    expect(order).toContain([
+        '  policies do',
+        '    policy action_type(:read) do', '      authorize_if Shop.Ops.Checks.Operator', '      authorize_if Shop.Ops.Checks.Viewer', '    end', '',
+        '    policy action_type(:update) do', '      forbid_unless Shop.Ops.Checks.Operator', '      authorize_if expr(note != "")', '    end', '',
+        '    policy action(:cancel) do', '      authorize_if Shop.Ops.Checks.Operator', '    end',
+        '  end', ''
+    ].join('\n'));
+});
+
+test('actors without is become resources or structs, and actor.is of an actor becomes a check', async () => {
+    const result = await planFor({
+        'desk.appling': `module desk {
+            role Agent
+            role Lead { actor.is(Agent) && actor.level > 2 }
+            actor human Operator roles Agent, Lead {
+                level: Int default 1
+                team: Team
+            }
+            actor service Mailer roles Agent
+            entity Team {
+                name: String
+                policy read { actor.is(Operator) || actor.is(Mailer) }
+            }
+        }`
+    });
+    const write = (file: string, text = '') => result.steps.reduce((current, { step }) => step.kind === 'template' && step.file === file ? step.write(current) : current, text);
+    const commands = result.steps.flatMap(({ step }) => step.kind === 'command' ? [step.run.join(' ')] : []);
+    expect(commands).toContain('mix ash.gen.resource Shop.Desk.Operator --domain Shop.Desk --default-actions read,create,update,destroy --uuid-primary-key id --attribute level:integer:required:public,roles:atom:array --extend postgres --timestamps --yes');
+    expect(commands).toContain('mix ash.gen.resource Shop.Desk.Operator --relationship belongs_to:team:Shop.Desk.Team:required --yes');
+    const operator = write('lib/shop/desk/operator.ex', 'defmodule Shop.Desk.Operator do\n  use Ash.Resource\n\n  attributes do\n    attribute :level, :integer do\n      allow_nil? false\n    end\n\n    attribute :roles, {:array, :atom} do\n      public? false\n    end\n  end\nend\n');
+    expect(operator).toContain('    attribute :level, :integer do\n      default 1\n');
+    expect(operator).toContain('    attribute :roles, {:array, :atom} do\n      default []\n      constraints items: [one_of: [:agent, :lead]]\n');
+    expect(operator).toContain('    calculate :lead?, :boolean, expr(level > 2)\n');
+    expect(write('lib/shop/desk/mailer.ex')).toBe('defmodule Shop.Desk.Mailer do\n  @moduledoc "The service actor Mailer. Pass %Shop.Desk.Mailer{} as the actor."\n  defstruct [roles: [:agent]]\nend\n');
+    expect(write('lib/shop/desk/checks/lead.ex')).toContain([
+        '  def match?(%Shop.Desk.Operator{} = actor, context, _opts) do',
+        '    actor = Ash.load!(actor, :lead?, authorize?: false, tenant: context.subject.tenant)',
+        '    :lead in (actor.roles || []) and Shop.Desk.Checks.Agent.match?(actor, context, []) and actor.lead?',
+        '  end', '', '  def match?(_actor, _context, _opts), do: false'
+    ].join('\n'));
+    expect(write('lib/shop/desk/checks/agent.ex')).toContain('  def match?(%Shop.Desk.Mailer{} = actor, _context, _opts) do\n    :agent in (actor.roles || [])\n  end\n');
+    expect(write('lib/shop/desk/checks/mailer.ex')).toContain('  def match?(%Shop.Desk.Mailer{}, _context, _opts), do: true\n');
+    expect(write('lib/shop/desk/team.ex', 'defmodule Shop.Desk.Team do\n  use Ash.Resource\nend\n')).toContain('    policy action_type(:read) do\n      authorize_if Shop.Desk.Checks.Operator\n      authorize_if Shop.Desk.Checks.Mailer\n    end\n');
     const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
-    expect(entries['ops.Order.policy[update]'].missing[0].what).toBe('add an Ash policy to ops.Order for update: actor.is(Operator) && note != ""');
+    for (const qn of ['desk.Operator', 'desk.Mailer', 'desk.Operator.team', 'desk.Operator.level', 'desk.Lead', 'desk.Agent']) expect(entries[qn].status).toBe('generated');
+});
+
+test('tenants partition resources, and policies compare records by id, read the tenant and guard fields', async () => {
+    const result = await planFor({
+        'org.appling': `module org {
+            role Member
+            actor human Person roles Member {
+                company: Company
+            }
+            entity Company {
+                name: String
+            }
+            tenant Workspace on Company
+            entity Project {
+                company: Company
+                owner: Company?
+                budget: Money
+                policy read fields budget { actor.is(Member) && company == actor.company }
+            }
+            entity Task {
+                project: Project
+                note: String?
+                policy { actor.is(Member) && project.company == tenant }
+                policy read fields note { actor.is(Member) && project.company == tenant }
+            }
+            query Mine from Task {
+                where { project.company == actor.company }
+                policy { actor.is(Member) }
+            }
+        }`
+    });
+    const write = (file: string, text: string) => result.steps.reduce((current, { step }) => step.kind === 'template' && step.file === file ? step.write(current) : current, text);
+    const resource = (name: string) => `defmodule Shop.Org.${name} do\n  use Ash.Resource\nend\n`;
+    expect(write('lib/shop/org/person.ex', resource('Person'))).toContain('  multitenancy do\n    strategy :attribute\n    attribute :company_id\n    global? true\n  end\n');
+    const task = write('lib/shop/org/task.ex', resource('Task'));
+    expect(task).not.toContain('multitenancy');
+    expect(task).toContain('    policy always() do\n      forbid_unless Shop.Org.Checks.Member\n      authorize_if expr(project.company_id == ^tenant())\n    end\n');
+    expect(task).toContain('    policy action(:mine) do\n      authorize_if Shop.Org.Checks.Member\n    end\n');
+    expect(task).toContain('    read :mine do\n      filter expr(project.company_id == ^actor(:company_id))\n');
+    expect(write('lib/shop/org/project.ex', resource('Project'))).toContain([
+        '  field_policies do',
+        '    field_policy :budget do', '      forbid_unless Shop.Org.Checks.Member', '      authorize_if expr(company_id == ^actor(:company_id))', '    end', '',
+        '    field_policy :* do', '      authorize_if always()', '    end',
+        '  end'
+    ].join('\n'));
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['org.Workspace'].missing.map(m => m.what)).toEqual([
+        'pick the tenant attribute of Project for Workspace',
+        'partition Task by Workspace, which they reach only through relationships, for example with a tenant attribute set from the relationship'
+    ]);
+    // Field policies cannot follow relationships.
+    expect(entries['org.Task.policy[read fields note]'].missing[0].what).toBe('add an Ash policy to org.Task for read: actor.is(Member) && project.company == tenant');
 });
