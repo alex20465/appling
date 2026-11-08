@@ -553,7 +553,8 @@ function validRecord(entity: GraphNode, context: MapContext): { name: string, re
         const type = field.data.type as TypeData;
         const fieldName = last(field.qn);
         if (type.many) record[fieldName] = [];
-        else if (field.data.default) record[fieldName] = defaultValue(field, { ...scope, self: 'x' }) ? simulator(context).evaluate(field.data.default as ExprData, { self: record }) : UNKNOWN;
+        // The default only decides whether the simulator sees its value; `New<Entity>` writes it, so its imports stay out.
+        else if (field.data.default) record[fieldName] = defaultValue(field, { ...scope, imports: new Set(), self: 'x' }) ?simulator(context).evaluate(field.data.default as ExprData, { self: record }) : UNKNOWN;
         else if (type.optional) record[fieldName] = null;
         else {
             const sample = goSample(fieldName, type, scope, context);

@@ -50,6 +50,23 @@ test('invariant tests check a valid record and a violation the simulator proves'
     expect(entries['v.Ticket.invariant["points in range"]'].status).toBe('generated');
 });
 
+test('a default the valid record leaves to New<Entity> adds no import to the test file', async () => {
+    const source = `module d {
+  entity Slot {
+    placed: DateTime default now
+    size: Int default 1
+    invariant "positive" { size > 0 }
+  }
+}`;
+    const { documents, services } = await buildWorkspace({ 'd.appling': source });
+    const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), go, 'app');
+    const files = new Map<string, string>();
+    for (const { step } of result.steps) if (step.kind === 'template') files.set(step.file, step.write(files.get(step.file)));
+    const tests = files.get('internal/d/d_test.go')!;
+    expect(tests).toContain('x.Size = -1');
+    expect(tests).not.toContain('"time"');
+});
+
 const ACCESS = `module m {
   role Clerk { actor.active && tenant != null }
   role Customer
