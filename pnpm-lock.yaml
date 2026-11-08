@@ -329,6 +329,9 @@ importers:
 
   packages/desktop:
     dependencies:
+      '@appling/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@appling/ide':
         specifier: workspace:*
         version: link:../ide
@@ -336,6 +339,9 @@ importers:
         specifier: 44.9.1
         version: 44.9.1
     devDependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: 1.32.1
+        version: 1.32.1(zod@4.6.7)
       '@types/node':
         specifier: ^24.19.2
         version: 24.19.2
@@ -373,6 +379,9 @@ importers:
         specifier: 8.22.0
         version: 8.22.0
     devDependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: 1.32.1
+        version: 1.32.1(zod@4.6.7)
       '@types/node':
         specifier: ^24.19.2
         version: 24.19.2

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell, WebContentsView, type MenuItemConstructorOptions } from 'electron';
 import { EXTENSION, readCodeWorkspace, writeCodeWorkspace } from './code-workspace.js';
 import { gitBranch, headFile } from './git.js';
+import { agentSessions, desktopHost } from './agent-sessions.js';
 import { startIdeProcess, type IdeProcess } from './ide-process.js';
 import { COMMANDS, loadKeybindings } from './keybindings.js';
 import { Repos } from './repos.js';
@@ -47,6 +48,8 @@ const workspaces = new Workspaces();
 const repos = new Repos();
 const views = new Map<string, WebContentsView>();
 const processes = new Map<string, IdeProcess>();
+/** The agent sessions of every workspace, shared by the repo servers (issue #16). */
+const sessions = agentSessions();
 /** Watchers of each repo's git `HEAD`, so the rail follows checkouts made anywhere. */
 const heads = new Map<string, FSWatcher>();
 let window: BrowserWindow | undefined;
@@ -170,6 +173,8 @@ async function launch(id: string): Promise<void> {
         const ide = await startIdeProcess(id, {
             node: process.execPath,
             env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+            sessions,
+            host: desktopHost(workspaces),
             onStatus: ({ errors }) => {
                 if (processes.get(id) !== ide && processes.has(id)) return;
                 repos.update(id, { errors });

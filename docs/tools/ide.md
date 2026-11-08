@@ -191,6 +191,8 @@ Renaming, retyping or removing a released domain element from the inspector or a
 
 The server watches the workspace folder for changes to `.appling` files (ignoring hidden folders and `node_modules`) and to `.appling/references.json`, and pushes a new snapshot to the page about 100 ms after the last change. Edits from another editor, `appling fmt` or an AI agent through the [MCP server](ai.md#mcp-server) appear in the views without a reload.
 
+The canvas also marks what [agent sessions](ai.md#agent-sessions) of the repo claimed or highlighted: a dashed ring in the session's colour around the declaration, with the session's label in its tooltip.
+
 ## Security
 
 The IDE is meant for your machine only:
@@ -209,5 +211,8 @@ The server endpoints, for reference:
 | `PUT /api/file?path=` | Writes one `.appling` file |
 | `GET /api/release` | Version and date of the latest release, or `null` |
 | `POST /api/chat` | One chat turn as a stream of JSON lines |
-| websocket `/events` | Snapshot pushes on file changes |
+| `POST /mcp` | The repo's MCP server for [agent sessions](ai.md#agent-sessions); needs a session's bearer token |
+| `GET`, `POST /api/sessions` | Lists the agent sessions, opens one (returns its token and the MCP URL) |
+| `PATCH`, `DELETE /api/sessions/<id>` | Renames a session or sets its status, ends it |
+| websocket `/events` | Snapshot pushes on file changes, the agent sessions and their `ide_act` actions; the page reports its selection and view on it |
 | websocket `/lsp` | One language server per connection |

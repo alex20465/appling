@@ -1,8 +1,11 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { ipcChannel, serveAppHost, serveSessionStore, type AppHost, type SessionStore } from '@appling/ai';
 
 export interface IdeProcess {
     url: string;
+    /** The repo's MCP server for agent sessions (bearer token of a session of the shared store). */
+    mcp: string;
     child: ChildProcess;
     close(): void;
 }
@@ -17,6 +20,10 @@ export interface IdeProcessOptions {
     onExit?(code: number | null, stderr: string): void;
     /** Called with the repo's status whenever the server reports it: at start and after every model change. */
     onStatus?(status: IdeStatus): void;
+    /** The agent sessions shared by every repo server, served to this one over its IPC channel. */
+    sessions?: SessionStore;
+    /** What the app adds to a session's IDE context and does with its actions. */
+    host?: AppHost;
 }
 
 /** What a repo's server reports for the rail. */
@@ -35,10 +42,15 @@ export function ideMain(): string {
  * The server reports its URL over the IPC channel and ends when that channel closes, also when the app is killed.
  */
 export function startIdeProcess(root: string, options: IdeProcessOptions = {}): Promise<IdeProcess> {
-    const child = spawn(options.node ?? process.execPath, [ideMain(), root, '--port', '0'], {
+    const child = spawn(options.node ?? process.execPath, [ideMain(), root, '--port', '0', ...(options.sessions ? ['--shared-sessions'] : [])], {
         stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
         env: options.env ?? process.env
     });
+    const stops = [
+        options.sessions && serveSessionStore(options.sessions, ipcChannel(child)),
+        options.host && serveAppHost(options.host, ipcChannel(child))
+    ];
+    child.once('exit', () => stops.forEach(stop => stop?.()));
     let stderr = '';
     child.stderr!.on('data', chunk => stderr = (stderr + chunk).slice(-4000));
     let ready = false;
@@ -55,7 +67,7 @@ export function startIdeProcess(root: string, options: IdeProcessOptions = {}): 
             if (message.type !== 'ready' || !message.url || ready) return;
             ready = true;
             clearTimeout(timer);
-            resolve({ url: message.url, child, close: () => child.connected ? child.disconnect() : child.kill() });
+            resolve({ url: message.url, mcp: `${message.url}/mcp`, child, close: () => child.connected ? child.disconnect() : child.kill() });
         });
         child.once('exit', code => {
             if (!ready) return fail(new Error(`The IDE server for ${root} ended with code ${code}.${stderr ? `\n${stderr.trim()}` : ''}`));

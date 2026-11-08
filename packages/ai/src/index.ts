@@ -4,3 +4,5 @@ export * from './project.js';
 export * from './prompts.js';
 export * from './tools.js';
 export * from './visual.js';
+export * from './sessions.js';
+export * from './session-tools.js';

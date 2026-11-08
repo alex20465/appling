@@ -23,6 +23,8 @@ To try it without installing anything, open the demo at https://appling.tools/id
 - An AI tab: ask about the model or ask for changes. The assistant looks things up in the graph and edits a working copy; its changes come back as a proposal with the text and graph differences, which you accept or reject. Set the model in `appling.config.json` (`"ai": { "provider": "anthropic", "model": "claude-opus-5-5" }`) and the provider's API key in the environment.
 - Once a release exists (`appling release`), the header shows how many migration steps were recorded since; renames, type changes and removals of released domain elements add them automatically.
 
+- The repo's MCP server at `/mcp` for agent sessions (bearer token per session, `POST /api/sessions` opens one): agents label their work, set their status, claim elements and files and message each other; the canvas rings the claimed elements in the session's colour.
+
 The views and the files update when the files change on disk.
 
 ## License

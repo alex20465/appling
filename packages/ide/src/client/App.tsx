@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { DEFAULT_VIEW, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { AgentSession } from '@appling/ai';
+import { DEFAULT_VIEW, type ClientReport, type SessionAct, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
 import type { EditOperation } from '@appling/model';
-import { connectLanguageServer, loadRelease, loadSnapshot, loadView, onSnapshot, requestEdit, saveFile, saveView } from './api.js';
+import { connectLanguageServer, loadRelease, loadSnapshot, loadView, onEvents, requestEdit, saveFile, saveView } from './api.js';
 import { Editor, type Reveal } from './Editor.js';
 import { ModelCanvas } from '@appling/viz/canvas';
-import { elementAt, GraphIndex } from '@appling/viz/views';
+import { elementAt, GraphIndex, type SessionMark } from '@appling/viz/views';
 import { Chat } from './Chat.js';
 import { Inspector } from './Inspector.js';
 import { Search } from './Search.js';
@@ -22,6 +23,11 @@ export function App() {
     const [release, setRelease] = useState<{ version: string } | null>(null);
     const [side, setSide] = useState<'search' | 'inspector' | 'ai'>('search');
     const [view, setView] = useState<ViewSettings>(DEFAULT_VIEW);
+    const [sessions, setSessions] = useState<AgentSession[]>([]);
+    /** The elements each agent session highlighted with ide_act. */
+    const [highlights, setHighlights] = useState<Record<string, string[]>>({});
+    const report = useRef<(report: ClientReport) => void>(() => undefined);
+    const act = useRef<(act: SessionAct) => void>(() => undefined);
 
     useEffect(() => {
         loadSnapshot().then(first => {
@@ -31,8 +37,15 @@ export function App() {
         });
         loadRelease().then(setRelease);
         loadView().then(setView);
-        return onSnapshot(setSnapshot);
+        const events = onEvents({ snapshot: setSnapshot, sessions: setSessions, act: a => act.current(a) });
+        report.current = events.report;
+        return events.close;
     }, []);
+
+    // What the IDE shows, for the agent sessions' ide_context.
+    useEffect(() => {
+        report.current({ selection: selected, view: { ...view }, file: snapshot?.files.find(f => f.uri === active)?.path });
+    }, [selected, view, active, snapshot]);
 
     const index = useMemo(() => snapshot && new GraphIndex(snapshot.graph), [snapshot]);
 
@@ -59,6 +72,25 @@ export function App() {
         if (operation.op === 'remove') setSelected(operation.target.slice(0, operation.target.lastIndexOf('.')) || undefined);
         return [];
     }, [snapshot]);
+
+    // The actions of agent sessions (ide_act): open and reveal select, highlight marks elements on the canvas.
+    act.current = (a: SessionAct) => {
+        if (a.action === 'highlight') setHighlights(current => ({ ...current, [a.session]: a.elements ?? [] }));
+        if ((a.action === 'open' || a.action === 'reveal') && a.elements?.[0]) select(a.elements[0], a.action === 'open');
+        else if (a.action === 'open' && a.file) {
+            const file = snapshot?.files.find(f => f.path === a.file);
+            if (file) {
+                setSource(true);
+                setActive(file.uri);
+                if (a.line) setReveal({ uri: file.uri, start: lineOffset(file.text, a.line), end: lineOffset(file.text, a.line) });
+            }
+        }
+    };
+
+    const marks = useMemo(() => {
+        const repo = snapshot && decodeURIComponent(snapshot.root.replace('file://', ''));
+        return sessions.filter(s => s.repo === repo).flatMap(s => [...s.claims.elements, ...highlights[s.id] ?? []].map((element): SessionMark => ({ element, color: s.color, label: s.label ?? s.name, session: s.id })));
+    }, [sessions, highlights, snapshot]);
 
     if (!snapshot || !index) return <div className="loading">Loading the model</div>;
     const block = release && `since_v${release.version.replaceAll('.', '_')}`;
@@ -87,7 +119,7 @@ export function App() {
                     onCursor={(uri, offset) => setSelected(elementAt(snapshot.locations, uri, offset))}
                     onSave={(path, text) => saveFile(path, text)}
                 />
-                <ModelCanvas index={index} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={selected} settings={view} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />
+                <ModelCanvas index={index} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={selected} settings={view} sessions={marks} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />
                 <div className="side">
                     <nav className="tabs" aria-label="Side panel">
                         <button className={side === 'search' ? 'active' : ''} onClick={() => setSide('search')}>Search</button>
@@ -101,4 +133,10 @@ export function App() {
             </main>
         </div>
     );
+}
+
+function lineOffset(text: string, line: number): number {
+    let offset = 0;
+    for (let i = 1; i < line && offset >= 0; i++) offset = text.indexOf('\n', offset) + 1 || text.length;
+    return offset;
 }

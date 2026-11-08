@@ -55,7 +55,10 @@ test('view settings are stored outside the model', async () => {
 test('changes on disk are pushed as snapshots', async () => {
     const socket = new WebSocket(ide.url.replace('http', 'ws') + '/events', { origin: ide.url });
     await new Promise(resolve => socket.on('open', resolve));
-    const pushed = new Promise<{ snapshot: { graph: { nodes: { qn: string }[] } } }>(resolve => socket.on('message', data => resolve(JSON.parse(data.toString()))));
+    const pushed = new Promise<{ snapshot: { graph: { nodes: { qn: string }[] } } }>(resolve => socket.on('message', data => {
+        const message = JSON.parse(data.toString());
+        if (message.type === 'snapshot') resolve(message);
+    }));
     writeFileSync(join(root, 'extra.appling'), 'module extra {\n}\n');
     const message = await pushed;
     expect(message.snapshot.graph.nodes.map(n => n.qn)).toContain('extra');

@@ -209,6 +209,12 @@ Tools and MCP:
 | `createMcpServer(root, { visualizer? })` | An MCP server with all tools, the `implement_next_task` and `derive_model` prompts and `MCP_INSTRUCTIONS`; with a visualizer also the visualization tools, and it declares the `claude/channel` capability |
 | `sessionChanges(project)` | A function that returns the model changes since it was created, for `VisualizerOptions.changes` |
 | `visualTools(host)`, `VisualHost`, `VISUAL_INSTRUCTIONS` | The visualization tools over a window host, the part of `Visualizer` they use, and the server instructions that explain them |
+| `createMcpServer(root, { session })`, `SessionScope`, `sessionTools(scope)`, `SESSION_INSTRUCTIONS` | With a session (`{ id, store, host? }`): the session tools, every call attributed to the session, conflict warnings on edits, and the instructions for coordinating with other sessions |
+| `SessionStore`, `MemorySessionStore`, `AgentSession`, `SessionMessage`, `ClaimConflict`, `SESSION_STATUSES`, `SESSION_COLORS` | The [agent sessions](../tools/ai.md#agent-sessions): open (with its bearer token), authenticate, end, update label and status, claim, release, touch, send, inbox, onChange |
+| `serveSessionStore(store, channel)`, `RemoteSessionStore`, `ipcChannel(process)`, `Channel` | A store served to another process, such as an IDE server child of Appling Desktop, and reached from there |
+| `IdeHost`, `IdeContext`, `IdeAction`, `AppHost`, `serveAppHost`, `remoteAppHost` | What `ide_context` and `ide_act` go through, and the part the app around the IDE server adds, also over IPC |
+| `findConflicts(sessions, self, touched)`, `overlaps(a, b)`, `peers(sessions, self)`, `sessionTitle(session)` | The claim rules and a session's display name |
+| `handleMcpRequest(server, request, response, hosts?)` | Answers one Streamable HTTP request with a fresh server, as `serveHttp` and the IDE server do |
 | `serveHttp(root, port)` | The MCP server over Streamable HTTP on `127.0.0.1`; returns `{ url, close() }` |
 | `REGISTRY_PROMPT`, `CHAT_SYSTEM`, `MCP_INSTRUCTIONS` | The registry skill text, the chat system prompt and the MCP server instructions that make the model the source of truth for business logic |
 
@@ -254,6 +260,7 @@ await window.show({ view: 'machine', focus: ['sales.OrderFlow'], title: 'Order l
 | `growTree(index, settings, unfolded, name?, trail?)` | The dependency tree of `settings.lens` as a `TreeNode`: the seed holds the modules, a module the declarations of the lens, a declaration the declarations that use it, grouped by kind when there is more than one; only the node ids in `unfolded` have children, the most relevant first; a node id in `trail` shows only its children in `unfolded` or `trail` |
 | `trailOf(index, settings, focus)`, `lensOf(kind)` | The `unfolded` and `trail` sets that draw the focused elements one after another, each unfolded in place, with the node id of each; the lens that starts from a kind |
 | `changeMarks(index, changes)` | The declarations that added and changed elements belong to, each `added` when the declaration itself is new, else `changed` |
+| `sessionMarks(index, marks)`, `SessionMark` | The declarations that the elements claimed or highlighted by agent sessions belong to, each with the first session's mark |
 | `revealPath(index, settings, qn)` | The node ids to unfold so that an element's declaration shows in its module |
 | `factOf(index, node)` | The short fact a tree node shows under its name, such as `on Order · draft, placed → cancelled` |
 | `LENSES`, `Lens` | The lenses (`domain`, `behavior`, `application`, `interfaces`, `access`) with their label and the kinds the tree starts from |
@@ -263,4 +270,4 @@ await window.show({ view: 'machine', focus: ['sales.OrderFlow'], title: 'Order l
 | `search`, `relations`, `entityActions`, `actionSummary`, `memberText`, `kindLabel`, `elementAt` | The search, relations and summaries the IDE side panel shows |
 | `ViewSettings`, `DEFAULT_VIEW` | The canvas options, the lens included |
 
-`@appling/viz/canvas` exports the SVG tree `ModelCanvas` (one lens at a time, unfolded node by node, circles sized by relevance, only trails when given a `focus`), the SVG flowchart `FlowCanvas` and the card grid `CardCanvas`, each with optional `bubbles`; `ModelCanvas` also marks the declarations of optional `changes`; import `@appling/viz/canvas.css` with them. They need `react` as a peer dependency.
+`@appling/viz/canvas` exports the SVG tree `ModelCanvas` (one lens at a time, unfolded node by node, circles sized by relevance, only trails when given a `focus`), the SVG flowchart `FlowCanvas` and the card grid `CardCanvas`, each with optional `bubbles`; `ModelCanvas` also marks the declarations of optional `changes` and rings those of optional `sessions` (`SessionMark[]`) in the session's colour; import `@appling/viz/canvas.css` with them. They need `react` as a peer dependency.
