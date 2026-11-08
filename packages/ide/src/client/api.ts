@@ -1,6 +1,7 @@
 import type { ChatEvent } from '@appling/ai';
 import type { EditOperation, EditResult } from '@appling/model';
 import type { FileDiff, Review, Revision } from '../shared/review.js';
+import type { Decision, LiveChanges } from '../shared/live.js';
 import { DEFAULT_VIEW, type ClientReport, type IdeEvents, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
 import { monaco } from './monaco.js';
 
@@ -40,6 +41,9 @@ export function onEvents(handlers: IdeEvents): { close(): void, report(report: C
         if (message.type === 'snapshot') handlers.snapshot(message.snapshot);
         if (message.type === 'sessions') handlers.sessions?.(message.sessions);
         if (message.type === 'act') handlers.act?.(message);
+        if (message.type === 'live') handlers.live?.(message.live);
+        if (message.type === 'agent-view') handlers.agentView?.(message.view, !!message.ended);
+        if (message.type === 'proposals') handlers.proposals?.(message.proposals);
     };
     return {
         close: () => socket.close(),
@@ -52,6 +56,23 @@ export function onEvents(handlers: IdeEvents): { close(): void, report(report: C
             if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'unsaved', files }));
         }
     };
+}
+
+/** Accepts the live changes of these files, or of every changed file: they stop being marked. */
+export async function acceptChanges(paths?: string[]): Promise<LiveChanges> {
+    return (await fetch('/api/live/accept', { method: 'POST', body: JSON.stringify({ paths }) })).json();
+}
+
+/** Writes a changed file's text as last accepted back to disk. */
+export async function revertChange(path: string): Promise<void> {
+    const response = await fetch('/api/live/revert', { method: 'POST', body: JSON.stringify({ path }) });
+    if (!response.ok) throw new Error(await response.text());
+}
+
+/** Answers an agent session's waiting propose_edits call. */
+export async function decideProposal(id: string, decision: Decision): Promise<void> {
+    const response = await fetch(`/api/proposals/${encodeURIComponent(id)}`, { method: 'POST', body: JSON.stringify({ decision }) });
+    if (!response.ok) throw new Error(await response.text());
 }
 
 export async function requestEdit(sources: Record<string, string>, operation: EditOperation): Promise<EditResult> {

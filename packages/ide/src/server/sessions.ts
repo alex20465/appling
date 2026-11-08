@@ -5,6 +5,8 @@ export interface ClientContext {
     selection?: string;
     view?: Record<string, unknown>;
     file?: string;
+    /** The agent session whose view (visual tools) the canvas shows, when the user opened one. */
+    watching?: string;
 }
 
 /**

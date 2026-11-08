@@ -2,14 +2,30 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 import type { EditOperation } from '@appling/model';
-import type { Changes, Visualizer } from '@appling/viz';
+import type { Ask, Bubble, Changes, Decision, Review, Selection, Show, Status } from '@appling/viz/protocol';
 import { VIEW_KINDS, type ViewKind } from '@appling/viz/views';
 import { graphDiff, hunks, proposal } from './chat.js';
 import type { Project } from './project.js';
 import { define, operationSchema, ProposalContext, type Tools } from './tools.js';
 
-/** What the visual tools need from the window, so tests can stand in for Electron. */
-export type VisualHost = Pick<Visualizer, 'show' | 'bubble' | 'selection' | 'reply' | 'review' | 'onAsk' | 'status'>;
+/**
+ * Where the visual tools draw: the floating window of `@appling/viz` (`Visualizer`) for a stdio session, or the
+ * project's canvas in the IDE for an agent session of its `/mcp`. Tests stand in for both.
+ */
+export interface VisualHost {
+    /** `window` (default): the floating window next to the terminal; `canvas`: the project's canvas in Appling. */
+    surface?: 'window' | 'canvas';
+    show(show: Show): Promise<void>;
+    /** False when nothing can show it. */
+    bubble(bubble: Bubble): boolean | Promise<boolean>;
+    selection(): Selection | Promise<Selection>;
+    reply(text: string, askId?: string): boolean | Promise<boolean>;
+    /** Resolves with the person's decision on a proposal. */
+    review(review: Review): Promise<Decision>;
+    status(status: Status): Promise<void>;
+    /** Questions the person types; only a host that can reach the session with them (a channel) has it. */
+    onAsk?(listener: (ask: Ask) => void): void;
+}
 
 /** The model changes since this call: the window's live view of what a session changed. */
 export function sessionChanges(project: Project): () => Promise<Changes> {
@@ -33,11 +49,24 @@ The window shows every model change of the session as it happens: the declaratio
 
 Questions typed into the window arrive as <channel source="appling" ask_id="..." selected="..." view="...">. Look things up with the model tools, then answer with visual_reply, passing the ask_id; the answer appears in the window, not in the terminal.`;
 
-/** Tools that drive the floating window. Only the MCP server registers them. */
+export const CANVAS_INSTRUCTIONS = `The appling server shows the model on the project's canvas in Appling, where the person works. Use it when the person asks to see, show, draw or visualize part of the model, and when they ask how a part of the application works: find the elements involved with the model tools, show them with visualize and explain them with visual_bubble, besides a short answer here. Pick the view that fits: node (one declaration or module in the model tree with what uses it), machine (a flowchart of the states and transitions), action (between which states it moves, who may run it, what it requires and changes), usecase (a flowchart of the steps), event (who emits and consumes it).
+
+The canvas never moves on its own: your view and its bubbles wait beside the canvas under your session's name until the person opens them, and then they follow each new view and bubble. Show one node at a time to walk through the model, and place one bubble per step in the order of the explanation; the person steps through them. Pass code, file and line to hint how an element is implemented, such as from code_references. Read what the person selected with visual_selection when they say "this" or "the selected one".
+
+Every model change, yours and any other, is marked live on the canvas and listed with its text and model diff until the person accepts or reverts it, so change the model with edit and write_model_file as usual; use propose_edits only when the person asks to review a change before it is written: they decide in the app. During longer work call visual_status at the start of each step with what you do and, when you know it, done and total.`;
+
+/** The instructions for the visual tools on this host. */
+export function visualInstructions(host: VisualHost): string {
+    return host.surface === 'canvas' ? CANVAS_INSTRUCTIONS : VISUAL_INSTRUCTIONS;
+}
+
+/** Tools that drive the floating window or the project's canvas. Only the MCP server registers them. */
 export function visualTools(host: VisualHost): Tools {
+    const where = host.surface === 'canvas' ? "on the project's canvas in Appling" : 'in the floating window';
+    const closed = host.surface === 'canvas' ? 'Nothing shows the canvas.' : 'The window is closed.';
     return {
         visualize: define({
-            description: 'Show a view of the model in the floating window next to the terminal, opening it when needed. Use it when the person asks to see or visualize something or asks how a part of the application works. view: node (any declaration or module; adds it to the tree on screen and unfolds what uses it, so you can guide one node at a time), machine (machines, as a flowchart), action (actions), usecase (use cases, as a flowchart), event (events). The person can click elements, ask questions from the window and jump to related elements.',
+            description: `Show a view of the model ${host.surface === 'canvas' ? "on the project's canvas in Appling, beside the person's own tree until they open it" : 'in the floating window next to the terminal, opening it when needed'}. Use it when the person asks to see or visualize something or asks how a part of the application works. view: node (any declaration or module; adds it to the tree on screen and unfolds what uses it, so you can guide one node at a time), machine (machines, as a flowchart), action (actions), usecase (use cases, as a flowchart), event (events). The person can click elements and jump to related elements.`,
             input: {
                 view: z.enum(VIEWS),
                 focus: z.array(z.string()).min(1).describe('Qualified names of the elements to draw, such as ["sales.OrderFlow"]'),
@@ -54,7 +83,7 @@ export function visualTools(host: VisualHost): Tools {
             }
         }),
         visual_bubble: define({
-            description: 'Place a bubble on an element of the view in the floating window, or on one of its members such as a field, to say what happens there. With code: a short example that hints how the element is implemented, with the file (relative to the model folder) and line it comes from. The bubbles stay until a different view is shown.',
+            description: `Place a bubble on an element of the view ${where}, or on one of its members such as a field, to say what happens there. With code: a short example that hints how the element is implemented, with the file (relative to the model folder) and line it comes from. The bubbles stay until a different view is shown.`,
             input: {
                 target: z.string().describe('Qualified name of the element or member, such as "sales.Order.status"'),
                 text: z.string().describe('One or two sentences'),
@@ -67,21 +96,21 @@ export function visualTools(host: VisualHost): Tools {
                 if (!graph.nodes.some(n => n.qn === input.target)) return { placed: false, reason: `No element ${input.target}.` };
                 if (input.line && !input.file) return { placed: false, reason: 'A line needs its file.' };
                 if (input.file && !existsSync(resolve(context.project.root, input.file))) return { placed: false, reason: `No file ${input.file} relative to the model folder.` };
-                return host.bubble(input) ? { placed: true } : { placed: false, reason: 'The window is closed.' };
+                return await host.bubble(input) ? { placed: true } : { placed: false, reason: closed };
             }
         }),
         visual_selection: define({
-            description: 'What the person selected in the floating window: the qualified name of the clicked element and the view on screen. open is false when the window is closed.',
+            description: `What the person selected ${where}: the qualified name of the clicked element and the view on screen. open is false when ${host.surface === 'canvas' ? 'no IDE window is open' : 'the window is closed'}.`,
             input: {},
             run: async () => host.selection()
         }),
         visual_reply: define({
-            description: 'Answer a question the person typed into the floating window; the text appears there. Pass the ask_id of the channel message.',
+            description: `Answer a question the person typed ${where}; the text appears there. Pass the ask_id of the channel message.`,
             input: { text: z.string(), ask_id: z.string().optional() },
-            run: async (_, input) => (host.reply(input.text, input.ask_id) ? { sent: true } : { sent: false, reason: 'The window is closed.' })
+            run: async (_, input) => (await host.reply(input.text, input.ask_id) ? { sent: true } : { sent: false, reason: closed })
         }),
         visual_status: define({
-            description: 'Show in the floating window what you work on now, such as "Modeling the tasks module" or "Implementing registry task 3 of 12", opening it when needed; done and total draw the progress. Call it at the start of each step of a longer task; the window keeps the earlier steps. Model changes appear in the window by themselves.',
+            description: `Show ${where} what you work on now, such as "Modeling the tasks module" or "Implementing registry task 3 of 12"; done and total draw the progress. Call it at the start of each step of a longer task; the earlier steps are kept. Model changes appear there by themselves.`,
             input: {
                 text: z.string().describe('The step, in a few words'),
                 done: z.number().int().min(0).optional().describe('Steps finished so far'),
@@ -93,7 +122,7 @@ export function visualTools(host: VisualHost): Tools {
             }
         }),
         propose_edits: define({
-            description: 'Propose model changes for the person to review in the floating window: the operations are validated on a copy, shown as text and graph differences, and written only when the person accepts. Waits for the decision and returns it, with their comment when they reject.',
+            description: `Propose model changes for the person to review ${host.surface === 'canvas' ? 'in Appling' : 'in the floating window'}: the operations are validated on a copy, shown as text and graph differences, and written only when the person accepts. Waits for the decision and returns it, with their comment when they reject.`,
             input: { operations: z.array(operationSchema).min(1), summary: z.string().describe('What changes and why, in one or two sentences') },
             run: async (context, input) => {
                 const working = new ProposalContext(context.project, context.sources());

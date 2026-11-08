@@ -67,7 +67,7 @@ const processes = new Map<string, IdeProcess>();
 const sessions = agentSessions();
 /** What the rail shows per repo and per workspace; every feature reports into its own source (`rail-status.ts`). */
 const rail = new RailStatus();
-const railSources = { validation: rail.source('validation'), editor: rail.source('editor'), git: rail.source('git'), agents: rail.source('agents') };
+const railSources = { validation: rail.source('validation'), editor: rail.source('editor'), git: rail.source('git'), agents: rail.source('agents'), live: rail.source('live') };
 sessions.onChange(list => railSources.agents.replace(agentContributions(list)));
 rail.onChange(() => refresh());
 /** Watchers of each repo's git `HEAD`, so the rail follows checkouts made anywhere. */
@@ -226,9 +226,10 @@ async function launch(id: string): Promise<void> {
             env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
             sessions,
             host: desktopHost(workspaces),
-            onStatus: ({ errors, unsaved }) => {
+            onStatus: ({ errors, unsaved, changes }) => {
                 if (processes.get(id) !== ide && processes.has(id)) return;
                 if (errors !== undefined) railSources.validation.set(id, { counts: { errors } });
+                if (changes !== undefined) railSources.live.set(id, { counts: { unseen: changes } });
                 if (unsaved) railSources.editor.set(id, { counts: { unsaved: unsaved.length }, notes: unsaved.map(f => `Unsaved: ${f}`) });
             },
             onExit: (code, stderr) => {
@@ -237,6 +238,7 @@ async function launch(id: string): Promise<void> {
                 drop(id);
                 railSources.validation.clear(id);
                 railSources.editor.clear(id);
+                railSources.live.clear(id);
                 repos.update(id, { status: 'failed', url: undefined, error: `The IDE server ended with code ${code}.${stderr ? `\n${stderr.trim()}` : ''}` });
                 refresh();
             }

@@ -17,12 +17,17 @@ export interface RailCounts {
     errors: number;
     /** Files with edits not yet saved in the repo's view. */
     unsaved: number;
+    /** Unseen model changes: files changed since the user last accepted them in the repo's view (#11). */
+    unseen: number;
 }
 
 export type RailCount = keyof RailCounts;
 
 /** Every count, most urgent first: the badge shows the first one above zero. */
-export const RAIL_COUNTS: readonly RailCount[] = ['agentsWaiting', 'agentsFailed', 'tasksFailed', 'errors', 'agentsWorking', 'tasksRunning', 'unsaved'];
+export const RAIL_COUNTS: readonly RailCount[] = ['agentsWaiting', 'agentsFailed', 'tasksFailed', 'errors', 'agentsWorking', 'tasksRunning', 'unsaved', 'unseen'];
+
+/** The counts a badge can show; unseen changes get a dot of their own on a background repo instead. */
+const BADGE_COUNTS = RAIL_COUNTS.filter(key => key !== 'unseen');
 
 /** A repo's git state beyond the branch (see `watchGit`). */
 export interface RailGit {
@@ -53,7 +58,7 @@ export interface RepoRailStatus {
 }
 
 export function emptyCounts(): RailCounts {
-    return { agentsWorking: 0, agentsWaiting: 0, agentsFailed: 0, tasksRunning: 0, tasksFailed: 0, errors: 0, unsaved: 0 };
+    return { agentsWorking: 0, agentsWaiting: 0, agentsFailed: 0, tasksRunning: 0, tasksFailed: 0, errors: 0, unsaved: 0, unseen: 0 };
 }
 
 /**
@@ -153,7 +158,7 @@ function same(a: RailContribution | undefined, b: RailContribution): boolean {
 
 /** The most urgent count above zero, for the badge; undefined when everything is quiet. */
 export function railBadge(counts: RailCounts): { kind: RailCount, count: number } | undefined {
-    const kind = RAIL_COUNTS.find(key => counts[key] > 0);
+    const kind = BADGE_COUNTS.find(key => counts[key] > 0);
     return kind && { kind, count: counts[kind] };
 }
 
@@ -164,7 +169,8 @@ const LABELS: Record<RailCount, [string, string]> = {
     errors: ['validation error', 'validation errors'],
     agentsWorking: ['agent working', 'agents working'],
     tasksRunning: ['task running', 'tasks running'],
-    unsaved: ['unsaved file', 'unsaved files']
+    unsaved: ['unsaved file', 'unsaved files'],
+    unseen: ['changed file not yet seen', 'changed files not yet seen']
 };
 
 /**

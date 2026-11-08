@@ -120,6 +120,7 @@ function render(state: ShellState): void {
         if (!shown) continue;
         if (shown.hidden) button.title += `\n${shown.hidden} hidden repo${shown.hidden > 1 ? 's' : ''}`;
         badge(button, shown);
+        unseenMark(button, shown.counts.unseen, shown.id === state.active);
     }
     repoRail.replaceChildren(...(workspace?.repos ?? []).map(repo => {
         const flags = `${repo.pinned ? ' pinned' : ''}${repo.hidden ? ' hidden' : ''}${repo.id === state.repo ? ' active' : ''}`;
@@ -127,6 +128,7 @@ function render(state: ShellState): void {
         const button = railButton(`repo ${repo.status}${flags}`, repo.name, `${repo.name}\n${repo.id}\n${note}Drag to reorder or onto a workspace, middle click closes, right click for more`);
         badge(button, repo);
         gitMarks(button, repo);
+        unseenMark(button, repo.counts.unseen, repo.id === state.repo);
         button.onclick = () => bridge.select(repo.id, workspace!.id);
         button.draggable = true;
         button.ondragstart = event => {
@@ -190,6 +192,15 @@ function gitMarks(button: HTMLElement, repo: RepoState): void {
         sync.textContent = `${git.ahead ? `↑${git.ahead > 9 ? '9+' : git.ahead}` : ''}${git.behind ? `↓${git.behind > 9 ? '9+' : git.behind}` : ''}`;
         button.append(sync);
     }
+}
+
+/** A background repo or workspace with unseen model changes gets a dot in the top right corner (#11). */
+function unseenMark(button: HTMLElement, unseen: number, shown: boolean): void {
+    if (!unseen || shown) return;
+    button.classList.add('unseen');
+    const dot = document.createElement('span');
+    dot.className = 'unseen-dot';
+    button.append(dot);
 }
 
 /**

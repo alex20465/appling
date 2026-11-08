@@ -1,4 +1,5 @@
 import type { AgentSession, IdeAction } from '@appling/ai';
+import type { AgentView, LiveChanges, Proposal } from './live.js';
 import type { Dependency, Graph, ResolvedReference } from '@appling/model';
 
 export interface SourceFile {
@@ -41,6 +42,12 @@ export interface IdeEvents {
     /** Every agent session of the workspace, after each change. */
     sessions?(sessions: AgentSession[]): void;
     act?(act: SessionAct): void;
+    /** Every model change since the baseline, after each change. */
+    live?(live: LiveChanges): void;
+    /** What an agent session shows with the visual tools; `ended` when the session ended. */
+    agentView?(view: AgentView, ended: boolean): void;
+    /** The proposals waiting for a decision, after each change. */
+    proposals?(proposals: Proposal[]): void;
 }
 
 /** What the client reports it shows, for the sessions' IDE context. */
@@ -48,4 +55,6 @@ export interface ClientReport {
     selection?: string;
     view?: Record<string, unknown>;
     file?: string;
+    /** The agent session whose view the canvas shows. */
+    watching?: string;
 }

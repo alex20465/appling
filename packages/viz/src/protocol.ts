@@ -36,6 +36,13 @@ export interface Status {
     total?: number;
 }
 
+/** What the person selected and the view on screen; `open` is false when nothing shows the agent's views. */
+export interface Selection {
+    open: boolean;
+    qn?: string;
+    view?: Show;
+}
+
 export type Decision = { accepted: true } | { accepted: false, comment?: string };
 
 export interface Ask {
