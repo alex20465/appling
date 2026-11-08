@@ -69,6 +69,46 @@ test('resources get defaults, identities, calculations and validations', async (
     ].join('\n'));
 });
 
+test('translated invariants get changeset tests the simulator proves', async () => {
+    const result = await planFor({
+        'shop.appling': `module shop {
+            enum Status { open done }
+            entity Item {
+                code: String unique
+                status: Status default open
+                quantity: Int
+                note: Text?
+                invariant "positive" { quantity > 0 && status in [open, done] }
+                invariant "noted when done" { status != done || has(note) }
+                invariant "small" { quantity * 2 < 100 }
+            }
+            entity Line {
+                item: Item
+                count: Int
+                invariant "counted" { count > 0 }
+            }
+        }`
+    });
+    const file = 'test/shop/shop/item_test.exs';
+    const text = result.steps.reduce<string | undefined>((current, { step }) => step.kind === 'template' && step.file === file ? step.write(current) : current, undefined);
+    const create = (attributes: string) => `    changeset = Ash.Changeset.for_create(Shop.Shop.Item, :create, %{${attributes}}, authorize?: false)`;
+    expect(text).toBe([
+        'defmodule Shop.Shop.ItemTest do', '  use ExUnit.Case, async: true', '',
+        '  test "invariant positive holds for valid records" do', create('code: "code-1", quantity: 1'), '    assert changeset.valid?', '  end', '',
+        '  test "invariant positive rejects violations" do', create('code: "code-1", quantity: -1'), '    refute changeset.valid?', '  end', '',
+        '  test "invariant noted when done holds for valid records" do', create('code: "code-1", quantity: 1'), '    assert changeset.valid?', '  end', '',
+        '  test "invariant noted when done rejects violations" do', create('code: "code-1", quantity: 1, status: :done'), '    refute changeset.valid?', '  end', '',
+        '  @tag skip: "registry task: shop.Item.invariant[\\"small\\"]"', '  test "invariant small holds for valid records"', '',
+        '  @tag skip: "registry task: shop.Item.invariant[\\"small\\"]"', '  test "invariant small rejects violations"',
+        'end', ''
+    ].join('\n'));
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['shop.Item.invariant["positive"]'].missing).toEqual([]);
+    expect(entries['shop.Item.invariant["small"]'].missing.map(m => m.what)).toContain(`write the tests "invariant small" in ${file}`);
+    // A required relationship leaves the input to a person.
+    expect(entries['shop.Line.invariant["counted"]'].missing.map(m => m.what)).toEqual(['write the tests "invariant counted" in test/shop/shop/line_test.exs']);
+});
+
 test('behavior, queries and the JSON:API are patched into the generated modules', async () => {
     const result = await planFor(examples());
     const files = new Map<string, string>([

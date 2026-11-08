@@ -1,17 +1,18 @@
 import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
-import type { ExprData, GraphNode, TypeData } from '@appling/model';
+import type { GraphNode, TypeData } from '@appling/model';
 import { interfaceSteps } from './api.js';
 import { projectionFieldSteps, querySteps } from './application.js';
 import { actionSteps, jobSteps, machineSteps } from './behavior.js';
-import { constant, elixirString, lastOf, parentOf, validation, withModuledoc } from './elixir.js';
+import { elixirString, lastOf, parentOf, withModuledoc } from './elixir.js';
 import { migrationSteps } from './migrations.js';
 import { hasPages, navigationSteps, pageSteps } from './pages.js';
 import { actorAttributeSpecs, actorFieldSteps, actorSteps, constrainRoles, homeAt, homeFields } from './actors.js';
 import { actorCheckSteps, closeResource, enforced, policySteps, policyTask, roleCalculations, roleSteps } from './roles.js';
 import { tenantSteps } from './tenants.js';
+import { check, defaultValue, invariantTests } from './model-tests.js';
 import { testSteps } from './tests.js';
 import { externalKeySteps } from './vendors.js';
-import { app, attributeType, calculation, fieldPolicyOf, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, storedAttributes, task, typeModule } from './naming.js';
+import { app, attributeType, calculation, fieldPolicyOf, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, task, typeModule } from './naming.js';
 
 const extension: CodegenExtension = {
     name: '@appling/codegen-ash',
@@ -50,7 +51,7 @@ const extension: CodegenExtension = {
             case 'Field': return fieldSteps(node, context);
             case 'Invariant': return [
                 ...(check(node, context) ? [] : [task(`enforce the invariant "${node.data.label}": ${node.props.condition}`)]),
-                ...testSteps(node, owner(node, context), `invariant ${node.data.label}`, ['holds for valid records', 'rejects violations'], context)
+                ...invariantTests(node, context)
             ];
             case 'Policy': return [
                 ...(policySteps(node, context) ?? [policyTask(node)]),
@@ -166,17 +167,6 @@ function patchResource(text: string, entity: GraphNode, context: MapContext): st
 
 function block(name: string, lines: string[]): string {
     return lines.length ? `\n  ${name} do\n${lines.map(l => `    ${l}\n`).join('')}  end\n` : '';
-}
-
-function check(invariant: GraphNode, context: MapContext): string | undefined {
-    return validation(invariant.data.condition as ExprData, storedAttributes(context.node(parentOf(invariant.qn))!, context), context.node);
-}
-
-function defaultValue(field: GraphNode, context: MapContext): string | undefined {
-    const expr = field.data.default as ExprData | undefined;
-    if (!expr) return undefined;
-    if (expr.$type === 'NameExpr' && expr.name === 'now' && !expr.target) return '&DateTime.utc_now/0';
-    return constant(expr, context.node);
 }
 
 function embedded(node: GraphNode, context: MapContext): string {
