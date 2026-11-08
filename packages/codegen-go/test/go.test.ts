@@ -17,6 +17,39 @@ test('examples generate Go packages for the domain and behavior layers', async (
     expect(entries['sales.Order.total'].status).toBe('generated');
 });
 
+const INVARIANTS = `module v {
+  enum State {
+    open
+    closed
+  }
+  entity Ticket {
+    title: String
+    state: State default open
+    points: Int default 0
+    note: Text?
+    invariant "points in range" { points >= 0 && points <= 100 }
+    invariant "noted when closed" { state != closed || note != null }
+    invariant "title given" { title != "" }
+  }
+}`;
+
+test('invariant tests check a valid record and a violation the simulator proves', async () => {
+    const { documents, services } = await buildWorkspace({ 'v.appling': INVARIANTS });
+    const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), go, 'app');
+    const files = new Map<string, string>();
+    for (const { step } of result.steps) if (step.kind === 'template') files.set(step.file, step.write(files.get(step.file)));
+    const tests = files.get('internal/v/v_test.go')!;
+    expect(tests.match(/func validTicket\(\)/g)).toHaveLength(1);
+    expect(tests).toContain('\tx := NewTicket()\n\tx.Title = "title-1"\n\treturn x');
+    expect(tests).toContain('\t\tx.Points = -1\n');
+    expect(tests).toContain('\t\tx.State = StateClosed\n');
+    expect(tests).toContain('\t\tx.Title = ""\n');
+    expect(tests).toContain('!strings.Contains(err.Error(), "noted when closed")');
+    expect(tests).not.toContain('t.Skip');
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['v.Ticket.invariant["points in range"]'].status).toBe('generated');
+});
+
 const ACCESS = `module m {
   role Clerk { actor.active && tenant != null }
   role Customer

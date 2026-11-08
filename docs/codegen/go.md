@@ -36,7 +36,8 @@ The Go module path is the project name: the `name` option, or the output folder'
 | `errors` | `var Err<Name> = errors.New(...)` |
 | `role`, `actor`, `tenant` | the `access` package, see [Access](#access) |
 | `policy` | a function per policy and the `Can...` checks in `policies.go`, see [Policies](#policies) |
-| invariants, policies, transitions, preconditions | skipped tests in `<module>_test.go` |
+| invariants | a test in `<module>_test.go` per invariant that `Validate` checks: `valid<Entity>()` (`New<Entity>()` plus a sample value for every other required field) passes `Validate`, and the same record with one field set to a value the simulator proves to break the invariant fails with its label. Without such a value the violation case stays skipped as a registry task |
+| policies, transitions, preconditions | skipped tests in `<module>_test.go` |
 
 Expressions are translated with their types: decimals use `Add`, `GreaterThanOrEqual` and friends, times use `Before`, `After` and `Add`, `sum(lines.map(l, l.amount))` becomes a loop, and `has(field)` checks the pointer.
 

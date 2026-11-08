@@ -1,5 +1,5 @@
 import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
-import type { ExprData, GraphNode, TypeData } from '@appling/model';
+import { Simulator, UNKNOWN, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
 import { accessFile, accessOf, accessSteps, actorFieldType, tenantOf, tenantPaths } from './access.js';
 import { camel, enumConstant, goExpr, goTerm, pascal, PRIMITIVES, qualify, type GoScope } from './golang.js';
 
@@ -30,7 +30,7 @@ const extension: CodegenExtension = {
             case 'Event': return [structStep(node, context, 'events.go')];
             case 'ErrorDecl': return [goFile(node.module, 'errors.go', context, new Set(['errors']), `// ${errorName(node)} is the declared error ${node.qn}.\nvar ${errorName(node)} = errors.New(${JSON.stringify(last(node.qn))})`)];
             case 'Field': return fieldSteps(node, context);
-            case 'Invariant': return [...(validation(node, context) ? [] : [task(`check the invariant "${node.data.label}" in Validate: ${node.props.condition}`)]), ...testSteps(node, context)];
+            case 'Invariant': return [...(validation(node, context) ? [] : [task(`check the invariant "${node.data.label}" in Validate: ${node.props.condition}`)]), ...invariantTestSteps(node, context)];
             case 'Policy': return [...policySteps(node, context), ...testSteps(node, context)];
             case 'Role':
             case 'Actor':
@@ -479,9 +479,184 @@ function machineSteps(machine: GraphNode, context: MapContext): Step[] {
 
 /** A skipped test per case of a rule in the module's test file; writing its body is a registry task. */
 function testSteps(node: GraphNode, context: MapContext): Step[] {
-    const name = `Test${pascal(last(parentOf(node.qn)))}${pascal(String(node.data.label ?? last(node.qn)).replace(/[^A-Za-z0-9]+/g, '_'))}`.replace(/_/g, '');
+    const name = testName(node);
     const code = `func ${name}(t *testing.T) {\n\tt.Skip(${JSON.stringify(`registry task: ${node.qn}`)})\n}`;
     return [goFile(node.module, `${pkgOf(node.module)}_test.go`, context, new Set(['testing']), code), task(`write the test ${name}`)];
+}
+
+function testName(node: GraphNode): string {
+    return `Test${pascal(last(parentOf(node.qn)))}${pascal(String(node.data.label ?? last(node.qn)).replace(/[^A-Za-z0-9]+/g, '_'))}`.replace(/_/g, '');
+}
+
+const simulators = new WeakMap<Graph, Simulator>();
+
+/** One simulator per graph, which proves that a test record satisfies or breaks an invariant. */
+function simulator(context: MapContext): Simulator {
+    let found = simulators.get(context.graph);
+    if (!found) simulators.set(context.graph, found = new Simulator(context.graph));
+    return found;
+}
+
+/**
+ * The test of an invariant that `Validate` checks: the entity's valid record passes `Validate`, and the same
+ * record with one field the simulator proves to break the invariant fails with its label. Without a valid
+ * record the test stays skipped; without such a field value only the violation case does, as a registry task.
+ */
+function invariantTestSteps(invariant: GraphNode, context: MapContext): Step[] {
+    const entity = context.node(parentOf(invariant.qn))!;
+    if (!validation(invariant, context)) return testSteps(invariant, context);
+    const imports = new Set(['testing']);
+    const scope = goScope(entity, context, imports);
+    const valid = validRecord(entity, context);
+    if (!valid) return testSteps(invariant, context);
+    const label = JSON.stringify(String(invariant.data.label));
+    const violation = violating(invariant, entity, valid.record, context, scope);
+    if (violation) imports.add('strings');
+    const name = testName(invariant);
+    const code = [
+        `func ${name}(t *testing.T) {`,
+        '\tt.Run("holds for a valid record", func(t *testing.T) {',
+        `\t\tif err := ${valid.name}().Validate(); err != nil {`,
+        `\t\t\tt.Fatalf("a valid ${last(entity.qn)}: %v", err)`,
+        '\t\t}',
+        '\t})',
+        '\tt.Run("rejects a violation", func(t *testing.T) {',
+        ...(violation ? [
+            `\t\tx := ${valid.name}()`,
+            `\t\t${violation}`,
+            `\t\tif err := x.Validate(); err == nil || !strings.Contains(err.Error(), ${label}) {`,
+            `\t\t\tt.Fatalf(${JSON.stringify(`${violation}: want the error %q, got %v`)}, ${label}, err)`,
+            '\t\t}'
+        ] : [`\t\tt.Skip(${JSON.stringify(`registry task: ${invariant.qn}`)})`]),
+        '\t})',
+        '}'
+    ].join('\n');
+    return [
+        valid.step,
+        goFile(invariant.module, `${pkgOf(invariant.module)}_test.go`, context, imports, code),
+        ...(violation ? [] : [task(`write the violation case of the test ${name}`)])
+    ];
+}
+
+/**
+ * The test helper `valid<Entity>` in the module's test file: `New<Entity>` with a sample value for every
+ * required stored field without a default that has one (strings, numbers, booleans, times, the first enum
+ * literal), and the record the simulator sees. Undefined when an invariant `Validate` checks is not proven to hold.
+ */
+function validRecord(entity: GraphNode, context: MapContext): { name: string, record: SimRecord, step: Step } | undefined {
+    const name = `valid${last(entity.qn)}`;
+    const imports = new Set<string>();
+    const scope = goScope(entity, context, imports);
+    const record: SimRecord = { $type: entity.qn };
+    const lines: string[] = [];
+    for (const field of fieldsOf(entity, context).filter(f => !f.data.derived)) {
+        const type = field.data.type as TypeData;
+        const fieldName = last(field.qn);
+        if (type.many) record[fieldName] = [];
+        else if (field.data.default) record[fieldName] = defaultValue(field, { ...scope, self: 'x' }) ? simulator(context).evaluate(field.data.default as ExprData, { self: record }) : UNKNOWN;
+        else if (type.optional) record[fieldName] = null;
+        else {
+            const sample = goSample(fieldName, type, scope, context);
+            record[fieldName] = sample?.value ?? UNKNOWN;
+            if (sample) lines.push(`\tx.${pascal(fieldName)} = ${sample.go}`);
+        }
+    }
+    const checked = context.children(entity.qn).filter(n => n.kind === 'Invariant' && validation(n, context));
+    if (!checked.every(i => simulator(context).evaluate(i.data.condition as ExprData, { self: record }) === true)) return undefined;
+    const code = [
+        `// ${name} returns ${/^[AEIOU]/.test(last(entity.qn)) ? 'an' : 'a'} ${last(entity.qn)} with the defaults of the model and a sample value for every other required field.`,
+        `func ${name}() *${last(entity.qn)} {`, `\tx := New${last(entity.qn)}()`, ...lines, '\treturn x', '}'
+    ].join('\n');
+    const file = goFile(entity.module, `${pkgOf(entity.module)}_test.go`, context, imports, code) as Extract<Step, { kind: 'template' }>;
+    const step: Step = { ...file, write: existing => existing?.includes(`\nfunc ${name}() `) ? existing : file.write(existing) };
+    return { name, record, step };
+}
+
+/** A sample value of a required field in Go and as the simulator sees it; undefined for files, value types and records. */
+function goSample(name: string, type: TypeData, scope: GoScope, context: MapContext): { go: string, value: Value } | undefined {
+    if (type.decl) {
+        const decl = context.node(type.decl);
+        const first = decl?.kind === 'Enum' ? context.children(decl.qn)[0] : undefined;
+        return first ? { go: enumConstant(first, scope), value: last(first.qn) } : undefined;
+    }
+    switch (type.primitive) {
+        case 'String':
+        case 'Text': return { go: JSON.stringify(`${name}-1`), value: `${name}-1` };
+        case 'Uuid': return { go: '"00000000-0000-4000-8000-000000000001"', value: '00000000-0000-4000-8000-000000000001' };
+        case 'Int': return { go: '1', value: 1 };
+        case 'Decimal':
+        case 'Money':
+            scope.imports.add(DECIMAL);
+            return { go: 'decimal.NewFromInt(1)', value: 1 };
+        case 'Bool': return { go: 'false', value: false };
+        case 'Date':
+        case 'DateTime':
+            scope.imports.add('time');
+            return { go: 'time.Now()', value: UNKNOWN };
+        case 'Duration':
+            scope.imports.add('time');
+            return { go: 'time.Hour', value: 3_600_000 };
+    }
+    return undefined;
+}
+
+interface Candidate {
+    go: string;
+    value: Value;
+    imports: string[];
+    /** The conversion an untyped constant needs inside `ptr`, such as `int64`. */
+    cast?: string;
+}
+
+/**
+ * An assignment such as `x.Total = decimal.NewFromInt(-1)` that makes the invariant false on the valid record,
+ * trying the fields the condition reads in order.
+ */
+function violating(invariant: GraphNode, entity: GraphNode, record: SimRecord, context: MapContext, scope: GoScope): string | undefined {
+    const condition = invariant.data.condition as ExprData;
+    const read = targets(condition);
+    for (const field of fieldsOf(entity, context).filter(f => read.has(f.qn) && !f.data.derived && !(f.data.type as TypeData).many)) {
+        for (const candidate of candidates(field.data.type as TypeData, scope, context)) {
+            if (simulator(context).evaluate(condition, { self: { ...record, [last(field.qn)]: candidate.value } }) !== false) continue;
+            candidate.imports.forEach(i => scope.imports.add(i));
+            return `x.${pascal(last(field.qn))} = ${candidate.go}`;
+        }
+    }
+    return undefined;
+}
+
+/** The values tried on a field: a few numbers, both booleans, the empty string, every enum literal, and nil when optional. */
+function candidates(type: TypeData, scope: GoScope, context: MapContext): Candidate[] {
+    const found: Candidate[] = [];
+    if (type.decl) {
+        const decl = context.node(type.decl);
+        if (decl?.kind === 'Enum') for (const literal of context.children(decl.qn)) found.push({ go: enumConstant(literal, scope), value: last(literal.qn), imports: [] });
+    } else {
+        const numbers = [-1, 0, 1_000_000];
+        switch (type.primitive) {
+            case 'Int': found.push(...numbers.map(n => ({ go: String(n), value: n, imports: [], cast: 'int64' }))); break;
+            case 'Decimal':
+            case 'Money': found.push(...numbers.map(n => ({ go: `decimal.NewFromInt(${n})`, value: n, imports: [DECIMAL] }))); break;
+            case 'Bool': found.push(...[true, false].map(b => ({ go: String(b), value: b, imports: [] }))); break;
+            case 'String':
+            case 'Text': found.push({ go: '""', value: '', imports: [] }); break;
+        }
+    }
+    if (!type.optional) return found;
+    return [{ go: 'nil', value: null, imports: [] }, ...found.map(c => ({ ...c, go: `ptr(${c.cast ? `${c.cast}(${c.go})` : c.go})` }))];
+}
+
+/** The qualified names the expression compares; a name only tested by `has()` is left out, its null is meant. */
+function targets(expr: unknown, found: Set<string> = new Set()): Set<string> {
+    if (Array.isArray(expr)) {
+        for (const item of expr) targets(item, found);
+    } else if (expr && typeof expr === 'object') {
+        const node = expr as { $type?: string, target?: unknown, call?: unknown, name?: unknown };
+        if (node.$type === 'NameExpr' && node.call && node.name === 'has') return found;
+        if (node.$type === 'NameExpr' && typeof node.target === 'string') found.add(node.target);
+        for (const value of Object.values(expr)) targets(value, found);
+    }
+    return found;
 }
 
 function defaultValue(field: GraphNode, scope: GoScope): string | undefined {
