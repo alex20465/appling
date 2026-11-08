@@ -102,6 +102,8 @@ type Events = {
     /** Shell integration marks and notifications, parsed. */
     event: [id: string, event: IntegrationEvent];
     notification: [id: string, notification: Notification];
+    /** Input written to a terminal (typed, pasted or an agent session's answer). */
+    input: [id: string, data: string];
     /** The tabs, splits, names or states of a repo's terminals changed. */
     changed: [repo: string];
     /** This process attached to a terminal it did not just start (after a restart, for a view): its screen and scrollback. */
@@ -336,7 +338,10 @@ export class TerminalService extends EventEmitter<Events> {
     }
 
     write(id: string, data: string): void {
-        this.live.get(id)?.attached?.write(data);
+        const attached = this.live.get(id)?.attached;
+        if (!attached) return;
+        attached.write(data);
+        this.emit('input', id, data);
     }
 
     async resize(id: string, cols: number, rows: number): Promise<void> {

@@ -86,6 +86,43 @@ appling-pty-host stop            # every session and the host
 
 The status is `running`, `needs input` or `exited <code>`. The packaged app has no such command on your `PATH`; start the tray instead: `Appling --tray` (from a clone, `node packages/desktop/out/bin.js --tray`). It is a small Appling process without windows that lists the sessions with their status and can open the app at one, stop one or stop all. `Appling --session <id>` opens the app at a session directly.
 
+## Agent sessions
+
+An agent session is a coding agent running in a tab of the terminal panel, wired to the repo's Appling MCP tools. **Agents › New Agent Session…** (`Ctrl+Alt+A`, also the robot button of the panel) starts one from a preset: **Claude Code**, **Codex**, **Gemini CLI** or **opencode**. A repo can have as many sessions as you like, each in its own tab.
+
+- **No setup.** Each session gets its own MCP session with a token. Desktop hands the agent the MCP server through its command line or environment and a configuration file in the session's own folder, and never edits your configuration files:
+
+  | Agent | MCP server | Status |
+  | :- | :- | :- |
+  | Claude Code | `--mcp-config` (HTTP with an `Authorization` header) | HTTP hooks in `--settings`: PermissionRequest, Notification, Stop, StopFailure, UserPromptSubmit |
+  | Codex | `-c mcp_servers.appling.url=…` with the token in `APPLING_MCP_TOKEN` | its TUI notifications as OSC 9 (`-c tui.notification_method="osc9"`) |
+  | Gemini CLI | a system settings file of the session's own (`GEMINI_CLI_SYSTEM_SETTINGS_PATH`, merged over the machine's) | its BeforeAgent, AfterAgent and Notification hooks |
+  | opencode | `OPENCODE_CONFIG_CONTENT` (a remote server with headers) | a plugin in `OPENCODE_CONFIG_DIR` for permission and idle events |
+
+- **Status.** The tab shows the agent's name until the agent labels its session through MCP; double click the tab (or the name on the board) to rename it. Its colour follows the status: green while it works, amber while it needs input or is blocked, gray when it is done or exited, red when it failed. Label, status and claims come from the agent through MCP; that it waits for you or finished its turn comes from its hooks or terminal notifications, never from reading its output.
+- **Exit.** When the agent exits, its tab turns gray and keeps its scrollback until you close it. Closing the tab ends the MCP session and releases its claims.
+- **The rail** shows a dot per session under its repo, in its status colour, with a ring around the session whose tab is shown. The repo's badge sums its sessions.
+- **The session board**, **Agents › Agent Sessions…** (`Ctrl+Shift+A`), lists every session of every workspace and repo with its label, status, repo, how long it runs and its unwatched playbook chapters. Arrows and Enter, or a click, jump to its tab.
+- **Answer without the terminal.** When a session in a background repo or workspace needs input, a desktop notification says so. Click it, or the session's amber dot on the rail, for the answer form: **Allow**, **Deny**, an option number or a typed reply, written to the agent's terminal. On macOS the notification itself has Allow and Deny buttons and a reply field.
+- **The canvas.** Elements a session claimed have a ring in the session's colour; click the ring to go to the session.
+- **Restarts.** Sessions are terminals, so they keep running when the app closes and come back in their tabs, with their MCP session and token. The agents reach Desktop through one local endpoint whose port stays the same between starts.
+
+Add your own presets, or change the built in ones, in `settings.json` of the app's data folder (**Terminal › Terminal Settings**):
+
+```json
+{
+  "agents.presets": [
+    { "name": "Aider", "command": "aider", "args": ["--mcp-server", "{mcpUrl}"], "env": { "AIDER_DARK_MODE": "1" } },
+    { "name": "Claude Code", "command": "claude", "args": ["--model", "opus"], "wiring": "claude" }
+  ]
+}
+```
+
+`wiring` is `claude`, `codex`, `gemini`, `opencode` or `env` (the default): with `env` the agent gets `APPLING_MCP_URL`, `APPLING_MCP_TOKEN` and `APPLING_HOOK_URL`, the arguments may use `{mcpUrl}`, `{token}` and `{hookUrl}`, and any OSC 9 or OSC 777 notification marks it as waiting. `answers` sets the keys of `allow`, `deny`, `option` (`{n}` for the number) and `submit`.
+
+> [!NOTE]
+> Agent sessions run in local repos for now. An agent in a remote repo runs on that machine, which cannot reach the app's local MCP endpoint yet.
+
 ## Remote repos
 
 A repo can live on another machine: on an SSH host, in a dev container or in WSL. Its IDE server, the pty host with its terminals and the code view then run there, next to the files, and Desktop shows them as it shows a local repo. A workspace can mix local and remote repos.

@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('terminals', {
     resize: (id: string, cols: number, rows: number) => ipcRenderer.send('terminal:resize', id, cols, rows),
     create: (options: { profile?: string, split?: boolean }) => ipcRenderer.send('terminal:create', options),
     profileMenu: (split: boolean) => ipcRenderer.send('terminal:profileMenu', split),
+    agentMenu: () => ipcRenderer.send('terminal:agentMenu'),
     tabMenu: (id: string) => ipcRenderer.send('terminal:tabMenu', id),
     close: (id: string) => ipcRenderer.send('terminal:close', id),
     focus: (id: string) => ipcRenderer.send('terminal:focus', id),

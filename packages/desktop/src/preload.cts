@@ -45,5 +45,16 @@ contextBridge.exposeInMainWorld('appling', {
         stop: (label: string) => ipcRenderer.send('tasks:stop', label),
         show: (label: string) => ipcRenderer.send('tasks:show', label),
         close: () => ipcRenderer.send('tasks:close')
-    }
+    },
+    // agent sessions (#10): the rail's dots, the board and the answer form
+    agentJump: (id: string) => ipcRenderer.send('agents:jump', id),
+    agentBoard: () => ipcRenderer.send('agents:board'),
+    agentOpenAnswer: (id: string) => ipcRenderer.send('agents:openAnswer', id),
+    agentClose: () => ipcRenderer.send('agents:close'),
+    agentAnswer: (id: string, answer: unknown) => ipcRenderer.send('agents:answer', id, answer),
+    agentRename: (id: string, label: string) => ipcRenderer.send('agents:rename', id, label),
+    agentEnd: (id: string) => ipcRenderer.send('agents:end', id),
+    onAgentBoard: (callback: (entries: unknown) => void) => ipcRenderer.on('agents:board', (_event, entries) => callback(entries)),
+    onAgentAnswer: (callback: (entry: unknown) => void) => ipcRenderer.on('agents:answer', (_event, entry) => callback(entry)),
+    onAgentClose: (callback: () => void) => ipcRenderer.on('agents:close', () => callback())
 });

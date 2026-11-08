@@ -301,6 +301,8 @@ Every file a session's tool call writes is attributed to the session in the IDE'
 
 The sessions sit in a session store that the IDE servers of a workspace share. Appling Desktop holds one store in its main process and serves it to every repo's IDE server child over the child's IPC channel (`appling-ide --shared-sessions`), so sessions of different repos see each other and keep their claims while a server restarts. A session belongs to a workspace and works in one repo; it sees the sessions of its workspace, or of its repo when it has none. An IDE server started on its own keeps a store of its own.
 
+In Desktop, agents reach the MCP server through one local endpoint of the app (`http://127.0.0.1:<port>/mcp`, which forwards to the session's repo server) and report hook events to it (`/hooks/<event>`), both with the session's token. Its port stays the same between starts and the store takes the sessions back with their tokens (`MemorySessionStore.adopt`), so an agent that kept running while the app restarted goes on with the same session. How Desktop starts and wires each agent is in [Appling Desktop](desktop.md#agent-sessions).
+
 The IDE server pushes every change of the sessions over its `/events` websocket as `{ type: "sessions", sessions }`, and every `ide_act` except `focus` as `{ type: "act", session, color, action, ... }`. The IDE client reports what it shows (`{ type: "context", selection, view, file, watching }`) on the same socket, which `ide_context` returns, and draws the claimed and highlighted elements of its repo's sessions with a ring in the session's colour.
 
 ## The playbook

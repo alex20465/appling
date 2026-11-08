@@ -8,7 +8,8 @@
 export const SKIP_SHELL = new Set([
     'nextRepo', 'previousRepo', 'nextWorkspace', 'previousWorkspace',
     ...Array.from({ length: 9 }, (_, i) => `workspace${i + 1}`),
-    'toggleTerminal', 'newTerminal', 'splitTerminal', 'nextTerminal', 'previousTerminal', 'devTools'
+    'toggleTerminal', 'newTerminal', 'splitTerminal', 'nextTerminal', 'previousTerminal', 'devTools',
+    'newAgentSession', 'agentBoard'
 ]);
 
 /** A key press as Electron's `before-input-event` reports it. */

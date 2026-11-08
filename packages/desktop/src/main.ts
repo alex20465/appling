@@ -1,14 +1,16 @@
 import { existsSync, mkdirSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, dialog, ipcMain, Menu, screen, shell, WebContentsView, type IpcMainEvent, type MenuItemConstructorOptions, type WebContents } from 'electron';
+import { app, BaseWindow, dialog, ipcMain, Menu, screen, shell, WebContentsView, type IpcMainEvent, type MenuItemConstructorOptions, type WebContents } from 'electron';
 import type { TextDiffRequest } from './code-bridge.js';
 import { CodeViews, type SourceLocation } from './code-view.js';
 import { EXTENSION, readCodeWorkspace, writeCodeWorkspace } from './code-workspace.js';
 import { displayFingerprint, displayOf, placeWindow, type DisplayInfo } from './displays.js';
 import { gitBranch, watchGit } from './git.js';
+import { unwatched } from '@appling/ai';
 import { agentSessions, desktopHost } from './agent-sessions.js';
 import { appCommand, sessionArg, trayMode, withoutAppFlags } from './app-flags.js';
+import { AgentUi } from './agents/ui.js';
 import { cloneIpc } from './clone-ipc.js';
 import { agentContributions, RailStatus, railBadge, railLines } from './rail-status.js';
 import { desktopPlaybooks, playbookRail } from './playbooks.js';
@@ -90,6 +92,7 @@ if (process.argv.slice(0, process.argv.includes('--') ? process.argv.indexOf('--
         code?.close();
         remotes.killAll();
         remoteStatus.close();
+        agents.dispose();
     });
 }
 
@@ -112,7 +115,8 @@ const remoteStatus = new RemoteStatus({
     log: message => console.error(message)
 });
 const remotes = new RemoteRepos({ userData: app.getPath('userData'), app: () => serverBundle(), rail: { connection: railSources.connection, git: railSources.git } });
-sessions.onChange(list => railSources.agents.replace(agentContributions(list)));
+// a session counts on the rail under its Desktop repo id (an agent session's own, else the path it works in)
+sessions.onChange(list => railSources.agents.replace(agentContributions(list.map(s => ({ ...s, repo: agents?.sessions.get(s.id)?.repo ?? s.repo })))));
 rail.onChange(() => refresh());
 /** The playbook of every workspace (#19), kept in the app's data folder; unwatched chapters count on the rail. */
 const playbooks = desktopPlaybooks(join(app.getPath('userData'), 'playbooks'));
@@ -209,6 +213,30 @@ function tasksMenuSoon(): void {
     clearTimeout(tasksMenuTimer);
     tasksMenuTimer = setTimeout(() => buildMenu(), 150);
 }
+/** The agent sessions in terminal tabs (#10): presets, the board, notifications and answers. */
+const agents = new AgentUi({
+    userData: app.getPath('userData'),
+    store: sessions,
+    panel: terminals,
+    ideMcp: repo => processes.get(repo)?.mcp,
+    activeRepo: () => workspaces.activeRepo(),
+    activeWorkspace: () => workspaces.current()?.id,
+    repoName: repo => repoName(repo),
+    workspaceName: id => workspaces.get(id)?.name,
+    attention: () => {
+        const shown = windows.all().map(w => workspaces.get(windows.activeOf(w.id, openIds()) ?? '')).filter(w => w !== undefined);
+        return { focused: BaseWindow.getFocusedWindow() !== null, shown: new Set(shown.flatMap(w => w.active ? [w.active] : [])), workspaces: new Set(shown.map(w => w.id)) };
+    },
+    showRepo: (repo, workspace) => workspaces.select(repo, workspace) && changed(),
+    focusedWindow: () => windows.focused().id,
+    cover: (window, on) => host.cover(window, 'agents', on),
+    send: (window, channel, ...args) => host.native(window)?.shell.webContents.send(channel, ...args),
+    windowOf: sender => host.idOf(sender),
+    focusActive: () => activeView()?.webContents.focus(),
+    unwatched: () => Object.assign({}, ...playbooks.all().map(book => unwatched(book).sessions)),
+    refresh: () => refresh(),
+    window: () => host.base()
+});
 /** The window layouts per monitor setup, as the session holds them. */
 let layouts: Record<string, SavedLayout> = {};
 /** The displays at the last change, to place windows whose display is gone where they were. */
@@ -241,6 +269,7 @@ function start(): void {
     });
     registerPaneType({ type: CODE_PANE, label: 'Code', region: 'side', share: code.settings.width });
     terminals.start();
+    void agents.start();
     // file paths in terminals open in the repo's code view where there is one, else in the OS
     if (CodeViews.supported()) terminals.fileOpener = codeViewOpener(code);
     /** Every message from a shell page acts in the window that sent it, which becomes the focused one. */
@@ -289,6 +318,7 @@ function start(): void {
         const repo = repoOf(event.sender);
         if (repo && typeof location?.uri === 'string' && Number.isInteger(location.start)) code?.selected(repo, location);
     });
+    ipcMain.on('ideFocusSession', (event, session: string) => repoOf(event.sender) && typeof session === 'string' && agents.jump(session));
     ipcMain.on('ideTextDiff', (event, request: TextDiffRequest) => {
         const repo = repoOf(event.sender);
         if (repo) code?.textDiff(repo, request);
@@ -417,7 +447,7 @@ async function launch(id: string): Promise<void> {
             env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
             sessions,
             playbooks,
-            host: desktopHost(workspaces),
+            host: desktopHost(workspaces, { tabs: session => agents.tabs(session), focus: session => agents.jump(session.id) }),
             onImplementation: state => code?.implementation(id, state),
             onStatus: ({ errors, unsaved, changes }) => {
                 if (processes.get(id) !== ide && processes.has(id)) return;
@@ -455,7 +485,7 @@ async function launchRemote(id: string): Promise<void> {
             ide: {
                 sessions,
                 playbooks,
-                host: desktopHost(workspaces),
+                host: desktopHost(workspaces, { tabs: session => agents.tabs(session), focus: session => agents.jump(session.id) }),
                 onStatus: ({ errors, unsaved, changes }) => {
                     if (errors !== undefined) railSources.validation.set(id, { counts: { errors } });
                     if (changes !== undefined) railSources.live.set(id, { counts: { unseen: changes } });
@@ -704,6 +734,7 @@ function state(window: string) {
                     return {
                         id: f.path, name: repoName(f.path, f.name), status: repo?.status ?? 'starting', error: repo?.error,
                         ...railView(rail.repo(f.path)),
+                        agents: agents.rail(f.path),
                         pinned: w.pinned.includes(f.path), hidden: w.hidden.includes(f.path), away: away(f.path)
                     };
                 })
@@ -965,7 +996,8 @@ const actions: Record<string, () => void> = {
     quit: () => app.quit(),
     ...terminals.actions(),
     runTask: () => tasks.show(),
-    runBuildTask: () => tasks.runBuild()
+    runBuildTask: () => tasks.runBuild(),
+    ...agents.actions()
 };
 
 function keybindingsFile(): string {
@@ -1001,6 +1033,7 @@ function buildMenu(): void {
         { label: 'Workspace', submenu: [item('nextWorkspace'), item('previousWorkspace'), { type: 'separator' }, ...numbered('workspace')] },
         { label: 'Terminal', submenu: terminals.menu(item) },
         { label: 'Tasks', submenu: tasks.menu(item) },
+        { label: 'Agents', submenu: [item('newAgentSession'), item('agentBoard')] },
         { label: 'Window', submenu: [item('detachRepo'), item('detachWorkspace'), item('dockWindow'), { type: 'separator' }, { role: 'minimize' }] }
     ];
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));

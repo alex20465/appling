@@ -28,6 +28,7 @@ interface Bridge {
     resize(id: string, cols: number, rows: number): void;
     create(options: { profile?: string, split?: boolean }): void;
     profileMenu(split: boolean): void;
+    agentMenu(): void;
     tabMenu(id: string): void;
     close(id: string): void;
     focus(id: string): void;
@@ -281,6 +282,8 @@ function provideFileLinks(view: View, y: number, callback: (links: ILink[] | und
 
 /** The tab's label: its name (given, else the profile's or program's), with the program the shell runs right now. */
 function label(id: string): string {
+    const agent = layout?.agents[id];
+    if (agent) return agent.title;
     const state = layout?.terminals[id];
     const name = layout?.names[id] ?? state?.name ?? 'terminal';
     const program = state?.running?.command?.trim().split(/\s+/)[0];
@@ -305,6 +308,8 @@ function tooltip(id: string): string {
     else if (state.last) lines.push(`Last: ${state.last.command ?? 'command'} exited with ${state.last.exitCode ?? '?'}`);
     if (state.exit) lines.push(`Ended with code ${state.exit.code}`);
     if (!state.integration && !state.command) lines.push('No shell integration');
+    const agent = layout?.agents[id];
+    if (agent) lines.unshift(`${agent.title}: ${agent.status}${agent.note ? ` (${agent.note})` : ''}`);
     return lines.join('\n');
 }
 
@@ -319,6 +324,13 @@ function renderTabs(): void {
         button.title = tab.panes.map(tooltip).join('\n\n');
         const dot = document.createElement('span');
         dot.className = `status ${tab.panes.map(status).find(Boolean) ?? ''}`;
+        // an agent session's tab takes its status colour: green working, amber waiting, gray done or exited, red failed
+        const agent = tab.panes.map(id => layout!.agents[id]).find(Boolean);
+        if (agent) {
+            button.classList.add('agent', `agent-${agent.status}`);
+            button.style.setProperty('--status', agent.statusColor);
+            button.style.setProperty('--session', agent.color);
+        }
         button.append(dot);
         if (editing && tab.panes.includes(editing)) {
             const input = document.createElement('input');
@@ -494,6 +506,8 @@ bridge.onCommand(command => {
 document.querySelector('#new')!.addEventListener('click', () => bridge.create({}));
 document.querySelector('#start')!.addEventListener('click', () => bridge.create({}));
 document.querySelector('#profiles')!.addEventListener('click', () => bridge.profileMenu(false));
+document.querySelector('#agent')!.addEventListener('click', () => bridge.agentMenu());
+document.querySelector('#start-agent')!.addEventListener('click', () => bridge.agentMenu());
 document.querySelector('#split')!.addEventListener('click', () => bridge.create({ split: true }));
 document.querySelector('#kill')!.addEventListener('click', () => {
     const id = focusedId();
