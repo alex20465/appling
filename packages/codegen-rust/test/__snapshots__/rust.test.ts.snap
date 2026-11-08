@@ -18,6 +18,9 @@ pub enum Role {
 /// A declared actor of the model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ActorType {
+    /// The human actor crm.Employee.
+    #[serde(rename = "crm.Employee")]
+    Employee,
     /// The human actor sales.Shopper.
     #[serde(rename = "sales.Shopper")]
     Shopper,
@@ -39,6 +42,17 @@ pub struct Actor {
 }
 
 impl Actor {
+    /// The actor crm.Employee with the roles it declares.
+    pub fn employee() -> Self {
+        Self {
+            actor_type: ActorType::Employee,
+            roles: vec![Role::Clerk],
+            id: None,
+            tenant: None,
+            account: None,
+        }
+    }
+
     /// The actor sales.Shopper with the roles it declares.
     pub fn shopper() -> Self {
         Self {
@@ -278,17 +292,17 @@ pub fn can_read_order_total(actor: &crate::access::Actor, order: &Order) -> bool
 
 /// Whether the policies of sales.Order let the actor create the record.
 pub fn can_create_order(actor: &crate::access::Actor, order: &Order) -> bool {
-    crate::access::in_tenant(actor, order) && order_policy_create_update_delete(actor, order)
+    crate::access::in_tenant(actor, order) && order_policy_create_delete(actor, order)
 }
 
 /// Whether the policies of sales.Order let the actor update the record.
 pub fn can_update_order(actor: &crate::access::Actor, order: &Order) -> bool {
-    crate::access::in_tenant(actor, order) && order_policy_create_update_delete(actor, order)
+    crate::access::in_tenant(actor, order) && order_policy_update(actor, order)
 }
 
 /// Whether the policies of sales.Order let the actor delete the record.
 pub fn can_delete_order(actor: &crate::access::Actor, order: &Order) -> bool {
-    crate::access::in_tenant(actor, order) && order_policy_create_update_delete(actor, order)
+    crate::access::in_tenant(actor, order) && order_policy_create_delete(actor, order)
 }
 
 /// The policy sales.Order.policy[read]: actor.is(crm.Clerk) || (actor.is(Customer) && customer == actor.account)
@@ -296,9 +310,14 @@ fn order_policy_read(actor: &crate::access::Actor, order: &Order) -> bool {
     crate::access::is_clerk(actor) || (crate::access::is_customer(actor) && (actor.account == Some(order.customer.id)))
 }
 
-/// The policy sales.Order.policy[create,update,delete]: actor.is(crm.Clerk)
-fn order_policy_create_update_delete(actor: &crate::access::Actor, _order: &Order) -> bool {
+/// The policy sales.Order.policy[create,delete]: actor.is(crm.Clerk)
+fn order_policy_create_delete(actor: &crate::access::Actor, _order: &Order) -> bool {
     crate::access::is_clerk(actor)
+}
+
+/// The policy sales.Order.policy[update]: actor.is(crm.Clerk) || (actor.is(Customer) && customer == actor.account && status == draft)
+fn order_policy_update(actor: &crate::access::Actor, order: &Order) -> bool {
+    crate::access::is_clerk(actor) || ((crate::access::is_customer(actor) && (actor.account == Some(order.customer.id))) && (order.status == OrderStatus::Draft))
 }
 
 /// The policy sales.Order.policy[read fields total]: actor.is(crm.Clerk) || (actor.is(Customer) && status != draft)
@@ -395,8 +414,11 @@ mod tests {
     #[ignore = "registry task: sales.Order.policy[read]"]
     fn order_policy_read() {}
     #[test]
-    #[ignore = "registry task: sales.Order.policy[create,update,delete]"]
-    fn order_policy_create_update_delete() {}
+    #[ignore = "registry task: sales.Order.policy[create,delete]"]
+    fn order_policy_create_delete() {}
+    #[test]
+    #[ignore = "registry task: sales.Order.policy[update]"]
+    fn order_policy_update() {}
     #[test]
     #[ignore = "registry task: sales.Order.policy[read fields total]"]
     fn order_policy_read_fields_total() {}

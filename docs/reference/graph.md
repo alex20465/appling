@@ -203,7 +203,7 @@ Unnamed elements, which get a key instead of a name:
 | Kind | Key | Example |
 |---|---|---|
 | `Invariant` | `invariant[<label as JSON string>]` | `sales.Order.invariant["total never negative"]` |
-| `Policy` | `policy[<operations> fields <fields>]`, each part only when present | `sales.Order.policy[read fields total]`, `sales.Order.policy[create,update,delete]`, `sales.PlaceOrder.policy[]` |
+| `Policy` | `policy[<operations> fields <fields>]`, each part only when present | `sales.Order.policy[read fields total]`, `sales.Order.policy[create,delete]`, `sales.PlaceOrder.policy[]` |
 | `Transition` | `transition[<from states>-><to state>]` | `sales.OrderFlow.transition[draft,placed->cancelled]` |
 | `Endpoint` | `endpoint[<verb> <path>]` | `sales.PublicApi.endpoint[GET /orders]` |
 | `SetEffect` | `effect[set <field>]` | `sales.PlaceOrder.effect[set placed_at]` |

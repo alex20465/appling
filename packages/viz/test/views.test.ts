@@ -179,7 +179,7 @@ test('abilities group what an actor may do, pages with the actions they offer', 
     expect([...groups.keys()]).toEqual(['Actions', 'Pages', 'Use cases', 'Queries', 'Data']);
     expect(groups.get('Pages')!.map(p => [p.target, p.verdict, p.offers!.map(o => `${o.target} ${o.verdict}`)])).toEqual([
         ['sales.Orders', 'depends', ['sales.Cancel no']],
-        ['sales.OrderDetail', 'depends', ['sales.PlaceOrder no', 'sales.Cancel no']]
+        ['sales.OrderDetail', 'depends', ['sales.PlaceOrder depends', 'sales.Cancel no']]
     ]);
     expect(policyText(index, 'sales.Order.policy[read]')).toBe('Order policy[read]: actor.is(crm.Clerk) || (actor.is(Customer) && customer == actor.account)');
     expect(policyText(index, 'sales.PlaceOrder.policy[]')).toBe('PlaceOrder policy: actor.is(Customer) && customer == actor.account');
@@ -238,7 +238,7 @@ test('an action card says between which states it moves, who may run it and what
     expect(text(cards)).toEqual([{
         title: 'PlaceOrder (on Order)',
         sections: [
-            'States: draft → placed', 'Who: Shopper: no', 'Requires: requires { lines.size() > 0 } else EmptyOrder',
+            'States: draft → placed', 'Who: Employee: no; Shopper: depends', 'Requires: requires { lines.size() > 0 } else EmptyOrder',
             'Changes: set placed_at = now; emit OrderPlaced { order = this }', 'Errors: EmptyOrder',
             'Used by: Checkout [usecase]; PublicApi [interface]; OrderDetail [page]'
         ]

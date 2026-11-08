@@ -152,7 +152,7 @@ Some elements have no name. Most examples below come from [sales.appling](../../
 | Element | Key | Example |
 |---|---|---|
 | Invariant | `invariant["<label>"]` | `sales.Order.invariant["total never negative"]` |
-| Policy | `policy[<operations> fields <fields>]` | `sales.Order.policy[read fields total]`, `sales.Order.policy[create,update,delete]`, `sales.PlaceOrder.policy[]` |
+| Policy | `policy[<operations> fields <fields>]` | `sales.Order.policy[read fields total]`, `sales.Order.policy[create,delete]`, `sales.PlaceOrder.policy[]` |
 | Transition | `transition[<from>-><to>]` | `sales.OrderFlow.transition[draft,placed->cancelled]` |
 | Endpoint | `endpoint[<verb> <path>]` | `sales.PublicApi.endpoint[GET /orders]` |
 | Set effect | `effect[set <field>]` | `sales.PlaceOrder.effect[set placed_at]` |

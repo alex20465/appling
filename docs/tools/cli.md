@@ -256,6 +256,7 @@ paid is reachable from draft:
   PaymentReceived -> paid
 
 $ appling simulate actors sales.Cancel examples
+crm.Employee: yes
 sales.Shopper: no
 
 $ appling simulate risks sales.PlaceOrder examples
@@ -274,7 +275,7 @@ Prints the [code references](references.md) of the workspace in the current fold
 ```
 $ appling refs sales.Order
 ../shop/sales/models.py:14-31 sales.Order
-../shop/sales/permissions.py:12-24 sales.Order.policy[create,update,delete] (shifted)
+../shop/sales/permissions.py:12-24 sales.Order.policy[update] (shifted)
 ```
 
 With `--check`, it prints every reference that is `shifted`, `broken` or `orphaned`, then the counts, and exits with 1 when there is one:

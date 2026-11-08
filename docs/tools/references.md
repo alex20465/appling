@@ -56,7 +56,7 @@ On the command line, [`appling refs`](cli.md#refs) prints the references of an e
 ```
 $ appling refs sales.Order
 ../shop/sales/models.py:14-31 sales.Order
-../shop/sales/permissions.py:12-24 sales.Order.policy[create,update,delete] (shifted)
+../shop/sales/permissions.py:12-24 sales.Order.policy[update] (shifted)
 ```
 
 In the IDE, the inspector lists the references of the selected element under **Code**; expand one to read its lines. An agent calls `code_references` with the qualified name.

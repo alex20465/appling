@@ -25,6 +25,13 @@ urlpatterns = [
     path("", include("sales.urls")),
 ]
 ",
+  "crm/actors.py": "import rules
+
+
+@rules.predicate
+def is_employee(user):
+    return user is not None and user.groups.filter(name="Employee").exists()
+",
   "crm/apps.py": "from django.apps import AppConfig
 
 
@@ -41,6 +48,7 @@ from django.dispatch import receiver
 
 GROUPS = [
     "Clerk",
+    "Employee",
 ]
 
 
@@ -91,7 +99,7 @@ def readable_account_rows(actor, rows):
 
 @rules.predicate
 def is_clerk(user):
-    return user is not None and user.groups.filter(name="Clerk").exists()
+    return user is not None and user.groups.filter(name__in=["Clerk", "Employee"]).exists()
 ",
   "crm/tenants.py": "from contextvars import ContextVar
 
@@ -455,7 +463,7 @@ def can_create_order(actor, order) -> bool:
 def can_update_order(actor, order) -> bool:
     if not getattr(actor, "is_authenticated", False):
         return False
-    return is_clerk(actor)
+    return is_clerk(actor) or ((is_customer(actor) and (order.customer == actor.account)) and (order.status == OrderStatus.DRAFT))
 
 
 def can_delete_order(actor, order) -> bool:
@@ -600,14 +608,24 @@ class OrderReadPolicyTest(TestCase):
         self.skipTest("registry task: sales.Order.policy[read]")
 
 
-class OrderCreateUpdateDeletePolicyTest(TestCase):
-    """sales.Order.policy[create,update,delete]: actor.is(crm.Clerk)"""
+class OrderCreateDeletePolicyTest(TestCase):
+    """sales.Order.policy[create,delete]: actor.is(crm.Clerk)"""
 
     def test_allows_permitted_actors(self):
-        self.skipTest("registry task: sales.Order.policy[create,update,delete]")
+        self.skipTest("registry task: sales.Order.policy[create,delete]")
 
     def test_denies_other_actors(self):
-        self.skipTest("registry task: sales.Order.policy[create,update,delete]")
+        self.skipTest("registry task: sales.Order.policy[create,delete]")
+
+
+class OrderUpdatePolicyTest(TestCase):
+    """sales.Order.policy[update]: actor.is(crm.Clerk) || (actor.is(Customer) && customer == actor.account && status == draft)"""
+
+    def test_allows_permitted_actors(self):
+        self.skipTest("registry task: sales.Order.policy[update]")
+
+    def test_denies_other_actors(self):
+        self.skipTest("registry task: sales.Order.policy[update]")
 
 
 class OrderReadPolicy2Test(TestCase):

@@ -309,7 +309,7 @@ Each entity gets functions in `<app>/policies.py`:
 def can_update_order(actor, order) -> bool:
     if not getattr(actor, "is_authenticated", False):
         return False
-    return is_clerk(actor)
+    return is_clerk(actor) or ((is_customer(actor) and (order.customer == actor.account)) and (order.status == OrderStatus.DRAFT))
 ```
 
 They are called where the model uses the element:

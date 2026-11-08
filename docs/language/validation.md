@@ -175,6 +175,7 @@ The expression typer checks every expression and every call. See [expressions](e
 | Rule | Message |
 |---|---|
 | A name is visible at its position, or is a value of the expected enum | `Unknown name "<name>".` |
+| `tenant` is read only when the workspace declares exactly one tenant | `"tenant" needs exactly one tenant in the workspace, which declares no tenant.` (or `declares <n> tenants`) |
 | An enum value named with its enum exists in that enum | `Enum <Enum> has no value "<name>".` |
 | A field access names a field of the receiver | `<Type> has no field "<field>".` |
 | An assignment in `create` or `emit` names a field of the entity or event | `<Entity or Event> has no field "<name>".` |
