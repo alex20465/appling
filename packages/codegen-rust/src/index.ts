@@ -1,5 +1,5 @@
 import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
-import type { ExprData, GraphNode, TypeData } from '@appling/model';
+import { Simulator, UNKNOWN, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
 import { accessFile, accessOf, accessSteps, actorFieldType, durationAttribute, durationSteps, libStep, PRIMITIVES, tenantOf, tenantPaths } from './access.js';
 import { enumVariant, pascal, qualify, rustExpr, rustTerm, snake, type RustScope } from './rust.js';
 
@@ -33,7 +33,7 @@ const extension: CodegenExtension = {
             case 'ErrorDecl': return [rustFile(node.module, text => text.includes(`    ${last(node.qn)},\n`) ? text : text.replace(/(pub enum Error \{[\s\S]*?)(\n\})/, (_, head, end) => `${head}\n    ${last(node.qn)},${end}`))];
             case 'Entity': return [append(node.module, entityBlock(node, context)), ...storedDurations(node, context), ...guardSteps(node, context)];
             case 'Field': return fieldSteps(node, context);
-            case 'Invariant': return [...(validation(node, context) ? [] : [task(`check the invariant "${node.data.label}" in validate: ${node.props.condition}`)]), ...testSteps(node)];
+            case 'Invariant': return [...(validation(node, context) ? [] : [task(`check the invariant "${node.data.label}" in validate: ${node.props.condition}`)]), ...invariantTestSteps(node, context)];
             case 'Policy': return [...policySteps(node, context), ...testSteps(node)];
             case 'Role':
             case 'Actor':
@@ -565,11 +565,191 @@ function machineSteps(machine: GraphNode, context: MapContext): Step[] {
 
 /** An ignored test per rule in the module's test module; writing its body is a registry task. */
 function testSteps(node: GraphNode): Step[] {
-    const name = snake(`${last(parentOf(node.qn))}_${String(node.data.label ?? last(node.qn))}`).replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    const name = testName(node);
     return [
         rustFile(node.module, text => text.replace(/(#\[cfg\(test\)\]\nmod tests \{\n)([\s\S]*?)(\}\n?$)/, (_, head, body, end) => `${head}${body}    #[test]\n    #[ignore = ${JSON.stringify(`registry task: ${node.qn}`)}]\n    fn ${name}() {}\n${end}`)),
         task(`write the test ${name}`)
     ];
+}
+
+function testName(node: GraphNode): string {
+    return snake(`${last(parentOf(node.qn))}_${String(node.data.label ?? last(node.qn))}`).replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+
+/** Adds a block to the test module of a module's file, which then imports the module (`use super::*;`). */
+function testBlock(module: string, block: string): Step {
+    return rustFile(module, text => text.replace(/(#\[cfg\(test\)\]\nmod tests \{\n)([\s\S]*?)(\}\n?$)/, (_, head, body, end) => {
+        const uses = body.startsWith('    use super::*;\n') ? body : `    use super::*;\n\n${body}`;
+        return `${head}${uses}${block.split('\n').map(l => l ? `    ${l}` : l).join('\n')}\n${end}`;
+    }));
+}
+
+const simulators = new WeakMap<Graph, Simulator>();
+
+/** One simulator per graph, which proves that a test record satisfies or breaks an invariant. */
+function simulator(context: MapContext): Simulator {
+    let found = simulators.get(context.graph);
+    if (!found) simulators.set(context.graph, found = new Simulator(context.graph));
+    return found;
+}
+
+/**
+ * The test of an invariant that `validate` checks: the entity's valid record passes `validate`, and the same
+ * record with one field the simulator proves to break the invariant fails with its label. Without a valid record
+ * the test stays ignored; without such a field value the violation case is a registry task.
+ */
+function invariantTestSteps(invariant: GraphNode, context: MapContext): Step[] {
+    const entity = context.node(parentOf(invariant.qn))!;
+    if (!validation(invariant, context)) return testSteps(invariant);
+    const scope = rustScope(entity, context);
+    const valid = validRecord(entity, scope, context);
+    if (!valid) return testSteps(invariant);
+    const name = testName(invariant);
+    const label = JSON.stringify(String(invariant.data.label));
+    const violation = violating(invariant, entity, valid.record, scope, context);
+    const message = (text: string, args = '') => JSON.stringify(text.replace(/\{/g, '{{').replace(/\}/g, '}}') + args);
+    const code = [
+        '#[test]',
+        `fn ${name}() {`,
+        `    assert_eq!(${valid.name}().validate(), Ok(()), ${message(`a valid ${last(entity.qn)}`)});`,
+        ...(violation ? [
+            `    let mut x = ${valid.name}();`,
+            `    ${violation}`,
+            '    let errors = x.validate().unwrap_err();',
+            `    assert!(errors.contains(&${label}), ${message(`${violation} breaks ${String(invariant.data.label)}`, ': {errors:?}')});`
+        ] : []),
+        '}'
+    ].join('\n');
+    return [valid.step, testBlock(invariant.module, code), ...(violation ? [] : [task(`write the violation case of the test ${name}`)])];
+}
+
+/**
+ * The test helper `valid_<entity>` in the module's test module: `<Entity>::new` with a sample for every argument,
+ * and the record the simulator sees. Undefined when an argument has no sample or an invariant `validate` checks
+ * is not proven to hold.
+ */
+function validRecord(entity: GraphNode, scope: RustScope, context: MapContext): { name: string, record: SimRecord, step: Step } | undefined {
+    const built = construct(entity, scope, context, 0);
+    if (!built) return undefined;
+    const checked = context.children(entity.qn).filter(n => n.kind === 'Invariant' && validation(n, context));
+    if (!checked.every(i => simulator(context).evaluate(i.data.condition as ExprData, { self: built.value }) === true)) return undefined;
+    const name = `valid_${snake(last(entity.qn))}`;
+    const code = [
+        `/// ${/^[AEIOU]/.test(last(entity.qn)) ? 'An' : 'A'} ${last(entity.qn)} with the defaults of the model and a sample for every other required field.`,
+        `fn ${name}() -> ${last(entity.qn)} {`, `    ${built.rust}`, '}', ''
+    ].join('\n');
+    const block = testBlock(entity.module, code) as Extract<Step, { kind: 'template' }>;
+    return { name, record: built.value, step: { ...block, write: existing => existing?.includes(`\n    fn ${name}() `) ? existing : block.write(existing) } };
+}
+
+/** `<Entity>::new(...)` with samples for its arguments, and the record the simulator sees. */
+function construct(entity: GraphNode, scope: RustScope, context: MapContext, depth: number): { rust: string, value: SimRecord } | undefined {
+    if (depth > 3) return undefined;
+    const required = requiredFields(entity, context, scope);
+    const value: SimRecord = { $type: entity.qn };
+    const args: string[] = [];
+    for (const field of fieldsOf(entity, context).filter(f => !f.data.derived)) {
+        const type = field.data.type as TypeData;
+        if (required.includes(field)) {
+            const sample = rustSample(last(field.qn), type, scope, context, depth);
+            if (!sample) return undefined;
+            args.push(sample.rust);
+            value[last(field.qn)] = sample.value;
+        } else if (type.many) value[last(field.qn)] = [];
+        else if (field.data.default) value[last(field.qn)] = simulator(context).evaluate(field.data.default as ExprData, { self: value });
+        else value[last(field.qn)] = null;
+    }
+    return { rust: `${qualify(entity, scope)}::new(${args.join(', ')})`, value };
+}
+
+/** A sample of a required value in Rust and as the simulator sees it: entities through their `new`, value types field by field. */
+function rustSample(name: string, type: TypeData, scope: RustScope, context: MapContext, depth: number): { rust: string, value: Value } | undefined {
+    if (type.many) return { rust: 'Vec::new()', value: [] };
+    if (type.optional) return { rust: 'None', value: null };
+    if (type.decl) {
+        const decl = context.node(type.decl);
+        if (decl?.kind === 'Enum') {
+            const first = context.children(decl.qn)[0];
+            return first && { rust: enumVariant(first, scope), value: last(first.qn) };
+        }
+        if (decl?.kind === 'Entity') {
+            const built = construct(decl, scope, context, depth + 1);
+            return built && { rust: `Box::new(${built.rust})`, value: built.value };
+        }
+        if (decl?.kind === 'ValueType') {
+            const value: SimRecord = { $type: decl.qn };
+            const fields: string[] = [];
+            for (const field of fieldsOf(decl, context).filter(f => !f.data.derived)) {
+                const sample = rustSample(last(field.qn), field.data.type as TypeData, scope, context, depth + 1);
+                if (!sample) return undefined;
+                fields.push(`${last(field.qn)}: ${sample.rust}`);
+                value[last(field.qn)] = sample.value;
+            }
+            return { rust: `${qualify(decl, scope)} { ${fields.join(', ')} }`, value };
+        }
+        return undefined;
+    }
+    switch (type.primitive) {
+        case 'String':
+        case 'Text':
+        case 'File': return { rust: `${JSON.stringify(`${name}-1`)}.to_string()`, value: `${name}-1` };
+        case 'Uuid': return { rust: '"00000000-0000-4000-8000-000000000001".to_string()', value: '00000000-0000-4000-8000-000000000001' };
+        case 'Int': return { rust: '1', value: 1 };
+        case 'Decimal':
+        case 'Money': return { rust: 'rust_decimal::Decimal::from(1)', value: 1 };
+        case 'Bool': return { rust: 'false', value: false };
+        case 'Date': return { rust: 'chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()', value: UNKNOWN };
+        case 'DateTime': return { rust: 'chrono::Utc::now()', value: UNKNOWN };
+        case 'Duration': return { rust: 'chrono::TimeDelta::hours(1)', value: 3_600_000 };
+    }
+    return undefined;
+}
+
+/** An assignment such as `x.discount = -1;` that makes the invariant false on the valid record, trying the fields the condition reads in order. */
+function violating(invariant: GraphNode, entity: GraphNode, record: SimRecord, scope: RustScope, context: MapContext): string | undefined {
+    const condition = invariant.data.condition as ExprData;
+    const read = targets(condition);
+    for (const field of fieldsOf(entity, context).filter(f => read.has(f.qn) && !f.data.derived && !(f.data.type as TypeData).many)) {
+        for (const candidate of candidates(field.data.type as TypeData, scope, context)) {
+            if (simulator(context).evaluate(condition, { self: { ...record, [last(field.qn)]: candidate.value } }) !== false) continue;
+            return `x.${last(field.qn)} = ${candidate.rust};`;
+        }
+    }
+    return undefined;
+}
+
+/** The values tried on a field: a few numbers, both booleans, the empty string, every enum literal, and `None` when optional. */
+function candidates(type: TypeData, scope: RustScope, context: MapContext): { rust: string, value: Value }[] {
+    const found: { rust: string, value: Value }[] = [];
+    if (type.decl) {
+        const decl = context.node(type.decl);
+        if (decl?.kind === 'Enum') for (const literal of context.children(decl.qn)) found.push({ rust: enumVariant(literal, scope), value: last(literal.qn) });
+    } else {
+        const numbers = [-1, 0, 1_000_000];
+        switch (type.primitive) {
+            case 'Int': found.push(...numbers.map(n => ({ rust: String(n), value: n }))); break;
+            case 'Decimal':
+            case 'Money': found.push(...numbers.map(n => ({ rust: `rust_decimal::Decimal::from(${n})`, value: n }))); break;
+            case 'Bool': found.push(...[true, false].map(b => ({ rust: String(b), value: b }))); break;
+            case 'String':
+            case 'Text': found.push({ rust: 'String::new()', value: '' }); break;
+        }
+    }
+    if (!type.optional) return found;
+    return [{ rust: 'None', value: null }, ...found.map(c => ({ ...c, rust: `Some(${c.rust})` }))];
+}
+
+/** The qualified names the expression compares; a name only tested by `has()` is left out, its null is meant. */
+function targets(expr: unknown, found: Set<string> = new Set()): Set<string> {
+    if (Array.isArray(expr)) {
+        for (const item of expr) targets(item, found);
+    } else if (expr && typeof expr === 'object') {
+        const node = expr as { $type?: string, target?: unknown, call?: unknown, name?: unknown };
+        if (node.$type === 'NameExpr' && node.call && node.name === 'has') return found;
+        if (node.$type === 'NameExpr' && typeof node.target === 'string') found.add(node.target);
+        for (const value of Object.values(expr)) targets(value, found);
+    }
+    return found;
 }
 
 function defaultValue(field: GraphNode, scope: RustScope): string | undefined {

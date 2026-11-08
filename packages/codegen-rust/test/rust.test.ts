@@ -17,6 +17,50 @@ test('examples generate a Rust crate for the domain and behavior layers', async 
     expect(entries['sales.Order.total'].status).toBe('generated');
 });
 
+const INVARIANTS = `module v {
+  enum State {
+    open
+    closed
+  }
+  value Place {
+    city: String
+    floor: Int
+  }
+  entity Owner {
+    name: String
+  }
+  entity Ticket {
+    title: String
+    owner: Owner
+    place: Place
+    state: State default open
+    points: Int default 0
+    note: Text?
+    opened: DateTime default now
+    invariant "points in range" { points >= 0 && points <= 100 }
+    invariant "noted when closed" { state != closed || note != null }
+    invariant "title given" { title != "" }
+  }
+}`;
+
+test('invariant tests check a valid record and a violation the simulator proves', async () => {
+    const { documents, services } = await buildWorkspace({ 'v.appling': INVARIANTS });
+    const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), rust, 'app');
+    const files = new Map<string, string>();
+    for (const { step } of result.steps) if (step.kind === 'template') files.set(step.file, step.write(files.get(step.file)));
+    const tests = files.get('src/v.rs')!.split('#[cfg(test)]')[1];
+    expect(tests.match(/use super::\*;/g)).toHaveLength(1);
+    expect(tests.match(/fn valid_ticket\(\)/g)).toHaveLength(1);
+    expect(tests).toContain('Ticket::new("title-1".to_string(), Box::new(Owner::new("name-1".to_string())), Place { city: "city-1".to_string(), floor: 1 })');
+    expect(tests).toContain('        x.points = -1;\n');
+    expect(tests).toContain('        x.state = State::Closed;\n');
+    expect(tests).toContain('        x.title = String::new();\n');
+    expect(tests).toContain('assert!(errors.contains(&"noted when closed"), "x.state = State::Closed; breaks noted when closed: {errors:?}");');
+    expect(tests).not.toContain('#[ignore');
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['v.Ticket.invariant["points in range"]'].status).toBe('generated');
+});
+
 const ACCESS = `module m {
   role Clerk { actor.active && tenant != null }
   role Customer
