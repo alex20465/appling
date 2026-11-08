@@ -5,7 +5,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { expect, test } from 'vitest';
 import {
-    createMcpServer, findConflicts, MemorySessionStore, overlaps, remoteAppHost, RemoteSessionStore, serveAppHost, serveSessionStore,
+    absolute, createMcpServer, findConflicts, MemorySessionStore, overlaps, remoteAppHost, RemoteSessionStore, repoFolder, serveAppHost, serveSessionStore,
     type AgentSession, type Channel, type IdeHost
 } from '../src/index.js';
 
@@ -40,6 +40,19 @@ test('element claims overlap with their members and ancestors only', () => {
     expect(overlaps('sales.Order', 'sales.Order.status')).toBe(true);
     expect(overlaps('sales.Order.status', 'sales.Order')).toBe(true);
     expect(overlaps('sales.Order', 'sales.OrderFlow')).toBe(false);
+});
+
+test('remote repo folders stay as they are on their machine: location ids unchanged, POSIX folders by POSIX rules', async () => {
+    expect(repoFolder('ssh://box/srv/shop')).toBe('ssh://box/srv/shop');
+    expect(repoFolder('/srv/shop/../crm/')).toBe('/srv/crm');
+    expect(absolute('/srv/shop', 'sales.appling')).toBe('/srv/shop/sales.appling');
+    expect(absolute('/srv/shop', 'a\\b.appling')).toBe('/srv/shop/a/b.appling');
+    expect(absolute('ssh://box/srv/shop/', 'sales.appling')).toBe('ssh://box/srv/shop/sales.appling');
+    expect(absolute('ssh://box/srv/shop', '/srv/shop/x.appling')).toBe('/srv/shop/x.appling');
+    const store = new MemorySessionStore();
+    const { session } = await store.open({ repo: 'ssh://box/srv/shop' });
+    expect(session.repo).toBe('ssh://box/srv/shop');
+    expect((await store.claim(session.id, { files: ['sales.appling'] })).claims.files).toEqual(['ssh://box/srv/shop/sales.appling']);
 });
 
 test('a store takes back a session with its earlier token', async () => {
@@ -125,7 +138,8 @@ test('MCP tool calls are attributed to the session and edits on claimed elements
 
     const tools = (await first.client.listTools()).tools.map(t => t.name);
     expect(tools).toEqual(expect.arrayContaining(['session_set_label', 'session_set_status', 'session_claim', 'session_release', 'sessions_list', 'session_message', 'session_inbox', 'ide_context', 'ide_act']));
-    expect(first.client.getInstructions()).toContain('session_set_label');
+    // the instructions require checking claims and keeping label and status current (#16)
+    for (const tool of ['session_set_label', 'session_set_status', 'sessions_list', 'session_claim', 'session_inbox']) expect(first.client.getInstructions()).toContain(tool);
 
     expect(await first.call('session_set_label', { label: 'Order totals' })).toMatchObject({ label: 'Order totals', status: 'working' });
     expect((await first.call('session_claim', { elements: ['sales.Order'] })).claims.elements).toEqual(['sales.Order']);

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import type { Channel } from './sessions.js';
+import { join } from 'node:path';
+import { repoFolder, type Channel } from './sessions.js';
 
 /**
  * The playbook of a workspace: one sequential story, in chapters, of what the agent sessions of all its repos plan and
@@ -116,7 +116,7 @@ export interface PlaybookStore {
 
 /** The playbook key of a session: its workspace, else its repo folder. */
 export function playbookKey(session: { workspace?: string, repo: string }): string {
-    return session.workspace ?? resolve(session.repo);
+    return session.workspace ?? repoFolder(session.repo);
 }
 
 /** Whether the user has not yet watched every step of the chapter. */
@@ -166,7 +166,7 @@ export class MemoryPlaybookStore implements PlaybookStore {
         const refs = input.refs ?? [];
         for (const ref of refs) if (!book.chapters.some(c => c.id === ref)) throw new Error(`No chapter ${ref} in this playbook to refer to.`);
         const chapter: Chapter = {
-            id: randomUUID(), session: input.session, label: input.label, color: input.color, repo: resolve(input.repo),
+            id: randomUUID(), session: input.session, label: input.label, color: input.color, repo: repoFolder(input.repo),
             title: input.title, plan: input.plan, steps: [], status: 'open', refs, opened: new Date().toISOString()
         };
         chapter.steps = validSteps(input.steps ?? []).map((step, i) => this.step(step, i + 1));

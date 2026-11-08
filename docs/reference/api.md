@@ -234,6 +234,7 @@ Tools and MCP:
 | `serveSessionStore(store, channel)`, `RemoteSessionStore`, `ipcChannel(process)`, `Channel` | A store served to another process, such as an IDE server child of Appling Desktop, and reached from there |
 | `IdeHost`, `IdeContext`, `IdeAction`, `AppHost`, `serveAppHost`, `remoteAppHost` | What `ide_context` and `ide_act` go through, and the part the app around the IDE server adds, also over IPC |
 | `findConflicts(sessions, self, touched)`, `overlaps(a, b)`, `peers(sessions, self)`, `sessionTitle(session)` | The claim rules and a session's display name |
+| `repoFolder(repo)`, `absolute(repo, file)` | A session's repo folder and a claimed file as the store keeps them: a local folder resolved, a remote one as it is on its machine (`ssh://` ids unchanged, POSIX folders by POSIX rules, also on Windows) |
 | `PlaybookStore`, `MemoryPlaybookStore(folder?)`, `Playbook`, `Chapter`, `PlaybookStep`, `StepInput`, `PlaybookPosition`, `CHANGE_KINDS`, `RESPONSE_KINDS` | The [workspace playbooks](../tools/ai.md#the-playbook): open a chapter, add steps, mark them done, close, read, move the user, respond, onChange; with a folder, each playbook is kept there as a JSON file |
 | `servePlaybookStore(store, channel)`, `RemotePlaybookStore` | A playbook store served to another process and reached from there, like the session store |
 | `openChapter(store, author, chapter)`, `ChapterAuthor`, `ChapterWriter` | Writes a chapter without MCP, such as for a code generation run: `add`, `done`, `close`, `read` |
