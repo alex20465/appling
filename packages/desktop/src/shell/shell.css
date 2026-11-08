@@ -7,6 +7,7 @@
   --ink-muted: #aaa092;
   --leaf: #5cbf63;
   --error: #e5684f;
+  --attention: #f0b429;
   color-scheme: dark;
 }
 
@@ -35,6 +36,11 @@ body { display: grid; grid-template-columns: 48px 1fr; background: var(--surface
 .dirty-dot { position: absolute; top: 3px; left: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--rust, #f2b632); pointer-events: none; }
 .sync { position: absolute; left: -4px; bottom: -4px; height: 13px; padding: 0 2px; border-radius: 6px; background: var(--surface-elevated); border: 1px solid var(--line); color: var(--ink-muted); font: 600 8px/11px system-ui, sans-serif; pointer-events: none; }
 .badge { position: absolute; right: -4px; bottom: -4px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px; background: var(--error); color: var(--surface); font: 700 9px/15px system-ui, sans-serif; text-align: center; pointer-events: none; }
+/* The badge's colour says what it counts: waiting for you (amber), failed or invalid (red), at work (green), unsaved (grey). */
+.badge.agentsWaiting { background: var(--attention); }
+.badge.agentsWorking, .badge.tasksRunning { background: var(--leaf); }
+.badge.unsaved { background: var(--ink-muted); }
+.repo.working, .workspace.working { outline: 2px solid color-mix(in srgb, var(--leaf) 55%, transparent); outline-offset: 1px; }
 /* Collapsed: the rail is gone and main.ts places the repo views at the left edge. */
 body.collapsed { grid-template-columns: 0 1fr; }
 body.collapsed .rail { display: none; }
@@ -55,3 +61,19 @@ body.collapsed .rail { display: none; }
 #stage p { color: var(--ink-muted); }
 #stage pre { max-height: 50vh; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-raised); white-space: pre-wrap; font-size: 12px; }
 .action { margin-right: 8px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-elevated); color: var(--ink); cursor: pointer; }
+
+#clone { position: fixed; inset: 0; display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; background: rgb(0 0 0 / 0.45); }
+#clone[hidden] { display: none; }
+#clone .panel { width: min(560px, 90vw); padding: 16px 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-raised); box-shadow: 0 16px 48px rgb(0 0 0 / 0.5); }
+#clone h2 { margin: 0 0 12px; font-size: 16px; }
+#clone label { display: block; margin-bottom: 10px; color: var(--ink-muted); font-size: 12px; }
+#clone input { display: block; width: 100%; margin-top: 4px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; outline: none; background: var(--surface); color: var(--ink); font: 13px ui-monospace, monospace; }
+#clone input:focus { border-color: var(--leaf); }
+#clone .row { display: flex; gap: 8px; align-items: center; }
+#clone .row input { flex: 1; }
+#clone .row .action { margin: 4px 0 0; }
+#clone .end { justify-content: flex-end; }
+#clone .status { min-height: 1.5em; margin: 4px 0 10px; color: var(--ink-muted); font-size: 12px; white-space: pre-wrap; }
+#clone .status.error { color: var(--error); }
+.action.primary { border-color: var(--leaf); }
+.action:disabled { opacity: 0.5; cursor: default; }

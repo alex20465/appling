@@ -40,6 +40,7 @@ export function App() {
     const [marked, setMarked] = useState(true);
     /** The review loads once its tab opens, then follows every snapshot and revision change. */
     const [reviewing, setReviewing] = useState(false);
+    const reportUnsaved = useRef<(files: string[]) => void>(() => undefined);
 
     const locations = useRef<Snapshot['locations']>({});
     locations.current = snapshot?.locations ?? {};
@@ -60,6 +61,7 @@ export function App() {
         loadView().then(setView);
         const events = onEvents({ snapshot: setSnapshot, sessions: setSessions, act: a => act.current(a) });
         report.current = events.report;
+        reportUnsaved.current = events.unsaved;
         return events.close;
     }, []);
 
@@ -151,6 +153,7 @@ export function App() {
                     onActive={setActive}
                     onCursor={(uri, offset) => setSelected(elementAt(snapshot.locations, uri, offset))}
                     onSave={(path, text) => saveFile(path, text)}
+                    onDirty={uris => reportUnsaved.current(snapshot.files.filter(f => uris.includes(f.uri)).map(f => f.path))}
                 />
                 <ModelCanvas index={canvasIndex} changes={marking?.diff} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={selected} settings={view} sessions={marks} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />
                 <div className="side">

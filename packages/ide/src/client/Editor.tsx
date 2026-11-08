@@ -15,6 +15,8 @@ interface EditorProps {
     onActive(uri: string): void;
     onCursor(uri: string, offset: number): void;
     onSave(path: string, text: string): void;
+    /** The uris of the dirty models, after every change of that set (Appling Desktop shows them on the rail). */
+    onDirty?(uris: string[]): void;
 }
 
 /** Monaco with one model per file. A model is dirty while its text differs from the file on disk; disk changes replace clean models only. */
@@ -25,9 +27,16 @@ export function Editor(props: EditorProps) {
     latest.current = props;
     const disk = useRef(new Map<string, string>());
     const [dirty, setDirty] = useState<Set<string>>(new Set());
-    const refreshDirty = () => setDirty(new Set(monaco.editor.getModels()
-        .filter(m => disk.current.has(m.uri.toString()) && m.getValue() !== disk.current.get(m.uri.toString()))
-        .map(m => m.uri.toString())));
+    const reported = useRef('[]');
+    const refreshDirty = () => {
+        const uris = monaco.editor.getModels()
+            .filter(m => disk.current.has(m.uri.toString()) && m.getValue() !== disk.current.get(m.uri.toString()))
+            .map(m => m.uri.toString()).sort();
+        setDirty(new Set(uris));
+        if (JSON.stringify(uris) === reported.current) return;
+        reported.current = JSON.stringify(uris);
+        latest.current.onDirty?.(uris);
+    };
 
     useEffect(() => {
         const instance = monaco.editor.create(host.current!, {

@@ -17,5 +17,13 @@ contextBridge.exposeInMainWorld('appling', {
     toggleRail: () => ipcRenderer.send('toggleRail'),
     onSwitcher: (callback: () => void) => ipcRenderer.on('switcher', () => callback()),
     switch: (query: string) => ipcRenderer.invoke('switch', query),
-    closeSwitcher: () => ipcRenderer.send('closeSwitcher')
+    closeSwitcher: () => ipcRenderer.send('closeSwitcher'),
+    addMenu: () => ipcRenderer.send('addMenu'),
+    openClone: () => ipcRenderer.send('openClone'),
+    move: (repo: string, from: string, to: string) => ipcRenderer.send('move', repo, from, to),
+    onClone: (callback: (form: unknown) => void) => ipcRenderer.on('clone', (_event, form) => callback(form)),
+    onCloneProgress: (callback: (progress: unknown) => void) => ipcRenderer.on('cloneProgress', (_event, progress) => callback(progress)),
+    chooseCloneParent: (current: string) => ipcRenderer.invoke('chooseCloneParent', current),
+    clone: (url: string, parent: string, name?: string) => ipcRenderer.invoke('clone', url, parent, name),
+    closeClone: () => ipcRenderer.send('closeClone')
 });

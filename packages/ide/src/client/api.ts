@@ -24,12 +24,17 @@ export async function saveFile(path: string, text: string): Promise<void> {
 
 /**
  * Calls back with what the server pushes: every new snapshot after files change on disk, the agent sessions and
- * their actions. `report` tells the server what the client shows.
+ * their actions. `report` tells the server what the client shows, `unsaved` which files have unsaved edits (Appling
+ * Desktop shows them on the rail).
  */
-export function onEvents(handlers: IdeEvents): { close(): void, report(report: ClientReport): void } {
+export function onEvents(handlers: IdeEvents): { close(): void, report(report: ClientReport): void, unsaved(files: string[]): void } {
     const socket = new WebSocket(`ws://${location.host}/events`);
     let pending: ClientReport | undefined;
-    socket.onopen = () => pending && socket.send(JSON.stringify({ type: 'context', ...pending }));
+    let unsaved: string[] | undefined;
+    socket.onopen = () => {
+        if (pending) socket.send(JSON.stringify({ type: 'context', ...pending }));
+        if (unsaved) socket.send(JSON.stringify({ type: 'unsaved', files: unsaved }));
+    };
     socket.onmessage = event => {
         const message = JSON.parse(event.data);
         if (message.type === 'snapshot') handlers.snapshot(message.snapshot);
@@ -41,6 +46,10 @@ export function onEvents(handlers: IdeEvents): { close(): void, report(report: C
         report: report => {
             pending = report;
             if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'context', ...report }));
+        },
+        unsaved: files => {
+            unsaved = files;
+            if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'unsaved', files }));
         }
     };
 }

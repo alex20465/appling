@@ -65,6 +65,41 @@ test('changes on disk are pushed as snapshots', async () => {
     socket.close();
 });
 
+test('the unsaved files of every connected client are reported as one set, also when a client leaves', async () => {
+    const own = mkdtempSync(join(tmpdir(), 'appling-ide-'));
+    const reports: string[][] = [];
+    let next: (() => void) | undefined;
+    const reported = () => new Promise<void>(done => next = done);
+    const server = await startIde(own, 0, { onUnsaved: files => { reports.push(files); next?.(); } });
+    const connect = async () => {
+        const socket = new WebSocket(server.url.replace('http', 'ws') + '/events', { origin: server.url });
+        await new Promise(resolve => socket.on('open', resolve));
+        return socket;
+    };
+    try {
+        const [one, two] = [await connect(), await connect()];
+        let wait = reported();
+        one.send(JSON.stringify({ type: 'unsaved', files: ['b.appling', 'a.appling'] }));
+        await wait;
+        wait = reported();
+        two.send(JSON.stringify({ type: 'unsaved', files: ['a.appling', 'c.appling'] }));
+        await wait;
+        expect(reports.at(-1)).toEqual(['a.appling', 'b.appling', 'c.appling']);
+        wait = reported();
+        one.close();
+        await wait;
+        expect(reports.at(-1)).toEqual(['a.appling', 'c.appling']);
+        wait = reported();
+        two.send(JSON.stringify({ type: 'unsaved', files: [] }));
+        await wait;
+        expect(reports).toHaveLength(4);
+        expect(reports.at(-1)).toEqual([]);
+        two.close();
+    } finally {
+        await server.close();
+    }
+});
+
 test('the language server answers over the websocket', async () => {
     const socket = new WebSocket(ide.url.replace('http', 'ws') + '/lsp', { origin: ide.url });
     await new Promise(resolve => socket.on('open', resolve));

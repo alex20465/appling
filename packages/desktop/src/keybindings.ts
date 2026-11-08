@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 /** Every command of the app menu, with its label. */
 export const COMMANDS = {
     open: 'Add Folder to Workspace…',
+    clone: 'Clone Repository…',
     closeRepo: 'Close Repo',
     switcher: 'Go to Repo…',
     nextRepo: 'Recent Repo',
@@ -30,6 +31,7 @@ export type Keybindings = Record<string, string | null>;
 /** Electron accelerators; `null` leaves a command without a shortcut. */
 export const DEFAULT_KEYBINDINGS: Keybindings = {
     open: 'CmdOrCtrl+O',
+    clone: null,
     closeRepo: 'CmdOrCtrl+W',
     switcher: 'CmdOrCtrl+P',
     nextRepo: 'Ctrl+Tab',

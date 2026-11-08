@@ -2,23 +2,13 @@ import { basename, resolve } from 'node:path';
 
 export type RepoStatus = 'starting' | 'ready' | 'failed';
 
-/** A repo with a running (or failed) IDE server; its id is its absolute path. */
+/** A repo with a running (or failed) IDE server; its id is its absolute path. What the rail shows of it is in `RailStatus`. */
 export interface Repo {
     id: string;
     name: string;
     status: RepoStatus;
     url?: string;
     error?: string;
-    /** Validation errors of its model, as its server last reported them. */
-    errors?: number;
-    /** The checked out branch (a short commit while detached); undefined outside git. */
-    branch?: string;
-    /** The branch it tracks, and the commits it is ahead of and behind it. */
-    upstream?: string;
-    ahead?: number;
-    behind?: number;
-    /** Files with uncommitted changes. */
-    dirty?: number;
 }
 
 /** The repos that have an IDE server, whichever workspaces they belong to (see `Workspaces`). */
