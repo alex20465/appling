@@ -272,6 +272,14 @@ export class TerminalPanel {
         this.arrange(repo);
     }
 
+    /** Opens the repo's panel on one terminal (a task's terminal when the task runs or is picked in the task list). */
+    reveal(repo: string, id: string): void {
+        this.service.update(repo, registry => registry.focus(id));
+        this.service.update(repo, registry => registry.setOpen(repo, true));
+        this.ensureView(repo);
+        this.arrange(repo);
+    }
+
     async create(repo: string, options: CreateOptions): Promise<void> {
         this.ensureView(repo);
         try {

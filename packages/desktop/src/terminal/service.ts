@@ -91,6 +91,8 @@ type Events = {
     notification: [id: string, notification: Notification];
     /** The tabs, splits, names or states of a repo's terminals changed. */
     changed: [repo: string];
+    /** This process attached to a terminal it did not just start (after a restart, for a view): its screen and scrollback. */
+    attached: [id: string, scrollback: string];
 };
 
 /**
@@ -105,6 +107,12 @@ export class TerminalService extends EventEmitter<Events> {
     readonly registry: TerminalRegistry;
     private readonly live = new Map<string, Live>();
     private readonly opened = new Set<string>();
+    private readonly opening = new Map<string, Promise<void>>();
+    /**
+     * Terminals that run a program, even though their executable is a shell (`sh -c` of a shell task): after a
+     * restart they keep their tab when they end, as programs do. Tasks (`tasks/runner.ts`) add theirs.
+     */
+    readonly programs = new Set<string>();
 
     constructor(private readonly options: TerminalServiceOptions = {}) {
         super();
@@ -141,9 +149,18 @@ export class TerminalService extends EventEmitter<Events> {
      * from the tabs, gives the others a tab and attaches them. With `endWithApp` the terminals left from a run that
      * did not end them (a crash) are ended instead.
      */
-    async openRepo(repo: string): Promise<void> {
-        if (this.opened.has(repo)) return;
+    openRepo(repo: string): Promise<void> {
+        const opening = this.opening.get(repo);
+        if (opening) return opening;
+        if (this.opened.has(repo)) return Promise.resolve();
         this.opened.add(repo);
+        // a second caller (the panel and the tasks) waits for the same reattach
+        const done = this.reattach(repo).finally(() => this.opening.delete(repo));
+        this.opening.set(repo, done);
+        return done;
+    }
+
+    private async reattach(repo: string): Promise<void> {
         const client = await this.connection();
         const infos = await client.list(repo);
         if (this.settings().endWithApp) {
@@ -158,7 +175,7 @@ export class TerminalService extends EventEmitter<Events> {
         const kept = infos.filter(info => !info.exit || known.has(info.id));
         const changed = this.registry.reconcile(repo, kept.map(info => info.id));
         // after a restart only the executable tells a shell from a program started with `command`
-        for (const info of kept) await this.track(info, !isShell(info));
+        for (const info of kept) await this.track(info, !isShell(info) || this.programs.has(info.id));
         if (changed) this.persist(repo);
         else this.emit('changed', repo);
     }
@@ -196,8 +213,10 @@ export class TerminalService extends EventEmitter<Events> {
         const live: Live = known ?? { info, integration: new ShellIntegration(info.cwd), command, unsubscribe: [], paused: false };
         this.live.set(info.id, live);
         if (live.attached) return;
+        const fresh = !!attached;
         attached ??= await (await this.connection()).attach(info.id);
         live.info = attached.info;
+        if (!fresh) this.emit('attached', info.id, attached.scrollback);
         this.listen(live, attached);
         if (!live.paused) live.unsubscribe.push(attached.onData(data => this.output(live, data)));
     }
@@ -249,6 +268,7 @@ export class TerminalService extends EventEmitter<Events> {
             const attached = await client.attach(id, size);
             live.info = { ...attached.info, ...live.info.exit && !attached.info.exit ? { exit: live.info.exit } : {} };
             this.listen(live, attached);
+            this.emit('attached', id, attached.scrollback);
             return {
                 scrollback: attached.scrollback,
                 resume: () => {
