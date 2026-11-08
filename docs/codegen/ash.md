@@ -38,7 +38,7 @@ The app name also sets the Elixir module prefix: `shop` becomes `Shop`, `shop_ap
 
 | Step | Command |
 |---|---|
-| Project | `mix igniter.new <app> --install ash,ash_postgres --yes --no-git`, adding `ash_state_machine` when the model has machines and `ash_oban` when it has scheduled jobs |
+| Project | `mix igniter.new <app> --install ash,ash_postgres --yes --no-git`, adding `simple_sat` (the SAT solver Ash policies need, in pure Elixir) when the model has policies, `ash_state_machine` when it has machines and `ash_oban` when it has scheduled jobs |
 | Phoenix | when the model has pages, `igniter.new` also gets `--with phx.new --with-args=--no-install` and installs `ash_phoenix`, plus `ash_json_api` when the model has a REST interface |
 | JSON:API | `mix igniter.install ash_json_api,bandit --yes` when the model has a REST interface and no pages |
 | Migrations | `mix ash.codegen initial_resources`, as the very last step |
@@ -53,7 +53,7 @@ Ash's generators work on modules that must already exist, so the extension sprea
 |---|---|
 | 0 | Project setup, `ash.gen.domain`, `ash.gen.enum`, `ash.gen.resource`, embedded resources and test files |
 | 1 | `belongs_to` relationships, once every resource exists |
-| 2 | Every patch of a generated module, after the last `mix` command, so expressions may follow relationships |
+| 2 | Every patch of a generated module, after the last `mix` command, so expressions may follow relationships, and the role and actor checks, which match the actor resources' structs |
 | 3 | `mix ash.codegen initial_resources` |
 
 ## Model to Ash
@@ -78,7 +78,7 @@ Modules are named `<App>.<Module>`, with nested modules as `<App>.<A>.<B>`; a ty
 | `action` without an entity | a task to write a generic action |
 | `machine` | an AshStateMachine section (see [state machines](#state-machines)) |
 | scheduled `job` | an AshOban trigger (see [jobs](#jobs)) |
-| `query` | a read action with `filter`, `sort` and offset pagination |
+| `query` | a read action with `filter`, `sort` and offset pagination; a filter that does not translate becomes `filter expr(false)` plus a task, so the action reads nothing until the filter is written |
 | computed projection field | a calculation on the source resource |
 | `interface rest` | AshJsonApi routes and a router served by Bandit (see [JSON:API](#jsonapi)) |
 | `actor` | the record that acts: the resource of its `is` entity, a resource of its own or a struct (see [actors](#actors)) |
@@ -313,7 +313,7 @@ Policies become `Ash.Policy.Authorizer` policies on the resource, which then lis
 |---|---|
 | an entity, with operations | `policy action_type(:read)`, a list for several, `delete` becomes `:destroy` |
 | an entity, without operations | `policy always()` |
-| an entity, with `fields` | `field_policy :total` or `field_policy [:total, :discount]` in `field_policies`, plus one `field_policy :*` that allows every other field |
+| an entity, with `fields` | `field_policy :discount` or `field_policy [:discount, :note]` in `field_policies`, plus one `field_policy :*` that allows every other field |
 | an action on an entity | `policy action(:<action>)` on the entity's resource |
 | a query | `policy action(:<query>)` on the read action of the query |
 
@@ -349,19 +349,9 @@ policies do
     authorize_if Shop.Crm.Checks.Clerk
   end
 end
-
-field_policies do
-  field_policy :total do
-    authorize_if Shop.Crm.Checks.Clerk
-    forbid_unless Shop.Sales.Checks.Customer
-    authorize_if expr(status != :draft)
-  end
-
-  field_policy :* do
-    authorize_if always()
-  end
-end
 ```
+
+Its `policy read fields total` generates no field policy yet: `total` sums a list, so it has no calculation, and Ash field policies name only fields the resource has. The task of the field, `add the calculation total = ..., public?: true, and add it to the field policy of sales.Order.policy[read fields total]: ...`, carries the condition.
 
 Ash forbids an action that no policy applies to on a resource with the authorizer, and requires every policy that applies to an action to pass. The effective policy is the conjunction of the policies along the path, so an action needs both the entity's `update` policy and its own.
 
@@ -391,7 +381,7 @@ A model without any policy generates no authorizer, and every action stays open.
 
 Callers pass the actor: the JSON:API takes it from the connection (`Ash.PlugHelpers.set_actor/2`), the generated LiveViews pass none, so their reads and actions on closed resources are forbidden until a signed in actor is passed with `actor:`.
 
-Ash field policies guard reads only: a field policy that also names `create`, `update` or `delete`, or names no operation, guards reads and leaves the writes a task. A field policy that follows a relationship (Ash field policies cannot) does not translate, so it forbids. Field policies on other operations only, policies of queries whose filter does not translate, of use cases and of actions without an entity stay tasks without a policy. Writing the policy test bodies is a task too.
+Ash field policies guard reads only: a field policy that also names `create`, `update` or `delete`, or names no operation, guards reads and leaves the writes a task. They name public attributes and calculations only: the calculation of a derived field that a field policy names is `public?: true`, a derived field without a calculation is left out until its calculation is written (its task names the policy), and a relationship is a task. A field policy that follows a relationship (Ash field policies cannot) does not translate, so it forbids. Field policies on other operations only, policies of queries whose filter does not translate, of use cases and of actions without an entity stay tasks without a policy. Writing the policy test bodies is a task too.
 
 ## Descriptions
 

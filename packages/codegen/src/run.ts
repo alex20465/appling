@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type { Graph } from '@appling/model';
@@ -47,9 +47,7 @@ export function runSteps(steps: PlannedStep[], out: string, log: (line: string) 
             const cwd = resolve(root, step.cwd ?? '.');
             mkdirSync(cwd, { recursive: true });
             const result = spawnSync(step.run[0], step.run.slice(1), { cwd, encoding: 'utf8', input: step.input });
-            if (result.error || result.status !== 0) {
-                throw new Error(`${step.run.join(' ')} failed: ${result.error?.message ?? (result.stderr || result.stdout)}`);
-            }
+            if (result.error || result.status !== 0) throw new Error(commandFailure(step.run, result));
             for (const file of step.creates ?? []) written?.push({ node, file });
         } else if (step.kind === 'template') {
             const file = join(root, step.file);
@@ -61,6 +59,13 @@ export function runSteps(steps: PlannedStep[], out: string, log: (line: string) 
             if (lines) written!.push({ node, file: step.file, lines });
         }
     }
+}
+
+/** The reason a command failed, with the end of what it printed on stdout and stderr (tools such as mix report errors on stdout). */
+function commandFailure(run: string[], result: SpawnSyncReturns<string>): string {
+    const reason = result.error?.message ?? (result.signal ? `killed by ${result.signal}` : `exit ${result.status}`);
+    const output = [result.stdout, result.stderr].map(o => (o ?? '').trimEnd()).filter(Boolean).join('\n').split('\n').slice(-60).join('\n');
+    return `${run.join(' ')} failed (${reason})${output ? `:\n${output}` : ''}`;
 }
 
 export function readRegistry(out: string): Registry | undefined {

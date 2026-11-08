@@ -7,8 +7,10 @@ import { addToSection } from './resource.js';
 /** A query becomes a read action of its entity's resource with filter, sort and pagination. */
 export function querySteps(query: GraphNode, context: MapContext): Step[] {
     const entity = context.node(query.data.entity as string)!;
-    const filter = query.data.filter ? ashExpr(query.data.filter as ExprData, context.node) : undefined;
-    if (query.data.filter && !filter) return [task(`filter the read action ${snake(lastOf(query.qn))} by ${query.props.filter}`)];
+    const translated = query.data.filter ? ashExpr(query.data.filter as ExprData, context.node) : undefined;
+    // A filter that does not translate reads nothing until it is written, so routes and pages can name the action.
+    const filter = query.data.filter && !translated ? 'false' : translated;
+    const tasks = query.data.filter && !translated ? [task(`filter the read action ${snake(lastOf(query.qn))} by ${query.props.filter}; it reads nothing until then`)] : [];
     const sorts = ((query.data.sorts ?? []) as { field: string, direction?: string }[]).map(s => `${lastOf(s.field)}: :${s.direction ?? 'asc'}`);
     const lines = [
         `read :${snake(lastOf(query.qn))} do`,
@@ -17,7 +19,7 @@ export function querySteps(query: GraphNode, context: MapContext): Step[] {
         ...(query.data.pageSize ? [`  pagination offset?: true, default_limit: ${query.data.pageSize}, required?: false`] : []),
         'end'
     ];
-    return [patch(fileOf(entity, context), existing => addToSection(existing, 'actions', lines))];
+    return [patch(fileOf(entity, context), existing => addToSection(existing, 'actions', lines)), ...tasks];
 }
 
 /** Computed projection fields become calculations on the source resource; plain fields are its attributes already. */

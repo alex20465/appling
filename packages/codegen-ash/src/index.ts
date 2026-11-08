@@ -7,11 +7,11 @@ import { constant, elixirString, lastOf, parentOf, validation, withModuledoc } f
 import { migrationSteps } from './migrations.js';
 import { hasPages, navigationSteps, pageSteps } from './pages.js';
 import { actorAttributeSpecs, actorFieldSteps, actorSteps, constrainRoles, homeAt, homeFields } from './actors.js';
-import { actorCheckSteps, closeResource, policySteps, policyTask, roleCalculations, roleSteps } from './roles.js';
+import { actorCheckSteps, closeResource, enforced, policySteps, policyTask, roleCalculations, roleSteps } from './roles.js';
 import { tenantSteps } from './tenants.js';
 import { testSteps } from './tests.js';
 import { externalKeySteps } from './vendors.js';
-import { app, attributeType, calculation, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, storedAttributes, task, typeModule } from './naming.js';
+import { app, attributeType, calculation, fieldPolicyOf, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, storedAttributes, task, typeModule } from './naming.js';
 
 const extension: CodegenExtension = {
     name: '@appling/codegen-ash',
@@ -29,7 +29,8 @@ const extension: CodegenExtension = {
         const pages = hasPages(context);
         const api = has('Interface', i => i.data.protocol === 'rest');
         const install = [
-            'ash', 'ash_postgres', ...(pages ? ['ash_phoenix'] : []), ...(has('Machine') ? ['ash_state_machine'] : []),
+            // Ash policies need a SAT solver; simple_sat is pure Elixir, so the project builds without a C compiler.
+            'ash', 'ash_postgres', ...(enforced(context) ? ['simple_sat'] : []), ...(pages ? ['ash_phoenix'] : []), ...(has('Machine') ? ['ash_state_machine'] : []),
             ...(has('Job', j => !!j.data.schedule) ? ['ash_oban'] : []), ...(pages && api ? ['ash_json_api'] : [])
         ];
         return [
@@ -132,7 +133,11 @@ function fieldSteps(field: GraphNode, context: MapContext): Step[] | undefined {
         return [{ ...mix(['ash.gen.resource', typeModule(owner, context), '--relationship', spec]), phase: 1 }];
     }
     const tasks: Step[] = [];
-    if (field.data.derived && !calculation(field, context)) tasks.push(task(`add the calculation ${lastOf(field.qn)} = ${field.props.derived}`));
+    if (field.data.derived && !calculation(field, context)) {
+        // Until the calculation exists, its field policy has nothing to name; the task carries the policy's condition.
+        const policy = fieldPolicyOf(field, context);
+        tasks.push(task(`add the calculation ${lastOf(field.qn)} = ${field.props.derived}${policy ? `, public?: true, and add it to the field policy of ${policy.qn}: ${policy.props.condition}` : ''}`));
+    }
     if (field.data.default && defaultValue(field, context) === undefined) tasks.push(task(`set the default of ${lastOf(field.qn)} to ${field.props.default}`));
     return tasks;
 }

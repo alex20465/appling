@@ -198,8 +198,8 @@
   {
     "kind": "Query",
     "generated": 1,
-    "partial": 0,
-    "todo": 1,
+    "partial": 1,
+    "todo": 0,
     "tasks": 1
   },
   {
@@ -247,8 +247,8 @@
   {
     "kind": "total",
     "generated": 100,
-    "partial": 21,
-    "todo": 19,
+    "partial": 22,
+    "todo": 18,
     "tasks": 60
   }
 ]

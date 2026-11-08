@@ -68,9 +68,18 @@ export function patch(file: string, write: (existing: string) => string): Step {
     return { kind: 'template', file, write: existing => write(existing!), phase: 2 };
 }
 
-/** The calculation for a derived field, or undefined when Ash expressions cannot say it. */
+/**
+ * The calculation for a derived field, or undefined when Ash expressions cannot say it. It is private unless a field
+ * policy names it: Ash field policies take only public attributes and calculations.
+ */
 export function calculation(field: GraphNode, context: MapContext): string | undefined {
     const type = field.data.type as TypeData;
     const body = field.data.derived && !type.many && ashExpr(field.data.derived as ExprData, context.node);
-    return body ? `calculate :${lastOf(field.qn)}, ${attributeType(type, context, true)}, expr(${body})` : undefined;
+    return body ? `calculate :${lastOf(field.qn)}, ${attributeType(type, context, true)}, expr(${body})${fieldPolicyOf(field, context) ? ', public?: true' : ''}` : undefined;
+}
+
+/** The first policy that guards reads of a field (`policy read fields ...`), if any. */
+export function fieldPolicyOf(field: GraphNode, context: MapContext): GraphNode | undefined {
+    return context.graph.nodes.find(p => p.kind === 'Policy' && ((p.data.fields ?? []) as string[]).includes(field.qn)
+        && (!((p.data.operations ?? []) as string[]).length || ((p.data.operations ?? []) as string[]).includes('read')));
 }

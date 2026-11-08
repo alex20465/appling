@@ -94,9 +94,11 @@ test('run executes commands and templates and writes the registry', async () => 
 
 test('a failing command stops the run', async () => {
     const out = join(mkdtempSync(join(tmpdir(), 'appling-')), 'shop');
-    const failing: CodegenExtension = { name: 'failing', steps: n => n.kind === 'Module' ? [{ kind: 'command', run: ['node', '-e', 'process.exit(3)'] }] : [] };
+    const script = 'console.log("compiling"); console.error("warning"); console.log("error: no such app"); process.exit(3)';
+    const failing: CodegenExtension = { name: 'failing', steps: n => n.kind === 'Module' ? [{ kind: 'command', run: ['node', '-e', script] }] : [] };
     const steps = plan(await graph(), failing, 'shop');
-    expect(() => runPlan(steps, out)).toThrow('node -e process.exit(3) failed');
+    // the reason and both streams, since tools such as mix print their errors on stdout
+    expect(() => runPlan(steps, out)).toThrow(`node -e ${script} failed (exit 3):\ncompiling\nerror: no such app\nwarning`);
     expect(existsSync(join(out, '.appling/tasks.json'))).toBe(false);
 });
 

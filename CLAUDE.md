@@ -23,11 +23,15 @@ node scripts/bench/check-scaling.mjs [copies...]   # time `check` on N copies of
 node packages/desktop/out/bin.js examples       # Appling Desktop on the sample models (needs a display; ask the user to start it)
 pnpm --filter @appling/lang build   # rebuild only the language after grammar changes
 node scripts/ci/codegen-coverage.mjs   # codegen coverage of every extension over the constructs fixture and examples (--json, --markdown, --base, --root, --badge)
+node scripts/ci/codegen-e2e.mjs <django|ash|go|rust>   # generate examples + constructs fixture, build them with the real toolchain
+scripts/ci/codegen-e2e-docker.sh <target>             # the same in the target's official docker image (projects in .e2e/)
 ```
 
 CI: `.github/workflows/ci.yml` on every PR and push to `main` runs build, test, `check examples` and the `fmt examples` + `git diff --exit-code` idempotence check, then the codegen coverage report (head and base, one sticky PR comment marked `<!-- appling-codegen-coverage -->`, the badge JSON pushed to the `badges` branch on `main`); see `docs/contributing/development.md`.
 
 `check` and `fmt` run the built CLI (`packages/cli/out/main.js`), so rebuild after any source change. Tests live in `packages/<pkg>/test/`; `packages/lang/test/workspace.ts` builds in memory sources as one workspace. The lang tests import `src/` and only need `langium generate`; every other package's tests import `@appling/*` through the packages' `out/` exports, so rebuild a changed upstream package before testing downstream ones. Every validation rule has a negative fixture in `validation.test.ts`; add one with each new rule. `packages/lang/test/fixtures/constructs/` uses every AST type and keyword of the grammar (`constructs.test.ts` fails otherwise), so extend it with each grammar change; each codegen extension's `coverage.test.ts` plans it and fails when its coverage per node kind (`test/coverage.json`) drops, and `-u` raises the baseline after a gain. Use `pnpm check examples` to verify changes against the sample models; `examples/sales.appling` and `examples/crm.appling` reference each other across modules.
+
+CI: `.github/workflows/codegen-e2e.yml` runs `scripts/ci/codegen-e2e.mjs` once per target (PRs touching codegen, lang, model, cli or examples; nightly; on demand). A generated project that fails to build, warns or fails a test is a generator bug: fix it in the extension with a snapshot or unit test.
 
 ## Architecture
 

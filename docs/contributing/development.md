@@ -9,7 +9,7 @@ Appling is a pnpm workspace of TypeScript packages under `packages/`. This page 
 
 - Node.js 24 (the version is in `.nvmrc`).
 - pnpm through corepack. The version is pinned in `package.json` (`packageManager`); run `corepack enable` once so `pnpm` uses it. An older global pnpm cannot install this workspace.
-- For end to end code generation runs only: `uv` (Django) and Elixir with `igniter_new` (Ash). The tests do not need them.
+- For end to end code generation runs only: `uv` (Django), Elixir with `igniter_new` (Ash), Go or Rust, or Docker instead of all four (see [generated projects end to end](#generated-projects-end-to-end)). The tests do not need them.
 
 ## Build and test
 
@@ -69,6 +69,28 @@ completion = (generated + partial / 2) / (generated + partial + todo)
 ```
 
 A `partial` element has code and open registry tasks, so it counts as half. With `--base`, each figure shows its change: `▲` for a gain, `▼` for a drop, in percentage points for shares. Fewer registry tasks is a gain, so `▲ -2` means two tasks fewer. `appling generate --coverage` prints the same report for the targets of a project (see [the CLI](../tools/cli.md#coverage)).
+
+## Generated projects end to end
+
+The codegen tests apply the steps in memory and compare snapshots; they never run a framework command or a compiler. `scripts/ci/codegen-e2e.mjs` does: for one target it generates `examples/` and the all constructs fixture (`packages/lang/test/fixtures/constructs/`), each in its own workspace with an `appling.config.json` for that target, and then builds and tests the result with the real toolchain.
+
+```sh
+pnpm build
+node scripts/ci/codegen-e2e.mjs go                         # both models, in a new temp folder
+node scripts/ci/codegen-e2e.mjs django examples --out /tmp/e2e
+scripts/ci/codegen-e2e-docker.sh rust                      # the same inside the official image
+```
+
+| Target | Toolchain | After `appling generate` |
+|---|---|---|
+| `django` | `uv`, Python 3.12 | `manage.py check`, `makemigrations --check --dry-run`, `migrate`, `manage.py test` |
+| `ash` | Elixir 1.18 on OTP 28, Postgres on `localhost` (user and password `postgres`) | `mix compile --warnings-as-errors`, `mix test` (`MIX_ENV=test`) |
+| `go` | Go 1.25 | `go build ./...`, `go vet ./...`, `go test ./...` |
+| `rust` | stable Rust | `cargo check --all-targets`, `cargo test`, both with `RUSTFLAGS="-D warnings"` |
+
+Skipped tests (the registry task skeletons) pass; a failing test, a compiler error or a warning fails the run. For Ash the script first installs the `igniter_new` and `phx_new` archives. Without a local toolchain, `scripts/ci/codegen-e2e-docker.sh <target>` runs the script in `ghcr.io/astral-sh/uv:python3.12-bookworm-slim`, `elixir:1.18`, `golang:1.25` or `rust:1` with your Node mounted in (for Ash next to a `postgres:16-alpine` container); the projects stay in `.e2e/<target>/` and the caches in `.e2e/home/`, both ignored by git. Igniter and Phoenix compile a lot of dependencies: give Docker at least 6 GB of memory for Ash.
+
+On GitHub the `Codegen end to end` workflow (`.github/workflows/codegen-e2e.yml`) runs the script once per target on pull requests that touch the codegen packages, `lang`, `model`, `cli`, `examples/` or the script, every night and on demand. A failing job uploads the generated projects as an artifact. When a generated project does not build, fix the generator in its extension and add a snapshot or unit test for the fix.
 
 ## Conventions
 
