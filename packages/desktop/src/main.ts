@@ -197,7 +197,7 @@ const tasks = new TaskController({
         refresh();
         if (!open) activeView()?.webContents.focus();
     },
-    reveal: (repo, terminal) => terminals.reveal(repo, terminal),
+    reveal: (repo, terminal) => void terminals.reveal(repo, terminal),
     remote: repo => isRemoteId(repo) ? remoteTasks(remotes.get(repo), repo) : undefined
 });
 tasks.runner.on('changed', () => {
