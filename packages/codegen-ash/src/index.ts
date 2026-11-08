@@ -7,7 +7,7 @@ import { constant, elixirString, lastOf, parentOf, validation, withModuledoc } f
 import { migrationSteps } from './migrations.js';
 import { hasPages, navigationSteps, pageSteps } from './pages.js';
 import { actorAttributeSpecs, actorFieldSteps, actorSteps, constrainRoles, homeAt, homeFields } from './actors.js';
-import { actorCheckSteps, closeResource, policySteps, policyTask, roleCalculations, roleSteps } from './roles.js';
+import { actorCheckSteps, closeResource, enforced, policySteps, policyTask, roleCalculations, roleSteps } from './roles.js';
 import { tenantSteps } from './tenants.js';
 import { testSteps } from './tests.js';
 import { externalKeySteps } from './vendors.js';
@@ -29,7 +29,8 @@ const extension: CodegenExtension = {
         const pages = hasPages(context);
         const api = has('Interface', i => i.data.protocol === 'rest');
         const install = [
-            'ash', 'ash_postgres', ...(pages ? ['ash_phoenix'] : []), ...(has('Machine') ? ['ash_state_machine'] : []),
+            // Ash policies need a SAT solver; simple_sat is pure Elixir, so the project builds without a C compiler.
+            'ash', 'ash_postgres', ...(enforced(context) ? ['simple_sat'] : []), ...(pages ? ['ash_phoenix'] : []), ...(has('Machine') ? ['ash_state_machine'] : []),
             ...(has('Job', j => !!j.data.schedule) ? ['ash_oban'] : []), ...(pages && api ? ['ash_json_api'] : [])
         ];
         return [

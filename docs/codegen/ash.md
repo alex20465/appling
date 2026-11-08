@@ -38,7 +38,7 @@ The app name also sets the Elixir module prefix: `shop` becomes `Shop`, `shop_ap
 
 | Step | Command |
 |---|---|
-| Project | `mix igniter.new <app> --install ash,ash_postgres --yes --no-git`, adding `ash_state_machine` when the model has machines and `ash_oban` when it has scheduled jobs |
+| Project | `mix igniter.new <app> --install ash,ash_postgres --yes --no-git`, adding `simple_sat` (the SAT solver Ash policies need, in pure Elixir) when the model has policies, `ash_state_machine` when it has machines and `ash_oban` when it has scheduled jobs |
 | Phoenix | when the model has pages, `igniter.new` also gets `--with phx.new --with-args=--no-install` and installs `ash_phoenix`, plus `ash_json_api` when the model has a REST interface |
 | JSON:API | `mix igniter.install ash_json_api,bandit --yes` when the model has a REST interface and no pages |
 | Migrations | `mix ash.codegen initial_resources`, as the very last step |
@@ -78,7 +78,7 @@ Modules are named `<App>.<Module>`, with nested modules as `<App>.<A>.<B>`; a ty
 | `action` without an entity | a task to write a generic action |
 | `machine` | an AshStateMachine section (see [state machines](#state-machines)) |
 | scheduled `job` | an AshOban trigger (see [jobs](#jobs)) |
-| `query` | a read action with `filter`, `sort` and offset pagination |
+| `query` | a read action with `filter`, `sort` and offset pagination; a filter that does not translate becomes `filter expr(false)` plus a task, so the action reads nothing until the filter is written |
 | computed projection field | a calculation on the source resource |
 | `interface rest` | AshJsonApi routes and a router served by Bandit (see [JSON:API](#jsonapi)) |
 | `actor` | the record that acts: the resource of its `is` entity, a resource of its own or a struct (see [actors](#actors)) |

@@ -431,7 +431,7 @@ end
 
 exports[`examples plan domains, enums, embedded resources, resources and relationships 1`] = `
 [
-  "(project): mix igniter.new shop --with phx.new --with-args=--no-install --install ash,ash_postgres,ash_phoenix,ash_state_machine,ash_oban,ash_json_api --yes --no-git",
+  "(project): mix igniter.new shop --with phx.new --with-args=--no-install --install ash,ash_postgres,simple_sat,ash_phoenix,ash_state_machine,ash_oban,ash_json_api --yes --no-git",
   "crm: mix ash.gen.domain Shop.Crm --yes",
   "sales: mix ash.gen.domain Shop.Sales --yes",
   "crm.Account: mix ash.gen.resource Shop.Crm.Account --domain Shop.Crm --default-actions read,create,update,destroy --uuid-primary-key id --attribute name:string:required:public,email:string:required:public --extend postgres --timestamps --yes",

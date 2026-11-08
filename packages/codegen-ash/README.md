@@ -18,7 +18,7 @@ Requires Elixir 1.17 or later and the `igniter_new` archive (`mix archive.instal
 
 | Model | Ash |
 |---|---|
-| project | `mix igniter.new <name> --install ash,ash_postgres` |
+| project | `mix igniter.new <name> --install ash,ash_postgres`, plus `simple_sat` when the model has policies |
 | `module` | `mix ash.gen.domain <App>.<Module>` |
 | `enum` | `mix ash.gen.enum` |
 | `value` | an embedded resource |
@@ -31,7 +31,7 @@ Requires Elixir 1.17 or later and the `igniter_new` archive (`mix archive.instal
 | `action` on an entity | an update action: arguments for inputs, validations for preconditions and guards, `set_attribute` or `atomic_update` changes, and `transition_state` |
 | `machine` | an AshStateMachine section; transitions on an event get an update action named after the event |
 | scheduled `job` | an AshOban trigger with `where` and `scheduler_cron`; `now - duration("720h")` becomes `ago(720, :hour)` |
-| `query` | a read action with filter, sort and offset pagination |
+| `query` | a read action with filter, sort and offset pagination; a filter that does not translate reads nothing (`filter expr(false)`) until written |
 | computed projection field | a calculation on the source resource |
 | `actor` | bound with `is`: the entity's resource holds its fields and a private `roles` attribute limited to the roles its actors carry; a `human` actor without `is`: a resource of its own with its fields and `roles`; a `system` or `service` actor without `is`: a struct whose `roles` are its roles; `actor.is(Actor)` becomes a check matching its record |
 | `role` | an `Ash.Policy.SimpleCheck` `<App>.<Module>.Checks.<Role>` with one clause per actor record that carries the role; the roles a condition names call their checks, the rest of the condition is a calculation `:<role>?` on the actor resource |

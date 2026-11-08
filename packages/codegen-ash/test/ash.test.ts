@@ -253,6 +253,32 @@ test('field policies name only fields on the resource, and calculations they nam
     expect(result.steps.find(({ step }) => step.kind === 'template' && step.file === 'lib/shop/shop/checks/manager.ex')?.step).toMatchObject({ phase: 2 });
 });
 
+test('a query filter that does not translate reads nothing, so its JSON:API route compiles', async () => {
+    const result = await planFor({
+        'shop.appling': `module shop {
+            entity Order {
+                reference: String
+            }
+            query Odd from Order {
+                where { ["x", "y"] [0] != reference }
+            }
+            projection OddView from Order {
+                reference
+            }
+            interface rest Api {
+                GET "/odd" -> Odd as OddView { reference }
+            }
+        }`
+    });
+    const write = (file: string, text: string) => result.steps.reduce((current, { step }) => step.kind === 'template' && step.file === file ? step.write(current) : current, text);
+    expect(write('lib/shop/shop/order.ex', 'defmodule Shop.Shop.Order do\n  use Ash.Resource\nend\n')).toContain('    read :odd do\n      filter expr(false)\n    end\n');
+    expect(write('lib/shop/shop.ex', 'defmodule Shop.Shop do\n  use Ash.Domain\nend\n')).toContain('index :odd, route: "/odd"');
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['shop.Odd'].missing.map(m => m.what)).toEqual(['filter the read action odd by ["x", "y"] [0] != reference; it reads nothing until then']);
+    // Without policies the project needs no SAT solver (the examples, with policies, install simple_sat).
+    expect(result.steps[0].step.kind === 'command' && result.steps[0].step.run.join(' ')).not.toContain('simple_sat');
+});
+
 test('once the model has a policy, every resource denies what no policy covers, and jobs bypass the policies', async () => {
     const source = (policies: boolean) => ({
         'ops.appling': `module ops {
