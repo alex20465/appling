@@ -1,9 +1,12 @@
 import { homedir } from 'node:os';
-import { dialog, ipcMain, type BrowserWindow } from 'electron';
+import { dialog, ipcMain, type BaseWindow, type WebContents } from 'electron';
 import { cloneRepo, defaultCloneParent } from './clone.js';
 
 export interface CloneHost {
-    window(): BrowserWindow | undefined;
+    /** The window the form opens in, for the folder dialog. */
+    window(): BaseWindow | undefined;
+    /** That window's shell page, which draws the form. */
+    shell(): WebContents | undefined;
     /** The folders of the workspace the clone goes to, for the proposed parent folder. */
     folders(): string[];
     /** Called when the form opens and closes, so the main process hides the repo views behind the shell page. */
@@ -36,7 +39,7 @@ export function cloneIpc(host: CloneHost): () => void {
             const folder = await cloneRepo(String(url ?? ''), String(parent ?? ''), {
                 name: name || undefined,
                 signal: controller.signal,
-                onProgress: progress => host.window()?.webContents.send('cloneProgress', progress)
+                onProgress: progress => host.shell()?.send('cloneProgress', progress)
             });
             if (controller.signal.aborted) return { error: 'The clone was cancelled.' };
             running = undefined;
@@ -50,10 +53,10 @@ export function cloneIpc(host: CloneHost): () => void {
     });
     ipcMain.on('closeClone', close);
     return () => {
-        const window = host.window();
-        if (!window) return;
+        const shell = host.shell();
+        if (!shell) return;
         host.shown(true);
-        window.webContents.focus();
-        window.webContents.send('clone', { parent: defaultCloneParent(host.folders(), homedir()) });
+        shell.focus();
+        shell.send('clone', { parent: defaultCloneParent(host.folders(), homedir()) });
     };
 }

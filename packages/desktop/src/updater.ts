@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { app, dialog, shell, type BrowserWindow } from 'electron';
+import { app, dialog, shell, type BaseWindow } from 'electron';
 import electronUpdater from 'electron-updater';
 import { releaseUrl, updateMode, type UpdateMode } from './update-policy.js';
 
@@ -24,7 +24,7 @@ export class Updater {
     private readonly reason?: string;
     private checking = false;
 
-    constructor(private readonly window: () => BrowserWindow | undefined) {
+    constructor(private readonly window: () => BaseWindow | undefined) {
         const { mode, reason } = updateMode({
             packaged: app.isPackaged, platform: process.platform, appImage: process.env.APPIMAGE, signed: signed(),
             disabled: process.env.APPLING_DISABLE_UPDATES

@@ -25,5 +25,11 @@ contextBridge.exposeInMainWorld('appling', {
     onCloneProgress: (callback: (progress: unknown) => void) => ipcRenderer.on('cloneProgress', (_event, progress) => callback(progress)),
     chooseCloneParent: (current: string) => ipcRenderer.invoke('chooseCloneParent', current),
     clone: (url: string, parent: string, name?: string) => ipcRenderer.invoke('clone', url, parent, name),
-    closeClone: () => ipcRenderer.send('closeClone')
+    closeClone: () => ipcRenderer.send('closeClone'),
+    // windows (issue #14): a drag out of the rail, a drop from another window's rail, the panes moved into this window
+    detach: (kind: string, id: string, x: number, y: number) => ipcRenderer.send('detach', kind, id, x, y),
+    drop: (kind: string, id: string) => ipcRenderer.send('drop', kind, id),
+    paneMenu: (pane: string) => ipcRenderer.send('paneMenu', pane),
+    focusPane: (pane: string) => ipcRenderer.send('focusPane', pane),
+    dockPane: (pane: string) => ipcRenderer.send('dockPane', pane)
 });
