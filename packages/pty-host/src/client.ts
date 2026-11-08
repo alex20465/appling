@@ -18,6 +18,8 @@ export interface ConnectOptions {
 export interface StartOptions {
     /** The Node binary; inside Electron its own executable, which runs as Node through `ELECTRON_RUN_AS_NODE`. */
     node?: string;
+    /** The host's entry, `hostMain()` by default; a packaged app passes its bundled copy. */
+    main?: string;
     /** The host's own environment. Shells get the environment of their spawn request. */
     env?: NodeJS.ProcessEnv;
     /** Milliseconds without clients and without running terminals before the host exits; 60000 by default, 0 never. */
@@ -40,7 +42,7 @@ export async function startPtyHost(dir: string = defaultDir(), options: StartOpt
     const log = openSync(logPath(dir), 'a', 0o600);
     let exited: number | null | undefined;
     try {
-        const child = spawn(options.node ?? process.execPath, [hostMain(), 'serve', '--dir', dir, '--idle-timeout', String(options.idleTimeout ?? 60000)], {
+        const child = spawn(options.node ?? process.execPath, [options.main ?? hostMain(), 'serve', '--dir', dir, '--idle-timeout', String(options.idleTimeout ?? 60000)], {
             detached: true,
             stdio: ['ignore', log, log],
             env: { ...options.env ?? process.env, ELECTRON_RUN_AS_NODE: '1' },

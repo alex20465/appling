@@ -23,6 +23,7 @@ export const COMMANDS = {
     reload: 'Reload Repo View',
     devTools: 'Toggle Developer Tools',
     keybindings: 'Keyboard Shortcuts',
+    checkForUpdates: 'Check for Updates…',
     quit: 'Quit'
 } as Record<string, string>;
 
@@ -51,6 +52,7 @@ export const DEFAULT_KEYBINDINGS: Keybindings = {
     reload: 'CmdOrCtrl+R',
     devTools: 'CmdOrCtrl+Alt+I',
     keybindings: 'CmdOrCtrl+K',
+    checkForUpdates: null,
     quit: 'CmdOrCtrl+Q'
 };
 

@@ -21,7 +21,7 @@ host.close();                                     // detaches; the shell keeps r
 
 `PtyHostClient` methods: `spawn(options)`, `list(group?)`, `attach(id, { cols, rows }?)`, `write(id, data)`, `resize(id, cols, rows)`, `kill(id, signal?)` (without a signal ends and removes the terminal, with one only sends it), `detach(id)`, `shutdown()` (ends every terminal and the host) and `close()`. `spawn` takes `cwd`, `shell` (default `$SHELL`, `%COMSPEC%` on Windows), `args`, `env` (default the caller's environment; `TERM=xterm-256color` and `COLORTERM=truecolor` are set), `cols`, `rows`, `group` (a free label such as the repo folder, which `list` filters by), `title` and `scrollback` (lines, default 10000). A terminal whose process ended stays listed with its `exit` and its scrollback until it is killed.
 
-`connectPtyHost({ dir, start, host: { node, env, idleTimeout, timeout } })`: `start: false` only connects. A host it starts runs detached in its own session with `node` (default the current executable, run as Node through `ELECTRON_RUN_AS_NODE`, so Electron can pass its own binary) and exits after `idleTimeout` milliseconds (default 60000, 0 never) without connected clients and without running terminals.
+`connectPtyHost({ dir, start, host: { node, main, env, idleTimeout, timeout } })`: `start: false` only connects. `main` is the host's entry (default this package's `out/main.js`; the packaged Desktop passes its bundled copy). A host it starts runs detached in its own session with `node` (default the current executable, run as Node through `ELECTRON_RUN_AS_NODE`, so Electron can pass its own binary) and exits after `idleTimeout` milliseconds (default 60000, 0 never) without connected clients and without running terminals.
 
 ## Command
 
