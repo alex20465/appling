@@ -37,6 +37,8 @@ Done when `pnpm test` passes, the CLI can dump the graph of `examples/`, `exampl
 
 `@appling/ide`, `@appling/ai`
 
+Appling Desktop (`@appling/desktop`, epic #15) replaced the browser IDE: `@appling/ide` lives on as Desktop's repo view and the landing demo, and the built in chat was removed in favour of agent sessions (decision 7C).
+
 - [x] A1 Read only IDE: `npx @appling/ide` starts a local server on the workspace. Browser UI (React, React Flow, Monaco) with a text editor backed by the LSP, the zoomable graph at the three levels of `concept.md` section 4, and selection synced between text and graph. Layout lives in `.appling/layout.json`, outside the model.
 - [x] A2 Editing: edit elements and attributes in the graph through the edit operations. Migration entries appear when a release exists.
 - [x] A3 AI: MCP server exposing check, graph query, edit operations and the registry. Provider adapter and chat panel in the IDE. AI changes pass validation and are shown as reviewable diffs.
@@ -72,6 +74,8 @@ Extensions are configured in `appling.config.json` by package name. Third party 
 
 `@appling/viz`, `@appling/ai`
 
+The floating window was removed with decision 7C of #15: the same views, bubbles and proposals now draw on the repo's canvas in Appling Desktop for agent sessions.
+
 - [x] C1 Show one node: `visualize` draws the element that was asked for and unfolds it in place, so the AI can guide through the model one node at a time instead of drawing a whole view.
 - [x] C2 Flowcharts: the machine and use case views draw a flowchart, with states and steps as nodes and transitions and step order as edges, instead of a list of cards or steps.
 - [x] C3 Note bubbles: the AI places a bubble on an element or one of its members, such as a field, to say what happens there.
@@ -92,8 +96,9 @@ Extensions are configured in `appling.config.json` by package name. Third party 
 | `@appling/lang` | exists | langium | grammar, scoping, validation, printer, expression typing, `/lsp` export |
 | `@appling/model` | new | lang | semantic graph, edit operations, release snapshots, migration steps |
 | `@appling/cli` | exists | lang, model, codegen | `check`, `fmt`, `release`, `generate` |
-| `@appling/ide` | new | lang, model, ai | local web IDE |
-| `@appling/ai` | new | model | MCP server, provider adapter, skills |
+| `@appling/ide` | private | lang, model, ai, viz | Desktop's repo view and the landing demo |
+| `@appling/desktop` | private | ide, ai, pty-host | Appling Desktop |
+| `@appling/ai` | new | model, viz | MCP server, agent sessions, skills |
 | `@appling/codegen` | new | model | plan, step runner, map contract, registry |
 | `@appling/codegen-django` | new | codegen | Django map and templates |
 | `@appling/codegen-ash` | new | codegen | Ash map and templates |

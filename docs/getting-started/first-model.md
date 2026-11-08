@@ -1,6 +1,6 @@
 ---
 title: Your first model
-description: Write a small shop model step by step, check it, format it, look at its graph and open it in the IDE.
+description: Write a small shop model step by step, check it, format it, look at its graph and open it in Appling Desktop.
 ---
 
 This tutorial builds a small shop: products, orders, a way to place an order and an API that lists placed orders. It touches four of the five layers and every CLI command you need day to day. You need [the CLI](installation.md#the-cli).
@@ -137,13 +137,15 @@ npx appling graph models
 
 Each element is a node with its qualified name, such as `shop.Order.status`, and each reference an edge. See [the semantic graph](../reference/graph.md).
 
-## 6. Open the IDE
+## 6. Open it in Appling Desktop
+
+Open the project folder in [Appling Desktop](../tools/desktop.md), from its launcher or from a terminal:
 
 ```sh
-npx @appling/ide models
+./Appling-0.1.0-linux-x86_64.AppImage .
 ```
 
-Open `http://127.0.0.1:4410`. The editor and the graph stay in sync: move the cursor to `PlaceOrder` and the graph selects it; rename a field in the inspector and every reference follows. See [the IDE](../tools/ide.md).
+The model canvas opens as the main area of the repo. Click a module to unfold its declarations, search for `PlaceOrder`, and rename a field in the inspector: every reference follows. **Source** opens the text next to the canvas, and the cursor in the text selects the element on the canvas. See [the repo view](../tools/ide.md). To try it without installing anything, open the [demo](https://appling.tools/ide/).
 
 ## Next steps
 

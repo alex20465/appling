@@ -3,7 +3,7 @@ title: Desktop
 description: Install Appling Desktop, the native app that opens many repos with the model canvas as the main area of each, and keep it up to date.
 ---
 
-Appling Desktop is a native app for Linux, Windows and macOS. It groups repos into workspaces, runs the [IDE](ide.md) once per repo and shows the model canvas as the main area of each. It is in development: the builds come from the `desktop-v<version>` tags of the repository, and there is no release yet.
+Appling Desktop is a native app for Linux, Windows and macOS. It groups repos into workspaces, runs an IDE server once per repo and shows its [repo view](ide.md), with the model canvas as the main area. It replaces the browser IDE and the floating visualization window of earlier versions. It is in development: the builds come from the `desktop-v<version>` tags of the repository, and there is no release yet.
 
 ## Install
 

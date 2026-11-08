@@ -59,7 +59,7 @@ Existing settings stay: init adds the `appling` server to a configuration that a
 
 Start the agent in the project folder and describe what you want, such as "I want to design a todo app". The rules tell the agent how to treat it:
 
-- A design or a draft is an Appling model, not code. The agent asks you what the business decides, writes the model module by module, validates it and shows it in the [visualization window](../tools/ai.md#visualization-window).
+- A design or a draft is an Appling model, not code. The agent asks you what the business decides, writes the model module by module, validates it and, in an agent session of [Appling Desktop](../tools/desktop.md), shows it on the canvas with the [visual tools](../tools/ai.md#visual-tools).
 - Code comes from the model through [code generation](../codegen/overview.md) with the stack in `appling.config.json`, and the [registry skill](../tools/ai.md#registry-skill) finishes what generation leaves open.
 - Every later request, a feature, a change or a bug, starts as a change of the model.
 - While only the model exists, the agent applies model changes directly, without asking.

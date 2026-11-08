@@ -119,7 +119,7 @@ import { createApplingLspServices } from '@appling/lang/lsp';
 startLanguageServer(createApplingLspServices({ connection, ...NodeFileSystem }).shared);
 ```
 
-`connection` is a `vscode-languageserver` connection. The IDE creates one per websocket with `vscode-ws-jsonrpc` and starts one server for each page. On Node, pass `realPath` too, as `appling-language-server` and the IDE do:
+`connection` is a `vscode-languageserver` connection. The IDE server of each repo in Appling Desktop creates one per websocket with `vscode-ws-jsonrpc` and starts one server for each view. On Node, pass `realPath` too, as `appling-language-server` and the IDE server do:
 
 ```ts
 import { existsSync, realpathSync } from 'node:fs';

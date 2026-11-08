@@ -13,7 +13,7 @@ The simulator evaluates the behavior a model describes against sample data and a
 | Which invariants does an action put at risk? | The invariants of its entity that read a field the action changes, directly or through derived fields |
 | What does running an action do? | Policies, preconditions, the transition taken, the effects, emitted events and violated invariants |
 
-You reach it through `appling simulate` in the [CLI](cli.md#simulate), the `simulate` tool of the [MCP server and the IDE chat](ai.md#model-tools), and the [IDE inspector](ide.md#the-inspector), which shows the answers for the selected action or machine.
+You reach it through `appling simulate` in the [CLI](cli.md#simulate), the `simulate` tool of the [MCP server](ai.md#model-tools), and the [inspector](ide.md#the-inspector) of Appling Desktop, which shows the answers for the selected action or machine.
 
 ## An example
 
@@ -131,4 +131,4 @@ simulator.risks('shop.Discount');
 simulator.run('shop.Discount', { lines: [{ amount: 5 }], discount: 0 }, { actor: 'shop.Staff' }, { amount: 20 });
 ```
 
-`@appling/model/simulator` exports the same class without the language dependencies, for the browser. The IDE uses it this way.
+`@appling/model/simulator` exports the same class without the language dependencies, for the browser. The repo view of Appling Desktop and its browser demo use it this way.

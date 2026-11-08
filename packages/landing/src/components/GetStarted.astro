@@ -2,14 +2,14 @@
 const commands = [
   { name: "check", text: "validates every .appling file and exits with 1 when it finds errors." },
   { name: "fmt", text: "rewrites files into canonical form. A second run changes nothing." },
-  { name: "@appling/ide", text: "opens the text and the graph side by side in your browser." },
+  { name: "graph", text: "prints the semantic graph as JSON, the same graph Appling Desktop and the AI read." },
   { name: "generate", text: "writes a draft project for every target in appling.config.json." },
 ];
 
 const lines = [
   { comment: "add the CLI to your project", command: "npm i -D @appling/cli" },
   { comment: "validate every model", command: "npx appling check models" },
-  { comment: "open the IDE on http://127.0.0.1:4410", command: "npx @appling/ide models" },
+  { comment: "print the semantic graph", command: "npx appling graph models" },
   { comment: "preview the generated project", command: "npx appling generate --plan models" },
 ];
 ---
