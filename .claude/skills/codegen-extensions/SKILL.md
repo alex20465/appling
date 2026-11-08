@@ -31,7 +31,7 @@ Command steps run through `spawnSync` with no shell (no pipes, no globs); stdin 
 |---|---|
 | 0 (default) | Django setup, apps, every Django template |
 | 1 | Ash `belongs_to`, migration snapshots |
-| 2 | every Ash `patch()`, `api_router.ex` |
+| 2 | every Ash `patch()`, `api_router.ex`, the role and actor checks (they pattern match resource structs, so every resource must exist before the next compile) |
 | 3 | final migrations: Django `makemigrations`, Ash `ash.codegen initial_resources` |
 
 Task steps have no phase and never run; they only become registry entries. Source: `packages/codegen/src/plan.ts`, `packages/codegen-django/src/index.ts`, `packages/codegen-ash/src/index.ts`.
@@ -52,6 +52,8 @@ No tasks means `generated` (this covers `[]`); templates or commands plus tasks 
 
 ## Ash 3
 
+- Ash policies need a SAT solver (`picosat_elixir` or `simple_sat`), else every resource with the authorizer warns "No SAT solver available" at compile; the generator installs `simple_sat` when the model has policies. Field policies may name only public attributes and public calculations (`private_fields_policy` defaults to `:show`), and every `mix ash.gen.*` compiles the whole project, so a file that references a not yet generated module breaks the next command. Source: https://github.com/ash-project/ash/blob/main/lib/ash/policy/authorizer/transformers/add_missing_field_policies.ex
+- `scripts/ci/codegen-e2e.mjs ash` (or `codegen-e2e-docker.sh ash`) is the only real check of the generated project; Igniter and Phoenix need about 6 GB of memory and 10 to 15 minutes.
 - Update and destroy actions default to `require_atomic? true`; every generated update sets `require_atomic? false` as a blanket choice (AshStateMachine's `transition_state` is atomic). `default_accept` is `[]`, so action inputs are emitted as `argument`s. Source: https://ash.hexdocs.pm/upgrading-to-3-0.html
 - Everything defaults to `public?: false`. Only attributes get the `public` modifier; `belongs_to` and `calculate` lines are private, so AshJsonApi (default fields: all public) does not expose them. `ash.gen.resource` on an existing resource merges with `--conflicts` defaulting to ignore, and default create and update actions accept only the public attributes given at creation. Source: https://ash.hexdocs.pm/Mix.Tasks.Ash.Gen.Resource.html
 - `mix igniter.install ash_json_api` without Phoenix creates `<App>Web.AshJsonApiRouter` listing the domains that have the extension at install time (none yet) and adds `open_api_spex`. The generator writes its own `<App>.ApiRouter`, which Bandit serves; `AshJsonApi.Router` has its own `Plug.Parsers` for `application/vnd.api+json`. Source: https://github.com/ash-project/ash_json_api/blob/main/lib/mix/tasks/ash_json_api.install.ex
