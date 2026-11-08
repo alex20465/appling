@@ -2,7 +2,8 @@ import type { ChatEvent, Playbook, PlaybookPosition, ResponseKind } from '@appli
 import type { EditOperation, EditResult } from '@appling/model';
 import type { FileDiff, Review, Revision } from '../shared/review.js';
 import type { Decision, LiveChanges } from '../shared/live.js';
-import { DEFAULT_VIEW, type ClientReport, type IdeEvents, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
+import type { GenerationSelection } from '@appling/codegen';
+import { DEFAULT_VIEW, type ClientReport, type GenerationRun, type IdeEvents, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
 import { monaco } from './monaco.js';
 
 export async function loadSnapshot(): Promise<Snapshot> {
@@ -45,6 +46,8 @@ export function onEvents(handlers: IdeEvents): { close(): void, report(report: C
         if (message.type === 'agent-view') handlers.agentView?.(message.view, !!message.ended);
         if (message.type === 'proposals') handlers.proposals?.(message.proposals);
         if (message.type === 'playbook') handlers.playbook?.(message.playbook);
+        if (message.type === 'generation') handlers.generation?.(message.run);
+        if (message.type === 'generation-event') handlers.generationEvent?.(message.id, message.event);
     };
     return {
         close: () => socket.close(),
@@ -57,6 +60,20 @@ export function onEvents(handlers: IdeEvents): { close(): void, report(report: C
             if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'unsaved', files }));
         }
     };
+}
+
+/** Starts a generation run through the targets of `appling.config.json`; the run then streams over the events. */
+export async function startGeneration(selection: GenerationSelection): Promise<GenerationRun> {
+    const response = await fetch('/api/generate', { method: 'POST', body: JSON.stringify({ selection }) });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+}
+
+/** The text of a code file of the workspace or a generate target, read only. */
+export async function loadCode(path: string): Promise<{ path: string, text: string }> {
+    const response = await fetch(`/api/code?path=${encodeURIComponent(path)}`);
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
 }
 
 /** Accepts the live changes of these files, or of every changed file: they stop being marked. */

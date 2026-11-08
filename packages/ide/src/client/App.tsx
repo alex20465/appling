@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentSession, Chapter, Playbook, PlaybookPosition } from '@appling/ai';
-import { DEFAULT_VIEW, type ClientReport, type SessionAct, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
+import { DEFAULT_VIEW, type ClientReport, type GenerationRun, type SessionAct, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
+import type { GenerationSelection } from '@appling/codegen';
+import { lineMarks } from '@appling/model/implementation';
 import type { EditOperation } from '@appling/model';
 import { withRemoved } from '@appling/model/diff';
 import type { Review as ReviewData, Revision } from '../shared/review.js';
 import type { AgentView, LiveChanges, Proposal } from '../shared/live.js';
-import { acceptChanges, connectLanguageServer, decideProposal, loadPlaybook, loadRelease, loadReview, loadRevisions, loadSnapshot, loadView, movePlaybook, onEvents, requestEdit, respondToStep, revertChange, saveFile, saveView } from './api.js';
+import { acceptChanges, connectLanguageServer, decideProposal, loadCode, loadPlaybook, loadRelease, loadReview, loadRevisions, loadSnapshot, loadView, movePlaybook, onEvents, requestEdit, respondToStep, revertChange, saveFile, saveView, startGeneration } from './api.js';
+import { Implementation } from './Implementation.js';
+import type { OpenCode } from './CodeView.js';
 import { AgentCanvas, AgentStrip } from './AgentView.js';
 import { Live } from './Live.js';
 import { PlaybookPanel, PlaybookPlayer } from './Playbook.js';
@@ -32,7 +36,12 @@ export function App() {
     const [active, setActive] = useState<string>();
     const [reveal, setReveal] = useState<Reveal>();
     const [release, setRelease] = useState<{ version: string } | null>(null);
-    const [side, setSide] = useState<'search' | 'inspector' | 'changes' | 'review' | 'playbook' | 'ai'>('search');
+    const [side, setSide] = useState<'search' | 'inspector' | 'changes' | 'review' | 'playbook' | 'code' | 'ai'>('search');
+    /** The generation running or last run, the code file shown in place of the model, and whether to offer generation. */
+    const [run, setRun] = useState<GenerationRun>();
+    const [code, setCode] = useState<OpenCode>();
+    const [offer, setOffer] = useState(0);
+    const outstandingBefore = useRef<number>(undefined);
     const [view, setView] = useState<ViewSettings>(DEFAULT_VIEW);
     const [sessions, setSessions] = useState<AgentSession[]>([]);
     /** The elements each agent session highlighted with ide_act. */
@@ -83,6 +92,8 @@ export function App() {
         const events = onEvents({
             playbook: setPlaybook,
             snapshot: setSnapshot, sessions: setSessions, act: a => act.current(a), live: setLive, proposals: setProposals,
+            generation: setRun,
+            generationEvent: (id, event) => setRun(current => current?.id === id ? { ...current, events: [...current.events, event] } : current),
             agentView: (next, ended) => setAgentViews(current => {
                 const { [next.session]: _, ...rest } = current;
                 return ended ? rest : { ...rest, [next.session]: next };
@@ -114,6 +125,22 @@ export function App() {
     }, [reviewing, rev, snapshot]);
 
     const index = useMemo(() => snapshot && new GraphIndex(snapshot.graph), [snapshot]);
+    const marks = useMemo(() => snapshot && lineMarks(snapshot.locations, Object.fromEntries(snapshot.files.map(f => [f.uri, f.text])), snapshot.implementation), [snapshot]);
+
+    // After a model change adds outstanding elements (new or changed since the last generation), generation is offered.
+    useEffect(() => {
+        if (!snapshot?.targets.length) return;
+        const count = Object.values(snapshot.implementation).filter(i => i.outstanding).length;
+        if (outstandingBefore.current !== undefined && count > outstandingBefore.current) setOffer(count);
+        if (!count) setOffer(0);
+        outstandingBefore.current = count;
+    }, [snapshot]);
+
+    const generate = useCallback((selection: GenerationSelection) => {
+        setOffer(0);
+        setSide('code');
+        startGeneration(selection).then(setRun, error => alert((error as Error).message));
+    }, []);
     /** While the review marks the canvas, it draws the working tree with the removed elements put back, ghosted. */
     const marking = reviewing && marked && review?.ok ? review : undefined;
     /** Otherwise the live changes are marked, with the removed elements ghosted; marks never move the camera. */
@@ -151,6 +178,22 @@ export function App() {
         return [];
     }, [snapshot]);
 
+    /** Jumps to an element's code: in Desktop's code view when there is one, else read only in place of the model. */
+    const openCode = useCallback((qn: string) => {
+        const reference = snapshot?.code[qn]?.find(c => c.status !== 'broken') ?? snapshot?.code[qn]?.[0];
+        if (!reference) return select(qn);
+        if (desktop?.openCode) return desktop.openCode({ path: reference.file, start: reference.start, end: reference.end });
+        loadCode(reference.file).then(file => {
+            setSource(true);
+            setCode({ ...file, start: reference.start, end: reference.end, qn });
+        }, error => alert((error as Error).message));
+    }, [snapshot, select]);
+
+    // the Appling extension's CodeLens in Desktop's code view: from code back to its element
+    const selectRef = useRef(select);
+    selectRef.current = select;
+    useEffect(() => { desktop?.onCodeElement?.(qn => selectRef.current(qn)); }, []);
+
     /** Opens a model file in the source, at a line. */
     const openFile = (path: string, line?: number) => {
         const file = snapshot?.files.find(f => f.path === path);
@@ -167,7 +210,7 @@ export function App() {
         else if (a.action === 'open' && a.file) openFile(a.file, a.line);
     };
 
-    const marks = useMemo(() => {
+    const sessionMarks = useMemo(() => {
         const repo = snapshot && decodeURIComponent(snapshot.root.replace('file://', ''));
         return sessions.filter(s => s.repo === repo).flatMap(s => [...s.claims.elements, ...highlights[s.id] ?? []].map((element): SessionMark => ({ element, color: s.color, label: s.label ?? s.name, session: s.id })));
     }, [sessions, highlights, snapshot]);
@@ -223,6 +266,10 @@ export function App() {
                     onCursor={(uri, offset) => setSelected(elementAt(snapshot.locations, uri, offset))}
                     onSave={(path, text) => saveFile(path, text)}
                     onDirty={uris => reportUnsaved.current(snapshot.files.filter(f => uris.includes(f.uri)).map(f => f.path))}
+                    marks={marks}
+                    onMark={openCode}
+                    code={code}
+                    onCloseCode={() => setCode(undefined)}
                 />
                 <div className="canvas-area">
                     {playing && playbook?.position.chapter
@@ -231,11 +278,18 @@ export function App() {
                             onSelect={qn => select(qn, false)} onClose={() => setPlaying(false)} onSession={toSession} onDiff={toDiff} />
                         : watched?.show
                         ? <AgentCanvas key={watched.session} index={canvasIndex} view={watched} session={sessions.find(s => s.id === watched.session)} settings={view} selected={selected} changes={canvasChanges} onSelect={qn => select(qn, false)} onClose={() => setWatching(undefined)} onOpenFile={openFile} />
-                        : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={selected} settings={view} sessions={marks} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
+                        : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={selected} settings={view} sessions={sessionMarks} implementation={snapshot.implementation} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
                     {!playing && unwatchedCount > 0 && (
                         <button className="playbook-chip" onClick={() => { setSide('playbook'); }}>{unwatchedCount} playbook chapter{unwatchedCount > 1 ? 's' : ''} to watch</button>
                     )}
                     <AgentStrip views={Object.values(agentViews)} sessions={sessions} watching={watching} onWatch={setWatching} />
+                    {offer > 0 && !(run && !run.ended) && (
+                        <div className="generate-offer" role="status">
+                            {offer} element{offer > 1 ? 's' : ''} new or changed since the last generation
+                            <button className="button" onClick={() => generate({ mode: 'outstanding' })}>Generate</button>
+                            <button className="button" onClick={() => setOffer(0)}>Not now</button>
+                        </div>
+                    )}
                     {proposals.length > 0 && side !== 'changes' && (
                         <button className="proposal-banner" onClick={() => setSide('changes')}>{proposals.length} proposed change{proposals.length > 1 ? 's' : ''} wait{proposals.length > 1 ? '' : 's'} for your decision</button>
                     )}
@@ -247,10 +301,12 @@ export function App() {
                         <button className={side === 'changes' ? 'active' : ''} onClick={() => setSide('changes')}>Changes{unseenCount + proposals.length > 0 && <span className="tab-count">{unseenCount + proposals.length}</span>}</button>
                         <button className={side === 'playbook' ? 'active' : ''} onClick={() => setSide('playbook')}>Playbook{unwatchedCount > 0 && <span className="tab-count">{unwatchedCount}</span>}</button>
                         <button className={side === 'review' ? 'active' : ''} onClick={() => { setSide('review'); setReviewing(true); }}>Review</button>
+                        <button className={side === 'code' ? 'active' : ''} onClick={() => setSide('code')}>Code{snapshot.tasks.length > 0 && <span className="tab-count">{snapshot.tasks.length}</span>}</button>
                         {!DESKTOP && <button className={side === 'ai' ? 'active' : ''} onClick={() => setSide('ai')}>AI</button>}
                     </nav>
                     <div hidden={side !== 'search'} className="side-panel"><Search index={index} onSelect={select} /></div>
-                    <div hidden={side !== 'inspector'} className="side-panel"><Inspector index={index} qn={selected} code={selected ? snapshot.code[selected] ?? [] : []} onSelect={select} onEdit={edit} /></div>
+                    <div hidden={side !== 'inspector'} className="side-panel"><Inspector index={index} qn={selected} code={selected ? snapshot.code[selected] ?? [] : []} implementation={selected ? snapshot.implementation[selected] : undefined} canGenerate={snapshot.targets.length > 0 && !(run && !run.ended)} onSelect={select} onEdit={edit} onOpenCode={openCode} onGenerate={qn => generate({ mode: 'elements', elements: [qn] })} /></div>
+                    <div hidden={side !== 'code'} className="side-panel"><Implementation snapshot={snapshot} run={run} sessions={sessions} selected={selected} onSelect={qn => select(qn, false)} onGenerate={generate} /></div>
                     <div hidden={side !== 'changes'} className="side-panel">
                         <Live live={live} proposals={proposals} sessions={sessions}
                             onAccept={paths => acceptChanges(paths).then(setLive)} onRevert={path => revertChange(path).catch(error => alert((error as Error).message))}

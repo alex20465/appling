@@ -2,6 +2,7 @@ import { basename, join } from 'node:path';
 import { commands, Range, Selection, TextEditorRevealType, Uri, window, workspace, type ExtensionContext } from 'vscode';
 import { LanguageClient, TransportKind, type LanguageClientOptions, type ServerOptions } from 'vscode-languageclient/node';
 import { connectDesktop } from './desktop-bridge.js';
+import { ImplementationView } from './implementation-view.js';
 
 let client: LanguageClient | undefined;
 
@@ -18,11 +19,17 @@ export async function activate(context: ExtensionContext): Promise<void> {
     await client.start();
 }
 
-/** Inside Appling Desktop's code view: syncs the selection with the canvas (see `desktop-bridge.ts`). */
+/**
+ * Inside Appling Desktop's code view: syncs the selection with the canvas, marks how far each model line is implemented
+ * and links code and elements both ways (see `desktop-bridge.ts`, `implementation-view.ts`).
+ */
 function startDesktopBridge(context: ExtensionContext): void {
     const url = process.env.APPLING_DESKTOP_BRIDGE;
     const token = process.env.APPLING_DESKTOP_TOKEN;
     if (!url || !token) return;
+    commands.executeCommand('setContext', 'appling.desktop', true);
+    const view = new ImplementationView(qn => bridge.showElement(qn));
+    context.subscriptions.push(view);
     const bridge = connectDesktop({
         url, token,
         log: message => console.error(message),
@@ -49,7 +56,9 @@ function startDesktopBridge(context: ExtensionContext): void {
                     return;
                 }
                 await commands.executeCommand('vscode.diff', old, now, `${basename(path)} (${rev.slice(0, 12)} ↔ Working Tree)`, { preview: true, selection: at });
-            }
+            },
+            implementation: state => view.update(state),
+            open: (path, start, end) => view.open(path, start, end)
         }
     });
     context.subscriptions.push(bridge);

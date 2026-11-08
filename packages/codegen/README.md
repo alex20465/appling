@@ -69,6 +69,10 @@ Third party extensions are named `appling-codegen-*` or `@scope/appling-codegen-
 
 Every graph node has an entry, so the registry is also the coverage report and the AI work queue. An element with a `does` text gets one task for it in every extension (`doesTask(node)`): implement it on actions, machines, jobs, queries, externals, operations and use cases, check it on everything else.
 
+## Code references and the implementation state
+
+Generation collects what each step writes (`runPlan(plan, out, log, written)`) and records it as code references in the workspace's `.appling/references.json` (`recordWritten`), with a fingerprint per generated element in `.appling/generation.json`. `workspaceImplementation(root, graph)` turns references, registries and fingerprints into a state per element (implemented, partial, unimplemented, shifted, broken) and the elements new or changed since the last generation. `generateElements` generates a selection (what changed, some elements, everything) into every target, as the IDE does.
+
 ## API
 
 | Export | Purpose |
@@ -81,6 +85,9 @@ Every graph node has an entry, so the registry is also the coverage report and t
 | `coverage(entries)`, `coverageTable(coverage)` | Registry entries and tasks per node kind and status, and that count as the Markdown table `--plan` prints |
 | `saveBaseline(out, exclude)`, `mergeGeneration(out, next, exclude)` | The generation baseline, and the three way merge of a fresh generation into a project |
 | `pendingChanges(graph, applied, stamp)`, `planMigrations(...)`, `runMigrations(...)`, `readApplied(out)` | Migration steps not yet applied to a generated project, and carrying them into it |
+| `generateElements(options)`, `GenerationEvent`, `GenerationSelection` | Generation of a selection into every target, with its events |
+| `locateWritten(out, written)`, `recordWritten(root, out, graph, written, elements)` | Where the written code is now, and recording it as references with the fingerprints |
+| `workspaceImplementation(root, graph)`, `readGenerations(root)`, `recordGeneration(...)` | The implementation state of a workspace and the generation records |
 
 ## License
 

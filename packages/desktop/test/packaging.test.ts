@@ -86,7 +86,7 @@ test('the bundle holds every program where Desktop looks, and the bundled IDE se
     expect(manifest.dependencies).toBeUndefined();
     expect(siblingFiles()).toEqual(expect.arrayContaining(['shell/index.html', 'preload.cjs', 'repo-preload.cjs']));
     for (const file of siblingFiles()) expect(existsSync(join(app, 'out', file)), `out/${file}`).toBe(true);
-    for (const file of ['out/main.js', 'skills/appling-registry/SKILL.md', 'ide/dist/client/index.html', 'ide/out/skills', 'ai/language', 'pty-host/package.json', 'native/node-pty/lib/index.js']) {
+    for (const file of ['out/main.js', 'skills/appling-registry/SKILL.md', 'ide/dist/client/index.html', 'ide/out/server/generation-worker.js', 'ide/out/skills', 'ai/language', 'pty-host/package.json', 'native/node-pty/lib/index.js']) {
         expect(existsSync(join(app, file)), file).toBe(true);
     }
 

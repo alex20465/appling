@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@appling/ai": "workspace:*",
+    "@appling/codegen": "workspace:*",
     "@appling/lang": "workspace:*",
     "@appling/model": "workspace:*",
     "@appling/viz": "workspace:*",

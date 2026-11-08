@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import type { LineMark } from '@appling/model/implementation';
+import { IMPLEMENTATION_LABELS } from '@appling/viz/views';
 import type { SourceFile } from '../shared/snapshot.js';
 import { monaco } from './monaco.js';
+import { CodeView, type OpenCode } from './CodeView.js';
 
 export interface Reveal {
     uri: string;
@@ -17,6 +20,13 @@ interface EditorProps {
     onSave(path: string, text: string): void;
     /** The uris of the dirty models, after every change of that set (Appling Desktop shows them on the rail). */
     onDirty?(uris: string[]): void;
+    /** The implementation mark of each line that declares an element, by file URI, from the files on disk. */
+    marks?: Record<string, LineMark[]>;
+    /** A click on a gutter mark: the element declared on that line. */
+    onMark?(qn: string): void;
+    /** A code file shown read only in place of the model, at a line range. */
+    code?: OpenCode;
+    onCloseCode?(): void;
 }
 
 /** Monaco with one model per file. A model is dirty while its text differs from the file on disk; disk changes replace clean models only. */
@@ -41,9 +51,17 @@ export function Editor(props: EditorProps) {
     useEffect(() => {
         const instance = monaco.editor.create(host.current!, {
             model: null, theme: 'appling', automaticLayout: true, fontFamily: 'JetBrains Mono', fontSize: 13,
-            lineHeight: 21, minimap: { enabled: false }, scrollBeyondLastLine: false, padding: { top: 12 }
+            lineHeight: 21, minimap: { enabled: false }, scrollBeyondLastLine: false, padding: { top: 12 }, glyphMargin: true
         });
         editor.current = instance;
+        const gutter = instance.onMouseDown(event => {
+            if (event.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) return;
+            const model = instance.getModel();
+            const line = event.target.position?.lineNumber;
+            const decoration = model && line && model.getLineDecorations(line).find(d => d.options.glyphMarginClassName?.includes('gutter-impl'));
+            const qn = decoration && marked.current.get(decoration.id);
+            if (qn) latest.current.onMark?.(qn);
+        });
         const cursor = instance.onDidChangeCursorPosition(event => {
             const model = instance.getModel();
             if (model && event.source !== 'api') latest.current.onCursor(model.uri.toString(), model.getOffsetAt(event.position));
@@ -56,9 +74,11 @@ export function Editor(props: EditorProps) {
         });
         return () => {
             cursor.dispose();
+            gutter.dispose();
             instance.dispose();
         };
     }, []);
+
 
     useEffect(() => {
         for (const file of props.files) {
@@ -89,6 +109,30 @@ export function Editor(props: EditorProps) {
         editor.current.revealRangeInCenterIfOutsideViewport(new monaco.Range(start.lineNumber, start.column, start.lineNumber, start.column));
     }, [props.reveal]);
 
+    /** The decoration ids of each model's marks, and the element each decoration stands for. */
+    const decorations = useRef(new Map<string, string[]>());
+    const marked = useRef(new Map<string, string>());
+    // Marks are placed from the files on disk, on models that match them; on a dirty model they keep moving with the edits.
+    useEffect(() => {
+        for (const file of props.files) {
+            const model = monaco.editor.getModel(monaco.Uri.parse(file.uri));
+            if (!model || model.getValue() !== file.text) continue;
+            const marks = props.marks?.[file.uri] ?? [];
+            const old = decorations.current.get(file.uri) ?? [];
+            old.forEach(id => marked.current.delete(id));
+            const ids = model.deltaDecorations(old, marks.map(mark => ({
+                range: new monaco.Range(mark.line, 1, mark.line, 1),
+                options: {
+                    glyphMarginClassName: `gutter-impl impl-${mark.state}${mark.outstanding ? ' outstanding' : ''}`,
+                    glyphMarginHoverMessage: { value: `**${mark.qn}**: ${IMPLEMENTATION_LABELS[mark.state]}${mark.outstanding ? ', changed since the last generation' : ''}. Click to open its code.` },
+                    stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+                }
+            })));
+            ids.forEach((id, i) => marked.current.set(id, marks[i].qn));
+            decorations.current.set(file.uri, ids);
+        }
+    }, [props.marks, props.files]);
+
     return (
         <div className="editor">
             <nav className="tabs" aria-label="Files">
@@ -98,7 +142,8 @@ export function Editor(props: EditorProps) {
                     </button>
                 ))}
             </nav>
-            <div className="editor-host" ref={host} />
+            <div className="editor-host" ref={host} hidden={!!props.code} />
+            {props.code && <CodeView code={props.code} onClose={() => props.onCloseCode?.()} />}
         </div>
     );
 }

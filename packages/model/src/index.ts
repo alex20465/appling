@@ -6,3 +6,4 @@ export * from './simulator.js';
 export * from './references.js';
 export * from './relevance.js';
 export * from './diff.js';
+export * from './implementation.js';

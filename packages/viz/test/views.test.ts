@@ -4,7 +4,7 @@ import { buildGraph, diffGraphs, Simulator, withRemoved } from '@appling/model';
 import { buildWorkspace, examples } from '../../lang/test/workspace.js';
 import { layoutFlow } from '../src/layout.js';
 import {
-    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, sessionMarks, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, policyText, relations, revealPath, search, trailOf, viewFor,
+    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, implementationMarks, sessionMarks, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, policyText, relations, revealPath, search, trailOf, viewFor,
     type Card, type Flow, type TreeNode
 } from '../src/views.js';
 
@@ -176,6 +176,19 @@ test('session marks lift members to their declaration; the first session wins', 
         { element: 'sales.Gone', color: 'blue', label: 'Status', session: 'b' }
     ]);
     expect([...marks].map(([qn, m]) => [qn, m.session])).toEqual([['sales.Order', 'a']]);
+});
+
+test('implementation marks roll members up into their declaration and declarations into their module', async () => {
+    const index = await indexOf(examples());
+    const states = Object.fromEntries(index.graph.nodes.map(n => [n.qn, { state: 'implemented' as const }]));
+    states['sales.Order.status'] = { state: 'unimplemented' as const };
+    states['crm.Account'] = { state: 'broken' as const };
+    const marks = implementationMarks(index, states);
+    expect(marks.get('sales.Order')).toBe('partial');
+    expect(marks.get('sales.OrderStatus')).toBe('implemented');
+    expect(marks.get('sales')).toBe('partial');
+    expect(marks.get('crm')).toBe('broken');
+    expect(marks.has('sales.Order.status')).toBe(false);
 });
 
 test('removed elements put back into the graph are marked removed, their members lift as changed', async () => {

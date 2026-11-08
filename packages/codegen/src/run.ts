@@ -5,6 +5,7 @@ import type { Graph } from '@appling/model';
 import type { Prerequisite } from './contract.js';
 import { describe, type Plan, type PlannedStep, type RegistryEntry } from './plan.js';
 import { saveBaseline } from './sync.js';
+import { addedRuns, mainRun, type Written } from './written.js';
 
 export interface Registry {
     extension: string;
@@ -25,17 +26,20 @@ export function checkPrerequisites(prerequisites: Prerequisite[], graph?: Graph)
     });
 }
 
-/** Runs the planned steps in order into the output folder and writes the registry. Stops at the first failing command. */
-export function runPlan(plan: Plan, out: string, log: (line: string) => void = () => { }): Registry {
+/**
+ * Runs the planned steps in order into the output folder and writes the registry. Stops at the first failing command.
+ * With `written`, collects what each step wrote, for the code references (`locateWritten`).
+ */
+export function runPlan(plan: Plan, out: string, log: (line: string) => void = () => { }, written?: Written[]): Registry {
     const root = resolve(out);
-    runSteps(plan.steps, out, log);
+    runSteps(plan.steps, out, log, written);
     const registry: Registry = { extension: plan.extension, test: plan.test, entries: Object.fromEntries(plan.entries.map(e => [e.qn, e])) };
     writeRegistry(root, registry);
     saveBaseline(root, plan.syncExclude ?? []);
     return registry;
 }
 
-export function runSteps(steps: PlannedStep[], out: string, log: (line: string) => void = () => { }): void {
+export function runSteps(steps: PlannedStep[], out: string, log: (line: string) => void = () => { }, written?: Written[]): void {
     const root = resolve(out);
     for (const { node, step } of steps) {
         log(`${node}: ${describe(step)}`);
@@ -46,10 +50,15 @@ export function runSteps(steps: PlannedStep[], out: string, log: (line: string) 
             if (result.error || result.status !== 0) {
                 throw new Error(`${step.run.join(' ')} failed: ${result.error?.message ?? (result.stderr || result.stdout)}`);
             }
+            for (const file of step.creates ?? []) written?.push({ node, file });
         } else if (step.kind === 'template') {
             const file = join(root, step.file);
             mkdirSync(dirname(file), { recursive: true });
-            writeFileSync(file, step.write(existsSync(file) ? readFileSync(file, 'utf8') : undefined));
+            const before = existsSync(file) ? readFileSync(file, 'utf8') : undefined;
+            const after = step.write(before);
+            writeFileSync(file, after);
+            const lines = written && mainRun(addedRuns(before, after));
+            if (lines) written!.push({ node, file: step.file, lines });
         }
     }
 }

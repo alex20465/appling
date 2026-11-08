@@ -34,7 +34,7 @@ AI agents record references while they implement through the [MCP server](ai.md#
 - The [registry skill](ai.md#registry-skill) records the lines of every element it finishes, before it marks the entry `done`.
 - The [reverse engineering skill](ai.md#reverse-engineering-skill) records the code each element describes while it writes the model.
 
-Both call `record_code_references`. It replaces the element's references, takes the first line of each range as its anchor, and refuses a missing file, a range outside the file, a range that starts on an empty line, or an element the model does not have.
+Both call `record_code_references`. [Generation](implementation.md#generation-records) records the references of the code it writes itself, from the IDE and with `appling generate`, and keeps the references an element has elsewhere. It replaces the element's references, takes the first line of each range as its anchor, and refuses a missing file, a range outside the file, a range that starts on an empty line, or an element the model does not have.
 
 ## How they stay correct
 
@@ -73,3 +73,7 @@ $ appling refs --check
 ```
 
 The `code_references` tool without a qualified name returns the same list, so an agent can record those references again.
+
+## Implementation state
+
+References decide how far an element counts as implemented: the IDE marks every model line and the canvas with it, see [Seed to code](implementation.md).

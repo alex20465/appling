@@ -70,9 +70,13 @@ Next to your models, in the workspace folder:
 ```
 .appling/
   view.json
+  references.json
+  generation.json
   releases/
     1.0.0.json
 ```
+
+`references.json` holds the [code references](../tools/references.md) and `generation.json` the fingerprints of each target's last generation, which decide what is [outstanding](../tools/implementation.md#generation-records).
 
 ### View
 

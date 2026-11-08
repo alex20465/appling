@@ -12,6 +12,10 @@ export interface DesktopHooks {
     onCodeCursor?(callback: (uri: string, offset: number) => void): void;
     /** Shows an agent session's tab, such as from its playbook chapter; the session tabs come with #10. */
     focusSession?(session: string): void;
+    /** Opens a code file in the code view at a line range (paths relative to the repo); absent where there is no code view. */
+    openCode?(request: { path: string, start: number, end: number }): void;
+    /** The code view asked to show an element, from its code (the Appling extension's CodeLens). */
+    onCodeElement?(callback: (qn: string) => void): void;
 }
 
 declare global {

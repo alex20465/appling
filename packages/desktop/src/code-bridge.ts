@@ -1,8 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
+import type { CodeMarks } from './ide-process.js';
 
 /**
  * The channel between the Appling extension inside a repo's Code OSS instance and the Desktop main process
@@ -13,7 +14,9 @@ export type ExtensionMessage =
     /** The first message: the token says which repo the extension runs in. */
     | { type: 'hello', token: string }
     /** The cursor moved in a `.appling` file. */
-    | { type: 'cursor', uri: string, offset: number };
+    | { type: 'cursor', uri: string, offset: number }
+    /** Show an element on the canvas: the extension's CodeLens on code that implements it. */
+    | { type: 'element', qn: string };
 
 export type DesktopMessage =
     /** The token was accepted. */
@@ -24,7 +27,14 @@ export type DesktopMessage =
      * Open the diff editor of a file between a git revision and the working tree: `before` is the file's absolute path
      * at `rev` (it differs after a rename), `path` its absolute path now; `line` (from 1) is revealed.
      */
-    | { type: 'diff', path: string, before: string, rev: string, line?: number };
+    | { type: 'diff', path: string, before: string, rev: string, line?: number }
+    /**
+     * The implementation state for the editor (#20): gutter marks of the model files' lines and links from code back to
+     * the elements it implements, both by absolute path. Each replaces the last; a new connection gets the last one.
+     */
+    | { type: 'implementation', marks: CodeMarks['marks'], links: CodeMarks['links'] }
+    /** Open a code file at a line range (from 1): the jump from an element to its code. */
+    | { type: 'open', path: string, start: number, end: number };
 
 export const BRIDGE_ENV = 'APPLING_DESKTOP_BRIDGE';
 export const TOKEN_ENV = 'APPLING_DESKTOP_TOKEN';
@@ -43,6 +53,7 @@ export function parseExtensionMessage(data: string): ExtensionMessage | undefine
     if (m.type === 'cursor' && typeof m.uri === 'string' && Number.isInteger(m.offset) && (m.offset as number) >= 0) {
         return { type: 'cursor', uri: m.uri, offset: m.offset as number };
     }
+    if (m.type === 'element' && typeof m.qn === 'string' && /^[\w.]+$/.test(m.qn)) return { type: 'element', qn: m.qn };
     return undefined;
 }
 
@@ -71,9 +82,23 @@ export function diffMessage(repo: string, request: TextDiffRequest): DesktopMess
     return { type: 'diff', path, before, rev: request.rev, ...(line ? { line } : {}) };
 }
 
+/** The open message for a repo's extension; undefined unless the file stays inside the repo and the lines are plain. */
+export function openMessage(repo: string, request: { path: string, start: number, end?: number }): DesktopMessage | undefined {
+    if (!request || typeof request.path !== 'string' || !Number.isInteger(request.start) || request.start < 1) return undefined;
+    const path = resolve(repo, request.path);
+    const rel = relative(repo, path);
+    // generated projects may live next to the repo (`"out": "../app"`), so only the parent of the repo is allowed besides it
+    const parent = relative(dirname(repo), path);
+    if (!rel || isAbsolute(rel) || parent.startsWith('..') || isAbsolute(parent)) return undefined;
+    const end = Number.isInteger(request.end) && request.end! >= request.start ? request.end! : request.start;
+    return { type: 'open', path, start: request.start, end };
+}
+
 export interface CodeBridgeOptions {
     /** The cursor moved in a `.appling` file of a repo's code view. */
     onCursor(repo: string, uri: string, offset: number): void;
+    /** The extension asked to show an element of the repo's model. */
+    onElement?(repo: string, qn: string): void;
     /** How long a connection may take to say hello. */
     helloTimeout?: number;
 }
@@ -88,6 +113,8 @@ export class CodeBridge {
     private readonly sockets = new Map<string, Set<WebSocket>>();
     /** Messages for a repo whose extension is not connected yet, sent when it says hello. */
     private readonly queued = new Map<string, DesktopMessage[]>();
+    /** The last implementation state per repo, for connections that come later. */
+    private readonly implementations = new Map<string, DesktopMessage>();
 
     constructor(private readonly options: CodeBridgeOptions) { }
 
@@ -103,6 +130,13 @@ export class CodeBridge {
     revoke(repo: string): void {
         this.disconnect(repo);
         this.queued.delete(repo);
+    }
+
+    /** Sends the repo's implementation state to its extension now and to every later connection. */
+    implementation(repo: string, state: CodeMarks): void {
+        const message: DesktopMessage = { type: 'implementation', marks: state.marks, links: state.links };
+        this.implementations.set(repo, message);
+        for (const socket of this.sockets.get(repo) ?? []) socket.send(JSON.stringify(message));
     }
 
     /** Forgets a repo's tokens and closes its connections; queued messages wait for the next one. */
@@ -154,9 +188,12 @@ export class CodeBridge {
                 if (!this.sockets.has(repo)) this.sockets.set(repo, new Set());
                 this.sockets.get(repo)!.add(ws);
                 ws.send(JSON.stringify({ type: 'welcome' } satisfies DesktopMessage));
+                const implementation = this.implementations.get(repo);
+                if (implementation) ws.send(JSON.stringify(implementation));
                 for (const queued of this.queued.get(repo) ?? []) ws.send(JSON.stringify(queued));
                 this.queued.delete(repo);
             } else if (message?.type === 'cursor') this.options.onCursor(repo, message.uri, message.offset);
+            else if (message?.type === 'element') this.options.onElement?.(repo, message.qn);
         });
         ws.on('close', () => {
             clearTimeout(timer);

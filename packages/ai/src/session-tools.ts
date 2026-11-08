@@ -1,6 +1,7 @@
 import { z } from 'zod';
+import { MAX_ATTEMPTS } from './project.js';
 import type { EditOperation } from '@appling/model';
-import { define, type Tools } from './tools.js';
+import { define, REGISTRY_TOOLS, type Tools } from './tools.js';
 import type { PlaybookStore } from './playbook.js';
 import { findConflicts, peers, SESSION_STATUSES, sessionTitle, type AgentSession, type Channel, type ClaimConflict, type Claims, type SessionStore } from './sessions.js';
 
@@ -184,6 +185,29 @@ export function sessionTools(scope: SessionScope): Tools {
             run: () => attempt(async () => {
                 const session = await self();
                 return scope.host ? scope.host.context(session) : { repo: session.repo, workspace: session.workspace };
+            })
+        }),
+        registry_next: define({
+            description: `${REGISTRY_TOOLS.registry_next.description} In an agent session it passes over tasks that other sessions claimed and claims the task's element for you, so the person sees which session finishes which part; registry_update with done releases it.`,
+            input: REGISTRY_TOOLS.registry_next.input,
+            run: (context, input) => attempt(async () => {
+                const session = await self();
+                const sessions = await store.list();
+                const next = context.project.nextTask(input.target, entry => findConflicts(sessions, session, { elements: [entry.qn] }).length > 0);
+                if (!next) return { done: 'No open tasks that other sessions have not claimed.' };
+                await store.claim(id, { elements: [next.entry.qn] });
+                return { ...next, claimed: next.entry.qn };
+            })
+        }),
+        registry_update: define({
+            description: `${REGISTRY_TOOLS.registry_update.description} Done, or a task out of attempts, releases your claim on its element.`,
+            input: REGISTRY_TOOLS.registry_update.input,
+            run: (context, input) => attempt(async () => {
+                const entry = context.project.updateTask(input.qn, input.status, input.note, input.target);
+                if (!entry) return { error: `No registry entry ${input.qn}.` };
+                const finished = entry.status === 'done' || (entry.attempts ?? 0) >= MAX_ATTEMPTS;
+                if (finished && (await self()).claims.elements.includes(input.qn)) await store.release(id, { elements: [input.qn] });
+                return entry;
             })
         }),
         ide_act: define({

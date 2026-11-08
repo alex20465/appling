@@ -1,6 +1,7 @@
 import type { Access, Graph, GraphNode, TypeData } from '@appling/model';
 import { relevance } from '@appling/model/relevance';
 import { Simulator } from '@appling/model/simulator';
+import { rollupState, type ImplementationState } from '@appling/model/implementation';
 
 /** The layers the tree starts from: each tab grows the model from the declarations of its kinds, module by module. */
 export type Lens = 'domain' | 'behavior' | 'application' | 'interfaces' | 'access';
@@ -296,6 +297,34 @@ export function changeMarks(index: GraphIndex, changes: MarkedChanges, modules =
             for (const module of index.lineage(qn).slice(1)) if (!marks.has(module)) marks.set(module, 'changed');
         }
     }
+    return marks;
+}
+
+/** Words for the implementation states, for marks and their tooltips. */
+export const IMPLEMENTATION_LABELS: Record<ImplementationState, string> = {
+    implemented: 'implemented', partial: 'partly implemented: open registry tasks', unimplemented: 'not implemented', shifted: 'code reference shifted', broken: 'code reference broken'
+};
+
+/**
+ * The implementation state the canvas draws per declaration: the declaration's own and its members' rolled up
+ * (`rollupState`), and per module that of its declarations.
+ */
+export function implementationMarks(index: GraphIndex, states: Record<string, { state: ImplementationState }>): Map<string, ImplementationState> {
+    const byDeclaration = new Map<string, ImplementationState[]>();
+    for (const [qn, { state }] of Object.entries(states)) {
+        const node = index.nodes.get(qn);
+        if (!node || node.kind === 'Module') continue;
+        const declaration = index.declaration(qn);
+        byDeclaration.set(declaration, [...byDeclaration.get(declaration) ?? [], state]);
+    }
+    const marks = new Map<string, ImplementationState>();
+    const byModule = new Map<string, ImplementationState[]>();
+    for (const [qn, list] of byDeclaration) {
+        const state = rollupState(list)!;
+        marks.set(qn, state);
+        for (const module of index.lineage(qn).slice(1)) byModule.set(module, [...byModule.get(module) ?? [], state]);
+    }
+    for (const [module, list] of byModule) marks.set(module, rollupState(list)!);
     return marks;
 }
 

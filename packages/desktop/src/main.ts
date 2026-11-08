@@ -259,6 +259,10 @@ function start(): void {
         const repo = repoOf(event.sender);
         if (repo) code?.textDiff(repo, request);
     });
+    ipcMain.on('ideOpenCode', (event, request: { path: string, start: number, end?: number }) => {
+        const repo = repoOf(event.sender);
+        if (repo) code?.openCode(repo, request);
+    });
 
     watchKeybindings();
     buildMenu();
@@ -375,6 +379,7 @@ async function launch(id: string): Promise<void> {
             sessions,
             playbooks,
             host: desktopHost(workspaces),
+            onImplementation: state => code?.implementation(id, state),
             onStatus: ({ errors, unsaved, changes }) => {
                 if (processes.get(id) !== ide && processes.has(id)) return;
                 if (errors !== undefined) railSources.validation.set(id, { counts: { errors } });

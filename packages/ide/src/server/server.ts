@@ -1,6 +1,6 @@
-import { watch, existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { watch, existsSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { basename, extname, relative, resolve, sep } from 'node:path';
+import { basename, extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { startLanguageServer } from 'langium/lsp';
 import { NodeFileSystem } from 'langium/node';
@@ -9,11 +9,14 @@ import { WebSocketMessageReader, WebSocketMessageWriter, type IWebSocket } from 
 import { WebSocketServer, type WebSocket } from 'ws';
 import { createApplingLspServices } from '@appling/lang/lsp';
 import { chat, createMcpServer, handleMcpRequest, languageModel, MemoryPlaybookStore, MemorySessionStore, modelSettings, touchedBy, type AppHost, type PlaybookStore, type SessionStore } from '@appling/ai';
-import { applyEdit, latestRelease, readReleases, REFERENCES, type EditOperation } from '@appling/model';
+import { applyEdit, latestRelease, readReleases, REFERENCES, type EditOperation, type LineMark } from '@appling/model';
+import { GENERATIONS, readConfig, REGISTRY } from '@appling/codegen';
 import type { ModelMessage } from 'ai';
 import type { Snapshot } from '../shared/snapshot.js';
 import { fileDiff, review, revisions } from './git.js';
-import { readView, snapshot, writeView } from './workspace.js';
+import { codeLinks, fileMarks, readView, snapshot, writeView } from './workspace.js';
+import { GenerationRunner, parseSelection, type GenerationSpawner } from './generation.js';
+import { playbookChapters, type PlaybookHook } from './generation-chapter.js';
 import { ideHost, type ClientContext } from './sessions.js';
 import { LiveTracker } from './live.js';
 import { AgentViews } from './visuals.js';
@@ -55,6 +58,18 @@ export interface IdeOptions {
      * server from another machine (Appling Desktop's remote repos).
      */
     origins?: string[];
+    /** Where generation runs go in the playbook; default: a chapter per run in `playbooks` (`playbookChapters`). */
+    generationChapters?: PlaybookHook;
+    /** Runs a generation; default: a worker thread (tests inject their own). */
+    generate?: GenerationSpawner;
+    /** Called with the implementation marks of the model files and the code references by file, after every snapshot (Appling Desktop's code view shows them). */
+    onImplementation?(implementation: Implementation): void;
+}
+
+/** The implementation state for an editor: marks by model file and links from code back to elements, by absolute path. */
+export interface Implementation {
+    marks: Record<string, LineMark[]>;
+    links: Record<string, { qn: string, start: number, end: number }[]>;
 }
 
 /** Serves the IDE for one workspace folder on 127.0.0.1. */
@@ -94,6 +109,11 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
         if (events.size && book.workspace === await workspace()) broadcast({ type: 'playbook', playbook: book });
     });
     const agents: Agents = { live, views, sessions, host, playbooks };
+    let refresh: () => void = () => undefined;
+    const generation = new GenerationRunner(root, message => {
+        broadcast(message);
+        if ((message as { type: string, run?: { ended?: string } }).type === 'generation' && (message as { run: { ended?: string } }).run.ended) refresh();
+    }, options.generationChapters ?? playbookChapters(playbooks, workspace, root), options.generate);
 
     const server = createServer((request, response) => {
         if (!trusted(request, origins)) return send(response, 403, 'Forbidden');
@@ -101,6 +121,7 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
             : request.url?.startsWith('/api/playbook') ? servePlaybook(request, response, playbooks, sessions, workspace, () => body(request))
             : request.url?.startsWith('/api/sessions') ? serveSessions(request, response, root, sessions)
             : request.url?.startsWith('/api/live/') || request.url?.startsWith('/api/proposals/') ? serveLive(request, response, live, views)
+            : request.url?.startsWith('/api/generat') || request.url?.startsWith('/api/code?') ? serveGeneration(request, response, root, generation)
             : handle(request, response, root, live);
         work.catch(error => response.headersSent ? response.end() : send(response, 500, String(error)));
     });
@@ -133,22 +154,33 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
                 for (const view of views.all()) ws.send(JSON.stringify({ type: 'agent-view', view }));
                 ws.send(JSON.stringify({ type: 'proposals', proposals: views.proposals() }));
                 workspace().then(playbooks.read.bind(playbooks)).then(playbook => ws.send(JSON.stringify({ type: 'playbook', playbook })), () => undefined);
+                const run = generation.current();
+                if (run) ws.send(JSON.stringify({ type: 'generation', run }));
             } else ws.close();
         });
     });
 
     let timer: NodeJS.Timeout | undefined;
-    const watcher = watch(root, { recursive: true }, (_, file) => {
-        if (file !== REFERENCES && (!file?.endsWith('.appling') || file.split(sep).some(part => part.startsWith('.') || part === 'node_modules'))) return;
+    /** Besides the model files: the code references, the generation records and the targets' registries. */
+    const state = () => [REFERENCES, GENERATIONS, ...(readConfig(root).generate ?? []).map(t => relative(root, resolve(root, t.out, REGISTRY)))];
+    const report = (current: Snapshot) => options.onImplementation?.({ marks: fileMarks(current), links: codeLinks(root, current) });
+    refresh = () => {
         clearTimeout(timer);
         timer = setTimeout(async () => {
             const current = await snapshot(root);
             const message = JSON.stringify({ type: 'snapshot', snapshot: current });
             events.forEach(ws => ws.send(message));
             options.onSnapshot?.(current);
+            report(current);
             await live.update(current).catch(error => console.error(error));
         }, 100);
+    };
+    const watcher = watch(root, { recursive: true }, (_, file) => {
+        if (!file) return;
+        const model = file.endsWith('.appling') && !file.split(sep).some(part => part.startsWith('.') || part === 'node_modules');
+        if (model || state().includes(file)) refresh();
     });
+    if (options.onImplementation) snapshot(root).then(report, error => console.error(error));
 
     await new Promise<void>(done => server.listen(port, '127.0.0.1', done));
     const address = server.address() as { port: number };
@@ -197,6 +229,39 @@ async function serveMcp(request: IncomingMessage, response: ServerResponse, root
         if (ok && files.length) live.attribute(id, files).catch(error => console.error(error));
     };
     await handleMcpRequest(createMcpServer(root, { session: { id, store: sessions, host, playbook: playbooks }, visualizer: views.host(id), onToolCall }), request, response);
+}
+
+/**
+ * Generation and the code it wrote: `POST /api/generate` (`{ selection }`, see `parseSelection`) starts a run and
+ * answers 202 with it, 409 while one runs; `GET /api/generation` the current or last run; `GET /api/code?path=` the
+ * text of a code file (read only) inside the workspace or a generate target, for the jump from an element to its code.
+ */
+async function serveGeneration(request: IncomingMessage, response: ServerResponse, root: string, runner: GenerationRunner): Promise<void> {
+    const url = new URL(request.url!, 'http://localhost');
+    if (url.pathname === '/api/generation' && request.method === 'GET') return json(response, runner.current() ?? null);
+    if (url.pathname === '/api/generate' && request.method === 'POST') {
+        const input = JSON.parse(await body(request) || '{}') as { selection?: unknown };
+        const selection = parseSelection(input.selection);
+        if (!selection) return send(response, 400, 'A selection is required: { mode: "outstanding" | "all" } or { mode: "elements", elements: [...] }.');
+        const outstanding = selection.mode === 'outstanding' ? Object.values((await snapshot(root)).implementation).filter(s => s.outstanding).length : undefined;
+        const run = runner.start(selection, outstanding);
+        if (!run) return send(response, 409, 'A generation is running.');
+        response.writeHead(202, { 'content-type': 'application/json' });
+        response.end(JSON.stringify(run));
+        return;
+    }
+    if (url.pathname === '/api/code' && request.method === 'GET') {
+        const file = resolve(root, url.searchParams.get('path') ?? '');
+        const folders = [root, ...(readConfig(root).generate ?? []).map(t => resolve(root, t.out))];
+        const inside = folders.some(folder => {
+            const rel = relative(folder, file);
+            return rel && !rel.startsWith('..') && !isAbsolute(rel) && !rel.split(sep).includes('.git');
+        });
+        if (!inside || !existsSync(file) || !statSync(file).isFile()) return send(response, 404, 'No such code file in the workspace or a generate target.');
+        if (statSync(file).size > 2 * 1024 * 1024) return send(response, 413, 'The file is too large to show.');
+        return json(response, { path: relative(root, file), text: readFileSync(file, 'utf8') });
+    }
+    send(response, 405, 'Method not allowed');
 }
 
 /**

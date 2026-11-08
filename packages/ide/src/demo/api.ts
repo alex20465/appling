@@ -47,6 +47,15 @@ export async function acceptChanges(): Promise<LiveChanges> {
 
 export async function revertChange(): Promise<void> {}
 
+/** The demo has no generate targets and no code. */
+export async function startGeneration(): Promise<never> {
+    throw new Error('Generation needs the IDE on your machine: npx @appling/ide');
+}
+
+export async function loadCode(): Promise<never> {
+    throw new Error('The demo has no code.');
+}
+
 export async function decideProposal(): Promise<void> {}
 
 /** The demo has no agent sessions, so its playbook stays empty. */

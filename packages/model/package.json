@@ -33,6 +33,10 @@
     "./diff": {
       "types": "./out/diff.d.ts",
       "default": "./out/diff.js"
+    },
+    "./implementation": {
+      "types": "./out/implementation.d.ts",
+      "default": "./out/implementation.js"
     }
   },
   "files": [

@@ -35,16 +35,24 @@ export function saveBaseline(out: string, exclude: string[]): void {
     if (registry) writeFileSync(join(root, BASELINE_REGISTRY), JSON.stringify(registry, null, 2) + '\n');
 }
 
+/** A part of a generation to merge: these files and these registry entries; everything else stays as it is. */
+export interface MergeScope {
+    files: string[];
+    entries: string[];
+}
+
 /**
  * Merges a fresh generation of the changed model into a generated project, three ways: the baseline of the
  * last generation, the project as it is, and the new generation. Then the new generation becomes the baseline.
+ * With a scope, only its files and registry entries are merged, and only they take the new baseline.
  */
-export function mergeGeneration(out: string, next: string, exclude: string[]): SyncReport {
+export function mergeGeneration(out: string, next: string, exclude: string[], scope?: MergeScope): SyncReport {
     const [root, fresh] = [resolve(out), resolve(next)];
     const baseline = join(root, BASELINE);
     const report: SyncReport = { updated: [], added: [], removed: [], merged: [], conflicts: [], kept: [] };
     const read = (path: string) => (existsSync(path) ? readFileSync(path) : undefined);
-    const nextFiles = new Set(projectFiles(fresh, exclude));
+    const inScope = (file: string) => !scope || scope.files.includes(file);
+    const nextFiles = new Set(projectFiles(fresh, exclude).filter(inScope));
     for (const file of nextFiles) {
         const [base, mine, theirs] = [read(join(baseline, file)), read(join(root, file)), read(join(fresh, file))!];
         const target = join(root, file);
@@ -63,7 +71,8 @@ export function mergeGeneration(out: string, next: string, exclude: string[]): S
             (merge.status === 0 ? report.merged : report.conflicts).push(file);
         }
     }
-    for (const file of projectFiles(baseline, exclude).filter(f => !nextFiles.has(f))) {
+    const freshFiles = new Set(projectFiles(fresh, exclude));
+    for (const file of projectFiles(baseline, exclude).filter(f => inScope(f) && !freshFiles.has(f))) {
         const mine = read(join(root, file));
         if (!mine) continue;
         if (mine.equals(read(join(baseline, file))!)) {
@@ -73,10 +82,28 @@ export function mergeGeneration(out: string, next: string, exclude: string[]): S
             report.kept.push(file);
         }
     }
-    mergeRegistry(root, fresh, report);
-    rmSync(baseline, { recursive: true, force: true });
-    cpSync(join(fresh, BASELINE), baseline, { recursive: true });
-    cpSync(join(fresh, BASELINE_REGISTRY), join(root, BASELINE_REGISTRY));
+    mergeRegistry(root, fresh, report, scope?.entries);
+    if (!scope) {
+        rmSync(baseline, { recursive: true, force: true });
+        cpSync(join(fresh, BASELINE), baseline, { recursive: true });
+        cpSync(join(fresh, BASELINE_REGISTRY), join(root, BASELINE_REGISTRY));
+        return report;
+    }
+    for (const file of scope.files) {
+        const source = join(fresh, BASELINE, file);
+        if (existsSync(source)) {
+            mkdirSync(dirname(join(baseline, file)), { recursive: true });
+            cpSync(source, join(baseline, file));
+        } else rmSync(join(baseline, file), { force: true });
+    }
+    const baseRegistry = existsSync(join(root, BASELINE_REGISTRY)) ? JSON.parse(readFileSync(join(root, BASELINE_REGISTRY), 'utf8')) as Registry : undefined;
+    const freshBase = JSON.parse(readFileSync(join(fresh, BASELINE_REGISTRY), 'utf8')) as Registry;
+    const merged: Registry = baseRegistry ?? { ...freshBase, entries: {} };
+    for (const qn of scope.entries) {
+        if (freshBase.entries[qn]) merged.entries[qn] = freshBase.entries[qn];
+        else delete merged.entries[qn];
+    }
+    writeFileSync(join(root, BASELINE_REGISTRY), JSON.stringify(merged, null, 2) + '\n');
     return report;
 }
 
@@ -84,13 +111,21 @@ export function mergeGeneration(out: string, next: string, exclude: string[]): S
  * The registry of the new generation, keeping the work done since the last one: an entry stays `done`, with
  * its attempts and notes, while what was missing is still the same. Conflicts become tasks of the project.
  */
-function mergeRegistry(root: string, fresh: string, report: SyncReport): void {
-    const next = readRegistry(fresh)!;
+function mergeRegistry(root: string, fresh: string, report: SyncReport, entries?: string[]): void {
+    const generated = readRegistry(fresh)!;
     const current = readRegistry(root);
+    // with a scope, the entries outside it stay as they are
+    const next: Registry = entries && current ? { ...generated, entries: { ...current.entries } } : generated;
+    if (entries && current) {
+        for (const qn of entries) {
+            if (generated.entries[qn]) next.entries[qn] = generated.entries[qn];
+            else delete next.entries[qn];
+        }
+    }
     const base = existsSync(join(root, BASELINE_REGISTRY)) ? JSON.parse(readFileSync(join(root, BASELINE_REGISTRY), 'utf8')) as Registry : undefined;
     for (const entry of Object.values(next.entries)) {
         const before = current?.entries[entry.qn];
-        if (!before) continue;
+        if (!before || (entries && !entries.includes(entry.qn))) continue;
         const unchanged = JSON.stringify(base?.entries[entry.qn]?.missing.map(m => m.what)) === JSON.stringify(entry.missing.map(m => m.what));
         if (before.status === 'done' && unchanged) {
             entry.status = 'done';

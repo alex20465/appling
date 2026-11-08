@@ -120,16 +120,19 @@ These three tools work on the [task registry](../codegen/registry.md) (`.appling
 | `registry_update` | `qn` (string), `status` (`done`, `partial` or `todo`), `note?` (string), `target?` | The updated entry. It counts one attempt; `done` clears the missing work; the note is appended; an entry still open after its third attempt gets the note `stopped after 3 attempts` |
 | `run_tests` | `target?` | `{ out, passed, output }`: runs the test command the extension recorded in the registry (for example `uv run python manage.py test`) in the project, with the last 4000 characters of its output |
 
+In an [agent session](#agent-sessions), `registry_next` passes over the entries whose element another session of the workspace claimed (or a parent or member of it), claims the element of the entry it returns for the session and adds `claimed: "<qn>"`; the IDE's [Code tab](implementation.md#registry-tasks-and-agent-sessions) shows the session on the task. With nothing left it returns `{ done: "No open tasks that other sessions have not claimed." }`. `registry_update` releases the claim when the entry is `done` or out of attempts.
+
 The entry from `registry_next` carries everything an agent needs: the element's qualified name, kind and layer, the steps and files that produced it, and for each missing task its description with the element's properties and related elements.
 
 ### Reference tools
 
-These two tools read and write the [code references](references.md) of the workspace (`.appling/references.json`): where each element is implemented, by file and line range.
+These tools read and write the [code references](references.md) of the workspace (`.appling/references.json`), where each element is implemented by file and line range, and tell how far the model is implemented.
 
 | Tool | Input | Returns |
 |---|---|---|
 | `code_references` | `qn?` (string) | `{ references }`. With `qn`: the references of that element and its members. Without: every reference that is not `current`. Each has `qn`, `file`, `start`, `end`, `anchor` and `status` (`current`, `shifted`, `broken` or `orphaned`); a shifted one has the lines where its anchor is now and the `recorded` range |
 | `record_code_references` | `qn` (string), `ranges`: a list of `{ file, start, end }`, with `file` absolute or relative to the workspace folder and lines counted from 1 | The recorded references, each with the first line of its range as `anchor`; `{ error }` for an unknown element, a missing file, a range outside the file or one that starts on an empty line. It replaces the element's references; an empty list removes them |
+| `implementation_status` | `module?`: a module or element to narrow to | `{ counts, outstanding, elements }`: the number of elements per [implementation state](implementation.md#implementation-states), how many are new or changed since the last generation, and every element (up to 200) that is not implemented or is outstanding, with `state`, `tasks` and `outstanding` |
 
 ### The implement_next_task prompt
 
@@ -324,7 +327,7 @@ The person approves, rejects or comments on any step. The response is stored wit
 
 Appling Desktop holds the playbooks next to the sessions in its main process and serves them to every repo's IDE server over the same IPC channel. It keeps each workspace's playbook as a JSON file in the `playbooks` folder of the app's data folder, so playbooks outlive the sessions and the app. A session's playbook is the one of its workspace, or of its repo folder when it has none. An IDE server started on its own keeps its playbooks in memory.
 
-The app writes chapters of its own, such as for a code generation run, without MCP, through `openChapter(store, author, chapter)` from `@appling/ai`. It returns a writer with `add(steps)`, `done(numbers, note?)`, `close(result)` and `read()`:
+The IDE server writes a chapter for every [generation run](implementation.md#generate-from-the-ide) it starts, as **Code generation**. The app writes chapters of its own without MCP, through `openChapter(store, author, chapter)` from `@appling/ai`. It returns a writer with `add(steps)`, `done(numbers, note?)`, `close(result)` and `read()`:
 
 ```ts
 const chapter = await openChapter(ide.playbooks, { workspace, repo, label: 'Generate Django', color: '#1971c2' },

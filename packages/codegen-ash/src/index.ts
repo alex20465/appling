@@ -109,9 +109,9 @@ function entitySteps(entity: GraphNode, context: MapContext): Step[] {
     // The fields of the actors bound to the entity, and their roles, which are not public, so nobody assigns roles to themselves through the API.
     specs.push(...actorAttributeSpecs(entity, context));
     return [
-        mix(['ash.gen.resource', typeModule(entity, context), '--domain', moduleName(entity.module, context),
+        { ...mix(['ash.gen.resource', typeModule(entity, context), '--domain', moduleName(entity.module, context),
             '--default-actions', 'read,create,update,destroy', '--uuid-primary-key', 'id', ...(specs.length ? ['--attribute', specs.join(',')] : []),
-            '--extend', 'postgres', '--timestamps']),
+            '--extend', 'postgres', '--timestamps']), creates: [fileOf(entity, context)] },
         patch(fileOf(entity, context), existing => patchResource(existing, entity, context))
     ];
 }
