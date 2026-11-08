@@ -248,7 +248,7 @@ Renaming, retyping or removing a released domain element from the inspector or a
 
 The server watches the workspace folder for changes to `.appling` files (ignoring hidden folders and `node_modules`), to `.appling/references.json`, `.appling/generation.json` and the registries of the generate targets inside the folder, and pushes a new snapshot to the page about 100 ms after the last change. Edits from another editor, `appling fmt` or an AI agent through the [MCP server](ai.md#mcp-server) appear in the views without a reload.
 
-The canvas also marks what [agent sessions](ai.md#agent-sessions) of the repo claimed or highlighted: a dashed ring in the session's colour around the declaration, with the session's label in its tooltip.
+The canvas also marks what [agent sessions](ai.md#agent-sessions) of the repo claimed or highlighted: a dashed ring in the session's colour around the declaration, with the session's label in its tooltip. In [Appling Desktop](desktop.md#agent-sessions) a click on the ring goes to the session's terminal tab.
 
 ## Security
 

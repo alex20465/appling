@@ -40,7 +40,9 @@ export const COMMANDS = {
     killTerminal: 'Kill Terminal',
     terminalSettings: 'Terminal Settings',
     runTask: 'Run Task…',
-    runBuildTask: 'Run Build Task'
+    runBuildTask: 'Run Build Task',
+    newAgentSession: 'New Agent Session…',
+    agentBoard: 'Agent Sessions…'
 } as Record<string, string>;
 
 export type Keybindings = Record<string, string | null>;
@@ -87,7 +89,10 @@ export const DEFAULT_KEYBINDINGS: Keybindings = {
     killTerminal: null,
     terminalSettings: null,
     runTask: null,
-    runBuildTask: 'CmdOrCtrl+Shift+B'
+    runBuildTask: 'CmdOrCtrl+Shift+B',
+    // the agent session commands also work while a terminal has the focus
+    newAgentSession: 'CmdOrCtrl+Alt+A',
+    agentBoard: 'CmdOrCtrl+Shift+A'
 };
 
 const KEY = /^(?:(?:Command|Cmd|Control|Ctrl|CommandOrControl|CmdOrCtrl|Alt|Option|AltGr|Shift|Super|Meta)\+)*(?:[0-9A-Z]|F(?:[1-9]|1[0-9]|2[0-4])|[-=;',./\\`[\]]|Plus|Space|Tab|Capslock|Numlock|Scrolllock|Backspace|Delete|Insert|Return|Enter|Up|Down|Left|Right|Home|End|PageUp|PageDown|Escape|Esc|PrintScreen|num[0-9]|numdec|numadd|numsub|nummult|numdiv)$/i;

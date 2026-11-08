@@ -56,6 +56,8 @@ const aiFiles = (to) => ['skills', 'language'].forEach(dir => cpSync(join(packag
 await bundle(join(root, 'out/main.js'), 'out/main.js');
 for (const file of ['preload.cjs', 'repo-preload.cjs', 'tray-icon.png']) cpSync(join(root, 'out', file), join(app, 'out', file));
 cpSync(join(root, 'out/shell'), join(app, 'out/shell'), { recursive: true });
+// the command hook of agent sessions (#10), where src/agents/sessions.ts (HOOK_SCRIPT) looks
+cpSync(join(root, 'out/agents/hook.cjs'), join(app, 'out/agents/hook.cjs'));
 // the terminal panel's page (already bundled), its preload and the shell integration scripts, where src/terminal/assets.ts looks
 for (const part of ['view', 'scripts', 'preload.cjs']) {
     cpSync(join(root, 'out/terminal', part), join(app, 'out/terminal', part), { recursive: true, filter: file => !/\.(map|d\.ts|d\.cts)$/.test(file) });

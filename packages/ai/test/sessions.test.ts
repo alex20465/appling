@@ -42,6 +42,21 @@ test('element claims overlap with their members and ancestors only', () => {
     expect(overlaps('sales.Order', 'sales.OrderFlow')).toBe(false);
 });
 
+test('a store takes back a session with its earlier token', async () => {
+    const first = new MemorySessionStore();
+    const { session, token } = await first.open({ name: 'Claude Code', repo: '/r/shop' });
+    await first.claim(session.id, { elements: ['sales.Order'] });
+    const saved = (await first.get(session.id))!;
+    const second = new MemorySessionStore();
+    const changes: number[] = [];
+    second.onChange(list => changes.push(list.length));
+    expect(second.adopt({ ...saved, label: 'Orders' }, token)).toMatchObject({ id: session.id, label: 'Orders', claims: { elements: ['sales.Order'] } });
+    expect(await second.authenticate(token)).toBe(session.id);
+    expect(changes).toEqual([1]);
+    await second.end(session.id);
+    expect(await second.authenticate(token)).toBeUndefined();
+});
+
 test('a session claims, sets label and status, messages and ends with its claims', async () => {
     const store = new MemorySessionStore();
     const changes: AgentSession[][] = [];

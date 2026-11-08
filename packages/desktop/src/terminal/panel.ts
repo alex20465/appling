@@ -72,6 +72,13 @@ export class TerminalPanel {
     bindings: Keybindings = {};
     /** How file links open; the default hands the file to the OS. */
     fileOpener: FileOpener = path => void shell.openPath(path);
+    /** Agent sessions (#10): what their tabs show, the New Agent Session menu, and renames that set their label. */
+    agents?: {
+        tabs(repo: string): PanelLayout['agents'];
+        menu(repo: string): MenuItemConstructorOptions[];
+        /** True when the terminal is an agent session's, which takes the name as its label. */
+        rename(terminal: string, name: string): boolean;
+    };
 
     constructor(private readonly options: PanelOptions) {
         this.service = new TerminalService({
@@ -285,6 +292,19 @@ export class TerminalPanel {
         this.arrange(repo);
     }
 
+    /** Whether the repo's panel is open and shows the terminal's tab. */
+    showing(terminal: string): boolean {
+        const repo = this.service.registry.repoOf(terminal);
+        if (!repo || !this.views.has(repo)) return false;
+        const entry = this.service.registry.get(repo);
+        return entry.open && !!entry.tabs.find(t => t.id === entry.active)?.panes.includes(terminal);
+    }
+
+    /** Sends the panels their layout again (the agent sessions changed). */
+    relayout(): void {
+        for (const repo of this.views.keys()) this.layoutDue(repo);
+    }
+
     private command(command: PanelCommand): void {
         const repo = this.options.activeRepo();
         const view = repo ? this.views.get(repo) : undefined;
@@ -359,6 +379,7 @@ export class TerminalPanel {
         const first = settings.defaultProfile && names.includes(settings.defaultProfile) ? settings.defaultProfile : profiles.default;
         return {
             ...this.service.layout(repo), repo,
+            agents: this.agents?.tabs(repo) ?? {},
             profiles: first ? [first, ...names.filter(n => n !== first)] : names,
             settings: { fontSize: settings.fontSize, fontFamily: settings.fontFamily, scrollback: settings.scrollback, cursorBlink: settings.cursorBlink },
             mac: process.platform === 'darwin'
@@ -411,6 +432,12 @@ export class TerminalPanel {
                 label: profile.name, click: () => void this.create(repo, { profile: profile.name, split: split === true })
             }))).popup({ window });
         });
+        ipcMain.on('terminal:agentMenu', event => {
+            const repo = repoOf(event);
+            const window = this.options.window();
+            const items = repo ? this.agents?.menu(repo) : undefined;
+            if (items?.length && window) Menu.buildFromTemplate(items).popup({ window });
+        });
         ipcMain.on('terminal:tabMenu', (event, id) => {
             const repo = repoOf(event);
             const window = this.options.window();
@@ -431,7 +458,8 @@ export class TerminalPanel {
         });
         ipcMain.on('terminal:rename', (event, id, name) => {
             const repo = repoOf(event);
-            if (repo && own(event, id) && typeof name === 'string') this.service.update(repo, registry => registry.rename(id, name));
+            if (!repo || !own(event, id) || typeof name !== 'string') return;
+            if (!this.agents?.rename(id, name)) this.service.update(repo, registry => registry.rename(id, name));
         });
         ipcMain.on('terminal:moveTab', (event, id, to) => {
             const repo = repoOf(event);

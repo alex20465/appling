@@ -9,6 +9,8 @@ export interface PanelLayout extends RepoTerminals {
     profiles: string[];
     settings: { fontSize: number, fontFamily: string, scrollback: number, cursorBlink: boolean };
     mac: boolean;
+    /** The agent session (#10) of each agent tab, by terminal id: its title (label, else the agent's name) and status. */
+    agents: Record<string, { session: string, title: string, status: string, statusColor: string, color: string, note?: string }>;
 }
 
 /** Commands the main process forwards to the page (from the menu or a shortcut). */

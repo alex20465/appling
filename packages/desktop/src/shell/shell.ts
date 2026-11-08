@@ -4,6 +4,7 @@
  */
 import type { CloneProgress } from '../clone.js';
 import type { RailCount, RailCounts } from '../rail-status.js';
+import { agentDots, type RailSession } from './agents.js';
 
 /** The rail status of a repo or a workspace (see `rail-status.ts`). */
 interface RailView {
@@ -28,6 +29,8 @@ interface RepoState extends RailView {
     hidden: boolean;
     /** Set while the repo's canvas was moved into another window. */
     away?: { window: string, pane: string };
+    /** Its agent sessions (#10), the shown one marked. */
+    agents?: RailSession[];
 }
 
 /** A pane moved into this window (issue #14), shown as a column of its own. */
@@ -155,7 +158,7 @@ function render(state: ShellState): void {
         badge(button, shown);
         unseenMark(button, shown.counts.unseen, shown.id === state.active);
     }
-    repoRail.replaceChildren(...(workspace?.repos ?? []).map(repo => {
+    repoRail.replaceChildren(...(workspace?.repos ?? []).flatMap(repo => {
         const flags = `${repo.pinned ? ' pinned' : ''}${repo.hidden ? ' hidden' : ''}${repo.id === state.repo ? ' active' : ''}${repo.connection ? ` conn-${repo.connection}` : ''}`;
         const note = repo.pinned ? 'Pinned. ' : repo.hidden ? 'Hidden from the rail. ' : '';
         const away = repo.away ? `Its canvas is in ${repo.away.window}.\n` : '';
@@ -177,7 +180,7 @@ function render(state: ShellState): void {
             event.preventDefault();
             bridge.repoMenu(repo.id);
         };
-        return button;
+        return [button, ...agentDots(repo.agents ?? [])];
     }));
 
     paneRail.replaceChildren(...(state.panes.length ? [document.createElement('hr')] : []), ...state.panes.map(pane => {

@@ -155,6 +155,21 @@ export class MemorySessionStore implements SessionStore {
         return { session: structuredClone(session), token };
     }
 
+    /**
+     * Takes back a session with the token it was handed before, such as one whose agent kept running in a terminal
+     * while Appling Desktop restarted: its agent goes on with the same bearer token. Its claims are taken as saved.
+     */
+    adopt(session: AgentSession, token: string): AgentSession {
+        const adopted: AgentSession = { ...structuredClone(session), repo: resolve(session.repo), unread: 0 };
+        this.sessions.set(adopted.id, adopted);
+        for (const [known, owner] of this.tokens) if (owner === adopted.id) this.tokens.delete(known);
+        this.tokens.set(token, adopted.id);
+        this.messages.set(adopted.id, []);
+        this.opened++;
+        this.changed();
+        return structuredClone(adopted);
+    }
+
     async authenticate(token: string): Promise<string | undefined> {
         const given = Buffer.from(token);
         for (const [known, id] of this.tokens) {

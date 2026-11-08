@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('applingDesktop', {
         openCode: (request: { path: string, start: number, end: number }) => ipcRenderer.send('ideOpenCode', request)
     } : {}),
     onCodeElement: (callback: (qn: string) => void) => ipcRenderer.on('codeElement', (_event, qn: string) => callback(qn)),
+    // the playbook (#19) and the claim rings on the canvas jump to an agent session's tab (#10)
+    focusSession: (session: string) => ipcRenderer.send('ideFocusSession', session),
     selected: (location: { uri: string, start: number, end: number }) => ipcRenderer.send('ideSelected', location),
     onCodeCursor: (callback: (uri: string, offset: number) => void) => ipcRenderer.on('codeCursor', (_event, uri: string, offset: number) => callback(uri, offset))
 });

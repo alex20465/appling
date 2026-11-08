@@ -278,7 +278,7 @@ export function App() {
                             onSelect={qn => select(qn, false)} onClose={() => setPlaying(false)} onSession={toSession} onDiff={toDiff} />
                         : watched?.show
                         ? <AgentCanvas key={watched.session} index={canvasIndex} view={watched} session={sessions.find(s => s.id === watched.session)} settings={view} selected={selected} changes={canvasChanges} onSelect={qn => select(qn, false)} onClose={() => setWatching(undefined)} onOpenFile={openFile} />
-                        : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={selected} settings={view} sessions={sessionMarks} implementation={snapshot.implementation} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
+                        : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={selected} settings={view} sessions={sessionMarks} onSession={desktop?.focusSession} implementation={snapshot.implementation} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
                     {!playing && unwatchedCount > 0 && (
                         <button className="playbook-chip" onClick={() => { setSide('playbook'); }}>{unwatchedCount} playbook chapter{unwatchedCount > 1 ? 's' : ''} to watch</button>
                     )}

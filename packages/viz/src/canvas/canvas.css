@@ -38,6 +38,7 @@
 .impl-shifted { fill: #4c9fe0; }
 .impl-broken { fill: #e5534b; }
 .tree-item .session-ring { fill: none; stroke-width: 2.5; stroke-dasharray: 5 3; pointer-events: none; }
+.tree-item .session-ring.jump { stroke-width: 4; pointer-events: stroke; cursor: pointer; }
 .tree-item.changed .ring { stroke: var(--rust); stroke-width: 3; stroke-dasharray: none; filter: drop-shadow(0 0 6px var(--rust)); }
 .tree-item.removed { opacity: 0.5; }
 .tree-item.removed .ring { stroke: var(--ink-muted); stroke-width: 2; stroke-dasharray: 4 3; fill: transparent; }
