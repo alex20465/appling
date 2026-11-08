@@ -7,6 +7,7 @@ import { IDE_PANE, layoutPanes, paneId, paneLabel, parsePane, registerPaneType }
 import { readSession, sessionOf, writeSession } from '../src/session.js';
 import { dropTarget, LAYOUTS, layoutFor, MAIN, rememberLayout, Windows } from '../src/windows.js';
 import { viewWorkspace } from '../src/view-workspace.js';
+import { chapterRepo } from '../src/chapter-repo.js';
 import { Workspaces } from '../src/workspaces.js';
 
 const display = (id: number, x: number, y: number, width = 1920, height = 1080): DisplayInfo =>
@@ -254,4 +255,17 @@ test('a repo view belongs to the workspace of the window it is in, so a folder i
     expect(viewWorkspace('/crm', 'w2', windows, list)).toBe(A);
     expect(viewWorkspace('/shop', undefined, windows, list)).toBe(A);
     expect(viewWorkspace('/gone', MAIN, windows, list)).toBeUndefined();
+});
+
+test('a chapter from another repo of the workspace finds that repo, local or remote, for its diff (#19)', () => {
+    const folders = ['/work/shop', '/work/crm', 'ssh://build@box/srv/billing'];
+    const roots: Record<string, string> = { 'ssh://build@box/srv/billing': '/srv/billing' };
+    const root = (id: string) => roots[id];
+    expect(chapterRepo('/work/crm', folders, root)).toBe('/work/crm');
+    expect(chapterRepo('/work/crm/', folders, root)).toBe('/work/crm');
+    // a remote repo's chapter names its folder on the other machine
+    expect(chapterRepo('/srv/billing', folders, root)).toBe('ssh://build@box/srv/billing');
+    // a repo of no folder of the workspace, or a remote one not connected yet, has no Changes tab to jump to
+    expect(chapterRepo('/elsewhere', folders, root)).toBeUndefined();
+    expect(chapterRepo('/srv/billing', folders, () => undefined)).toBeUndefined();
 });

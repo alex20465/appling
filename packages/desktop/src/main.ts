@@ -29,10 +29,12 @@ import { Updater } from './updater.js';
 import { currentDisplays, WindowHost } from './window-host.js';
 import { dropTarget, layoutFor, MAIN, rememberLayout, type SavedLayout } from './windows.js';
 import { viewWorkspace } from './view-workspace.js';
+import { chapterRepo } from './chapter-repo.js';
 import { Workspaces } from './workspaces.js';
 import { systemNotifier } from '@appling/pty-host';
 import { RemoteRepos } from './remote/desktop.js';
 import { RemoteStatus } from './remote/notify.js';
+import { markRunning } from './remote/tray-remotes.js';
 import { findDevcontainer } from './remote/devcontainer.js';
 import { serverBundle } from './remote/install.js';
 import { isRemoteId, parseLocation, vscodeUriAt, type RemoteLocation } from './remote/location.js';
@@ -67,8 +69,12 @@ if (process.argv.slice(0, process.argv.includes('--') ? process.argv.indexOf('--
     app.exit(0);
 } else if (trayMode(process.argv)) {
     // the tray only mode: a process of its own (own profile, own lock) that holds no windows and no terminals
+    const appUserData = app.getPath('userData');
     app.setPath('userData', join(app.getPath('appData'), 'Appling Tray'));
-    app.whenReady().then(() => startTray({ icon: fileURLToPath(new URL('./tray-icon.png', import.meta.url)), command: args => appCommand(appLaunch(), args) }));
+    app.whenReady().then(() => startTray({
+        icon: fileURLToPath(new URL('./tray-icon.png', import.meta.url)), command: args => appCommand(appLaunch(), args),
+        appUserData, userData: app.getPath('userData'), serverBundle: () => serverBundle()
+    }));
 } else if (!app.requestSingleInstanceLock({ paths: initial, session: initialSession })) {
     // An instance runs already: it receives the paths through `second-instance`.
     app.quit();
@@ -81,6 +87,9 @@ if (process.argv.slice(0, process.argv.includes('--') ? process.argv.indexOf('--
         if (session) void openSession(session);
     });
     app.whenReady().then(start);
+    // while the app runs it follows its remote repos itself; the tray lets go of them meanwhile (#18)
+    const presence = markRunning(app.getPath('userData'));
+    app.on('quit', () => presence.clear());
     app.on('window-all-closed', () => app.quit());
     // the layout is saved before the windows close, so closing them on the way out changes nothing
     app.on('before-quit', () => {
@@ -266,6 +275,7 @@ function start(): void {
         attach: (repo, view) => host.addPane(paneId(CODE_PANE, repo), view),
         detach: repo => host.removePane(paneId(CODE_PANE, repo)),
         ideView: repo => host.panes.get(paneId(IDE_PANE, repo)),
+        runCommand: command => actions[command]?.(),
         onChange: () => {
             refresh();
             // which code views are open is part of the session (#8)
@@ -336,6 +346,22 @@ function start(): void {
     ipcMain.on('ideSelected', (event, location: SourceLocation) => {
         const repo = repoOf(event.sender);
         if (repo && typeof location?.uri === 'string' && Number.isInteger(location.start)) code?.selected(repo, location);
+    });
+    ipcMain.on('ideShowChanges', (event, repo: string, session?: string) => {
+        const from = repoOf(event.sender);
+        if (!from || typeof repo !== 'string') return;
+        const workspace = workspaceOfView(from);
+        const folders = workspaces.all().find(w => w.id === workspace)?.folders.map(f => f.path) ?? [];
+        const target = chapterRepo(repo, folders, id => remotes.get(id)?.root);
+        if (!target) return;
+        if (workspaces.select(target, workspace)) changed();
+        // the view may only now come up; the repo preload holds the message until its client listens
+        const tell = (tries: number) => {
+            const view = host.panes.get(paneId(IDE_PANE, target));
+            if (view && !view.webContents.isDestroyed()) view.webContents.send('ideShowChanges', typeof session === 'string' ? session : undefined);
+            else if (tries > 0) setTimeout(() => tell(tries - 1), 300);
+        };
+        tell(20);
     });
     ipcMain.on('ideFocusSession', (event, session: string) => repoOf(event.sender) && typeof session === 'string' && agents.jump(session));
     ipcMain.on('ideTextDiff', (event, request: TextDiffRequest) => {
@@ -1060,6 +1086,7 @@ function watchKeybindings(): void {
 function buildMenu(): void {
     const { bindings, problems } = loadKeybindings(keybindingsFile());
     terminals.bindings = bindings;
+    if (code) code.bindings = bindings;
     if (problems.length) console.error(`Appling Desktop keybindings:\n  ${problems.join('\n  ')}`);
     const item = (command: string): MenuItemConstructorOptions => ({
         label: COMMANDS[command], accelerator: bindings[command] ?? undefined, click: actions[command]

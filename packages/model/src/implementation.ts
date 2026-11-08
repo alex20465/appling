@@ -91,6 +91,32 @@ export function implementationStates(graph: Graph, input: ImplementationInput): 
     return result;
 }
 
+/**
+ * The state of every sub-anchor (`Graph.anchors`: a use case step, a `requires`, a page component…). One with code
+ * references has its own state from them; until then the code of its element covers it, and it shows the element's
+ * state (a step's handler shows its step's). It changes with its element, so it is outstanding when that is. Kept apart from the elements' states, which
+ * count elements.
+ */
+export function anchorStates(graph: Graph, references: ResolvedReference[], states: Record<string, ElementImplementation>): Record<string, ElementImplementation> {
+    const byAddress = Map.groupBy(references.filter(r => r.status !== 'orphaned'), r => r.qn);
+    const result: Record<string, ElementImplementation> = {};
+    for (const anchor of graph.anchors ?? []) {
+        // a handler goes with its step, the rest with their element
+        const parent = anchor.kind === 'on' ? anchor.address.slice(0, anchor.address.lastIndexOf('.on[')) : undefined;
+        const owner = (parent && result[parent]) || states[anchor.owner];
+        if (!owner) continue;
+        const own = byAddress.get(anchor.address) ?? [];
+        const current = own.filter(r => r.status === 'current').length;
+        const state: ImplementationState = !own.length ? owner.state
+            : own.some(r => r.status === 'broken') ? 'broken'
+            : own.some(r => r.status === 'shifted') ? 'shifted'
+            : owner.outstanding ? 'unimplemented'
+            : 'implemented';
+        result[anchor.address] = { state, references: current, tasks: 0, outstanding: owner.outstanding };
+    }
+    return result;
+}
+
 /** One state for several: broken or shifted when any is, implemented or unimplemented when all are, else partial. */
 export function rollupState(states: ImplementationState[]): ImplementationState | undefined {
     if (!states.length) return undefined;

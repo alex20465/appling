@@ -12,6 +12,16 @@ export const SKIP_SHELL = new Set([
     'newAgentSession', 'agentBoard'
 ]);
 
+/**
+ * The menu commands that run even while a code view (Code OSS) has the focus. Code OSS binds most keys itself
+ * (Ctrl+P, Ctrl+W, Ctrl+B, Ctrl+K chords, Ctrl+Tab, Ctrl+PageDown, Ctrl+`), so only app commands on keys it leaves
+ * free pass: the workspaces by number, the code view toggle, the agent sessions, the developer tools and quit.
+ */
+export const SKIP_CODE = new Set([
+    ...Array.from({ length: 9 }, (_, i) => `workspace${i + 1}`),
+    'toggleCode', 'newAgentSession', 'agentBoard', 'devTools', 'quit'
+]);
+
 /** A key press as Electron's `before-input-event` reports it. */
 export interface KeyInput {
     type: string;
@@ -77,9 +87,9 @@ export function matches(accelerator: string, input: KeyInput, mac: boolean): boo
     return keyNames(input).includes(key);
 }
 
-/** The skip-shell command that the key press triggers under the bindings, if any. */
-export function commandFor(input: KeyInput, bindings: Record<string, string | null>, mac: boolean): string | undefined {
-    for (const command of SKIP_SHELL) {
+/** The command of `passing` (by default the skip-shell ones) that the key press triggers under the bindings, if any. */
+export function commandFor(input: KeyInput, bindings: Record<string, string | null>, mac: boolean, passing: Set<string> = SKIP_SHELL): string | undefined {
+    for (const command of passing) {
         const accelerator = bindings[command];
         if (accelerator && matches(accelerator, input, mac)) return command;
     }

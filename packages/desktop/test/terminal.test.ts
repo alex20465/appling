@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { PtyHostClient } from '@appling/pty-host';
 import { afterAll, describe, expect, test } from 'vitest';
 import { DEFAULT_KEYBINDINGS } from '../src/keybindings.js';
-import { commandFor, matches } from '../src/terminal/keys.js';
+import { commandFor, matches, SKIP_CODE } from '../src/terminal/keys.js';
 import { findFileLinks, isWebUrl, offsetAt } from '../src/terminal/links.js';
 import { substitute, terminalProfiles, vscodeSettingsFiles, type ProfileContext } from '../src/terminal/profiles.js';
 import { DEFAULT_HEIGHT, MAX_HEIGHT, TerminalRegistry } from '../src/terminal/registry.js';
@@ -273,6 +273,25 @@ describe('keys in a terminal', () => {
         expect(matches('CmdOrCtrl+PageDown', key('PageDown', 'PageDown', { control: true }), false)).toBe(true);
         expect(matches('Ctrl+Tab', { ...key('Tab', 'Tab', { control: true }), type: 'keyUp' }, false)).toBe(false);
         expect(matches('Bogus+X', key('x', 'KeyX'), false)).toBe(false);
+    });
+
+    test('a code view keeps the keys Code OSS uses; only the SKIP_CODE commands pass', () => {
+        const bindings = DEFAULT_KEYBINDINGS;
+        const code = (input: ReturnType<typeof key>) => commandFor(input, bindings, false, SKIP_CODE);
+        // Quick Open, close editor, sidebar, chords, editor history, next editor, Code OSS's own terminal
+        for (const letter of ['p', 'w', 'b', 'k', 'e', 'r', 'o']) expect(code(key(letter, `Key${letter.toUpperCase()}`, { control: true }))).toBeUndefined();
+        expect(code(key('Tab', 'Tab', { control: true }))).toBeUndefined();
+        expect(code(key('PageDown', 'PageDown', { control: true }))).toBeUndefined();
+        expect(code(key('`', 'Backquote', { control: true }))).toBeUndefined();
+        expect(code(key('B', 'KeyB', { control: true, shift: true }))).toBeUndefined();
+        expect(code(key('1', 'Digit1', { control: true }))).toBeUndefined();
+        // the app's own keys on keys Code OSS leaves free
+        expect(code(key('2', 'Digit2', { control: true, alt: true }))).toBe('workspace2');
+        expect(code(key('c', 'KeyC', { control: true, alt: true }))).toBe('toggleCode');
+        expect(code(key('A', 'KeyA', { control: true, shift: true }))).toBe('agentBoard');
+        expect(code(key('q', 'KeyQ', { control: true }))).toBe('quit');
+        // by the user's binding, not the default
+        expect(commandFor(key('F9', 'F9'), { ...bindings, toggleCode: 'F9' }, false, SKIP_CODE)).toBe('toggleCode');
     });
 });
 

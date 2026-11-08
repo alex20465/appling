@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { AgentSession } from '@appling/ai';
 import type { ElementChange } from '@appling/model/diff';
 import { kindLabel } from '@appling/viz/views';
@@ -16,6 +16,8 @@ interface LiveProps {
     /** Only the files this session wrote, such as when a playbook chapter jumps to its session's diff. */
     session?: string;
     onAllSessions?(): void;
+    /** A file whose text diff opens, such as when the Inspector asks for a live changed element's diff. */
+    openPath?: { path: string };
 }
 
 const STATUS: Record<LiveFile['status'], string> = { added: 'A', modified: 'M', deleted: 'D' };
@@ -24,8 +26,9 @@ const STATUS: Record<LiveFile['status'], string> = { added: 'A', modified: 'M', 
  * Beside the canvas: the proposals agent sessions wait on, then every model change since the user last accepted, per
  * file, with the session that wrote it, its model diff and its text diff, to accept (stop marking it) or revert.
  */
-export function Live({ live, proposals, sessions, onAccept, onRevert, onDecide, onSelect, session, onAllSessions }: LiveProps) {
+export function Live({ live, proposals, sessions, onAccept, onRevert, onDecide, onSelect, session, onAllSessions, openPath }: LiveProps) {
     const [open, setOpen] = useState<string>();
+    useEffect(() => { if (openPath) setOpen(openPath.path); }, [openPath]);
     const byId = new Map(sessions.map(s => [s.id, s]));
     const changes = new Map((live?.diff.changes ?? []).map(c => [c.qn, c]));
     const files = (live?.files ?? []).filter(f => !session || f.sessions.includes(session));

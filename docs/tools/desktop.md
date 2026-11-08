@@ -38,6 +38,10 @@ From a clone of the repository, `node packages/desktop/out/bin.js [paths...]` do
 
 The code view of a repo (Code OSS with the Appling extension) marks every model line with how far its element is implemented and puts a CodeLens on implementing code that selects its element on the canvas. **Open code** in the IDE, or a click on a gutter mark, opens the element's code in the code view. See [Seed to code](implementation.md).
 
+A changed element selected on the canvas while the Review tab marks it opens its **text diff** in the code view's diff editor from the Inspector, as the Review list does.
+
+Keys in the code view belong to Code OSS: the shortcuts of the app menu stay out of its way, so `Ctrl+P`, `Ctrl+W`, `Ctrl+B`, the `Ctrl+K` chords, `Ctrl+Tab` and `` Ctrl+` `` do what they do in VS Code. Only a few app commands pass through, by your current bindings: **Workspace 1** to **9** (`Ctrl+Alt+1`…), **Toggle Code View** (`Ctrl+Alt+C`), **New Agent Session…** (`Ctrl+Alt+A`), **Agent Sessions…** (`Ctrl+Shift+A`), **Toggle Developer Tools** and **Quit**.
+
 ## Windows and monitors
 
 Every window has the rail and the switcher. The first window is the main window: it holds every workspace no other window holds, and closing it quits the app.
@@ -78,6 +82,8 @@ Clicking it (or **Open**) starts Appling at that session: its repo, its tab, the
 
 For a remote repo the pty host on the other machine shows nothing there. While Appling is connected to the repo, it shows the notification on your machine instead; a click opens the repo's terminal panel at that terminal, and a reply goes to the remote session.
 
+While the app is closed, the tray (below) takes this over for remote repos. It reads the remote repos of the workspaces you last had open and connects to each the way the app does (SSH with your keys, the dev container, WSL), but only to its pty host, no IDE server. A remote session that needs input while nobody is attached then notifies on your machine, a reply goes to it, and a click opens Appling at the repo. The tray also lists the remote sessions with where they run (`Plan · shop on build@box`) and stops them. While the app runs, the tray lets go of the remote repos, so no wait notifies twice.
+
 To see or stop sessions without the app, use the `appling-pty-host` command (from a clone of the repository, `node packages/pty-host/out/main.js`):
 
 ```sh
@@ -86,7 +92,7 @@ appling-pty-host kill <id>
 appling-pty-host stop            # every session and the host
 ```
 
-The status is `running`, `needs input` or `exited <code>`. The packaged app has no such command on your `PATH`; start the tray instead: `Appling --tray` (from a clone, `node packages/desktop/out/bin.js --tray`). It is a small Appling process without windows that lists the sessions with their status and can open the app at one, stop one or stop all. `Appling --session <id>` opens the app at a session directly.
+The status is `running`, `needs input` or `exited <code>`. The packaged app has no such command on your `PATH`; start the tray instead: `Appling --tray` (from a clone, `node packages/desktop/out/bin.js --tray`). It is a small Appling process without windows that lists the sessions with their status, those of remote repos too, and can open the app at one, stop one or stop all. `Appling --session <id>` opens the app at a session directly.
 
 ## Agent sessions
 

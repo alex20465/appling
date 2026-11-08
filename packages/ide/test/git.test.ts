@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { startIde, type Ide } from '../src/server/server.js';
-import { lineDiff, type Review } from '../src/shared/review.js';
+import { elementTextDiff, lineDiff, type Review } from '../src/shared/review.js';
+import type { Snapshot } from '../src/shared/snapshot.js';
 
 const SHOP = `module shop {
   entity Order {
@@ -63,6 +64,21 @@ test('the model at HEAD against the working tree, with the changed files of the 
     expect(review.before.files.map(f => f.path)).toEqual(['shop.appling']);
     const location = review.before.locations['shop.Order.paid'];
     expect(review.before.files[0].text.slice(location.start, location.end)).toBe('paid: Bool');
+});
+
+test('a changed element selected on the canvas opens the same text diff as the Review list (#12)', async () => {
+    const review = await get<Review>('/api/diff?rev=HEAD');
+    if (!review.ok) throw new Error(review.error);
+    const snapshot = await get<Snapshot>('/api/snapshot');
+    const change = (qn: string) => review.diff.changes.find(c => c.qn === qn)!;
+    const changed = elementTextDiff(change('shop.Order.total'), review, snapshot);
+    expect(changed).toEqual({ before: 'total: Decimal', after: 'total: Integer', request: { path: 'shop.appling', rev: review.commit, qn: 'shop.Order.total', line: 3 } });
+    // a removed element opens where it was, an added one where it is now
+    const removed = elementTextDiff(change('shop.Order.paid'), review, snapshot);
+    expect(removed.after).toBe('');
+    expect(removed.request).toMatchObject({ path: 'shop.appling', line: 5 });
+    const added = elementTextDiff(change('extra.Tag'), review, snapshot);
+    expect(added).toMatchObject({ before: '', request: { path: 'extra.appling', line: 2 } });
 });
 
 test('any commit compares with the working tree', async () => {

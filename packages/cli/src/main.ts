@@ -74,7 +74,7 @@ function refs(documents: LangiumDocument[], services: ApplingServices, target: s
     const all = resolveReferences('.', buildGraph(documents.map(doc => doc.parseResult.value as Model), services));
     const line = (r: ResolvedReference) => `${r.file}:${r.start}-${r.end} ${r.qn}`;
     if (target !== '--check') {
-        const found = all.filter(r => r.qn === target || r.qn.startsWith(`${target}.`));
+        const found = all.filter(r => r.qn === target || r.qn.startsWith(`${target}.`) || r.qn.startsWith(`${target}#`));
         for (const r of found) console.log(`${line(r)}${r.status === 'current' ? '' : ` (${r.status})`}`);
         if (!found.length) console.log(`no code references for ${target}`);
         return 0;

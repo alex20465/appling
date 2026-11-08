@@ -1,4 +1,4 @@
-import type { GraphDiff } from '@appling/model/diff';
+import type { ElementChange, GraphDiff } from '@appling/model/diff';
 import type { Graph } from '@appling/model/graph';
 import type { Location, SourceFile } from './snapshot.js';
 
@@ -48,6 +48,28 @@ export interface TextDiffRequest {
     /** The line to reveal, counted from 1. */
     line?: number;
     qn?: string;
+}
+
+/**
+ * A changed element's text at the review's revision and now, and the request that opens its text diff in Desktop's
+ * code view (the file it is in now, or was in for a removed one, at its line). The Review list and the Inspector of an
+ * element marked on the canvas both use it.
+ */
+export function elementTextDiff(change: ElementChange, review: Extract<Review, { ok: true }>, now: { files: SourceFile[], locations: Record<string, Location> }): { before: string, after: string, request: TextDiffRequest } {
+    const { before } = review;
+    const fileText = (files: { uri: string, text: string }[], uri: string) => files.find(f => f.uri === uri)?.text ?? '';
+    const pathOf = (uri: string) => now.files.find(f => f.uri === uri)?.path ?? before.files.find(f => f.uri === uri)?.path;
+    const slice = (text: string, location?: { start: number, end: number }) => location ? text.slice(location.start, location.end) : '';
+    const old = before.locations[change.was ?? change.qn];
+    const current = change.status === 'removed' ? undefined : now.locations[change.qn];
+    const location = current ?? old!;
+    const text = fileText(current ? now.files : before.files, location.uri);
+    const request: TextDiffRequest = {
+        path: pathOf(location.uri)!, rev: review.commit, qn: change.qn,
+        line: text.slice(0, location.start).split('\n').length,
+        ...(old && current && pathOf(old.uri) !== pathOf(current.uri) && { before: pathOf(old.uri) })
+    };
+    return { before: old ? slice(fileText(before.files, old.uri), old) : '', after: current ? slice(fileText(now.files, current.uri), current) : '', request };
 }
 
 export interface DiffLine {

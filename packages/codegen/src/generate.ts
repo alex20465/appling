@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import {
-    fingerprint, implementationStates, outstandingElements, replaceReferencesIn, resolveReferences,
+    anchorStates, fingerprint, implementationStates, outstandingElements, replaceReferencesIn, resolveReferences,
     type ElementImplementation, type GenerationRecord, type Graph
 } from '@appling/model';
 import { loadExtension, readConfig, type Target } from './config.js';
@@ -72,6 +72,8 @@ export interface TargetState {
 
 export interface WorkspaceImplementation {
     states: Record<string, ElementImplementation>;
+    /** The states of the sub-anchors (`anchorStates`), by address. */
+    anchors: Record<string, ElementImplementation>;
     targets: TargetState[];
     /** Every entry of every target's registry that still has something missing. */
     tasks: TargetTask[];
@@ -83,13 +85,15 @@ export function workspaceImplementation(root: string, graph: Graph): WorkspaceIm
     const records = readGenerations(root);
     const registries = configured.map(t => ({ target: t, registry: readRegistry(resolve(root, t.out)) }));
     const entries = registries.flatMap(r => Object.values(r.registry?.entries ?? {}));
+    const references = resolveReferences(root, graph);
     const states = implementationStates(graph, {
-        references: resolveReferences(root, graph),
+        references,
         tasks: entries,
         outstanding: outstandingElements(graph, configured.map(t => records[t.out]))
     });
     return {
         states,
+        anchors: anchorStates(graph, references, states),
         targets: registries.map(({ target, registry }) => ({ extension: target.extension, out: target.out, generated: !!registry, at: records[target.out]?.at })),
         tasks: registries.flatMap(({ target, registry }) => Object.values(registry?.entries ?? {})
             .filter(e => e.status !== 'done' && e.missing.length)

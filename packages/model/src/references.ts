@@ -11,7 +11,7 @@ export interface CodeReference {
     anchor: string;
 }
 
-/** The code references of a workspace, by qualified name. */
+/** The code references of a workspace, by qualified name or sub-anchor address (`sales.PlaceOrder#step[2]`). */
 export type References = Record<string, CodeReference[]>;
 
 /**
@@ -58,7 +58,8 @@ export function recordReferences(root: string, qn: string, ranges: { file: strin
 
 /** Every reference with where it is now, nearest occurrence of its anchor first. With a graph, references to elements it lacks are orphaned. */
 export function resolveReferences(root: string, graph?: Graph): ResolvedReference[] {
-    const names = graph && new Set(graph.nodes.map(n => n.qn));
+    // elements and the sub-anchors of lines that are not elements (`anchors.ts`) carry references
+    const names = graph && new Set([...graph.nodes.map(n => n.qn), ...(graph.anchors ?? []).map(a => a.address)]);
     return Object.entries(readReferences(root)).flatMap(([qn, references]) => references.map(reference => {
         if (names && !names.has(qn)) return { qn, ...reference, status: 'orphaned' as const };
         const path = resolve(root, reference.file);

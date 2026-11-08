@@ -4,6 +4,8 @@ import {
     type ApplingServices, type Layer, type Model, type Module
 } from '@appling/lang';
 
+import { subAnchors, type GraphAnchor } from './anchors.js';
+
 export type Level = 'out' | 'medium' | 'in';
 
 export interface GraphNode {
@@ -55,6 +57,11 @@ export interface GraphEdge {
 export interface Graph {
     nodes: GraphNode[];
     edges: GraphEdge[];
+    /**
+     * Declaring lines that are not elements (use case steps and their handlers, `requires`, page components, navigation
+     * items, messages) by their sub-anchor address (`anchors.ts`), so they can carry code references. Absent when none.
+     */
+    anchors?: GraphAnchor[];
 }
 
 export interface Dependency {
@@ -146,7 +153,8 @@ export function buildGraph(models: Model[], services: ApplingServices): Graph {
             if (owner && to) add({ from: qns.get(owner)!, to, kind: 'uses' });
         }
     }
-    return { nodes, edges };
+    const anchors = subAnchors(qns).map(({ address, owner, kind }): GraphAnchor => ({ address, owner, kind }));
+    return anchors.length ? { nodes, edges, anchors } : { nodes, edges };
 }
 
 /** The qualified name of every element, in document order. */

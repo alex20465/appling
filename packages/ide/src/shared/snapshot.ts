@@ -27,10 +27,15 @@ export interface Snapshot {
     graph: Graph;
     dependencies: Dependency[];
     locations: Record<string, Location>;
-    /** Where elements are implemented, by qualified name. */
+    /** Where elements and sub-anchors are implemented, by qualified name or address. */
     code: Record<string, CodeLocation[]>;
     /** How far each element is implemented, by qualified name; empty without a server. */
     implementation: Record<string, ElementImplementation>;
+    /**
+     * How far each sub-anchor is implemented (a use case step, a `requires`, a page component…), by its address
+     * (`sales.PlaceOrder#step[2]`); `locations` and `code` hold the sub-anchors too. Empty without a server.
+     */
+    anchors: Record<string, ElementImplementation>;
     /** The generate targets of `appling.config.json`. */
     targets: TargetState[];
     /** The open registry tasks of every target. */

@@ -6,6 +6,9 @@ import { afterAll, beforeAll, expect, test } from 'vitest';
 import { WebSocket } from 'ws';
 import { recordReferences, writeRelease } from '@appling/model';
 import { startIde, type Ide } from '../src/server/server.js';
+import { fileMarks } from '../src/server/workspace.js';
+import type { Snapshot } from '../src/shared/snapshot.js';
+import { elementAt } from '@appling/viz/views';
 
 let ide: Ide;
 let root: string;
@@ -31,6 +34,30 @@ test('the snapshot has the code references with their lines', async () => {
     recordReferences(root, 'sales.Order', [{ file: 'models.py', start: 3, end: 4 }]);
     const snapshot = await (await fetch(`${ide.url}/api/snapshot`)).json();
     expect(snapshot.code['sales.Order']).toMatchObject([{ file: 'models.py', start: 3, end: 4, status: 'current', text: 'class Order(models.Model):\n    pass' }]);
+});
+
+test('a declaring line that is no element carries its code reference, state and mark by its sub-anchor (#20)', async () => {
+    writeFileSync(join(root, 'checkout.py'), 'def checkout(order):\n    charge(order.total)\n');
+    recordReferences(root, 'sales.Checkout#step[2]', [{ file: 'checkout.py', start: 2, end: 2 }]);
+    const snapshot = await (await fetch(`${ide.url}/api/snapshot`)).json() as Snapshot;
+    const address = 'sales.Checkout#step[2]';
+    const file = snapshot.files.find(f => f.path === 'sales.appling')!;
+    const location = snapshot.locations[address];
+    expect(file.text.slice(location.start, location.end)).toBe('step Payments.Charge(order.total) on Declined do Cancel(order)');
+    expect(snapshot.code[address]).toMatchObject([{ file: 'checkout.py', start: 2, status: 'current', text: '    charge(order.total)' }]);
+    expect(snapshot.anchors[address]).toMatchObject({ state: 'implemented', references: 1 });
+    // the other steps show their use case's state; the elements' states hold no sub-anchors
+    expect(snapshot.anchors['sales.Checkout#step[1]'].state).toBe(snapshot.implementation['sales.Checkout'].state);
+    expect(snapshot.implementation[address]).toBeUndefined();
+    // the gutter of Desktop's code view marks the step's own line
+    const line = file.text.slice(0, location.start).split('\n').length;
+    const marks = Object.entries(fileMarks(snapshot)).find(([path]) => path.endsWith('sales.appling'))![1];
+    // (its handler is on the same line and shows the step's state)
+    expect(marks.find(m => m.line === line)).toMatchObject({ qn: `${address}.on[Declined]`, state: 'implemented' });
+    // the cursor on the handler selects the handler's own address
+    const handler = snapshot.locations[`${address}.on[Declined]`];
+    expect(elementAt(snapshot.locations, file.uri, handler.start + 3)).toBe(`${address}.on[Declined]`);
+    recordReferences(root, address, []);
 });
 
 test('files are written only inside the workspace', async () => {

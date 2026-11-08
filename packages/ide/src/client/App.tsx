@@ -5,7 +5,9 @@ import type { GenerationSelection } from '@appling/codegen';
 import { lineMarks } from '@appling/model/implementation';
 import type { EditOperation } from '@appling/model';
 import { withRemoved } from '@appling/model/diff';
-import type { Review as ReviewData, Revision } from '../shared/review.js';
+import { anchorOwner, isAnchorAddress } from '@appling/model/anchors';
+import { elementTextDiff, type Review as ReviewData, type Revision } from '../shared/review.js';
+import { openTextDiff } from './hooks.js';
 import type { AgentView, LiveChanges, Proposal } from '../shared/live.js';
 import { acceptChanges, connectLanguageServer, SOURCE_OPEN, decideProposal, loadCode, loadPlaybook, loadRelease, loadReview, loadRevisions, loadSnapshot, loadView, movePlaybook, onEvents, requestEdit, respondToStep, revertChange, saveFile, saveView, startGeneration } from './api.js';
 import { Implementation } from './Implementation.js';
@@ -129,7 +131,7 @@ export function App() {
     }, [reviewing, rev, snapshot]);
 
     const index = useMemo(() => snapshot && new GraphIndex(snapshot.graph), [snapshot]);
-    const marks = useMemo(() => snapshot && lineMarks(snapshot.locations, Object.fromEntries(snapshot.files.map(f => [f.uri, f.text])), snapshot.implementation), [snapshot]);
+    const marks = useMemo(() => snapshot && lineMarks(snapshot.locations, Object.fromEntries(snapshot.files.map(f => [f.uri, f.text])), { ...snapshot.implementation, ...snapshot.anchors }), [snapshot]);
 
     // After a model change adds outstanding elements (new or changed since the last generation), generation is offered.
     useEffect(() => {
@@ -156,6 +158,29 @@ export function App() {
         return index;
     }, [index, marking, liveMarks]);
     const canvasChanges = marking?.diff ?? liveMarks?.diff;
+    /** The selected element: a selected sub-anchor (a use case step, a `requires`…) shows its element on the canvas. */
+    const element = selected && !index?.nodes.has(selected) && isAnchorAddress(selected) ? anchorOwner(selected) : selected;
+    const anchor = selected && element !== selected ? selected : undefined;
+    const selectedChange = element ? canvasChanges?.changes.find(c => c.qn === element) : undefined;
+    /** The text diff the Inspector shows itself, without Desktop's code view, and the live file the Changes tab opens. */
+    const [inspectorDiff, setInspectorDiff] = useState<{ qn: string, before: string, after: string }>();
+    const [liveOpen, setLiveOpen] = useState<{ path: string }>();
+    /** A changed element selected on the canvas: its text diff in the code view, as from the Review list (#12). */
+    const textDiff = (qn: string) => {
+        const change = canvasChanges?.changes.find(c => c.qn === qn);
+        if (!change || !snapshot) return;
+        if (marking) {
+            const diff = elementTextDiff(change, marking, snapshot);
+            if (!openTextDiff(diff.request)) setInspectorDiff(inspectorDiff?.qn === qn ? undefined : { qn, before: diff.before, after: diff.after });
+            return;
+        }
+        // live changes compare with the text last accepted, not a commit: the Changes tab shows that file's diff
+        const file = liveMarks?.files.find(f => f.elements.includes(qn));
+        if (!file) return;
+        setChangesOf(undefined);
+        setLiveOpen({ path: file.path });
+        setSide('changes');
+    };
 
     /** Selects an element, reveals its source and, unless asked not to, shows it in the inspector. */
     const select = useCallback((qn: string, inspect = true) => {
@@ -197,6 +222,8 @@ export function App() {
     const selectRef = useRef(select);
     selectRef.current = select;
     useEffect(() => { desktop?.onCodeElement?.(qn => selectRef.current(qn)); }, []);
+    // a chapter of this repo, played in another repo's view, jumped here to its diff
+    useEffect(() => { desktop?.onShowChanges?.(session => { setChangesOf(session); setSide('changes'); }); }, []);
 
     /** Opens a model file in the source, at a line. */
     const openFile = (path: string, line?: number) => {
@@ -235,7 +262,10 @@ export function App() {
             setWatching(chapter.session);
         }
     };
+    /** A chapter jumps to its diff: this repo's Changes tab, or in Desktop the one of the repo the chapter came from. */
     const toDiff = (chapter: Chapter) => {
+        const repo = snapshot && decodeURIComponent(snapshot.root.replace('file://', ''));
+        if (repo && chapter.repo !== repo && desktop?.showChanges) return desktop.showChanges(chapter.repo, chapter.session);
         setChangesOf(chapter.session);
         setSide('changes');
     };
@@ -277,12 +307,12 @@ export function App() {
                 />
                 <div className="canvas-area">
                     {playing && playbook?.position.chapter
-                        ? <PlaybookPlayer index={canvasIndex} playbook={playbook} settings={view} selected={selected} repo={decodeURIComponent(snapshot.root.replace('file://', ''))}
+                        ? <PlaybookPlayer index={canvasIndex} playbook={playbook} settings={view} selected={element} repo={decodeURIComponent(snapshot.root.replace('file://', ''))}
                             onMove={movePlay} onRespond={async (chapter, step, kind, text) => { await respondToStep(chapter, step, kind, text).catch(error => alert((error as Error).message)); }}
                             onSelect={qn => select(qn, false)} onClose={() => setPlaying(false)} onSession={toSession} onDiff={toDiff} />
                         : watched?.show
-                        ? <AgentCanvas key={watched.session} index={canvasIndex} view={watched} session={sessions.find(s => s.id === watched.session)} settings={view} selected={selected} changes={canvasChanges} onSelect={qn => select(qn, false)} onClose={() => setWatching(undefined)} onOpenFile={openFile} />
-                        : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={selected} settings={view} sessions={sessionMarks} onSession={desktop?.focusSession} implementation={snapshot.implementation} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
+                        ? <AgentCanvas key={watched.session} index={canvasIndex} view={watched} session={sessions.find(s => s.id === watched.session)} settings={view} selected={element} changes={canvasChanges} onSelect={qn => select(qn, false)} onClose={() => setWatching(undefined)} onOpenFile={openFile} />
+                        : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={element} settings={view} sessions={sessionMarks} onSession={desktop?.focusSession} implementation={snapshot.implementation} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
                     {!playing && unwatchedCount > 0 && (
                         <button className="playbook-chip" onClick={() => { setSide('playbook'); }}>{unwatchedCount} playbook chapter{unwatchedCount > 1 ? 's' : ''} to watch</button>
                     )}
@@ -308,13 +338,14 @@ export function App() {
                         <button className={side === 'code' ? 'active' : ''} onClick={() => setSide('code')}>Code{snapshot.tasks.length > 0 && <span className="tab-count">{snapshot.tasks.length}</span>}</button>
                     </nav>
                     <div hidden={side !== 'search'} className="side-panel"><Search index={index} onSelect={select} /></div>
-                    <div hidden={side !== 'inspector'} className="side-panel"><Inspector index={index} qn={selected} code={selected ? snapshot.code[selected] ?? [] : []} implementation={selected ? snapshot.implementation[selected] : undefined} canGenerate={snapshot.targets.length > 0 && !(run && !run.ended)} onSelect={select} onEdit={edit} onOpenCode={openCode} onGenerate={qn => generate({ mode: 'elements', elements: [qn] })} /></div>
-                    <div hidden={side !== 'code'} className="side-panel"><Implementation snapshot={snapshot} run={run} sessions={sessions} selected={selected} onSelect={qn => select(qn, false)} onGenerate={generate} /></div>
+                    <div hidden={side !== 'inspector'} className="side-panel"><Inspector index={index} qn={element} code={element ? snapshot.code[element] ?? [] : []} implementation={element ? snapshot.implementation[element] : undefined}
+                        anchor={anchor ? { address: anchor, code: snapshot.code[anchor] ?? [], implementation: snapshot.anchors[anchor] } : undefined} canGenerate={snapshot.targets.length > 0 && !(run && !run.ended)} onSelect={select} onEdit={edit} onOpenCode={openCode} onGenerate={qn => generate({ mode: 'elements', elements: [qn] })} change={selectedChange} onTextDiff={textDiff} diff={inspectorDiff} /></div>
+                    <div hidden={side !== 'code'} className="side-panel"><Implementation snapshot={snapshot} run={run} sessions={sessions} selected={element} onSelect={qn => select(qn, false)} onGenerate={generate} /></div>
                     <div hidden={side !== 'changes'} className="side-panel">
                         <Live live={live} proposals={proposals} sessions={sessions}
                             onAccept={paths => acceptChanges(paths).then(setLive)} onRevert={path => revertChange(path).catch(error => alert((error as Error).message))}
                             onDecide={(id, decision) => decideProposal(id, decision).catch(error => alert((error as Error).message))}
-                            onSelect={qn => select(qn, false)} session={changesOf} onAllSessions={() => setChangesOf(undefined)} />
+                            onSelect={qn => select(qn, false)} session={changesOf} onAllSessions={() => setChangesOf(undefined)} openPath={liveOpen} />
                     </div>
                     <div hidden={side !== 'playbook'} className="side-panel">
                         <PlaybookPanel playbook={playbook} sessions={sessions} playing={playing} onPlay={movePlay} onSession={toSession} onDiff={toDiff} />

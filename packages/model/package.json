@@ -34,6 +34,10 @@
       "types": "./out/diff.d.ts",
       "default": "./out/diff.js"
     },
+    "./anchors": {
+      "types": "./out/anchors.d.ts",
+      "default": "./out/anchors.js"
+    },
     "./implementation": {
       "types": "./out/implementation.d.ts",
       "default": "./out/implementation.js"
