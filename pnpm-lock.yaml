@@ -332,6 +332,9 @@ importers:
       '@appling/ai':
         specifier: workspace:*
         version: link:../ai
+      '@appling/cli':
+        specifier: workspace:*
+        version: link:../cli
       '@appling/ide':
         specifier: workspace:*
         version: link:../ide

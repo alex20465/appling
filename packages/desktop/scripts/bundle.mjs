@@ -71,6 +71,8 @@ aiFiles('ide/out');
 await bundle(join(packages, 'ai/out/main.js'), 'ai/out/main.js');
 aiFiles('ai');
 await bundle(join(packages, 'lang/out/language-server.js'), 'lang/out/language-server.js');
+// the `appling` command line of the built in tasks (src/tasks/builtin.ts)
+await bundle(join(packages, 'cli/out/main.js'), 'cli/out/main.js');
 await bundle(join(packages, 'pty-host/out/main.js'), 'pty-host/out/main.js', [nodePty('../../native/node-pty/lib/index.js')]);
 // The agent that runs the remote side of remote repos (src/remote/agent.ts); with the IDE server, the pty host,
 // node-pty and the Appling extension it is the server bundle that src/remote/install.ts uploads (BUNDLE_PARTS).

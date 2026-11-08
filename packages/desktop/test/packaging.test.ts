@@ -26,6 +26,7 @@ test('from the workspace every program resolves to its built package entry', () 
     expect(programPath('pty-host', base)).toMatch(/packages[\\/]pty-host[\\/]out[\\/]main\.js$/);
     expect(programPath('language-server', base)).toMatch(/packages[\\/]lang[\\/]out[\\/]language-server\.js$/);
     expect(programPath('mcp', base)).toMatch(/packages[\\/]ai[\\/]out[\\/]main\.js$/);
+    expect(programPath('cli', base)).toMatch(/packages[\\/]cli[\\/]out[\\/]main\.js$/);
     expect(programPath('vsix', base)).toMatch(/packages[\\/]vscode[\\/]out[\\/]appling\.vsix$/);
     expect(programPath('ide')).toBe(programPath('ide', base));
 });
@@ -95,6 +96,9 @@ test('the bundle holds every program where Desktop looks, and the bundled IDE se
 
     const root = tempDir();
     writeFileSync(join(root, 'shop.appling'), 'module shop {\n  entity Order {\n    total: Int\n  }\n}\n');
+    // the bundled command line of the built in tasks
+    const check = await run(process.execPath, [join(app, BUNDLED.cli), 'check'], { cwd: root }).catch(error => error);
+    expect(check.code ?? 0, check.stderr).toBe(0);
     const ide = await startIdeProcess(root, { main: join(app, BUNDLED.ide) });
     try {
         expect(await (await fetch(ide.url)).text()).toContain('<html');

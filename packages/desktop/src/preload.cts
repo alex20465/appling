@@ -34,5 +34,16 @@ contextBridge.exposeInMainWorld('appling', {
     dockPane: (pane: string) => ipcRenderer.send('dockPane', pane),
     onRemote: (callback: (form: unknown) => void) => ipcRenderer.on('remote', (_event, form) => callback(form)),
     addRemote: (text: string) => ipcRenderer.invoke('addRemote', text),
-    closeRemote: () => ipcRenderer.send('closeRemote')
+    closeRemote: () => ipcRenderer.send('closeRemote'),
+    // the task list (issue #13, tasks/ipc.ts)
+    tasks: {
+        view: () => ipcRenderer.invoke('tasks:view'),
+        onOpen: (callback: (view: unknown) => void) => ipcRenderer.on('tasks:open', (_event, view) => callback(view)),
+        onList: (callback: (view: unknown) => void) => ipcRenderer.on('tasks:list', (_event, view) => callback(view)),
+        onAsk: (callback: (label: string) => void) => ipcRenderer.on('tasks:ask', (_event, label) => callback(label)),
+        run: (label: string, inputs?: Record<string, string>, restart?: boolean) => ipcRenderer.send('tasks:run', label, inputs, restart),
+        stop: (label: string) => ipcRenderer.send('tasks:stop', label),
+        show: (label: string) => ipcRenderer.send('tasks:show', label),
+        close: () => ipcRenderer.send('tasks:close')
+    }
 });

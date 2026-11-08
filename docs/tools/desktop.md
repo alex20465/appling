@@ -112,6 +112,19 @@ The rail shows each remote repo's connection: a dashed amber border while it con
 
 In a `.code-workspace` file remote repos are written as VS Code writes them (`"uri": "vscode-remote://ssh-remote+build/srv/shop"`), so VS Code opens the same workspace.
 
+## Tasks
+
+Appling runs the tasks of VS Code's `.vscode/tasks.json`, so a repo set up for VS Code works as it is. **Tasks › Run Task…** lists the shown repo's tasks with their state: run, restart or stop one, or open its terminal. **Run Build Task** (`Ctrl+Shift+B`) runs the default build task.
+
+- Each task runs in its own terminal of the repo's panel. It is running until it exits, then succeeded or failed by its exit code.
+- `shell` and `process` tasks, `options.cwd` and `options.env`, the `windows`, `linux` and `osx` overrides, `dependsOn` with `dependsOrder`, inputs and variables such as `${workspaceFolder}` and `${env:HOME}` work as in VS Code. Tasks in the `tasks` section of a `.code-workspace` file count too.
+- A background task (`isBackground`), such as a dev server or a watcher, stays running. It is ready once its problem matcher's end pattern shows up in its output; tasks that depend on it start then.
+- Tasks with `"runOptions": { "runOn": "folderOpen" }` start when the repo opens. The first time, Appling asks whether automatic tasks may run in that folder and keeps the answer.
+- Tasks keep running when you switch repos or close the app. At the next start Appling finds them again and knows their state.
+- The built in tasks **appling: check**, **appling: generate** and **appling: release** run the [CLI](cli.md) over the repo; release asks for the version.
+- In a [remote repo](#remote-repos) the tasks of its `tasks.json` run on that machine, in the repo's folder there.
+- The rail shows the running and failed tasks of each repo, and the sums per workspace.
+
 ## Updates
 
 Desktop looks for a new version on GitHub Releases at every start, and on **File › Check for Updates…**.
@@ -127,7 +140,7 @@ An AppImage that was extracted or moved into a package keeps running but cannot 
 
 ## Inside the package
 
-The app bundles everything it runs. Each repo's IDE server, the pty host that keeps terminals running, the language server and the [MCP server](ai.md#mcp-server) are Node programs that Desktop starts with its own Electron binary as Node (`ELECTRON_RUN_AS_NODE`), so no separate Node installation is needed. The terminal library node-pty is the only native module; it uses Node's stable ABI, so the same build loads in Electron.
+The app bundles everything it runs. Each repo's IDE server, the pty host that keeps terminals running, the language server, the [MCP server](ai.md#mcp-server) and the CLI of the built in tasks are Node programs that Desktop starts with its own Electron binary as Node (`ELECTRON_RUN_AS_NODE`), so no separate Node installation is needed. The terminal library node-pty is the only native module; it uses Node's stable ABI, so the same build loads in Electron.
 
 ## Build it yourself
 

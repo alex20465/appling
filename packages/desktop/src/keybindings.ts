@@ -38,7 +38,9 @@ export const COMMANDS = {
     findInTerminal: 'Find in Terminal…',
     clearTerminal: 'Clear Terminal',
     killTerminal: 'Kill Terminal',
-    terminalSettings: 'Terminal Settings'
+    terminalSettings: 'Terminal Settings',
+    runTask: 'Run Task…',
+    runBuildTask: 'Run Build Task'
 } as Record<string, string>;
 
 export type Keybindings = Record<string, string | null>;
@@ -83,7 +85,9 @@ export const DEFAULT_KEYBINDINGS: Keybindings = {
     findInTerminal: null,
     clearTerminal: null,
     killTerminal: null,
-    terminalSettings: null
+    terminalSettings: null,
+    runTask: null,
+    runBuildTask: 'CmdOrCtrl+Shift+B'
 };
 
 const KEY = /^(?:(?:Command|Cmd|Control|Ctrl|CommandOrControl|CmdOrCtrl|Alt|Option|AltGr|Shift|Super|Meta)\+)*(?:[0-9A-Z]|F(?:[1-9]|1[0-9]|2[0-4])|[-=;',./\\`[\]]|Plus|Space|Tab|Capslock|Numlock|Scrolllock|Backspace|Delete|Insert|Return|Enter|Up|Down|Left|Right|Home|End|PageUp|PageDown|Escape|Esc|PrintScreen|num[0-9]|numdec|numadd|numsub|nummult|numdiv)$/i;

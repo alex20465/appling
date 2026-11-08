@@ -18,6 +18,9 @@ import { IDE_PANE, paneId, paneLabel, parsePane, registerPaneType } from './pane
 import { Repos } from './repos.js';
 import { readSession, restore, sessionOf, writeSession } from './session.js';
 import { switcherEntries } from './switcher.js';
+import { TaskController } from './tasks/ipc.js';
+import { remoteTasks, remoteTerminals } from './tasks/remote.js';
+import { taskContributions } from './tasks/state.js';
 import { appLaunch, codeViewOpener, TERMINAL_PANE, TerminalPanel } from './terminal/panel.js';
 import { startTray } from './tray.js';
 import { Updater } from './updater.js';
@@ -97,7 +100,7 @@ const processes = new Map<string, IdeProcess>();
 const sessions = agentSessions();
 /** What the rail shows per repo and per workspace; every feature reports into its own source (`rail-status.ts`). */
 const rail = new RailStatus();
-const railSources = { validation: rail.source('validation'), editor: rail.source('editor'), git: rail.source('git'), agents: rail.source('agents'), live: rail.source('live'), playbook: rail.source('playbook'), connection: rail.source('connection') };
+const railSources = { validation: rail.source('validation'), editor: rail.source('editor'), git: rail.source('git'), agents: rail.source('agents'), live: rail.source('live'), playbook: rail.source('playbook'), connection: rail.source('connection'), tasks: rail.source('tasks') };
 /** Repos on SSH hosts, in dev containers and in WSL (`remote/`): their servers run there, reached over the transport. */
 /** Notifications here for the terminals of remote repos that need input while no view is attached (#18). */
 const remoteStatus = new RemoteStatus({
@@ -173,8 +176,39 @@ const terminals = new TerminalPanel({
     setHidden: (repo, hidden) => host.setHidden(paneId(TERMINAL_PANE, repo), hidden),
     refresh: () => refresh(),
     focusRepoView: repo => host.panes.get(paneId(IDE_PANE, repo))?.webContents.focus(),
-    window: () => host.base()
+    window: () => host.base(),
+    remote: repo => isRemoteId(repo) ? remoteTerminals(remotes.get(repo), repo, remotes.ptyDir(repo)) : undefined
 });
+/** The tasks of each repo (`tasks/`, issue #13), each in its own terminal; their states feed the rail and the Tasks menu. */
+let tasksWindow: string | undefined;
+let tasksMenuTimer: NodeJS.Timeout | undefined;
+const tasks = new TaskController({
+    userData: app.getPath('userData'),
+    service: terminals.service,
+    activeRepo: () => workspaces.activeRepo(),
+    workspaceFiles: repo => workspaces.all().filter(w => w.folders.some(f => f.path === repo)).map(w => w.id),
+    folders: repo => Object.fromEntries(workspaces.all().filter(w => w.folders.some(f => f.path === repo)).flatMap(w => w.folders.map(f => [f.name ?? basename(f.path), f.path]))),
+    window: () => host.base(tasksWindow),
+    shell: () => host.native(tasksWindow ?? windows.focused().id)?.shell.webContents,
+    shown: open => {
+        if (open) tasksWindow = windows.focused().id;
+        if (tasksWindow) host.cover(tasksWindow, 'tasks', open);
+        if (!open) tasksWindow = undefined;
+        refresh();
+        if (!open) activeView()?.webContents.focus();
+    },
+    reveal: (repo, terminal) => void terminals.reveal(repo, terminal),
+    remote: repo => isRemoteId(repo) ? remoteTasks(remotes.get(repo), repo) : undefined
+});
+tasks.runner.on('changed', () => {
+    railSources.tasks.replace(taskContributions(tasks.runner.states()));
+    tasksMenuSoon();
+});
+/** The Tasks menu lists the shown repo's tasks with their states, so it is built again when either changes. */
+function tasksMenuSoon(): void {
+    clearTimeout(tasksMenuTimer);
+    tasksMenuTimer = setTimeout(() => buildMenu(), 150);
+}
 /** The window layouts per monitor setup, as the session holds them. */
 let layouts: Record<string, SavedLayout> = {};
 /** The displays at the last change, to place windows whose display is gone where they were. */
@@ -351,7 +385,11 @@ function changed(): void {
         if (repos.add(repo).added) {
             watchBranch(repo);
             launch(repo);
-            terminals.openRepo(repo);
+            // a remote repo's terminals and tasks open once it is connected (`launchRemote`)
+            if (!isRemoteId(repo)) {
+                terminals.openRepo(repo);
+                tasks.openRepo(repo);
+            }
         }
     }
     for (const repo of repos.all()) {
@@ -361,6 +399,7 @@ function changed(): void {
     windows.prune(openIds(), live);
     const shown = shownKey();
     const revealed = shown !== lastShown ? reveal() : undefined;
+    if (shown !== lastShown) tasksMenuSoon();
     lastShown = shown;
     playbookCounts.refresh();
     refresh();
@@ -431,6 +470,8 @@ async function launchRemote(id: string): Promise<void> {
                 const existing = host.panes.get(paneId(IDE_PANE, id));
                 if (!existing) host.addPane(paneId(IDE_PANE, id), view(url));
                 else if (again) existing.webContents.reload();
+                // the terminals and tasks in the pty host there
+                void terminals.openRepo(id).then(() => tasks.openRepo(id));
                 refresh();
             },
             onFailed: error => {
@@ -478,6 +519,7 @@ function stop(id: string): void {
     }
     drop(id);
     terminals.closeRepo(id);
+    tasks.closeRepo(id);
 }
 
 /** A kept alive view of one repo's IDE: it may only show pages of its own server; links to the web open in the browser. */
@@ -921,7 +963,9 @@ const actions: Record<string, () => void> = {
     },
     checkForUpdates: () => updater.check(),
     quit: () => app.quit(),
-    ...terminals.actions()
+    ...terminals.actions(),
+    runTask: () => tasks.show(),
+    runBuildTask: () => tasks.runBuild()
 };
 
 function keybindingsFile(): string {
@@ -956,6 +1000,7 @@ function buildMenu(): void {
         { label: 'Repo', submenu: [item('switcher'), { type: 'separator' }, item('openFileInVSCode'), item('openRepoInVSCode'), { type: 'separator' }, item('nextRepo'), item('previousRepo'), { type: 'separator' }, ...numbered('repo')] },
         { label: 'Workspace', submenu: [item('nextWorkspace'), item('previousWorkspace'), { type: 'separator' }, ...numbered('workspace')] },
         { label: 'Terminal', submenu: terminals.menu(item) },
+        { label: 'Tasks', submenu: tasks.menu(item) },
         { label: 'Window', submenu: [item('detachRepo'), item('detachWorkspace'), item('dockWindow'), { type: 'separator' }, { role: 'minimize' }] }
     ];
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));

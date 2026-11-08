@@ -290,6 +290,10 @@ export class PtyHost {
         const args = options.args ?? [];
         const cols = positive(options.cols, 80), rows = positive(options.rows, 24);
         const env: Record<string, string> = { ...(options.env ?? process.env as Record<string, string>) };
+        for (const [key, value] of Object.entries(options.addEnv ?? {})) {
+            if (value === null) delete env[key];
+            else if (typeof value === 'string') env[key] = value;
+        }
         delete env.ELECTRON_RUN_AS_NODE;
         delete env.APPLING_PTY_HOST_DIR;
         env.TERM = 'xterm-256color';

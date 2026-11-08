@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@appling/ai": "workspace:*",
+    "@appling/cli": "workspace:*",
     "@appling/ide": "workspace:*",
     "@appling/lang": "workspace:*",
     "@appling/pty-host": "workspace:*",

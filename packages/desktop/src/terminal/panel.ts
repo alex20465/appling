@@ -14,7 +14,7 @@ import { commandFor } from './keys.js';
 import { isWebUrl, offsetAt } from './links.js';
 import { terminalProfiles, vscodeSettingsFiles, type Platform, type Profiles } from './profiles.js';
 import { END_WITH_APP, readSettingsFile, terminalSettings, writeSetting, type TerminalSettings } from './settings.js';
-import { TerminalService, type CreateOptions } from './service.js';
+import { TerminalService, type CreateOptions, type RemoteTerminals } from './service.js';
 import type { PanelCommand, PanelLayout } from './view-protocol.js';
 
 const PAGE = asset('view/index.html');
@@ -45,6 +45,8 @@ export interface PanelOptions {
     window(): BaseWindow | undefined;
     /** Gives the focus back to the repo's own view when the panel hides. */
     focusRepoView(repo: string): void;
+    /** Where a remote repo's terminals run (`TerminalServiceOptions.remote`). */
+    remote?(repo: string): RemoteTerminals | undefined;
 }
 
 /**
@@ -78,7 +80,8 @@ export class TerminalPanel {
             host: { host: { node: process.execPath, env: process.env, main: programPath('pty-host'), open: openCommand(appLaunch()) } },
             settings: () => this.settings(),
             profiles: repo => this.profiles(repo, true),
-            version: app.getVersion()
+            version: app.getVersion(),
+            remote: repo => options.remote?.(repo)
         });
         this.service.on('data', (id, data) => this.queue(id, data));
         this.service.on('exit', (id, exit) => {
@@ -158,8 +161,8 @@ export class TerminalPanel {
     }
 
     /** A repo became live: find its terminals in the pty host (after a restart too) and show the panel if it was open. */
-    openRepo(repo: string): void {
-        this.service.openRepo(repo).then(() => {
+    openRepo(repo: string): Promise<void> {
+        return this.service.openRepo(repo).then(() => {
             const entry = this.service.registry.get(repo);
             if (entry.open && entry.tabs.length) this.ensureView(repo);
             this.arrange(repo);

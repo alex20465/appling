@@ -40,6 +40,14 @@
         <div class="row end"><button type="button" class="action cancel">Cancel</button><button type="submit" class="action primary">Add</button></div>
       </div>
     </form>
+    <div id="tasks" class="overlay" hidden role="dialog" aria-label="Tasks">
+      <div class="panel">
+        <input type="text" placeholder="Run task…" aria-label="Task" spellcheck="false" autocomplete="off" />
+        <ul role="listbox"></ul>
+        <p class="problems" role="status"></p>
+      </div>
+    </div>
     <script type="module" src="./shell.js"></script>
+    <script type="module" src="./tasks.js"></script>
   </body>
 </html>

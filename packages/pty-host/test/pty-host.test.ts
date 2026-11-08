@@ -124,6 +124,16 @@ describe.skipIf(process.platform === 'win32')('pty host', () => {
         client.close();
     }, 20000);
 
+    test('addEnv adds to the host\'s own environment instead of sending the client\'s', async () => {
+        const dir = hostDir();
+        const client = await connectPtyHost({ dir, host: { env: { ...process.env, FROM_HOST: 'host', DROP_ME: 'x' } } });
+        const terminal = await client.spawnAttached({ shell: '/bin/sh', args: ['-c', 'printf "%s:%s:%s" "$FROM_HOST" "$ADDED" "${DROP_ME-gone}"'], cwd: dir, addEnv: { ADDED: 'added', DROP_ME: null } });
+        const live = output(terminal);
+        await new Promise(done => terminal.onExit(done));
+        expect(live.text()).toContain('host:added:gone');
+        client.close();
+    }, 20000);
+
     test('a client without the token is turned away', async () => {
         const dir = hostDir();
         (await connectPtyHost({ dir })).close();

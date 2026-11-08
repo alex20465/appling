@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
  * What Desktop finds at run time: the Node programs it runs as child processes (with `ELECTRON_RUN_AS_NODE`) or hands
  * to other tools, and the Appling extension (`vsix`) it installs into the code view.
  */
-export type Program = 'ide' | 'pty-host' | 'language-server' | 'mcp' | 'vsix';
+export type Program = 'ide' | 'pty-host' | 'language-server' | 'mcp' | 'cli' | 'vsix';
 
 /**
  * Where `scripts/bundle.mjs` puts each program in the packaged app, relative to the app's root (Desktop's main is
@@ -19,6 +19,7 @@ export const BUNDLED: Record<Program, string> = {
     'pty-host': 'pty-host/out/main.js',
     'language-server': 'lang/out/language-server.js',
     mcp: 'ai/out/main.js',
+    cli: 'cli/out/main.js',
     vsix: 'vscode/appling.vsix'
 };
 
@@ -34,6 +35,7 @@ const INSTALLED: Record<Program, [string, string]> = {
     'pty-host': ['@appling/pty-host', 'main.js'],
     'language-server': ['@appling/lang', 'language-server.js'],
     mcp: ['@appling/ai', 'main.js'],
+    cli: ['@appling/cli/package.json', 'out/main.js'],
     vsix: ['appling-vscode/package.json', 'out/appling.vsix']
 };
 

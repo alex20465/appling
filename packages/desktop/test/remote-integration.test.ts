@@ -7,6 +7,10 @@ import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 import { connectPtyHost } from '@appling/pty-host';
 import type { ConnectionState } from '../src/remote/connection.js';
 import { RemoteRepo } from '../src/remote/remote-repo.js';
+import { TaskRunner } from '../src/tasks/runner.js';
+import { remoteTasks, remoteTerminals } from '../src/tasks/remote.js';
+import { TerminalService } from '../src/terminal/service.js';
+import { DEFAULT_TERMINAL_SETTINGS } from '../src/terminal/settings.js';
 
 /**
  * The remote side for real: an sshd of this user on a free port (no root needed) and a container, each reached through
@@ -148,6 +152,33 @@ describe.skipIf(!SSH)('over ssh', () => {
         expect(repo.connection.state).toBe('connected');
         expect(progress.some(line => line.startsWith('Connecting'))).toBe(true);
         expect(progress.some(line => line.startsWith('Installing'))).toBe(false);
+    }, 90000);
+
+    test('tasks read tasks.json over the transport and run in the remote pty host, the built in appling check too', async () => {
+        const id = `ssh://127.0.0.1/${repo.root}`;
+        mkdirSync(join(repo.root!, '.vscode'), { recursive: true });
+        writeFileSync(join(repo.root!, '.vscode', 'tasks.json'), JSON.stringify({
+            version: '2.0.0',
+            tasks: [{ label: 'where', type: 'shell', command: 'echo "$(pwd) ${env:HOME} $WHO" > where.txt', options: { env: { WHO: 'remote' } } }]
+        }));
+        const service = new TerminalService({
+            host: { dir: join(dir, 'unused-local-pty'), start: false },
+            settings: () => DEFAULT_TERMINAL_SETTINGS,
+            remote: () => remoteTerminals(repo, id, join(dir, 'local-pty'))
+        });
+        const runner = new TaskRunner(service, { platform: 'linux', remote: () => remoteTasks(repo, id) });
+        await runner.openRepo(id);
+        expect(runner.list(id).map(task => task.label)).toEqual(['where', 'appling: check', 'appling: generate', 'appling: release']);
+        expect(await runner.run(id, 'where')).toMatchObject({ status: 'succeeded' });
+        expect(readFileSync(join(repo.root!, 'where.txt'), 'utf8').trim()).toBe(`${repo.root} ${repo.installed!.probe.home} remote`);
+        const terminal = runner.state(id, 'where').terminal!;
+        const client = await connectPtyHost({ dir: join(dir, 'local-pty'), start: false });
+        expect((await client.list(id)).map(t => t.id)).toContain(terminal);
+        client.close();
+        // the command line of the server bundle there
+        expect(await runner.run(id, 'appling: check')).toMatchObject({ status: 'succeeded', exit: { code: 0 } });
+        await service.closeRepo(id);
+        service.dispose();
     }, 90000);
 });
 
