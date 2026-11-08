@@ -82,6 +82,51 @@ test('invariants over stored fields become check constraints, defaults and deriv
         'enforce the invariant "not derived": big || quantity < 5',
         'write the test bodies of ItemNotDerivedTest in shop/tests.py'
     ]);
+    // An enforced invariant gets active tests: the factory row is stored, a proven violation raises.
+    expect(entries['shop.Item.invariant["positive"]'].missing).toEqual([]);
+    expect(entries['shop.Item.invariant["noted when done"]'].missing).toEqual([]);
+    const tests = files['shop/tests.py'];
+    expect(tests).toContain('from django.db import IntegrityError, transaction');
+    expect(tests).toContain([
+        '    def test_holds_for_valid_rows(self):',
+        '        item = make_item()',
+        '        self.assertTrue(Item.objects.filter(pk=item.pk).exists())',
+        '',
+        '    def test_rejects_violations(self):',
+        '        with self.assertRaises(IntegrityError), transaction.atomic():',
+        '            make_item(quantity=-1)'
+    ].join('\n'));
+    // A field only tested by has() may stay null: SQL treats IS NOT NULL as false, not unknown.
+    expect(tests).toContain('            make_item(status=Status.DONE)');
+    expect(files['shop/factories.py']).toContain('def make_item(**fields):');
+});
+
+test('an invariant without a proven violation keeps its rejects case as a task', async () => {
+    const { files, entries } = await generate({
+        'shop.appling': `module shop {
+            entity Item {
+                quantity: Int default 1
+                invariant "any" { quantity < 10 || quantity >= 10 }
+            }
+        }`
+    });
+    expect(files['shop/tests.py']).toContain('self.assertTrue(Item.objects.filter(pk=item.pk).exists())');
+    expect(entries['shop.Item.invariant["any"]'].missing.map(m => m.what))
+        .toEqual(['write the test bodies of ItemAnyTest in shop/tests.py (test_rejects_violations)']);
+});
+
+test('an invariant the sample row cannot be proven to meet keeps both cases as a task', async () => {
+    const { files, entries } = await generate({
+        'shop.appling': `module shop {
+            entity Item {
+                label: String
+                invariant "named" { label != "" }
+            }
+        }`
+    });
+    expect(files['shop/tests.py']).not.toContain('make_item');
+    expect(entries['shop.Item.invariant["named"]'].missing.map(m => m.what))
+        .toEqual(['write the test bodies of ItemNamedTest in shop/tests.py']);
 });
 
 test('roles become django-rules predicates, and the entity actors are bound to becomes the user model', async () => {
