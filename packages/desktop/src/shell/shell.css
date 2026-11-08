@@ -46,6 +46,12 @@ body { display: grid; grid-template-columns: 48px 1fr; background: var(--surface
 .badge.agentsWorking, .badge.tasksRunning { background: var(--leaf); }
 .badge.unsaved { background: var(--ink-muted); }
 .badge.unwatched { background: #4dabf7; }
+/* A remote repo's connection: dashed amber while (re)connecting, red when it failed, a dot in the top right when it is connected. */
+.repo.conn-connecting, .repo.conn-reconnecting { border-style: dashed; border-color: var(--attention); }
+.repo.conn-reconnecting { animation: reconnecting 1.2s ease-in-out infinite alternate; }
+.repo.conn-failed { border-color: var(--error); border-style: dashed; }
+.repo.conn-connected:not(.pinned)::after { content: ''; position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 1px; background: var(--ink-muted); }
+@keyframes reconnecting { from { opacity: 1; } to { opacity: 0.5; } }
 .repo.working, .workspace.working { outline: 2px solid color-mix(in srgb, var(--leaf) 55%, transparent); outline-offset: 1px; }
 /* Collapsed: the rail is gone and main.ts places the repo views at the left edge. */
 body.collapsed { grid-template-columns: 0 1fr; }
@@ -68,18 +74,18 @@ body.collapsed .rail { display: none; }
 #stage pre { max-height: 50vh; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-raised); white-space: pre-wrap; font-size: 12px; }
 .action { margin-right: 8px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-elevated); color: var(--ink); cursor: pointer; }
 
-#clone { position: fixed; inset: 0; display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; background: rgb(0 0 0 / 0.45); }
-#clone[hidden] { display: none; }
-#clone .panel { width: min(560px, 90vw); padding: 16px 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-raised); box-shadow: 0 16px 48px rgb(0 0 0 / 0.5); }
-#clone h2 { margin: 0 0 12px; font-size: 16px; }
-#clone label { display: block; margin-bottom: 10px; color: var(--ink-muted); font-size: 12px; }
-#clone input { display: block; width: 100%; margin-top: 4px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; outline: none; background: var(--surface); color: var(--ink); font: 13px ui-monospace, monospace; }
-#clone input:focus { border-color: var(--leaf); }
-#clone .row { display: flex; gap: 8px; align-items: center; }
-#clone .row input { flex: 1; }
-#clone .row .action { margin: 4px 0 0; }
-#clone .end { justify-content: flex-end; }
-#clone .status { min-height: 1.5em; margin: 4px 0 10px; color: var(--ink-muted); font-size: 12px; white-space: pre-wrap; }
-#clone .status.error { color: var(--error); }
+#clone, #remote { position: fixed; inset: 0; display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; background: rgb(0 0 0 / 0.45); }
+#clone[hidden], #remote[hidden] { display: none; }
+#clone .panel, #remote .panel { width: min(560px, 90vw); padding: 16px 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-raised); box-shadow: 0 16px 48px rgb(0 0 0 / 0.5); }
+#clone h2, #remote h2 { margin: 0 0 12px; font-size: 16px; }
+#clone label, #remote label { display: block; margin-bottom: 10px; color: var(--ink-muted); font-size: 12px; }
+#clone input, #remote input { display: block; width: 100%; margin-top: 4px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; outline: none; background: var(--surface); color: var(--ink); font: 13px ui-monospace, monospace; }
+#clone input:focus, #remote input:focus { border-color: var(--leaf); }
+#clone .row, #remote .row { display: flex; gap: 8px; align-items: center; }
+#clone .row input, #remote .row input { flex: 1; }
+#clone .row .action, #remote .row .action { margin: 4px 0 0; }
+#clone .end, #remote .end { justify-content: flex-end; }
+#clone .status, #remote .status { min-height: 1.5em; margin: 4px 0 10px; color: var(--ink-muted); font-size: 12px; white-space: pre-wrap; }
+#clone .status.error, #remote .status.error { color: var(--error); }
 .action.primary { border-color: var(--leaf); }
 .action:disabled { opacity: 0.5; cursor: default; }

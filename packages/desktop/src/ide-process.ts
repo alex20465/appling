@@ -28,6 +28,11 @@ export interface IdeProcessOptions {
     playbooks?: PlaybookStore;
     /** What the app adds to a session's IDE context and does with its actions. */
     host?: AppHost;
+    /**
+     * Starts the server with these arguments (after its entry) somewhere else, such as on a remote machine through
+     * the agent's relay (`remote/relay.ts`); by default `node <main> ...args` with an IPC channel here.
+     */
+    launch?(args: string[]): ChildProcess;
 }
 
 /** What a repo's server reports for the rail; each report carries one of the two. */
@@ -50,7 +55,8 @@ export function ideMain(): string {
  * The server reports its URL over the IPC channel and ends when that channel closes, also when the app is killed.
  */
 export function startIdeProcess(root: string, options: IdeProcessOptions = {}): Promise<IdeProcess> {
-    const child = spawn(options.node ?? process.execPath, [options.main ?? ideMain(), root, '--port', '0', ...(options.sessions ? ['--shared-sessions'] : [])], {
+    const args = [root, '--port', '0', ...(options.sessions ? ['--shared-sessions'] : [])];
+    const child = options.launch ? options.launch(args) : spawn(options.node ?? process.execPath, [options.main ?? ideMain(), ...args], {
         stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
         env: options.env ?? process.env
     });

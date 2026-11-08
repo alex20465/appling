@@ -183,18 +183,20 @@ test('workspace files read like VS Code: comments, trailing commas, relative pat
         '    { "path": "shop", "name": "Shop // web" },',
         '    { "path": "../crm", },',
         '    { "uri": "vscode-remote://ssh-remote+box/srv/api" },',
+        '    { "uri": "vscode-vfs://github/owner/repo" },',
         '  ],',
         '  /* kept */ "settings": { "editor.tabSize": 2, "url": "http://x/*y*/" },',
         '}'
     ].join('\n'));
     const workspace = readCodeWorkspace(file);
     expect(workspaceName(file)).toBe('client');
-    expect(workspace.folders).toEqual([{ path: join(dir, 'shop'), name: 'Shop // web' }, { path: resolve(dir, '../crm') }]);
+    // remote folders open as remote repos; kinds Desktop cannot open are kept as they are
+    expect(workspace.folders).toEqual([{ path: join(dir, 'shop'), name: 'Shop // web' }, { path: resolve(dir, '../crm') }, { path: 'ssh://box/srv/api' }]);
     expect(workspace.data).toEqual({ settings: { 'editor.tabSize': 2, url: 'http://x/*y*/' } });
 
     writeCodeWorkspace(file, [...workspace.folders, { path: join(dir, 'docs') }]);
     expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({
-        folders: [{ name: 'Shop // web', path: 'shop' }, { path: '../crm' }, { path: 'docs' }, { uri: 'vscode-remote://ssh-remote+box/srv/api' }],
+        folders: [{ name: 'Shop // web', path: 'shop' }, { path: '../crm' }, { uri: 'vscode-remote://ssh-remote+box/srv/api' }, { path: 'docs' }, { uri: 'vscode-vfs://github/owner/repo' }],
         settings: { 'editor.tabSize': 2, url: 'http://x/*y*/' }
     });
 

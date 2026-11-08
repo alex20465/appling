@@ -60,6 +60,32 @@ Every repo has its own terminals in a panel under its canvas. **Terminal › Tog
 - Ctrl+click (Cmd+click on macOS) opens a URL in the browser and a file path in the code view.
 - Terminals keep running when the app closes or crashes. At the next start they come back in their tabs, with their screen and scrollback. To end them with the app instead, check **Terminal › End Terminals with the App**.
 
+## Remote repos
+
+A repo can live on another machine: on an SSH host, in a dev container or in WSL. Its IDE server, the pty host with its terminals and the code view then run there, next to the files, and Desktop shows them as it shows a local repo. A workspace can mix local and remote repos.
+
+| Kind | Add it with | As a path |
+|---|---|---|
+| SSH host | **File › Add Remote Repository…**, which proposes the hosts of `~/.ssh/config` | `ssh://host/path`, `ssh://user@host:2222/~/src/shop` (`~` is the home folder there) |
+| Dev container | **File › Open Folder in Dev Container…**, or **Reopen in Dev Container** in the menu of a repo with a `.devcontainer/devcontainer.json` | `devcontainer:///home/me/work/shop` (the folder on this machine) |
+| WSL (Windows) | **File › Add Remote Repository…**, which proposes the installed distributions | `wsl://Ubuntu/home/me/shop` |
+
+The paths work on the command line too:
+
+```sh
+./Appling-0.1.0-linux-x86_64.AppImage ssh://build/srv/shop ~/work/crm
+```
+
+- **SSH** logs in without asking: use a key, an ssh agent or a certificate, as for `ssh -o BatchMode=yes`. Everything in `~/.ssh/config` applies (aliases, `ProxyJump`, keys). An unknown host key is accepted on the first connection and checked afterwards. Everything goes through one ssh connection per repo.
+- **Dev containers** start with the [devcontainer CLI](https://github.com/devcontainers/cli) when it is installed, so features and lifecycle commands run as in VS Code. Without it, Desktop runs the container itself with `docker`, from the `image` or `build.dockerfile` of devcontainer.json, mounts the folder at `workspaceFolder` (`/workspaces/<folder>` by default) and reuses the folder's container on the next start, also one that VS Code created. Docker Compose configurations need the CLI.
+- **WSL** runs through `wsl.exe -d <distribution>`.
+
+The first connection to a machine installs the Appling server into `~/.appling-server` there: the IDE server, the pty host and a Node binary for that machine, uploaded over the connection, so the machine needs no internet access. The code view adds Code OSS on first use; for remote repos it does not follow the canvas selection yet. Each Desktop build installs once per machine. The other machine must run Linux (glibc based, not Alpine) or macOS, on x64 or arm64. Terminals need node-pty for its platform; the Linux build of Desktop brings it for Linux x64.
+
+The rail shows each remote repo's connection: a dashed amber border while it connects or reconnects, a dashed red one when it failed (the repo shows the reason with Retry), a small grey square when it is connected. The tooltip names the machine and, while reconnecting, the attempt. When the network drops, Desktop reconnects with growing pauses (1 s, doubling up to 30 s, ten attempts) and keeps the repo's view at the same address; the terminals keep running on the other machine and reattach. The branch and the changes in the rail come from `git status` on the other machine every 10 seconds.
+
+In a `.code-workspace` file remote repos are written as VS Code writes them (`"uri": "vscode-remote://ssh-remote+build/srv/shop"`), so VS Code opens the same workspace.
+
 ## Updates
 
 Desktop looks for a new version on GitHub Releases at every start, and on **File › Check for Updates…**.

@@ -50,6 +50,11 @@ export interface IdeOptions {
     playbooks?: PlaybookStore;
     /** Called with the number of unseen model changes (changed files since the user last accepted) after each change. */
     onUnseen?(count: number): void;
+    /**
+     * More origins to trust besides the server's own, such as `http://127.0.0.1:<port>` of a port forwarded to this
+     * server from another machine (Appling Desktop's remote repos).
+     */
+    origins?: string[];
 }
 
 /** Serves the IDE for one workspace folder on 127.0.0.1. */
@@ -147,7 +152,7 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
 
     await new Promise<void>(done => server.listen(port, '127.0.0.1', done));
     const address = server.address() as { port: number };
-    origins = [`http://127.0.0.1:${address.port}`, `http://localhost:${address.port}`];
+    origins = [`http://127.0.0.1:${address.port}`, `http://localhost:${address.port}`, ...options.origins ?? []];
     return {
         url: origins[0],
         mcp: `${origins[0]}/mcp`,

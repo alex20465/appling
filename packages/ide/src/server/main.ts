@@ -7,7 +7,10 @@ import { snapshot } from './workspace.js';
 const args = process.argv.slice(2);
 const portIndex = args.indexOf('--port');
 const port = portIndex >= 0 ? Number(args[portIndex + 1]) : 4410;
-const root = resolve(args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--port') ?? '.');
+const valued = new Set(['--port', '--origin']);
+const root = resolve(args.find((a, i) => !a.startsWith('--') && !valued.has(args[i - 1])) ?? '.');
+// --origin <url> (repeatable): an origin to trust too, the local end of a port that Appling Desktop forwards here.
+const origins = args.flatMap((a, i) => a === '--origin' && args[i + 1] ? [args[i + 1]] : []);
 
 // Started by Appling Desktop with an IPC channel: it shows the number of model errors, the unsaved files and the
 // unseen model changes on the rail.
@@ -17,7 +20,7 @@ const shared = process.send && args.includes('--shared-sessions')
     ? { sessions: new RemoteSessionStore(ipcChannel(process)), playbooks: new RemotePlaybookStore(ipcChannel(process)), host: remoteAppHost(ipcChannel(process)) } : {};
 const unsaved = (files: string[]) => process.send?.({ type: 'status', unsaved: files });
 const unseen = (changes: number) => process.send?.({ type: 'status', changes });
-const ide = await startIde(root, port, process.send ? { onSnapshot: s => status(s.errors), onUnsaved: unsaved, onUnseen: unseen, ...shared } : {});
+const ide = await startIde(root, port, { origins, ...process.send ? { onSnapshot: s => status(s.errors), onUnsaved: unsaved, onUnseen: unseen, ...shared } : {} });
 console.log(`Appling IDE for ${root} at ${ide.url}`);
 
 // Started by Appling Desktop with an IPC channel: report the URL and end with the app.

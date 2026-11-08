@@ -18,6 +18,7 @@ npx @appling/ide [folder] [--port 4410]
 |---|---|---|
 | `folder` | the current folder | The workspace: every `.appling` file below it, searched recursively, skipping hidden folders and `node_modules` |
 | `--port <number>` | `4410` | The port on `127.0.0.1` |
+| `--origin <url>` | | Another origin to trust (repeatable), such as the local end of a port forwarded to the server from another machine; Appling Desktop passes it for remote repos |
 
 ```sh
 npx @appling/ide examples
