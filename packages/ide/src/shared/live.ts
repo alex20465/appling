@@ -40,6 +40,8 @@ export interface AgentView {
     steps: Status[];
     /** Its answers (visual_reply), the last last. */
     replies: string[];
+    /** The questions the user typed to it in its view, the last last; each reaches its inbox as a message from User. */
+    questions?: string[];
     /** When it last changed, as an ISO time. */
     at: string;
 }

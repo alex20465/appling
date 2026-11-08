@@ -22,21 +22,28 @@ interface Watched {
  */
 export class RemoteStatus {
     private readonly watched = new Map<string, Watched>();
+    /** What was notified for a repo whose connection dropped, until it is watched again. */
+    private readonly seen = new Map<string, Map<string, number>>();
 
     constructor(private readonly options: RemoteStatusOptions) {}
 
     /** Follows the remote repo's pty host through `dir` (`RemoteRepos.ptyDir`); again after every reconnect. */
     async watch(repo: string, dir: string): Promise<void> {
+        // a wait notified before a reconnect is not raised again
+        const notified = this.watched.get(repo)?.notified ?? this.seen.get(repo) ?? new Map<string, number>();
         this.unwatch(repo);
         const client = await PtyHostClient.connect(dir);
-        const watched: Watched = { client, notified: new Map() };
+        const watched: Watched = { client, notified };
         this.watched.set(repo, watched);
         client.on('status', (terminal, status) => {
             if (status.state === 'needsInput') void this.needsInput(repo, watched, terminal, status.since);
         });
         client.on('removed', terminal => watched.notified.delete(terminal));
         client.on('close', () => {
-            if (this.watched.get(repo) === watched) this.watched.delete(repo);
+            if (this.watched.get(repo) !== watched) return;
+            this.watched.delete(repo);
+            // the connection dropped: the next `watch` after the reconnect keeps what was notified
+            this.seen.set(repo, watched.notified);
         });
         // terminals that waited while the app was away
         for (const info of await client.subscribe()) {
@@ -47,11 +54,13 @@ export class RemoteStatus {
     unwatch(repo: string): void {
         const watched = this.watched.get(repo);
         this.watched.delete(repo);
+        this.seen.delete(repo);
         watched?.client.close();
     }
 
     close(): void {
         for (const repo of [...this.watched.keys()]) this.unwatch(repo);
+        this.seen.clear();
     }
 
     private async needsInput(repo: string, watched: Watched, terminal: string, since: number, known?: TerminalInfo): Promise<void> {
@@ -59,6 +68,8 @@ export class RemoteStatus {
         // the attachments right now: a view that shows the terminal makes the notification needless
         const info = known ?? (await watched.client.list().catch(() => [])).find(t => t.id === terminal);
         if (!info || info.attached || info.status.state !== 'needsInput' || info.status.since !== since || info.meta?.notify === 'off') return;
+        // another call for the same wait may have raised it while this one waited for the list
+        if (watched.notified.get(terminal) === since) return;
         watched.notified.set(terminal, since);
         const { title, body } = notificationText(info.status.notification, info);
         try {

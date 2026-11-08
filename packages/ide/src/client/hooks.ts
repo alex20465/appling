@@ -16,6 +16,13 @@ export interface DesktopHooks {
     openCode?(request: { path: string, start: number, end: number }): void;
     /** The code view asked to show an element, from its code (the Appling extension's CodeLens). */
     onCodeElement?(callback: (qn: string) => void): void;
+    /**
+     * The workspace this view belongs to now: the one of the window it is in, as a repo may sit in several workspaces
+     * (#14). The view plays that workspace's playbook.
+     */
+    workspace?(): string | undefined;
+    /** The view moved to a window of another workspace. */
+    onWorkspace?(callback: (workspace: string | undefined) => void): void;
 }
 
 declare global {

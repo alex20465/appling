@@ -66,7 +66,8 @@ describe.skipIf(process.platform === 'win32')('remote terminal status', () => {
                 open: (repo, terminal) => opened.push(`${repo} ${terminal}`)
             });
             const env = { PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: tmpdir() };
-            const ask = ['-c', 'printf "\\033]9;Approve?\\007"; read a; echo "got-$a"; exit 5'];
+            // the exit status tells what the program read: 7 for the reply "yes", else 5
+            const ask = ['-c', 'printf "\\033]9;Approve?\\007"; read a; echo "got-$a"; [ "$a" = yes ] && exit 7; exit 5'];
             // one that waited before the app connected, one that a view shows (attached: no notification)
             const before = await remote.spawn({ shell: '/bin/sh', args: ask, cwd: dir, env, group: '/srv/shop', meta: { label: 'Plan' } });
             await until(async () => (await remote.list()).find(t => t.id === before.id)?.status.state === 'needsInput');
@@ -77,9 +78,14 @@ describe.skipIf(process.platform === 'win32')('remote terminal status', () => {
             const shown = await remote.spawnAttached({ shell: '/bin/sh', args: ask, cwd: dir, env });
             answer = 'reply';
             const later = await remote.spawn({ shell: '/bin/sh', args: ask, cwd: dir, env });
+            // the reply reached the pty: the program read it and exited with 7
             await until(async () => (await remote.list()).find(t => t.id === later.id)?.status.state === 'exited');
+            expect((await remote.list()).find(t => t.id === later.id)?.exit).toEqual({ code: 7 });
             expect(notified.map(n => n.terminal)).toEqual([before.id, later.id]);
             expect((await remote.attach(later.id)).scrollback).toContain('got-yes');
+            // watched again, as after a reconnect: the wait already notified is not raised again
+            await status.watch('ssh://box/srv/shop', dir);
+            expect(notified.map(n => n.terminal)).toEqual([before.id, later.id]);
             expect(shown.id).toBeTruthy();
             status.close();
         } finally {

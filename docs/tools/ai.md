@@ -213,7 +213,7 @@ The canvas shows one bubble at a time, so none covers another. It grows as large
 
 ### Talk about what you see
 
-When you say "this" or "the selected one" in the terminal, the agent reads your selection with `visual_selection`: the element selected in the repo view and, while you look at it, the session's view. `visual_reply` shows an answer with the session's view.
+When you say "this" or "the selected one" in the terminal, the agent reads your selection with `visual_selection`: the element selected in the repo view and, while you look at it, the session's view. To ask a session something about what it shows, open its view and type the question in the field under the view's bar. The question reaches the session's inbox as a message from User; the agent sees that a message waits in the result of its next tool call, reads it with `session_inbox` and answers with `visual_reply`, which shows the answer with the session's view. An agent that waits at its prompt makes no tool call, so tell it in its terminal to read its inbox, or ask it there.
 
 ### Progress, changes and review
 
@@ -228,7 +228,7 @@ When you say "this" or "the selected one" in the terminal, the agent reads your 
 | `visualize` | `view`: `node`, `machine`, `action`, `usecase` or `event`; `focus`: qualified names; `title?`, `note?` | `{ shown: true }`, or `{ error }` naming the elements the view cannot draw |
 | `visual_bubble` | `target`: an element or member; `text`; `code?`; `file?` (relative to the model folder) and `line?` | `{ placed: true }`, or `{ placed: false, reason }` for an unknown element, a missing file, a line without its file or no open repo view |
 | `visual_selection` | none | `{ open, qn?, view? }`: whether a repo view is open, the selected element and the session's view while the person looks at it |
-| `visual_reply` | `text`, `ask_id?` | `{ sent: true }`, or `{ sent: false, reason }` when no repo view is open |
+| `visual_reply` | `text` | `{ sent: true }`, or `{ sent: false, reason }` when no repo view is open |
 | `visual_status` | `text`: the current step; `done?`, `total?`: the progress | `{ shown: true }` |
 | `propose_edits` | `operations`: [edit operations](../reference/edit-operations.md); `summary` | After your decision: `{ accepted: true, ok: true, changed }`, `{ accepted: false, comment? }`, or `{ ok: false, operation, errors }` when an operation is invalid before review |
 
@@ -260,7 +260,7 @@ The server instructions tell the agent to set the label after reading the first 
 | `session_release` | `elements?`, `files?`; neither releases every claim | `{ claims }` |
 | `sessions_list` | none | `{ self, others }`: the sessions of the workspace with label, status, note, repo, claims and last tool call |
 | `session_message` | `to`: a session id or label; `text` | `{ sent: true, to }`, or `{ error }` for an unknown or ambiguous session |
-| `session_inbox` | none | `{ messages }`: the unread messages, each with `from`, `fromLabel`, `text` and `at`; reading marks them read |
+| `session_inbox` | none | `{ messages }`: the unread messages of other sessions and of the person (`fromLabel` User: questions typed in the session's view, playbook responses), each with `from`, `fromLabel`, `text` and `at`; reading marks them read |
 | `ide_context` | none | What the IDE shows: the session's `tab`, the `repo`, the `activeRepo` and `workspace`, the open `tabs`, the canvas `view`, the `selection` and the open `file` |
 | `ide_act` | `action`: `focus`, `open`, `highlight` or `reveal`; `elements?`; `file?`, `line?` | `{ ok: true }`, or `{ ok: false, reason }`. `focus` shows the session's tab (Desktop only), `open` and `reveal` select an element or open a file, `highlight` marks elements on the canvas in the session's colour (an empty list clears them) |
 
@@ -304,7 +304,7 @@ The person approves, rejects or comments on any step. The response is stored wit
 
 ### Where playbooks live
 
-Appling Desktop holds the playbooks next to the sessions in its main process and serves them to every repo's IDE server over the same IPC channel. It keeps each workspace's playbook as a JSON file in the `playbooks` folder of the app's data folder, so playbooks outlive the sessions and the app. A session's playbook is the one of its workspace, or of its repo folder when it has none. An IDE server started on its own keeps its playbooks in memory.
+Appling Desktop holds the playbooks next to the sessions in its main process and serves them to every repo's IDE server over the same IPC channel. It keeps each workspace's playbook as a JSON file in the `playbooks` folder of the app's data folder, so playbooks outlive the sessions and the app. A session's playbook is the one of its workspace, or of its repo folder when it has none. A repo view plays the playbook of the workspace it belongs to: in Desktop, the workspace of the window that shows it. An IDE server started on its own keeps its playbooks in memory.
 
 The IDE server writes a chapter for every [generation run](implementation.md#generate-from-the-ide) it starts, as **Code generation**. The app writes chapters of its own without MCP, through `openChapter(store, author, chapter)` from `@appling/ai`. It returns a writer with `add(steps)`, `done(numbers, note?)`, `close(result)` and `read()`:
 

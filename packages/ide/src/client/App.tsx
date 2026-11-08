@@ -69,6 +69,9 @@ export function App() {
     /** The workspace's playbook (#19); the canvas plays it only while `playing`, and moves only on the user's steps. */
     const [playbook, setPlaybook] = useState<Playbook>();
     const [playing, setPlaying] = useState(false);
+    /** The workspace this view belongs to, as Appling Desktop names it; elsewhere the server decides. */
+    const [workspace, setWorkspace] = useState(() => desktop?.workspace?.());
+    const viewWorkspace = useRef(workspace);
     /** The session whose changes the Changes tab shows alone, after a chapter jumped to its diff. */
     const [changesOf, setChangesOf] = useState<string>();
 
@@ -80,9 +83,9 @@ export function App() {
         });
         loadRelease().then(setRelease);
         loadView().then(setView);
-        loadPlaybook().then(setPlaybook);
-        // A repo view shared by several workspaces plays the playbook of the one shown; reload it when shown again.
-        const shown = () => { if (document.visibilityState === 'visible') loadPlaybook().then(setPlaybook); };
+        loadPlaybook(viewWorkspace.current).then(setPlaybook);
+        // A repo view shared by several workspaces plays the playbook of the one it belongs to; reload it when shown again.
+        const shown = () => { if (document.visibilityState === 'visible') loadPlaybook(viewWorkspace.current).then(setPlaybook); };
         document.addEventListener('visibilitychange', shown);
         addEventListener('focus', shown);
         const events = onEvents({
@@ -94,6 +97,11 @@ export function App() {
                 const { [next.session]: _, ...rest } = current;
                 return ended ? rest : { ...rest, [next.session]: next };
             })
+        }, viewWorkspace.current);
+        // Appling Desktop moved the view to a window of another workspace: the server sends that one's playbook.
+        desktop?.onWorkspace?.(next => {
+            viewWorkspace.current = next;
+            setWorkspace(next);
         });
         report.current = events.report;
         reportUnsaved.current = events.unsaved;
@@ -106,8 +114,8 @@ export function App() {
 
     // What the IDE shows, for the agent sessions' ide_context.
     useEffect(() => {
-        report.current({ selection: selected, view: { ...view }, file: snapshot?.files.find(f => f.uri === active)?.path, watching });
-    }, [selected, view, active, snapshot, watching]);
+        report.current({ selection: selected, view: { ...view }, file: snapshot?.files.find(f => f.uri === active)?.path, watching, workspace });
+    }, [selected, view, active, snapshot, watching, workspace]);
 
     // The view of a session that ended closes.
     useEffect(() => { if (watching && !agentViews[watching]?.show) setWatching(undefined); }, [agentViews, watching]);
@@ -135,7 +143,7 @@ export function App() {
     const generate = useCallback((selection: GenerationSelection) => {
         setOffer(0);
         setSide('code');
-        startGeneration(selection).then(setRun, error => alert((error as Error).message));
+        startGeneration(selection, viewWorkspace.current).then(setRun, error => alert((error as Error).message));
     }, []);
     /** While the review marks the canvas, it draws the working tree with the removed elements put back, ghosted. */
     const marking = reviewing && marked && review?.ok ? review : undefined;

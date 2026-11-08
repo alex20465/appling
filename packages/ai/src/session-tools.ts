@@ -175,7 +175,7 @@ export function sessionTools(scope: SessionScope): Tools {
             run: (_, input) => attempt(async () => ({ sent: true, to: await store.send(id, input.to, input.text) }))
         }),
         session_inbox: define({
-            description: 'Read the messages other sessions sent you; reading them marks them read.',
+            description: 'Read the messages other sessions and the person (as User: questions typed in your view, playbook responses) sent you; reading them marks them read.',
             input: {},
             run: () => attempt(async () => ({ messages: await store.inbox(id) }))
         }),

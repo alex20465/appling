@@ -3,6 +3,7 @@ import type { AgentSession } from '@appling/ai';
 import { CardCanvas, FlowCanvas, ModelCanvas } from '@appling/viz/canvas';
 import { cardView, flowView, lensOf, trailOf, type GraphIndex, type MarkedChanges, type ViewSettings } from '@appling/viz/views';
 import type { AgentView } from '../shared/live.js';
+import { askSession } from './api.js';
 
 /**
  * The views agent sessions drew with the visual tools, as a strip over the canvas. Nothing moves until the user opens
@@ -77,10 +78,41 @@ export function AgentCanvas({ index, view, session, settings: base, selected, ch
                 {latest && <span className="agent-step" role="status">{latest.text}{latest.total ? ` ${latest.done ?? 0}/${latest.total}` : ''}</span>}
                 <button className="button" onClick={onClose}>Back to the model</button>
             </div>
+            <AskSession session={view.session} name={session ? session.label ?? session.name : 'the session'} asked={view.questions?.at(-1)} />
             {view.replies.length > 0 && <p className="agent-reply">{view.replies.at(-1)}</p>}
             {cards ? <CardCanvas index={index} cards={cards} selected={selected} bubbles={bubbles} step={step} onSelect={onSelect} onOpenFile={onOpenFile} />
                 : flow ? <FlowCanvas index={index} flow={flow} selected={selected} bubbles={bubbles} step={step} edgesOnClick={show.view === 'machine'} onSelect={onSelect} onOpenFile={onOpenFile} />
                 : <ModelCanvas index={index} focus={show.focus} selected={selected} settings={settings} bubbles={bubbles} changes={changes} step={step} onSelect={onSelect} onSettings={setSettings} onOpenFile={onOpenFile} />}
         </div>
+    );
+}
+
+/** A question to the session about its view: it reaches the session's inbox, the answer comes back with visual_reply. */
+function AskSession({ session, name, asked }: { session: string, name: string, asked?: string }) {
+    const [text, setText] = useState('');
+    const [error, setError] = useState<string>();
+    const [sending, setSending] = useState(false);
+    const submit = async (event: React.FormEvent) => {
+        event.preventDefault();
+        const question = text.trim();
+        if (!question || sending) return;
+        setSending(true);
+        try {
+            await askSession(session, question);
+            setText('');
+            setError(undefined);
+        } catch (failure) {
+            setError((failure as Error).message);
+        } finally {
+            setSending(false);
+        }
+    };
+    return (
+        <form className="agent-ask" onSubmit={submit}>
+            {asked && <span className="muted agent-asked" title={asked}>You asked: {asked}</span>}
+            <input aria-label={`Ask ${name}`} placeholder={`Ask ${name} about this view`} value={text} onChange={event => setText(event.target.value)} />
+            <button className="button" type="submit" disabled={!text.trim() || sending}>Ask</button>
+            {error && <span className="agent-ask-error" role="alert">{error}</span>}
+        </form>
     );
 }

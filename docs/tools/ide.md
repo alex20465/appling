@@ -171,7 +171,7 @@ While the Review tab marks its own diff on the canvas, the review's marks replac
 
 ### Agent views and proposals
 
-The [visual tools](ai.md#visual-tools) of the repo's agent sessions draw on this canvas. A view a session shows, with its bubbles, its current step and its last reply, waits as a chip at the top right of the canvas under the session's name and colour. Click it to open the view: the canvas draws the session's tree, flowchart or cards, one bubble at a time with Back and Next, and follows each new view and bubble of that session; **Back to the model** returns to your own tree. Nothing opens by itself.
+The [visual tools](ai.md#visual-tools) of the repo's agent sessions draw on this canvas. A view a session shows, with its bubbles, its current step and its last reply, waits as a chip at the top right of the canvas under the session's name and colour. Click it to open the view: the canvas draws the session's tree, flowchart or cards, one bubble at a time with Back and Next, and follows each new view and bubble of that session; **Back to the model** returns to your own tree. Nothing opens by itself. The field under the view's bar sends the session a question: it reaches the session's inbox as a message from User, stays listed in the view, and the session's answer (`visual_reply`) shows below it.
 
 A change a session proposes with `propose_edits` shows at the top of the Changes tab with its summary, text and model differences and a comment field; a banner on the canvas points there while the tab is closed. **Accept** writes it and **Reject** sends your comment back to the agent, whose tool call waits for the decision. When the session ends, its views go and its waiting proposals are rejected.
 
@@ -221,8 +221,10 @@ The server endpoints, for reference:
 | `POST /mcp` | The repo's MCP server for [agent sessions](ai.md#agent-sessions); needs a session's bearer token |
 | `GET`, `POST /api/sessions` | Lists the agent sessions, opens one (returns its token and the MCP URL) |
 | `PATCH`, `DELETE /api/sessions/<id>` | Renames a session or sets its status, ends it |
+| `GET /api/playbook?workspace=` | The playbook of the view's workspace (an absolute path; without it, the one the app shows) |
+| `POST /api/sessions/<id>/ask` | Delivers `{ text }`, a question typed in the session's view, to its inbox |
 | `POST /api/live/accept` | Accepts the live changes of `{ paths }`, or of every changed file; returns the changes left |
 | `POST /api/live/revert` | Writes the text last accepted of `{ path }` back |
 | `POST /api/proposals/<id>` | Decides a waiting proposal with `{ decision: { accepted, comment? } }` |
-| websocket `/events` | Snapshot pushes on file changes, the live changes (`live`), the agent sessions, their `ide_act` actions, views (`agent-view`) and proposals; the view reports its selection, view and the agent view it shows on it |
+| websocket `/events?workspace=` | Snapshot pushes on file changes, the live changes (`live`), the agent sessions, their `ide_act` actions, views (`agent-view`), proposals and the playbook of the view's workspace; the view reports its selection, view, the agent view it shows on it and its workspace (a view that moves to another workspace gets that one's playbook) |
 | websocket `/lsp` | One language server per connection |

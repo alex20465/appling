@@ -53,7 +53,9 @@ A moved workspace takes its repos along. A moved repo takes its canvas: the new 
 
 Moving never reloads anything: the canvas, its selection, the code view and agent sessions stay as they were.
 
-Appling saves which window holds what and where every window is, once per monitor setup, and restores it at the next start. A window whose monitor is gone opens on the primary display.
+Appling saves which window holds what and where every window is, once per monitor setup, and restores it at the next start. A window whose monitor is gone opens on the primary display. The code views that were open come back too, each once its repo is shown.
+
+A folder can sit in several workspaces and still has one canvas. It plays the playbook of the workspace whose window shows it, and switches to the other workspace's playbook when it moves to that one's window.
 
 ## Terminals
 

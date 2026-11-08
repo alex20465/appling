@@ -120,6 +120,10 @@ button:focus-visible { outline: 2px solid var(--leaf); outline-offset: 2px; }
 .agent-bar .button { margin-left: auto; }
 .agent-note { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-step { font: 11px var(--font-mono); color: var(--rust); }
+.agent-ask { display: flex; gap: 6px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--surface); font-size: 12.5px; }
+.agent-ask input { flex: 1; min-width: 0; font: inherit; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-raised); color: var(--ink); }
+.agent-asked { max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-ask-error { color: var(--rust); }
 .agent-reply { margin: 0; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); font-size: 12.5px; white-space: pre-wrap; max-height: 30%; overflow-y: auto; }
 .agent-strip { position: absolute; top: 96px; right: 12px; z-index: 2; display: grid; gap: 4px; justify-items: end; max-width: min(360px, 50%); }
 .agent-chip { display: flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 9px; border: 1px solid var(--line-strong); border-radius: 14px; background: var(--surface-raised); color: var(--ink); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

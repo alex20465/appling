@@ -19,7 +19,7 @@ import { playbookChapters, type PlaybookHook } from './generation-chapter.js';
 import { ideHost, type ClientContext } from './sessions.js';
 import { LiveTracker } from './live.js';
 import { AgentViews } from './visuals.js';
-import { playbookWorkspace, servePlaybook } from './playbook.js';
+import { playbookWorkspace, servePlaybook, viewWorkspace } from './playbook.js';
 import { unseen, type LiveChanges } from '../shared/live.js';
 import type { Decision } from '@appling/viz/protocol';
 
@@ -77,7 +77,11 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
     let origins: string[] = [];
     const sessions = options.sessions ?? new MemorySessionStore();
     const playbooks = options.playbooks ?? new MemoryPlaybookStore();
-    const workspace = () => playbookWorkspace(root, options.host);
+    const workspace = (view?: string) => playbookWorkspace(root, options.host, view);
+    // the workspace each connected view belongs to, as it reports it (see `ClientReport.workspace`)
+    const viewsWorkspace = new Map<WebSocket, string | undefined>();
+    // the workspace of the view that started the current generation run, for its playbook chapter
+    let generationWorkspace: string | undefined;
     const client: ClientContext = {};
     // the unsaved files each connected client reports, for Appling Desktop's rail
     const unsaved = new Map<WebSocket, string[]>();
@@ -103,24 +107,26 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
         broadcast({ type: 'sessions', sessions: list });
         views.prune(list.map(s => s.id));
     });
-    // Only the playbook of the workspace this view shows goes to its clients.
+    // Each view gets only the playbook of the workspace it belongs to.
     const stopPlaybooks = playbooks.onChange(async book => {
-        if (events.size && book.workspace === await workspace()) broadcast({ type: 'playbook', playbook: book });
+        if (!events.size) return;
+        const text = JSON.stringify({ type: 'playbook', playbook: book });
+        for (const ws of events) if (book.workspace === await workspace(viewsWorkspace.get(ws))) ws.send(text);
     });
     const agents: Agents = { live, views, sessions, host, playbooks };
     let refresh: () => void = () => undefined;
     const generation = new GenerationRunner(root, message => {
         broadcast(message);
         if ((message as { type: string, run?: { ended?: string } }).type === 'generation' && (message as { run: { ended?: string } }).run.ended) refresh();
-    }, options.generationChapters ?? playbookChapters(playbooks, workspace, root), options.generate);
+    }, options.generationChapters ?? playbookChapters(playbooks, () => workspace(generationWorkspace), root), options.generate);
 
     const server = createServer((request, response) => {
         if (!trusted(request, origins)) return send(response, 403, 'Forbidden');
         const work = request.url === '/mcp' ? serveMcp(request, response, root, agents)
             : request.url?.startsWith('/api/playbook') ? servePlaybook(request, response, playbooks, sessions, workspace, () => body(request))
-            : request.url?.startsWith('/api/sessions') ? serveSessions(request, response, root, sessions)
+            : request.url?.startsWith('/api/sessions') ? serveSessions(request, response, root, sessions, views)
             : request.url?.startsWith('/api/live/') || request.url?.startsWith('/api/proposals/') ? serveLive(request, response, live, views)
-            : request.url?.startsWith('/api/generat') || request.url?.startsWith('/api/code?') ? serveGeneration(request, response, root, generation)
+            : request.url?.startsWith('/api/generat') || request.url?.startsWith('/api/code?') ? serveGeneration(request, response, root, generation, view => generationWorkspace = view)
             : handle(request, response, root, live);
         work.catch(error => response.headersSent ? response.end() : send(response, 500, String(error)));
     });
@@ -128,18 +134,28 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
     server.on('upgrade', (request, socket, head) => {
         if (!trusted(request, origins)) return socket.destroy();
         sockets.handleUpgrade(request, socket, head, ws => {
+            const path = new URL(request.url!, 'http://localhost').pathname;
             if (request.url === '/lsp') serveLanguage(ws, root);
-            else if (request.url === '/events') {
+            else if (path === '/events') {
                 events.add(ws);
                 ws.on('close', () => {
                     events.delete(ws);
+                    viewsWorkspace.delete(ws);
                     if (unsaved.delete(ws)) reportUnsaved();
                 });
                 // The client reports what it shows, for the sessions' IDE context, and its unsaved files.
                 ws.on('message', data => {
                     try {
-                        const message = JSON.parse(data.toString()) as { type?: string, files?: unknown } & ClientContext;
-                        if (message.type === 'context') Object.assign(client, { selection: message.selection, view: message.view, file: message.file, watching: message.watching });
+                        const message = JSON.parse(data.toString()) as { type?: string, files?: unknown, workspace?: unknown } & ClientContext;
+                        if (message.type === 'context') {
+                            Object.assign(client, { selection: message.selection, view: message.view, file: message.file, watching: message.watching });
+                            const before = viewsWorkspace.get(ws);
+                            viewsWorkspace.set(ws, viewWorkspace(message.workspace));
+                            // a view that moved to another workspace gets that one's playbook
+                            if (before !== viewsWorkspace.get(ws)) {
+                                workspace(viewsWorkspace.get(ws)).then(playbooks.read.bind(playbooks)).then(playbook => ws.send(JSON.stringify({ type: 'playbook', playbook })), () => undefined);
+                            }
+                        }
                         if (message.type === 'unsaved' && Array.isArray(message.files)) {
                             unsaved.set(ws, message.files.filter((f): f is string => typeof f === 'string'));
                             reportUnsaved();
@@ -152,7 +168,9 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
                 ws.send(JSON.stringify({ type: 'live', live: live.current() }));
                 for (const view of views.all()) ws.send(JSON.stringify({ type: 'agent-view', view }));
                 ws.send(JSON.stringify({ type: 'proposals', proposals: views.proposals() }));
-                workspace().then(playbooks.read.bind(playbooks)).then(playbook => ws.send(JSON.stringify({ type: 'playbook', playbook })), () => undefined);
+                const named = viewWorkspace(new URL(request.url!, 'http://localhost').searchParams.get('workspace'));
+                viewsWorkspace.set(ws, named);
+                workspace(named).then(playbooks.read.bind(playbooks)).then(playbook => ws.send(JSON.stringify({ type: 'playbook', playbook })), () => undefined);
                 const run = generation.current();
                 if (run) ws.send(JSON.stringify({ type: 'generation', run }));
             } else ws.close();
@@ -235,14 +253,15 @@ async function serveMcp(request: IncomingMessage, response: ServerResponse, root
  * answers 202 with it, 409 while one runs; `GET /api/generation` the current or last run; `GET /api/code?path=` the
  * text of a code file (read only) inside the workspace or a generate target, for the jump from an element to its code.
  */
-async function serveGeneration(request: IncomingMessage, response: ServerResponse, root: string, runner: GenerationRunner): Promise<void> {
+async function serveGeneration(request: IncomingMessage, response: ServerResponse, root: string, runner: GenerationRunner, startedIn: (workspace?: string) => void): Promise<void> {
     const url = new URL(request.url!, 'http://localhost');
     if (url.pathname === '/api/generation' && request.method === 'GET') return json(response, runner.current() ?? null);
     if (url.pathname === '/api/generate' && request.method === 'POST') {
-        const input = JSON.parse(await body(request) || '{}') as { selection?: unknown };
+        const input = JSON.parse(await body(request) || '{}') as { selection?: unknown, workspace?: unknown };
         const selection = parseSelection(input.selection);
         if (!selection) return send(response, 400, 'A selection is required: { mode: "outstanding" | "all" } or { mode: "elements", elements: [...] }.');
         const outstanding = selection.mode === 'outstanding' ? Object.values((await snapshot(root)).implementation).filter(s => s.outstanding).length : undefined;
+        if (!runner.current() || runner.current()!.ended) startedIn(viewWorkspace(input.workspace));
         const run = runner.start(selection, outstanding);
         if (!run) return send(response, 409, 'A generation is running.');
         response.writeHead(202, { 'content-type': 'application/json' });
@@ -283,10 +302,23 @@ async function serveLive(request: IncomingMessage, response: ServerResponse, liv
 
 /**
  * The sessions for the IDE client and for an IDE server without Appling Desktop: list, open (returns the token and
- * the MCP URL once), rename or set the status as the user, end.
+ * the MCP URL once), rename or set the status as the user, end, and `POST /api/sessions/<id>/ask` (`{ text }`): a
+ * question the user typed in the session's view, delivered to its inbox.
  */
-async function serveSessions(request: IncomingMessage, response: ServerResponse, root: string, sessions: SessionStore): Promise<void> {
-    const id = decodeURIComponent(request.url!.slice('/api/sessions'.length).replace(/^\//, ''));
+async function serveSessions(request: IncomingMessage, response: ServerResponse, root: string, sessions: SessionStore, views: AgentViews): Promise<void> {
+    const path = request.url!.slice('/api/sessions'.length).replace(/^\//, '');
+    const ask = /^([^/]+)\/ask$/.exec(path);
+    if (ask && request.method === 'POST') {
+        const text = String((JSON.parse(await body(request) || '{}') as { text?: unknown }).text ?? '').trim();
+        if (!text) return send(response, 400, 'A question is required.');
+        try {
+            await views.ask(sessions, decodeURIComponent(ask[1]), text);
+        } catch (error) {
+            return send(response, 404, (error as Error).message);
+        }
+        return json(response, { delivered: true });
+    }
+    const id = decodeURIComponent(path);
     if (!id && request.method === 'GET') return json(response, await sessions.list());
     if (!id && request.method === 'POST') {
         const input = JSON.parse(await body(request) || '{}') as { name?: string, label?: string, workspace?: string };

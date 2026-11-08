@@ -70,7 +70,7 @@ async function attributed(scope: SessionScope, tool: string, input: Record<strin
             const conflicts = findConflicts(await scope.store.list(), self, touched);
             if (conflicts.length) Object.assign(extra, { conflicts, warning: conflictWarning(conflicts) });
         }
-        if (self?.unread && tool !== 'session_inbox') extra.messages = `${self.unread} unread message(s) from other sessions: read them with session_inbox.`;
+        if (self?.unread && tool !== 'session_inbox') extra.messages = `${self.unread} unread message(s) from other sessions or the person: read them with session_inbox.`;
     } catch (error) {
         console.error(error);
     }
