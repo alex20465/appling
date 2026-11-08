@@ -57,17 +57,8 @@ scopes:
     note: could split into django and ash if the Ash knowledge turns out much larger
 
   - id: ai-sdk-mcp
-    knowledge: AI SDK 7 streaming chat and tool calling, provider packages, MockLanguageModelV4 in tests, MCP SDK server over stdio and HTTP, zod 4 tool schemas shared by both
+    knowledge: MCP SDK server over stdio and HTTP, zod 4 tool schemas, agent session and visual tools (the AI SDK chat was removed with the browser IDE, decision 7C of #15)
     anchors:
-      - name: ai
-        version: 7.0.149
-        manifest: packages/ai/package.json
-      - name: "@ai-sdk/anthropic"
-        version: 4.0.86
-        manifest: packages/ai/package.json
-      - name: "@ai-sdk/openai"
-        version: 4.0.100
-        manifest: packages/ai/package.json
       - name: "@modelcontextprotocol/sdk"
         version: 1.32.1
         manifest: packages/ai/package.json
@@ -75,11 +66,10 @@ scopes:
         version: 4.6.7
         manifest: packages/ai/package.json
     activation:
-      imports: [ai, "@ai-sdk/anthropic", "@ai-sdk/openai", "@modelcontextprotocol/sdk", zod]
+      imports: ["@modelcontextprotocol/sdk", zod]
       files:
         - packages/ai/**
         - packages/ide/src/server/server.ts
-        - packages/ide/src/client/Chat.tsx
     footprint: 7
     density: 0.06
     confidence: high

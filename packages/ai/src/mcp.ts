@@ -4,13 +4,13 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { Project } from './project.js';
 import { MCP_INSTRUCTIONS, REGISTRY_PROMPT, REVERSE_PROMPT } from './prompts.js';
 import { AUTHORING_TOOLS, diskContext, MODEL_TOOLS, REFERENCE_TOOLS, REGISTRY_TOOLS, type Tools } from './tools.js';
-import { visualInstructions, visualTools, type VisualHost } from './visual.js';
+import { VISUAL_INSTRUCTIONS, visualTools, type VisualHost } from './visual.js';
 import { conflictWarning, SESSION_INSTRUCTIONS, sessionTools, touchedBy, type SessionScope } from './session-tools.js';
 import { findConflicts } from './sessions.js';
 import { PLAYBOOK_INSTRUCTIONS, playbookTools } from './playbook-tools.js';
 
 export interface McpServerOptions {
-    /** Where the visual tools draw: the floating window or the project's canvas. Without it there are no visual tools. */
+    /** Where the visual tools draw: the project's canvas. Without it there are no visual tools. */
     visualizer?: VisualHost;
     session?: SessionScope;
     /** Called after every tool call with its input and result, such as to attribute the files it wrote to its session. */
@@ -19,23 +19,15 @@ export interface McpServerOptions {
 
 /**
  * An MCP server over one workspace folder: model tools, registry tools, the prompts, and instructions that make the
- * model the source of truth for business logic. With a visualizer it also drives the floating window or the
- * project's canvas; one with `onAsk` makes it a Claude Code channel, so questions typed there reach the session. With a session, every tool call is attributed to
- * it, the session tools coordinate it with the other agent sessions, and edits that touch their claims come back with
+ * model the source of truth for business logic. With a visualizer it also drives the project's canvas. With a
+ * session, every tool call is attributed to it, the session tools coordinate it with the other agent sessions, and edits that touch their claims come back with
  * a warning.
  */
 export function createMcpServer(root: string, options: McpServerOptions = {}): McpServer {
     const context = diskContext(new Project(root));
     const { visualizer, session, onToolCall } = options;
-    const instructions = [MCP_INSTRUCTIONS, visualizer && visualInstructions(visualizer), session && SESSION_INSTRUCTIONS, session?.playbook && PLAYBOOK_INSTRUCTIONS].filter(Boolean).join('\n\n');
-    const server = new McpServer({ name: 'appling', version: '0.1.0' }, {
-        capabilities: visualizer?.onAsk && { experimental: { 'claude/channel': {} } },
-        instructions
-    });
-    visualizer?.onAsk?.(ask => server.server.notification({
-        method: 'notifications/claude/channel',
-        params: { content: ask.text, meta: { ask_id: ask.id, selected: ask.selected ?? '', view: ask.view ? `${ask.view.view} ${ask.view.focus.join(' ')}` : '' } }
-    }).catch(error => console.error(error)));
+    const instructions = [MCP_INSTRUCTIONS, visualizer && VISUAL_INSTRUCTIONS, session && SESSION_INSTRUCTIONS, session?.playbook && PLAYBOOK_INSTRUCTIONS].filter(Boolean).join('\n\n');
+    const server = new McpServer({ name: 'appling', version: '0.1.0' }, { instructions });
     const visual = visualizer ? visualTools(visualizer) : {};
     const sessions = session ? { ...sessionTools(session), ...session.playbook ? playbookTools(session.id, session.store, session.playbook) : {} } : {};
     for (const [name, tool] of Object.entries({ ...MODEL_TOOLS, ...AUTHORING_TOOLS, ...REGISTRY_TOOLS, ...REFERENCE_TOOLS, ...visual, ...sessions } as Tools)) {

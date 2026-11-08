@@ -3,14 +3,14 @@ const steps = [
   { name: "Install", text: "the CLI, the AI package and an empty folder for the model." },
   { name: "Connect", text: "your AI agent to the Appling MCP server. It teaches the agent the language." },
   { name: "Derive", text: "the model: the agent maps your models, rules, operations, queries, routes and screens to the five layers, one validated file at a time." },
-  { name: "Review", text: "it in the IDE and read what the agent could not model exactly; each place names its source file." },
+  { name: "Review", text: "it in Appling Desktop and read what the agent could not model exactly; each place names its source file." },
 ];
 
 const lines = [
   { comment: "in your project: install the tools", prompt: "$", command: "npm i -D @appling/cli @appling/ai && mkdir models" },
   { comment: "connect your AI agent, here Claude Code", prompt: "$", command: "claude mcp add appling -- npx appling-mcp models" },
   { comment: "in Claude Code: derive the model from your code", prompt: ">", command: "/mcp__appling__derive_model" },
-  { comment: "check the result and open the graph", prompt: "$", command: "npx appling check models && npx @appling/ide models" },
+  { comment: "check the result", prompt: "$", command: "npx appling check models" },
 ];
 ---
 

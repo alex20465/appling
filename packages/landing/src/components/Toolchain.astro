@@ -8,16 +8,16 @@ const tools = [
     href: "/docs/tools/cli/",
   },
   {
-    title: "IDE",
-    pkg: "@appling/ide",
-    text: "The text next to a map of modules and entities, with a search over every action, query and page. Every edit is validated and lands as one undoable step.",
-    command: "npx @appling/ide models",
-    href: "/docs/tools/ide/",
+    title: "Desktop",
+    pkg: "Appling Desktop",
+    text: "Your repos in workspaces, each with the model canvas, a search over every action, query and page, the code view and terminals for agents. Every edit is validated and lands as one undoable step.",
+    command: "Appling.AppImage models",
+    href: "/docs/tools/desktop/",
   },
   {
     title: "AI",
     pkg: "@appling/ai",
-    text: "An MCP server for any client and a chat in the IDE. AI changes pass validation and arrive as proposals you review.",
+    text: "An MCP server for any client, and agent sessions in Desktop that show their work on the canvas. AI changes pass validation and arrive as proposals you review.",
     command: "npx appling-mcp models",
     href: "/docs/tools/ai/",
   },
@@ -51,7 +51,7 @@ const tools = [
     <div class="flex max-w-[640px] flex-col gap-3">
       <span class="eyebrow">Toolchain</span>
       <h2 class="text-h1">Every tool reads the same graph</h2>
-      <p class="text-ink-soft">The command line, the IDE, the AI and the generators all work on one validated model and change it through the same edit operations.</p>
+      <p class="text-ink-soft">The command line, Appling Desktop, the AI and the generators all work on one validated model and change it through the same edit operations.</p>
     </div>
     <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-px border border-line bg-line">
       {tools.map((tool) => (

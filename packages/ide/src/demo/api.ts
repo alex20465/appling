@@ -1,10 +1,13 @@
-import type { ChatEvent, Playbook } from '@appling/ai';
+import type { Playbook } from '@appling/ai';
 import { applyEdit, type EditOperation, type EditResult } from '@appling/model/edit';
 import { buildSnapshot } from '../shared/model.js';
 import type { FileDiff, Review, Revision } from '../shared/review.js';
 import type { LiveChanges } from '../shared/live.js';
 import { DEFAULT_VIEW, type ClientReport, type IdeEvents, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
 import { monaco } from '../client/monaco.js';
+
+/** The demo opens with the source next to the canvas, so the text is in view. */
+export const SOURCE_OPEN = true;
 
 /**
  * The IDE's server calls answered in the browser, for the demo on the landing site: the workspace is the
@@ -49,7 +52,7 @@ export async function revertChange(): Promise<void> {}
 
 /** The demo has no generate targets and no code. */
 export async function startGeneration(): Promise<never> {
-    throw new Error('Generation needs the IDE on your machine: npx @appling/ide');
+    throw new Error('Generation needs Appling Desktop on your machine: https://appling.tools/docs/tools/desktop/');
 }
 
 export async function loadCode(): Promise<never> {
@@ -80,7 +83,7 @@ export async function loadRelease(): Promise<null> {
 }
 
 export async function loadReview(): Promise<Review> {
-    return { ok: false, error: 'The review compares the model with a git commit. Run the IDE on a git repository on your machine: npx @appling/ide' };
+    return { ok: false, error: 'The review compares the model with a git commit. Open a git repository in Appling Desktop: https://appling.tools/docs/tools/desktop/' };
 }
 
 export async function loadRevisions(): Promise<Revision[]> {
@@ -89,10 +92,6 @@ export async function loadRevisions(): Promise<Revision[]> {
 
 export async function loadFileDiff(): Promise<FileDiff | { error: string }> {
     return { error: 'No git in the demo.' };
-}
-
-export async function* chatTurn(): AsyncGenerator<ChatEvent> {
-    yield { type: 'error', message: 'The AI chat needs a model provider. Run the IDE on your machine with an API key: npx @appling/ide models' };
 }
 
 export async function connectLanguageServer(): Promise<void> {

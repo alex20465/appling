@@ -53,7 +53,7 @@ export interface CodeMarks {
     links: Record<string, { qn: string, start: number, end: number }[]>;
 }
 
-/** The IDE server's entry, `appling-ide`: bundled in the packaged app, else the workspace package's. */
+/** The IDE server's entry, `out/server/main.js` of `@appling/ide`: bundled in the packaged app, else the workspace package's. */
 export function ideMain(): string {
     return programPath('ide');
 }

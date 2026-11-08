@@ -2,19 +2,16 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 import type { EditOperation } from '@appling/model';
-import type { Ask, Bubble, Changes, Decision, Review, Selection, Show, Status } from '@appling/viz/protocol';
+import type { Bubble, Decision, Review, Selection, Show, Status } from '@appling/viz/protocol';
 import { VIEW_KINDS, type ViewKind } from '@appling/viz/views';
-import { graphDiff, hunks, proposal } from './chat.js';
-import type { Project } from './project.js';
+import { proposal } from './proposal.js';
 import { define, operationSchema, ProposalContext, type Tools } from './tools.js';
 
 /**
- * Where the visual tools draw: the floating window of `@appling/viz` (`Visualizer`) for a stdio session, or the
- * project's canvas in the IDE for an agent session of its `/mcp`. Tests stand in for both.
+ * Where the visual tools draw: the project's canvas in the repo view of Appling Desktop, for an agent session of the
+ * IDE server's `/mcp`. Tests stand in for it.
  */
 export interface VisualHost {
-    /** `window` (default): the floating window next to the terminal; `canvas`: the project's canvas in Appling. */
-    surface?: 'window' | 'canvas';
     show(show: Show): Promise<void>;
     /** False when nothing can show it. */
     bubble(bubble: Bubble): boolean | Promise<boolean>;
@@ -23,54 +20,27 @@ export interface VisualHost {
     /** Resolves with the person's decision on a proposal. */
     review(review: Review): Promise<Decision>;
     status(status: Status): Promise<void>;
-    /** Questions the person types; only a host that can reach the session with them (a channel) has it. */
-    onAsk?(listener: (ask: Ask) => void): void;
-}
-
-/** The model changes since this call: the window's live view of what a session changed. */
-export function sessionChanges(project: Project): () => Promise<Changes> {
-    const baseline = project.sources();
-    const before = project.graph(baseline);
-    return async () => {
-        const now = project.sources();
-        return { hunks: hunks(project.root, baseline, now), graph: graphDiff(await before, await project.graph(now)) };
-    };
 }
 
 const VIEWS = Object.keys(VIEW_KINDS) as [ViewKind, ...ViewKind[]];
 
-export const VISUAL_INSTRUCTIONS = `The appling server can show the model in a floating window next to the terminal. Use it when the person asks to see, show, draw or visualize part of the model, and also when they ask how a part of the application works, such as "how does observability work": find the elements involved with the model tools, show them with visualize and explain them in the window with visual_bubble, besides a short answer in the terminal. Pick the view that fits: node (one declaration or module in the model tree with what uses it), machine (a flowchart of the states and the transitions between them), action (between which states it moves, who may run it, what it requires and changes), usecase (a flowchart of the steps), event (who emits and consumes it).
-
-To walk the person through the model, show one node at a time: each node view adds the element to the tree on screen and unfolds it in place, so show next one of the elements that use it. Explain what happens at an element with visual_bubble, one bubble per step in the order of the explanation; the window shows one bubble at a time and numbers them, so the person steps through them. Pass code, file and line to hint how an element is implemented, such as from code_references.
-
-While the window is open, read what the person clicked with visual_selection when they say "this" or "the selected one".
-
-The window shows every model change of the session as it happens: the declarations added and changed light up in the tree, which grows with them, and the window lists the changes with their text differences. So change the model with edit and write_model_file as usual; use propose_edits only when the person asks to review a change before it is written. During longer work, such as designing a model, generating the application or working through the registry, call visual_status at the start of each step with what you do and, when you know it, done and total, so the person follows the progress in the window instead of only in the terminal.
-
-Questions typed into the window arrive as <channel source="appling" ask_id="..." selected="..." view="...">. Look things up with the model tools, then answer with visual_reply, passing the ask_id; the answer appears in the window, not in the terminal.`;
-
-export const CANVAS_INSTRUCTIONS = `The appling server shows the model on the project's canvas in Appling, where the person works. Use it when the person asks to see, show, draw or visualize part of the model, and when they ask how a part of the application works: find the elements involved with the model tools, show them with visualize and explain them with visual_bubble, besides a short answer here. Pick the view that fits: node (one declaration or module in the model tree with what uses it), machine (a flowchart of the states and transitions), action (between which states it moves, who may run it, what it requires and changes), usecase (a flowchart of the steps), event (who emits and consumes it).
+export const VISUAL_INSTRUCTIONS = `The appling server shows the model on the project's canvas in Appling, where the person works. Use it when the person asks to see, show, draw or visualize part of the model, and when they ask how a part of the application works: find the elements involved with the model tools, show them with visualize and explain them with visual_bubble, besides a short answer here. Pick the view that fits: node (one declaration or module in the model tree with what uses it), machine (a flowchart of the states and transitions), action (between which states it moves, who may run it, what it requires and changes), usecase (a flowchart of the steps), event (who emits and consumes it).
 
 The canvas never moves on its own: your view and its bubbles wait beside the canvas under your session's name until the person opens them, and then they follow each new view and bubble. Show one node at a time to walk through the model, and place one bubble per step in the order of the explanation; the person steps through them. Pass code, file and line to hint how an element is implemented, such as from code_references. Read what the person selected with visual_selection when they say "this" or "the selected one".
 
 Every model change, yours and any other, is marked live on the canvas and listed with its text and model diff until the person accepts or reverts it, so change the model with edit and write_model_file as usual; use propose_edits only when the person asks to review a change before it is written: they decide in the app. During longer work call visual_status at the start of each step with what you do and, when you know it, done and total.`;
 
-/** The instructions for the visual tools on this host. */
-export function visualInstructions(host: VisualHost): string {
-    return host.surface === 'canvas' ? CANVAS_INSTRUCTIONS : VISUAL_INSTRUCTIONS;
-}
-
-/** Tools that drive the floating window or the project's canvas. Only the MCP server registers them. */
+/** Tools that drive the project's canvas. Only the MCP server registers them. */
 export function visualTools(host: VisualHost): Tools {
-    const where = host.surface === 'canvas' ? "on the project's canvas in Appling" : 'in the floating window';
-    const closed = host.surface === 'canvas' ? 'Nothing shows the canvas.' : 'The window is closed.';
+    const where = "on the project's canvas in Appling";
+    const closed = 'Nothing shows the canvas.';
     return {
         visualize: define({
-            description: `Show a view of the model ${host.surface === 'canvas' ? "on the project's canvas in Appling, beside the person's own tree until they open it" : 'in the floating window next to the terminal, opening it when needed'}. Use it when the person asks to see or visualize something or asks how a part of the application works. view: node (any declaration or module; adds it to the tree on screen and unfolds what uses it, so you can guide one node at a time), machine (machines, as a flowchart), action (actions), usecase (use cases, as a flowchart), event (events). The person can click elements and jump to related elements.`,
+            description: `Show a view of the model on the project's canvas in Appling, beside the person's own tree until they open it. Use it when the person asks to see or visualize something or asks how a part of the application works. view: node (any declaration or module; adds it to the tree on screen and unfolds what uses it, so you can guide one node at a time), machine (machines, as a flowchart), action (actions), usecase (use cases, as a flowchart), event (events). The person can click elements and jump to related elements.`,
             input: {
                 view: z.enum(VIEWS),
                 focus: z.array(z.string()).min(1).describe('Qualified names of the elements to draw, such as ["sales.OrderFlow"]'),
-                title: z.string().optional().describe('A short title for the window'),
+                title: z.string().optional().describe('A short title for the view'),
                 note: z.string().optional().describe('One or two sentences about what the view shows')
             },
             run: async (context, input) => {
@@ -100,7 +70,7 @@ export function visualTools(host: VisualHost): Tools {
             }
         }),
         visual_selection: define({
-            description: `What the person selected ${where}: the qualified name of the clicked element and the view on screen. open is false when ${host.surface === 'canvas' ? 'no IDE window is open' : 'the window is closed'}.`,
+            description: `What the person selected ${where}: the qualified name of the clicked element and the view on screen. open is false when no repo view is open.`,
             input: {},
             run: async () => host.selection()
         }),
@@ -122,7 +92,7 @@ export function visualTools(host: VisualHost): Tools {
             }
         }),
         propose_edits: define({
-            description: `Propose model changes for the person to review ${host.surface === 'canvas' ? 'in Appling' : 'in the floating window'}: the operations are validated on a copy, shown as text and graph differences, and written only when the person accepts. Waits for the decision and returns it, with their comment when they reject.`,
+            description: `Propose model changes for the person to review in Appling: the operations are validated on a copy, shown as text and graph differences, and written only when the person accepts. Waits for the decision and returns it, with their comment when they reject.`,
             input: { operations: z.array(operationSchema).min(1), summary: z.string().describe('What changes and why, in one or two sentences') },
             run: async (context, input) => {
                 const working = new ProposalContext(context.project, context.sources());

@@ -11,8 +11,8 @@ Every tool in Appling is built on six public packages. Use them to build your ow
 | `@appling/lang/lsp` | The language server services |
 | `@appling/model` | Semantic graph, edit operations, releases |
 | `@appling/codegen` | Code generation core: plans, registry, migrations |
-| `@appling/ai` | Workspace access for AI, MCP server, chat |
-| `@appling/viz` | Model views, the canvases of the IDE and the visualization window |
+| `@appling/ai` | Workspace access for AI, MCP server, agent sessions, playbook |
+| `@appling/viz` | Model views, the canvases of Appling Desktop's repo view and the types of the visual tools |
 
 ## Language: @appling/lang
 
@@ -227,9 +227,8 @@ Tools and MCP:
 | `MODEL_TOOLS`, `AUTHORING_TOOLS`, `REGISTRY_TOOLS`, `REFERENCE_TOOLS`, `Tools` | The tool definitions: description, zod input shape and `run(context, input)` |
 | `operationSchema` | The zod schema of an edit operation |
 | `ToolContext`, `diskContext(project)`, `ProposalContext` | Where tools read and write: the files on disk, or a working copy that collects operations |
-| `createMcpServer(root, { visualizer?, onToolCall? })`, `McpServerOptions` | An MCP server with all tools, the `implement_next_task` and `derive_model` prompts and `MCP_INSTRUCTIONS`; with a visualizer also the visualization tools, and the `claude/channel` capability when the visualizer has `onAsk`; `onToolCall(tool, input, result)` sees every call, such as to attribute the files it wrote |
-| `sessionChanges(project)` | A function that returns the model changes since it was created, for `VisualizerOptions.changes` |
-| `visualTools(host)`, `VisualHost`, `VISUAL_INSTRUCTIONS`, `CANVAS_INSTRUCTIONS`, `visualInstructions(host)` | The visualization tools over a host, what they need from it (`Visualizer` for the floating window, or a host with `surface: 'canvas'` such as the IDE's), and the server instructions for each surface |
+| `createMcpServer(root, { visualizer?, onToolCall? })`, `McpServerOptions` | An MCP server with all tools, the `implement_next_task` and `derive_model` prompts and `MCP_INSTRUCTIONS`; with a visualizer also the visual tools; `onToolCall(tool, input, result)` sees every call, such as to attribute the files it wrote |
+| `visualTools(host)`, `VisualHost`, `VISUAL_INSTRUCTIONS` | The visual tools over a host, what they need from it (the IDE server's canvas host of an agent session), and their server instructions |
 | `createMcpServer(root, { session })`, `SessionScope`, `sessionTools(scope)`, `SESSION_INSTRUCTIONS` | With a session (`{ id, store, host? }`): the session tools, every call attributed to the session, conflict warnings on edits, and the instructions for coordinating with other sessions |
 | `SessionStore`, `MemorySessionStore`, `AgentSession`, `SessionMessage`, `ClaimConflict`, `SESSION_STATUSES`, `SESSION_COLORS` | The [agent sessions](../tools/ai.md#agent-sessions): open (with its bearer token), authenticate, end, update label and status, claim, release, touch, send, post (a message from the user or the app), inbox, onChange |
 | `serveSessionStore(store, channel)`, `RemoteSessionStore`, `ipcChannel(process)`, `Channel` | A store served to another process, such as an IDE server child of Appling Desktop, and reached from there |
@@ -242,40 +241,25 @@ Tools and MCP:
 | `playbookKey(session)`, `isUnwatched(chapter)`, `unwatched(playbook)`, `playbookPosition(playbook)` | A session's playbook, the unwatched chapters in total, per session and per repo, and where the user is |
 | `handleMcpRequest(server, request, response, hosts?)` | Answers one Streamable HTTP request with a fresh server, as `serveHttp` and the IDE server do |
 | `serveHttp(root, port)` | The MCP server over Streamable HTTP on `127.0.0.1`; returns `{ url, close() }` |
-| `REGISTRY_PROMPT`, `CHAT_SYSTEM`, `MCP_INSTRUCTIONS` | The registry skill text, the chat system prompt and the MCP server instructions that make the model the source of truth for business logic |
+| `REGISTRY_PROMPT`, `MCP_INSTRUCTIONS` | The registry skill text and the MCP server instructions that make the model the source of truth for business logic |
 
-Chat:
+Proposals:
 
 | Export | Purpose |
 |---|---|
-| `chat(root, messages, model)` | One chat turn on a working copy; yields `ChatEvent`s: `text`, `tool`, `proposal`, `error` |
-| `modelSettings(root)`, `DEFAULT_MODEL`, `ModelSettings` | The `ai` section of `appling.config.json` with its defaults |
-| `languageModel(settings)` | The AI SDK model for the settings |
-| `Proposal`, `Hunk`, `ChatEvent` | The proposal and event types |
+| `proposal(project, context)` | The operations a `ProposalContext` collected, with their text and graph differences, as `propose_edits` shows them |
+| `Proposal`, `Hunk` | The proposal types |
 | `hunks(root, before, after)`, `graphDiff(before, after)` | The text and graph differences of a proposal |
 
-The tools and the chat are described in [AI tools](../tools/ai.md).
+The tools are described in [AI tools](../tools/ai.md).
 
 ## Visualization: @appling/viz
 
-Open the visualization window from your own Node program:
-
-```ts
-import { Project } from '@appling/ai';
-import { Visualizer } from '@appling/viz';
-
-const project = new Project('models');
-const window = new Visualizer({ root: 'models', graph: () => project.graph() });
-window.onAsk(ask => console.error(ask.text, ask.selected));
-await window.show({ view: 'machine', focus: ['sales.OrderFlow'], title: 'Order lifecycle' });
-```
+The root export (also `@appling/viz/protocol`) has the types the [visual tools](../tools/ai.md#visual-tools) exchange with the canvas:
 
 | Export | Purpose |
 |---|---|
-| `Visualizer` | The window host: `show(show)`, `bubble(bubble)`, `selection()`, `reply(text, askId)`, `review(review)` (resolves with the decision), `status(status)`, `onAsk(listener)`, `close()`. It serves the window on `127.0.0.1` with a random token, starts Electron on first use and pushes a new graph and the session changes when `.appling` files change, growing a `node` view by the declarations they touch |
-| `VisualizerOptions` | `root`, `graph()`, an optional `changes()` with the model changes of the session, an optional `launch(url)` that starts the window and an optional `edit(file, line)` that opens a file clicked in the window, for tests |
-| `Show`, `Bubble`, `Review`, `Decision`, `Ask`, `Selection`, `Changes`, `Status` | What the window draws, a note or code example on an element, a proposal to decide, the decision, a question from the window, the current selection, the model changes of the session (hunks and graph differences), the step the agent works on with its progress |
-| `HostMessage`, `WindowMessage` | The websocket messages between host and window |
+| `Show`, `Bubble`, `Review`, `Decision`, `Selection`, `Status` | A view of focused elements with a title and note, a note or code example on an element, a proposal to decide, the decision, the person's selection and view, the step the agent works on with its progress |
 | `nextShow(current, next)` | The view after the next one: a `node` view on a `node` view adds its elements, and whether the bubbles stay |
 
 `@appling/viz/views` holds the pure view logic, without React or DOM imports:

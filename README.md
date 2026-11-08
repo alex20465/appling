@@ -52,8 +52,8 @@ The language is documented in [docs/language](docs/language/overview.md); the fu
 | [`@appling/cli`](packages/cli) | The `appling` command: `check`, `fmt`, `graph`, `release`, `generate` |
 | [`@appling/lang`](packages/lang) | The language: grammar, scoping, validation, expression typing, canonical printer and language server, built on [Langium](https://langium.org) |
 | [`@appling/model`](packages/model) | The semantic graph, edit operations and releases with automatic migration steps |
-| [`@appling/ide`](packages/ide) | A local IDE: text next to a map of modules and entities, a search over every element, an inspector that edits, AI chat with reviewable proposals |
-| [`@appling/ai`](packages/ai) | MCP server, model adapter and the skill that works through a generated project's task registry |
+| [`@appling/desktop`](packages/desktop) | Appling Desktop, the native app: repos grouped into workspaces, each with the model canvas, a search over every element, an inspector that edits, the code view, terminals and agent sessions (in development) |
+| [`@appling/ai`](packages/ai) | MCP server, agent sessions and the skill that works through a generated project's task registry |
 | [`@appling/codegen`](packages/codegen) | Code generation core: plan, step runner, extension contract, task registry, migrations |
 | [`@appling/codegen-django`](packages/codegen-django) | Django extension |
 | [`@appling/codegen-ash`](packages/codegen-ash) | Ash extension |
@@ -61,7 +61,6 @@ The language is documented in [docs/language](docs/language/overview.md); the fu
 ```sh
 npx @appling/cli check models
 npx @appling/cli fmt models
-npx @appling/ide models
 npx @appling/cli generate --plan models
 ```
 
@@ -82,8 +81,10 @@ pnpm fmt examples     # canonical formatting
 ```
 packages/lang     grammar (src/appling.langium), scoping, validator, expression typing, printer, language server
 packages/model    semantic graph, edit operations, releases
-packages/ide      local web IDE (server and React client)
-packages/ai       MCP server, chat, registry skill
+packages/desktop  Appling Desktop, the Electron app
+packages/ide      the repo view Desktop runs per repo (server and React client), and the landing demo
+packages/viz      model views and SVG canvases
+packages/ai       MCP server, agent sessions, registry skill
 packages/codegen* code generation core and the Django and Ash extensions
 packages/cli      the appling command
 examples          sample models that reference each other across modules

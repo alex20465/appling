@@ -1,9 +1,9 @@
 ---
 title: Installation
-description: Install the Appling CLI, open the IDE, connect an AI assistant and prepare the toolchains for code generation.
+description: Install the Appling CLI and Appling Desktop, connect an AI assistant and prepare the toolchains for code generation.
 ---
 
-Appling is a set of npm packages. You only install what you use: the CLI is enough to write and check models; the IDE, the MCP server and the code generators come on top.
+Appling is a set of npm packages. You only install what you use: the CLI is enough to write and check models; Appling Desktop, the MCP server and the code generators come on top.
 
 ## Requirements
 
@@ -32,15 +32,9 @@ npx appling check
 
 Without a path it checks every `.appling` file below the current folder. See [the CLI reference](../tools/cli.md) for every command.
 
-## The IDE
+## Appling Desktop
 
-The IDE runs locally and opens in your browser. It needs no installation:
-
-```sh
-npx @appling/ide models
-```
-
-Then open `http://127.0.0.1:4410`. Pass `--port` to use another port. See [the IDE](../tools/ide.md).
+Appling Desktop is the app to explore and edit models: it opens your repos with the model canvas as the main area of each, next to a search, an inspector that edits, the source, a code view and terminals for agents. Download it for Linux, Windows or macOS from the releases of the repository; see [Desktop](../tools/desktop.md) for the install steps. To try the canvas first, open the [demo](https://appling.tools/ide/) in your browser.
 
 ## AI assistants
 
@@ -53,7 +47,7 @@ npm install --save-dev @appling/ai
 claude mcp add appling -- npx appling-mcp .
 ```
 
-The IDE chat needs an API key in the environment (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`). See [AI](../tools/ai.md).
+In [Appling Desktop](../tools/desktop.md), agents in the repo's terminals connect as [agent sessions](../tools/ai.md#agent-sessions) and show their work on the canvas. See [AI](../tools/ai.md).
 
 ## Code generators
 

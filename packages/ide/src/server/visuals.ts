@@ -19,7 +19,6 @@ export class AgentViews {
     /** The visual host of one session for its MCP server. */
     host(session: string): VisualHost {
         return {
-            surface: 'canvas',
             show: async show => this.change(session, view => {
                 const next = nextShow(view.show, show);
                 view.show = next.show;

@@ -32,7 +32,7 @@ pnpm --filter @appling/lang build                                   # after a gr
 pnpm vitest run packages/lang/test/validation.test.ts -t "name"     # one file, one test
 pnpm vitest run -u                                                  # update snapshots
 node packages/cli/out/main.js graph examples                        # the semantic graph as JSON
-node packages/ide/out/server/main.js examples                       # the IDE on http://127.0.0.1:4410
+node packages/desktop/out/bin.js examples                           # Appling Desktop on the sample models
 ```
 
 The language tests import `src/` directly and only need `langium generate`. Every other package's tests import `@appling/*` through the packages' `out/` exports, so rebuild an upstream package before testing a downstream one.
