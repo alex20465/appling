@@ -12,7 +12,7 @@ import { diffMessage, openMessage } from '@appling/ide/host-requests';
 import { CodeBridge, parseExtensionMessage } from '../src/code-bridge.js';
 import { CODE_SERVER, codeServerAsset, ensureCodeServer, type CodeServerRelease } from '../src/code-download.js';
 import { CodeInstances, type InstanceStatus } from '../src/code-instances.js';
-import { authorized, CodeProxy, PROXY_COOKIE, rewriteCookies, routeOf } from '../src/code-proxy.js';
+import { authorized, CodeProxy, PROXY_COOKIE, rewriteCookies, rewriteSetCookies, routeOf, tokenCookie } from '../src/code-proxy.js';
 import { boundPort, codeDirs, codeServerArgs, installExtension, repoKey, startCodeServer, type CodeServer } from '../src/code-server.js';
 import { DEFAULT_CODE_VIEW, loadCodeViewSettings, splitBounds } from '../src/code-settings.js';
 import { DEFAULT_KEYBINDINGS } from '../src/keybindings.js';
@@ -224,7 +224,7 @@ test('the proxy routes by repo key, admits only its cookie and hands each instan
     expect(reply.status).toBe(200);
     expect(reply.body).toBe('hello /r/abc/static/x.js?y=1');
     expect(seen.at(-1)?.cookie).toBe('theme=dark; vscode-tkn=tok-a');
-    expect(reply.headers['set-cookie']).toEqual(['other=1']);
+    expect(reply.headers['set-cookie']).toEqual(['other=1', 'vscode-tkn=tok-a; Path=/r/abc; SameSite=Strict']);
     expect((await get(`${proxy.origin}/elsewhere`, { cookie })).status).toBe(403);
 
     const ws = new WebSocket(`${proxy.origin.replace('http', 'ws')}/r/abc/socket`, { headers: { cookie } });
@@ -241,6 +241,81 @@ test('the proxy routes by repo key, admits only its cookie and hands each instan
     expect(proxy.url('abc', '/work/my shop')).toBe(`${proxy.origin}/r/abc/?folder=%2Fwork%2Fmy%20shop`);
 });
 
+/**
+ * An instance that checks its connection token the way Code OSS does: HTTP requests by the `vscode-tkn` cookie, and
+ * the websocket by the `auth` of the handshake's first message, which the workbench takes from `document.cookie`.
+ */
+async function tokenCheckingInstance(token: string): Promise<number> {
+    const server = createServer((req, res) => {
+        if (!(req.headers.cookie ?? '').split('; ').includes(`vscode-tkn=${token}`)) return res.writeHead(403).end();
+        res.writeHead(200, { 'content-type': 'text/html' }).end('<html>workbench</html>');
+    });
+    const sockets = new WebSocketServer({ server });
+    sockets.on('connection', ws => ws.once('message', data => {
+        const message = JSON.parse(String(data)) as { type?: string, auth?: string };
+        if (message.type === 'auth' && message.auth === token) ws.send('{"type":"sign"}');
+        else ws.close(1008, 'Unauthorized client refused: auth mismatch');
+    }));
+    const port = await listen(server);
+    cleanup.push(() => sockets.close(), () => server.close());
+    return port;
+}
+
+/** The token a browser page at `/r/<key>/` reads from `document.cookie` after these `Set-Cookie` values. */
+function pageToken(setCookies: string[] | undefined, key: string): string | undefined {
+    for (const value of setCookies ?? []) {
+        const [pair, ...attributes] = value.split(';').map(part => part.trim());
+        const path = attributes.find(a => a.toLowerCase().startsWith('path='))?.slice(5);
+        if (attributes.some(a => a.toLowerCase() === 'httponly') || (path && !`/r/${key}/`.startsWith(path))) continue;
+        if (pair.startsWith('vscode-tkn=')) return pair.slice('vscode-tkn='.length);
+    }
+    return undefined;
+}
+
+/** Opens the workbench's websocket through the proxy and sends the handshake's auth message. */
+function handshake(url: string, cookie: string | undefined, auth: string | undefined): Promise<string> {
+    return new Promise(resolve => {
+        const ws = new WebSocket(url, { headers: cookie ? { cookie } : {} });
+        ws.once('open', () => ws.send(JSON.stringify({ type: 'auth', auth })));
+        ws.once('message', data => { resolve(String(data)); ws.close(); });
+        ws.once('close', (_code, reason) => resolve(`closed: ${reason}`));
+        ws.once('unexpected-response', (_req, res) => resolve(`refused: ${res.statusCode}`));
+        ws.once('error', () => resolve('error'));
+    });
+}
+
+test('the workbench gets its instance connection token through the proxy and passes the websocket handshake', async () => {
+    const proxy = new CodeProxy({ secret: 's3cret' });
+    await proxy.listen();
+    cleanup.push(() => proxy.close());
+    const cookie = `${PROXY_COOKIE}=s3cret`;
+    const socket = (key: string) => `${proxy.origin.replace('http', 'ws')}/r/${key}/?reconnectionToken=x`;
+
+    proxy.route('abc', { port: await tokenCheckingInstance('tok-a'), token: 'tok-a' });
+    proxy.route('def', { port: await tokenCheckingInstance('tok-d'), token: 'tok-d' });
+    const page = await get(`${proxy.origin}/r/abc/?folder=%2Fwork`, { cookie });
+    expect(page.status).toBe(200);
+    const token = pageToken(page.headers['set-cookie'], 'abc');
+    expect(token).toBe('tok-a');
+    // each view reads only its own repo's token
+    expect(pageToken(page.headers['set-cookie'], 'def')).toBeUndefined();
+    expect(await handshake(socket('abc'), `${cookie}; vscode-tkn=${token}`, token)).toBe('{"type":"sign"}');
+    expect(await handshake(socket('def'), cookie, token)).toBe('closed: Unauthorized client refused: auth mismatch');
+
+    // without the proxy cookie nothing gets through, not even with the token
+    expect(await handshake(socket('abc'), `vscode-tkn=${token}`, token)).toBe('refused: 403');
+    expect((await get(`${proxy.origin}/r/abc/`, { cookie: `vscode-tkn=${token}` })).status).toBe(403);
+
+    // a restarted instance has a new token, which the next page load hands out
+    proxy.route('abc', { port: await tokenCheckingInstance('tok-b'), token: 'tok-b' });
+    const reloaded = await get(`${proxy.origin}/r/abc/`, { cookie: `${cookie}; vscode-tkn=${token}` });
+    expect(reloaded.status).toBe(200);
+    const renewed = pageToken(reloaded.headers['set-cookie'], 'abc');
+    expect(renewed).toBe('tok-b');
+    expect(await handshake(socket('abc'), `${cookie}; vscode-tkn=${renewed}`, renewed)).toBe('{"type":"sign"}');
+    expect(await handshake(socket('abc'), cookie, token)).toBe('closed: Unauthorized client refused: auth mismatch');
+});
+
 test('proxy helpers parse routes and cookies', () => {
     expect(routeOf('/r/0f3a/stable-1/static')).toBe('0f3a');
     expect(routeOf('/r/0f3a?x')).toBe('0f3a');
@@ -252,6 +327,9 @@ test('proxy helpers parse routes and cookies', () => {
     expect(authorized('a=1; appling-code=s', 's')).toBe(true);
     expect(authorized('appling-code=s2', 's')).toBe(false);
     expect(authorized(undefined, 's')).toBe(false);
+    expect(tokenCookie('k1', 't')).toBe('vscode-tkn=t; Path=/r/k1; SameSite=Strict');
+    expect(rewriteSetCookies(undefined, 'k1', 't')).toEqual(['vscode-tkn=t; Path=/r/k1; SameSite=Strict']);
+    expect(rewriteSetCookies(['vscode-tkn=raw; Max-Age=60', 'a=1'], 'k1', 't')).toEqual(['a=1', 'vscode-tkn=t; Path=/r/k1; SameSite=Strict']);
 });
 
 test('bridge messages from the extension are parsed strictly', () => {

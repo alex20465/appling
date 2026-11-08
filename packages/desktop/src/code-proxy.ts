@@ -37,6 +37,20 @@ export function rewriteCookies(header: string | undefined, token: string): strin
     return [...kept, `${TOKEN_COOKIE}=${token}`].join('; ');
 }
 
+/**
+ * The connection token cookie for a repo's code view, scoped to its base path so each view reads only its own
+ * instance's token. The workbench reads it from `document.cookie` (so not `HttpOnly`) and sends it as `auth` in the
+ * first message of its websocket handshake, which the instance checks; the proxy cookie still guards every request.
+ */
+export function tokenCookie(key: string, token: string): string {
+    return `${TOKEN_COOKIE}=${token}; Path=${basePath(key)}; SameSite=Strict`;
+}
+
+/** The response's `Set-Cookie` values with the instance's own token cookies replaced by the repo's scoped one. */
+export function rewriteSetCookies(values: string[] | undefined, key: string, token: string): string[] {
+    return [...(values ?? []).filter(c => !c.startsWith(`${TOKEN_COOKIE}=`)), tokenCookie(key, token)];
+}
+
 /** Whether the request carries the proxy cookie with the secret. */
 export function authorized(header: string | undefined, secret: string): boolean {
     return (header ?? '').split(';').some(c => c.trim() === `${PROXY_COOKIE}=${secret}`);
@@ -48,7 +62,10 @@ export function authorized(header: string | undefined, secret: string): boolean 
  * Code OSS keeps user settings, keybindings and UI state in the browser's IndexedDB, which is per origin, so every
  * instance is served from this one origin (`/r/<key>/` each, the instance's `--server-base-path`): settings and
  * keybindings are shared, while each repo's workspace state stays its own (keyed by its folder). The proxy admits
- * only requests with its cookie and adds each instance's own connection token, which the browser never sees.
+ * only requests with its cookie and adds each instance's own connection token to them. Every response sets that
+ * token as the `vscode-tkn` cookie of the repo's base path (`tokenCookie`), because the workbench sends it inside its
+ * websocket handshake; a restarted instance's new token replaces it with the next response. The code views' session
+ * is their own, and without the proxy cookie nothing gets through.
  */
 export class CodeProxy {
     readonly secret: string;
@@ -75,10 +92,7 @@ export class CodeProxy {
                 host: '127.0.0.1', port: target.port, method: request.method, path: request.url,
                 headers: this.headers(request.headers, target)
             }, reply => {
-                const headers = { ...reply.headers };
-                const cookies = (headers['set-cookie'] ?? []).filter(c => !c.startsWith(`${TOKEN_COOKIE}=`));
-                if (cookies.length) headers['set-cookie'] = cookies;
-                else delete headers['set-cookie'];
+                const headers = { ...reply.headers, 'set-cookie': rewriteSetCookies(reply.headers['set-cookie'], target.key, target.token) };
                 response.writeHead(reply.statusCode ?? 502, reply.statusMessage, headers);
                 reply.pipe(response);
             });
@@ -152,11 +166,12 @@ export class CodeProxy {
         else this.targets.delete(key);
     }
 
-    private admit(request: IncomingMessage): CodeTarget | 403 | 503 {
+    private admit(request: IncomingMessage): (CodeTarget & { key: string }) | 403 | 503 {
         if (!authorized(request.headers.cookie, this.secret)) return 403;
         const key = routeOf(request.url ?? '');
         if (!key) return 403;
-        return this.targets.get(key) ?? 503;
+        const target = this.targets.get(key);
+        return target ? { ...target, key } : 503;
     }
 
     private headers(headers: IncomingHttpHeaders, target: CodeTarget): IncomingHttpHeaders {
