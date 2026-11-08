@@ -29,8 +29,10 @@ test('examples generate apps, enums, value types and models', async () => {
     expect(files).toMatchSnapshot();
     expect(entries['sales.Order.invariant["total never negative"]'].missing[0].what).toBe('enforce the invariant "total never negative": total >= 0');
     expect(entries['sales.Order.total'].status).toBe('generated');
-    expect(entries['sales.PlaceOrder'].status).toBe('partial');
-    expect(entries['sales.PlaceOrder'].missing.map(m => m.what)).toEqual(['write the test bodies of PlaceOrderPreconditionsTest in sales/tests.py']);
+    expect(entries['sales.PlaceOrder'].status).toBe('generated');
+    expect(entries['sales.PlaceOrder'].missing).toEqual([]);
+    expect(entries['sales.OrderFlow.transition[draft->placed]'].missing.map(m => m.what)).toEqual(['write the test bodies of OrderFlowDraftToPlacedTest in sales/tests.py']);
+    expect(entries['sales.OrderFlow.transition[placed->paid]'].status).toBe('generated');
     expect(entries['sales.Checkout'].missing.map(m => m.what)).toEqual(['continue Checkout when PaymentReceived happens, or after 24h with the timeout call; the steps from here on are not generated']);
     expect(entries['sales.ExpireDrafts'].missing.map(m => m.what)).toEqual(['schedule "python manage.py expire_drafts" with cron "0 3 * * *"']);
 });
@@ -238,4 +240,73 @@ test('does texts become docstrings and help texts, and one registry task each', 
     expect(entries['shop.Account'].missing.map(m => m.what)).toEqual(['check that Account matches its description: Someone who buys.\n  Pays by "card".']);
     expect(entries['shop.Account.email'].status).toBe('partial');
     expect(entries['shop.Close'].missing.map(m => m.what)).toContain('implement what Close does: Closes the @Account');
+});
+
+test('transition and precondition tests get bodies where the simulator proves the fixture, and stay tasks elsewhere', async () => {
+    const { files, entries } = await generate({
+        'shop.appling': `module shop {
+            enum Status { open held closed }
+            entity Customer {
+                name: String unique
+            }
+            entity Ticket {
+                customer: Customer
+                status: Status state default open
+                priority: Int
+                due: Duration
+                closed_at: DateTime?
+                note: String?
+                invariant "priority positive" { priority > 0 }
+            }
+            entity Scan {
+                image: File
+                status: Status state default open
+            }
+            error TooLow
+            action Close on Ticket {
+                requires { priority > 5 } else TooLow
+                effect { set closed_at = now }
+                errors TooLow
+            }
+            action Hold on Ticket {
+                input { reason: String }
+            }
+            action Archive on Scan
+            machine TicketFlow on Ticket.status {
+                transition open, held -> closed via Close
+                transition open -> held via Hold when { has(note) }
+            }
+            machine ScanFlow on Scan.status {
+                transition open -> closed via Archive
+            }
+        }`
+    });
+    expect(files['shop/factories.py']).toContain([
+        'def make_ticket(**fields):',
+        '    """A Ticket with a value for every required field; the fields given replace them."""',
+        '    values = {"customer": make_customer(), "priority": 1, "due": timedelta(hours=1)}'
+    ].join('\n'));
+    expect(files['shop/factories.py']).toContain('    values = {"name": f"name-{next(_sequence)}"}');
+    expect(files['shop/factories.py']).not.toContain('make_scan');
+    // The fixture's priority 1 fails Close's precondition: that case runs, the transitions of Close cannot.
+    expect(files['shop/tests.py']).toContain([
+        '    def test_precondition_1_is_enforced(self):',
+        '        ticket = make_ticket()',
+        '        with self.assertRaises(TooLow):',
+        '            close(ticket)'
+    ].join('\n'));
+    expect(entries['shop.Close'].missing.map(m => m.what)).toEqual([]);
+    expect(entries['shop.TicketFlow.transition[open,held->closed]'].missing.map(m => m.what)).toEqual(['write the test bodies of TicketFlowOpenHeldToClosedTest in shop/tests.py']);
+    // Hold's guard needs a note the fixture lacks; refusing the other states needs none.
+    expect(files['shop/tests.py']).toContain([
+        '    def test_refuses_other_states(self):',
+        '        for state in (Status.HELD, Status.CLOSED):',
+        '            with self.subTest(state=state):',
+        '                ticket = make_ticket(status=state)',
+        '                with self.assertRaises(InvalidTransition):',
+        '                    hold(ticket, reason="reason")'
+    ].join('\n'));
+    expect(entries['shop.TicketFlow.transition[open->held]'].missing.map(m => m.what)).toEqual(['write the test bodies of TicketFlowOpenToHeldTest in shop/tests.py (test_moves_from_allowed_states)']);
+    // A required file has no sample, so Scan has no factory.
+    expect(entries['shop.ScanFlow.transition[open->closed]'].missing.map(m => m.what)).toEqual(['write the test bodies of ScanFlowOpenToClosedTest in shop/tests.py']);
 });

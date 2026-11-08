@@ -3,20 +3,30 @@ import type { GraphNode } from '@appling/model';
 import { pythonFile, task, template } from './files.js';
 import { appOf, lastOf, parentOf } from './python.js';
 
+/** A test method: a name, and its body when the model says enough to write it. */
+export interface TestCase {
+    name: string;
+    /** The body lines, indented for the method; undefined leaves the method skipped as a registry task. */
+    body?: string[];
+}
+
 /**
- * A test class per rule in `<app>/tests.py`, one method per case. Bodies are registry tasks: each
- * method skips with a pointer to its entry until someone writes it.
+ * A test class per rule in `<app>/tests.py`, one method per case. A case with a body runs; one without
+ * skips with a pointer to its registry entry, which gets a task to write the missing bodies.
  */
-export function testSteps(node: GraphNode, rule: string, cases: string[], context: MapContext): Step[] {
+export function testSteps(node: GraphNode, rule: string, cases: (string | TestCase)[], context: MapContext, imports: Iterable<string> = [], steps: Step[] = []): Step[] {
     const name = `${words(node, context)}Test`;
+    const all = cases.map(c => typeof c === 'string' ? { name: c } : c);
     const code = [
         `class ${name}(TestCase):`,
         `    """${node.qn}: ${rule.replaceAll('"', '\\"')}"""`,
-        ...cases.flatMap(c => ['', `    def test_${c}(self):`, `        self.skipTest(${JSON.stringify(`registry task: ${node.qn}`)})`])
+        ...all.flatMap(c => ['', `    def test_${c.name}(self):`, ...(c.body ?? [`self.skipTest(${JSON.stringify(`registry task: ${node.qn}`)})`]).map(l => `        ${l}`)])
     ].join('\n');
+    const missing = all.filter(c => !c.body);
     return [
-        template(`${appOf(node.module)}/tests.py`, existing => pythonFile(existing, ['from django.test import TestCase'], code)),
-        task(`write the test bodies of ${name} in ${appOf(node.module)}/tests.py`)
+        ...steps,
+        template(`${appOf(node.module)}/tests.py`, existing => pythonFile(existing, ['from django.test import TestCase', ...imports], code)),
+        ...(missing.length ? [task(`write the test bodies of ${name} in ${appOf(node.module)}/tests.py${missing.length < all.length ? ` (${missing.map(c => `test_${c.name}`).join(', ')})` : ''}`)] : [])
     ];
 }
 

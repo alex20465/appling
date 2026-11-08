@@ -45,7 +45,7 @@ export function pythonFile(existing: string | undefined, imports: Iterable<strin
     return [mergeImports([...header, ...imports]).join('\n'), body, block].filter(Boolean).join('\n\n\n') + '\n';
 }
 
-const STANDARD_LIBRARY = ['contextvars', 'datetime', 'decimal', 're', 'typing', 'uuid'];
+const STANDARD_LIBRARY = ['contextvars', 'datetime', 'decimal', 'itertools', 're', 'typing', 'uuid'];
 
 /** One line per module with its names sorted; standard library first, then Django and REST framework, then the project's apps. */
 function mergeImports(lines: string[]): string[] {
