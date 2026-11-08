@@ -2,7 +2,7 @@
 
 Appling Desktop: one native app for many repos. Repos are grouped into workspaces, each repo gets its own Appling IDE server and a view that stays alive while you switch, with the model canvas, search and inspector as its main area.
 
-In development (epic #15); the package is private until the first release. This is the shell with workspaces: the rail (collapsible, with pinned, reordered and hidden repos), one IDE server per repo, `.code-workspace` files, session restore, the fuzzy switcher, the app menu and rebindable shortcuts. The rail shows each repo's validation errors and git state (branch, ahead and behind, dirty). Each repo's IDE has a Review tab with the model diff against any commit. Cloning, agent, task and unsaved file status in the rail, terminals, agent sessions, the code view and packaging follow.
+In development (epic #15); the package is private until the first release. This is the shell with workspaces: the rail (collapsible, with pinned, reordered and hidden repos), one IDE server per repo, `.code-workspace` files, session restore, the fuzzy switcher, the app menu and rebindable shortcuts. The rail shows each repo's validation errors and git state (branch, ahead and behind, dirty). Each repo's IDE has a Review tab with the model diff against any commit. Each repo has a code view, an embedded Code OSS. Cloning, agent, task and unsaved file status in the rail, terminals, agent sessions and packaging follow.
 
 ## Run it
 
@@ -43,6 +43,25 @@ Several workspaces stay open at once. A folder may sit in more than one workspac
 
 The open workspaces, the repo shown in each, the active workspace, the most recently used order, the pinned and hidden repos and whether the rail is collapsed are saved to `session.json` in the user data folder on every change and restored at the next start. Workspace files are read again then, so changes made in VS Code meanwhile show up; a file that is gone or broken is reported and left out.
 
+## Code view
+
+**View › Toggle Code View** (`CmdOrCtrl+Alt+C`) opens the repo's code view on the right of the canvas: a full Code OSS ([openvscode-server](https://github.com/gitpod-io/openvscode-server)) with explorer, editor, search, source control and extensions, opened on the repo's folder. It is hidden by default; toggling it off again lets the canvas fill the repo. Each repo has its own instance, which survives switching repos and workspaces.
+
+- **Download.** The first open downloads the pinned openvscode-server (`CODE_SERVER` in `code-download.ts`, about 75 MB) into `code-oss/server/` in the user data folder, checks its SHA-256 against the pinned digest and unpacks it; nothing partial stays in the cache. openvscode-server publishes Linux builds only (x64, arm64, armhf), so on macOS and Windows the code view reports that it is not available. `APPLING_CODE_SERVER=<path to bin/openvscode-server>` uses another server instead.
+- **Extensions** install from Open VSX, the gallery openvscode-server uses, into `code-oss/extensions/`, shared by every repo; their workspace state stays per repo. The Appling extension (`appling-vscode`, built with `packages/vscode`) is installed on the first start and again whenever its build changes, so `.appling` files have the language server. `APPLING_VSIX` points at another `.vsix`.
+- **Settings and keybindings** are shared across repos. Code OSS keeps them, with the UI state, in the browser storage of its origin, so every instance is served from one local proxy origin (`http://127.0.0.1:<port>/r/<repo key>/`) on a port kept in `code-oss/proxy.json`. Each repo's tabs and layout are stored per folder and come back after a restart or a suspend.
+- **Lifecycle**, in `settings.json` in the user data folder:
+
+  ```json
+  { "codeView": { "lifecycle": "lazy", "idleMinutes": 15, "width": 0.5 } }
+  ```
+
+  `lazy` (the default) starts an instance the first time its code view opens and stops its process after the code view was out of sight (hidden, or its repo not shown) for `idleMinutes`; it starts again, with its tabs, when the code view shows again. `always` starts the instance with the repo and keeps it running while the repo is open. `width` is the code view's share of the repo (0.2 to 0.8). Bad values are skipped and reported on stderr.
+- **Selection sync.** Selecting an element on the canvas, in the search or in the inspector opens its source in the code view. Moving the cursor in a `.appling` file in the code view selects the element there on the canvas. The Appling extension talks to the main process over a websocket on the proxy (`/bridge`), with a token per instance start.
+- **Open in VS Code.** **Repo › Open File in VS Code** opens the file last in focus (in the code view or selected on the canvas) at its line in VS Code; **Repo › Open Repo in VS Code** and the rail's context menu open the repo. They use the `code` command from the PATH (on macOS also from the app bundle).
+
+Each instance listens on its own port on 127.0.0.1 and requires its own connection token, which only the proxy knows; the proxy admits only the code views, by a cookie with a secret of the running app.
+
 ## How it works
 
 - `bin.ts` resolves the paths and starts Electron detached with `main.js -- <paths>`. The main process takes Electron's single instance lock with the paths as additional data; a second instance hands them to the first through `second-instance` and quits.
@@ -50,7 +69,8 @@ The open workspaces, the repo shown in each, the active workspace, the most rece
 - Every repo runs `appling-ide <folder> --port 0` in its own child process (Electron's binary with `ELECTRON_RUN_AS_NODE`), so a failing repo cannot take the app down. The server reports its URL over the IPC channel, then `{ type: 'status', errors }` at start and after every model change, and ends when the channel closes, also when the app is killed. A server that ends shows its error with Retry and Close.
 - The window holds the shell page (`src/shell`: the 48px rail with workspaces on top and the repos of the active workspace below, and the empty and error states) and one `WebContentsView` per repo loading `<ide url>/?shell=desktop`: the IDE client with the canvas as the main area, the source folded away behind **Source** and no AI chat. Views of inactive repos are hidden, not destroyed. A view may navigate only within its own server; `https` links open in the browser.
 - `agent-sessions.ts`: the main process holds one store of agent sessions for every workspace and serves it to each repo's server over its IPC channel (`--shared-sessions`), with `desktopHost` adding the active repo, the workspace and the focus action to the sessions' IDE context. Agents reach the repo server's `/mcp` with their session's token (`openAgentSession`).
-- The shell talks to the main process only through the preload bridge (`preload.cts`); every page runs sandboxed with context isolation.
+- The shell talks to the main process only through the preload bridge (`preload.cts`); every page runs sandboxed with context isolation. A repo view's own preload (`repo-preload.cts`) exposes `window.applingDesktop` for the code view's selection sync.
+- The code view: `code-download.ts` (pinned release, verified download), `code-server.ts` (one openvscode-server per repo: `--host 127.0.0.1 --port 0 --connection-token-file --server-base-path /r/<key>` with the shared `--user-data-dir`, `--extensions-dir` and `--server-data-dir`), `code-instances.ts` (the pure lifecycle: lazy start, idle suspend, always alive), `code-proxy.ts` (the one origin proxy, which swaps the cookie for each instance's token), `code-bridge.ts` (the extension channel), `code-settings.ts`, `vscode-cli.ts` and the Electron glue in `code-view.ts` (one kept alive `WebContentsView` per repo in the `persist:appling-code` session).
 
 ## Shortcuts
 
@@ -67,6 +87,8 @@ The open workspaces, the repo shown in each, the active workspace, the most rece
 | `workspace1` … `workspace9` | `CmdOrCtrl+Alt+1` … `CmdOrCtrl+Alt+9` |
 | `toggleRail` | `CmdOrCtrl+B` |
 | `toggleSource` | `CmdOrCtrl+E` |
+| `toggleCode` (the code view) | `CmdOrCtrl+Alt+C` |
+| `openFileInVSCode`, `openRepoInVSCode` | none |
 | `reload` (the active repo's view) | `CmdOrCtrl+R` |
 | `devTools` | `CmdOrCtrl+Alt+I` |
 | `keybindings` (opens the keybindings file) | `CmdOrCtrl+K` |

@@ -1,11 +1,13 @@
 import { join } from 'node:path';
-import type { ExtensionContext } from 'vscode';
+import { Range, Selection, TextEditorRevealType, Uri, window, workspace, type ExtensionContext } from 'vscode';
 import { LanguageClient, TransportKind, type LanguageClientOptions, type ServerOptions } from 'vscode-languageclient/node';
+import { connectDesktop } from './desktop-bridge.js';
 
 let client: LanguageClient | undefined;
 
 /** Starts the bundled Appling language server for every `.appling` file in the workspace. */
 export async function activate(context: ExtensionContext): Promise<void> {
+    startDesktopBridge(context);
     const module = context.asAbsolutePath(join('out', 'server.js'));
     const server: ServerOptions = {
         run: { module, transport: TransportKind.ipc },
@@ -14,6 +16,31 @@ export async function activate(context: ExtensionContext): Promise<void> {
     const options: LanguageClientOptions = { documentSelector: [{ scheme: 'file', language: 'appling' }] };
     client = new LanguageClient('appling', 'Appling', server, options);
     await client.start();
+}
+
+/** Inside Appling Desktop's code view: syncs the selection with the canvas (see `desktop-bridge.ts`). */
+function startDesktopBridge(context: ExtensionContext): void {
+    const url = process.env.APPLING_DESKTOP_BRIDGE;
+    const token = process.env.APPLING_DESKTOP_TOKEN;
+    if (!url || !token) return;
+    const bridge = connectDesktop({
+        url, token,
+        log: message => console.error(message),
+        editor: {
+            onCursor: listener => window.onDidChangeTextEditorSelection(event => {
+                const document = event.textEditor.document;
+                if (document.languageId === 'appling') listener(document.uri.toString(), document.offsetAt(event.selections[0].active));
+            }),
+            reveal: async (uri, start, end) => {
+                const document = await workspace.openTextDocument(Uri.parse(uri));
+                const editor = await window.showTextDocument(document, { preview: true });
+                const from = document.positionAt(start);
+                editor.selection = new Selection(from, from);
+                editor.revealRange(new Range(from, document.positionAt(end)), TextEditorRevealType.InCenterIfOutsideViewport);
+            }
+        }
+    });
+    context.subscriptions.push(bridge);
 }
 
 export async function deactivate(): Promise<void> {

@@ -16,14 +16,19 @@
   ],
   "main": "./out/extension.js",
   "activationEvents": [
-    "workspaceContains:**/*.appling"
+    "workspaceContains:**/*.appling",
+    "onLanguage:appling"
   ],
   "contributes": {
     "languages": [
       {
         "id": "appling",
-        "aliases": ["Appling"],
-        "extensions": [".appling"],
+        "aliases": [
+          "Appling"
+        ],
+        "extensions": [
+          ".appling"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -36,16 +41,18 @@
     ]
   },
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=out/extension.js && esbuild ../lang/out/language-server.js --bundle --platform=node --format=cjs --outfile=out/server.js && cp ../lang/src/syntaxes/appling.tmLanguage.json out/",
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=out/extension.js && esbuild ../lang/out/language-server.js --bundle --platform=node --format=cjs --outfile=out/server.js && cp ../lang/src/syntaxes/appling.tmLanguage.json out/ && vsce package --no-dependencies --out out/appling.vsix",
     "package": "vsce package --no-dependencies --out out/appling.vsix"
   },
   "devDependencies": {
     "@appling/lang": "workspace:*",
     "@types/node": "^24.19.2",
     "@types/vscode": "1.100.0",
+    "@types/ws": "8.18.2",
     "@vscode/vsce": "4.0.0",
     "esbuild": "0.28.2",
     "typescript": "7.0.2",
-    "vscode-languageclient": "10.1.2"
+    "vscode-languageclient": "10.1.2",
+    "ws": "8.22.0"
   }
 }

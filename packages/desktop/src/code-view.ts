@@ -1,0 +1,286 @@
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
+import { dialog, session, shell, WebContentsView, type BrowserWindow, type Session } from 'electron';
+import { BRIDGE_ENV, CodeBridge, TOKEN_ENV } from './code-bridge.js';
+import { ensureCodeServer } from './code-download.js';
+import { CodeInstances, type InstanceState } from './code-instances.js';
+import { CodeProxy, PROXY_COOKIE } from './code-proxy.js';
+import { codeDirs, installExtension, repoKey, startCodeServer, type CodeServer } from './code-server.js';
+import { loadCodeViewSettings, splitBounds, type Bounds, type CodeViewSettings } from './code-settings.js';
+import { findCode, lineColumn, vscodeArgs } from './vscode-cli.js';
+
+/** A source location as the IDE client knows it. */
+export interface SourceLocation {
+    uri: string;
+    start: number;
+    end?: number;
+}
+
+interface Instance {
+    server: CodeServer;
+    close(): Promise<void>;
+}
+
+export interface CodeViewsOptions {
+    window: BrowserWindow;
+    /** The app's user data folder. */
+    userData: string;
+    /** The repo's IDE view, which hears the cursor of the code view. */
+    ideView(repo: string): WebContentsView | undefined;
+    /** Something the menu or the title depends on changed. */
+    onChange(): void;
+}
+
+/** The Appling extension's package, built by `appling-vscode`'s build; `APPLING_VSIX` overrides it. */
+function applingVsix(): string | undefined {
+    if (process.env.APPLING_VSIX) return process.env.APPLING_VSIX;
+    try {
+        return join(dirname(createRequire(import.meta.url).resolve('appling-vscode/package.json')), 'out', 'appling.vsix');
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * The code view of every repo: an embedded Code OSS (openvscode-server) per repo behind one local proxy, shown on the
+ * right of the repo's IDE view on demand. Thin Electron glue over `code-instances.ts` (lifecycle), `code-proxy.ts`,
+ * `code-bridge.ts` (selection sync with the Appling extension), `code-server.ts` and `code-download.ts`.
+ */
+export class CodeViews {
+    readonly settings: CodeViewSettings;
+    private readonly root: string;
+    private readonly bridge: CodeBridge;
+    private readonly proxy: CodeProxy;
+    private readonly instances: CodeInstances<Instance>;
+    private readonly views = new Map<string, WebContentsView>();
+    /** Repos whose code view is open (it shows while the repo is shown). */
+    private readonly shown = new Set<string>();
+    /** The file each repo had last in focus, in the code view or on the canvas, for Open in VS Code. */
+    private readonly current = new Map<string, SourceLocation>();
+    private readonly session: Session;
+    private ready?: Promise<void>;
+    private extension?: Promise<void>;
+
+    constructor(private readonly options: CodeViewsOptions) {
+        this.root = join(options.userData, 'code-oss');
+        const { settings, problems } = loadCodeViewSettings(join(options.userData, 'settings.json'));
+        if (problems.length) console.error(`Appling Desktop settings:\n  ${problems.join('\n  ')}`);
+        this.settings = settings;
+        this.bridge = new CodeBridge({ onCursor: (repo, uri, offset) => this.cursor(repo, uri, offset) });
+        this.proxy = new CodeProxy({ bridge: (request, socket, head) => this.bridge.upgrade(request, socket, head) });
+        this.session = session.fromPartition('persist:appling-code');
+        this.instances = new CodeInstances<Instance>({
+            launch: repo => this.launch(repo),
+            lifecycle: settings.lifecycle,
+            idleMs: settings.idleMinutes * 60000,
+            onChange: (repo, state) => this.instanceChanged(repo, state)
+        });
+    }
+
+    /** Listens on the proxy port of the last run (Code OSS's storage is per origin) and lets the code views in. */
+    private start(): Promise<void> {
+        this.ready ??= (async () => {
+            mkdirSync(this.root, { recursive: true });
+            const portFile = join(this.root, 'proxy.json');
+            let preferred = 0;
+            try {
+                preferred = Number(JSON.parse(readFileSync(portFile, 'utf8')).port) || 0;
+            } catch {
+                // first start
+            }
+            const port = await this.proxy.listen(preferred);
+            if (port !== preferred) writeFileSync(portFile, `${JSON.stringify({ port })}\n`);
+            await this.session.cookies.set({ url: this.proxy.origin, name: PROXY_COOKIE, value: this.proxy.secret, httpOnly: true, sameSite: 'strict' });
+        })();
+        return this.ready;
+    }
+
+    /** Follows the open repos: new ones get an instance (started now with `always`), closed ones lose theirs. */
+    sync(live: Set<string>): void {
+        for (const repo of live) {
+            if (this.instances.get(repo)) continue;
+            if (this.settings.lifecycle === 'always') this.start().then(() => this.instances.add(repo), error => console.error(error));
+            else this.instances.add(repo);
+        }
+        for (const repo of this.instances.repos()) {
+            if (live.has(repo)) continue;
+            this.shown.delete(repo);
+            this.current.delete(repo);
+            this.drop(repo);
+            this.instances.remove(repo);
+        }
+    }
+
+    isShown(repo: string | undefined): boolean {
+        return !!repo && this.shown.has(repo);
+    }
+
+    /** Opens or hides a repo's code view; hidden, the canvas fills the repo again. */
+    toggle(repo: string): void {
+        if (this.shown.delete(repo)) return this.options.onChange();
+        this.shown.add(repo);
+        this.ensureView(repo);
+        this.options.onChange();
+        this.open(repo);
+    }
+
+    /** Places the code views and returns the IDE views' bounds; only the shown repo's view is visible. */
+    layout(active: string | undefined, area: Bounds, covered: boolean): Bounds {
+        const split = splitBounds(area, !!active && this.shown.has(active), this.settings.width);
+        // an open code view whose instance was suspended comes back when its repo is shown again
+        if (active && this.shown.has(active) && !this.views.has(active)) {
+            this.ensureView(active);
+            this.open(active);
+        }
+        for (const [repo, view] of this.views) {
+            const visible = repo === active && this.shown.has(repo) && !covered;
+            view.setVisible(visible);
+            if (split.code) view.setBounds(split.code);
+        }
+        for (const repo of this.instances.repos()) this.instances.visible(repo, repo === active && this.shown.has(repo));
+        return split.ide;
+    }
+
+    /** An element was selected in the repo's IDE: its source opens in the code view, when that runs. */
+    selected(repo: string, location: SourceLocation): void {
+        this.current.set(repo, location);
+        this.bridge.reveal(repo, location.uri, location.start, location.end ?? location.start);
+    }
+
+    /** Opens the repo in VS Code, or the file last in focus at its line. */
+    openInVSCode(repo: string, file: boolean): void {
+        const code = findCode();
+        if (!code) {
+            dialog.showErrorBox('VS Code was not found', 'Install VS Code and its `code` command (in VS Code: Shell Command: Install \'code\' command in PATH).');
+            return;
+        }
+        const location = file ? this.current.get(repo) : undefined;
+        let target: { path: string, line?: number, column?: number } | undefined;
+        if (location?.uri.startsWith('file:')) {
+            const path = fileURLToPath(location.uri);
+            try {
+                target = { path, ...lineColumn(readFileSync(path, 'utf8'), location.start) };
+            } catch {
+                target = { path };
+            }
+        }
+        const child = spawn(code, vscodeArgs(repo, target), { detached: true, stdio: 'ignore', shell: process.platform === 'win32' });
+        child.on('error', error => dialog.showErrorBox('VS Code did not start', error.message));
+        child.unref();
+    }
+
+    async close(): Promise<void> {
+        for (const repo of [...this.views.keys()]) this.drop(repo);
+        await this.instances.closeAll();
+        this.bridge.close();
+        await this.proxy.close();
+    }
+
+    private async open(repo: string): Promise<void> {
+        try {
+            await this.start();
+            await this.instances.start(repo);
+        } catch (error) {
+            this.status(repo, `The code view did not start.\n\n${(error as Error).message}`);
+        }
+    }
+
+    private async launch(repo: string): Promise<Instance> {
+        const binary = process.env.APPLING_CODE_SERVER ?? await ensureCodeServer(join(this.root, 'server'), {
+            onProgress: (received, total) => this.status(repo, `Downloading Code OSS (openvscode-server) once… ${total ? `${Math.round(received / total * 100)}%` : `${Math.round(received / 1e6)} MB`}`)
+        });
+        const dirs = codeDirs(this.root);
+        await this.installAppling(binary).catch(error => console.error(`The Appling extension was not installed: ${(error as Error).message}`));
+        this.status(repo, 'Starting Code OSS…');
+        const key = repoKey(repo);
+        const env: NodeJS.ProcessEnv = { ...process.env, [BRIDGE_ENV]: this.proxy.bridgeUrl, [TOKEN_ENV]: this.bridge.token(repo) };
+        delete env.ELECTRON_RUN_AS_NODE;
+        let instance: Instance | undefined = undefined;
+        const server = await startCodeServer({
+            binary, key, ...dirs, env,
+            onExit: (code, output) => instance && this.instances.exited(repo, instance, `Code OSS ended with code ${code}.\n${output.trim().split('\n').slice(-20).join('\n')}`)
+        });
+        this.proxy.route(key, { port: server.port, token: server.token });
+        instance = {
+            server,
+            close: async () => {
+                this.proxy.route(key, undefined);
+                this.bridge.revoke(repo);
+                await server.close();
+            }
+        };
+        return instance;
+    }
+
+    /** Installs the bundled Appling extension once per build of it, so `.appling` files have the language server. */
+    private installAppling(binary: string): Promise<void> {
+        this.extension ??= (async () => {
+            const vsix = applingVsix();
+            if (!vsix || !existsSync(vsix)) throw new Error(`no appling.vsix (looked at ${vsix ?? 'appling-vscode'}); build packages/vscode`);
+            const digest = createHash('sha256').update(readFileSync(vsix)).digest('hex');
+            const marker = join(this.root, 'appling-extension.json');
+            const installed = existsSync(marker) ? JSON.parse(readFileSync(marker, 'utf8')).sha256 : undefined;
+            if (installed === digest) return;
+            await installExtension(binary, vsix, codeDirs(this.root), { ...process.env, ELECTRON_RUN_AS_NODE: undefined });
+            writeFileSync(marker, `${JSON.stringify({ sha256: digest })}\n`);
+        })();
+        return this.extension;
+    }
+
+    private instanceChanged(repo: string, state: InstanceState<Instance>): void {
+        if (state.status === 'running') {
+            const view = this.views.get(repo);
+            if (view) view.webContents.loadURL(this.proxy.url(repoKey(repo), repo));
+        } else if (state.status === 'suspended' || state.status === 'stopped') this.drop(repo);
+        else if (state.status === 'failed' && state.error) this.status(repo, state.error);
+        this.options.onChange();
+    }
+
+    /** The cursor moved in a `.appling` file of the code view: the canvas selects the element there. */
+    private cursor(repo: string, uri: string, offset: number): void {
+        this.current.set(repo, { uri, start: offset });
+        this.options.ideView(repo)?.webContents.send('codeCursor', uri, offset);
+    }
+
+    /** A plain page in the code view's place while the instance downloads, starts or after it failed. */
+    private status(repo: string, message: string): void {
+        const view = this.views.get(repo);
+        if (!view) return;
+        const text = message.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
+        const page = `<!doctype html><meta charset="utf-8"><body style="margin:0;background:#0c0a08;color:#d8cfc4;font:13px system-ui;padding:24px"><pre style="white-space:pre-wrap;font:inherit">${text}</pre>`;
+        view.webContents.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(page)}`);
+    }
+
+    private ensureView(repo: string): WebContentsView {
+        const existing = this.views.get(repo);
+        if (existing) return existing;
+        const view = new WebContentsView({ webPreferences: { session: this.session, contextIsolation: true, sandbox: true, nodeIntegration: false } });
+        view.setBackgroundColor('#0c0a08');
+        view.webContents.setWindowOpenHandler(({ url }) => {
+            if (/^https?:\/\//.test(url) && !url.startsWith(this.proxy.origin)) shell.openExternal(url);
+            return { action: 'deny' };
+        });
+        view.webContents.on('will-navigate', (event, target) => {
+            if (!target.startsWith(`${this.proxy.origin}/`)) event.preventDefault();
+        });
+        this.options.window.contentView.addChildView(view);
+        view.setVisible(false);
+        this.views.set(repo, view);
+        const state = this.instances.get(repo);
+        if (state?.status === 'running') view.webContents.loadURL(this.proxy.url(repoKey(repo), repo));
+        else this.status(repo, 'Starting Code OSS…');
+        return view;
+    }
+
+    private drop(repo: string): void {
+        const view = this.views.get(repo);
+        if (!view) return;
+        this.views.delete(repo);
+        this.options.window.contentView.removeChildView(view);
+        view.webContents.close();
+    }
+}

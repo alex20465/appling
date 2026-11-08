@@ -17,6 +17,12 @@ import { applyTextEdits, modelTexts, monaco } from './monaco.js';
 /** Inside Appling Desktop (`?shell=desktop`) the canvas is the main area, the source is folded away and there is no chat. */
 const DESKTOP = new URLSearchParams(location.search).get('shell') === 'desktop';
 
+/** Appling Desktop's bridge to its code view (Code OSS), from the repo view's preload; absent elsewhere. */
+const desktop = (window as { applingDesktop?: {
+    selected(location: { uri: string, start: number, end: number }): void;
+    onCodeCursor(callback: (uri: string, offset: number) => void): void;
+} }).applingDesktop;
+
 export function App() {
     const [source, setSource] = useState(!DESKTOP);
     const [snapshot, setSnapshot] = useState<Snapshot>();
@@ -37,6 +43,15 @@ export function App() {
     const [marked, setMarked] = useState(true);
     /** The review loads once its tab opens, then follows every snapshot and revision change. */
     const [reviewing, setReviewing] = useState(false);
+
+    const locations = useRef<Snapshot['locations']>({});
+    locations.current = snapshot?.locations ?? {};
+
+    // the cursor in a `.appling` file of Desktop's code view selects the element there
+    useEffect(() => desktop?.onCodeCursor((uri, offset) => {
+        const qn = elementAt(locations.current, uri, offset);
+        if (qn) setSelected(qn);
+    }), []);
 
     useEffect(() => {
         loadSnapshot().then(first => {
@@ -77,6 +92,7 @@ export function App() {
         if (location) {
             setActive(location.uri);
             setReveal({ ...location });
+            desktop?.selected(location);
         }
     }, [snapshot]);
 

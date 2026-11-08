@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, watch, writeFileSync, type FSWatcher } from 'nod
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell, WebContentsView, type MenuItemConstructorOptions } from 'electron';
+import { CodeViews, type SourceLocation } from './code-view.js';
 import { EXTENSION, readCodeWorkspace, writeCodeWorkspace } from './code-workspace.js';
 import { gitBranch, watchGit } from './git.js';
 import { agentSessions, desktopHost } from './agent-sessions.js';
@@ -16,6 +17,7 @@ import { Workspaces } from './workspaces.js';
 const RAIL = 48;
 const SHELL = fileURLToPath(new URL('./shell/index.html', import.meta.url));
 const PRELOAD = fileURLToPath(new URL('./preload.cjs', import.meta.url));
+const REPO_PRELOAD = fileURLToPath(new URL('./repo-preload.cjs', import.meta.url));
 
 /** Folders and workspace files handed to this instance on the command line, after `--`, as absolute paths (see `bin.ts`). */
 function pathsOf(argv: string[]): string[] {
@@ -41,6 +43,7 @@ if (!app.requestSingleInstanceLock({ paths: initial })) {
         for (const process of processes.values()) process.close();
         for (const unwatch of heads.values()) unwatch();
         keybindingsWatcher?.close();
+        code?.close();
     });
 }
 
@@ -54,6 +57,8 @@ const sessions = agentSessions();
 const heads = new Map<string, () => void>();
 let window: BrowserWindow | undefined;
 let keybindingsWatcher: FSWatcher | undefined;
+/** The code view (Code OSS) of every repo. */
+let code: CodeViews | undefined;
 /** While the switcher is open the repo views are hidden, so the shell page (which draws it) is on top. */
 let switcherOpen = false;
 
@@ -76,6 +81,7 @@ function start(): void {
     window.webContents.on('will-navigate', event => event.preventDefault());
     window.on('resize', layout);
     window.loadFile(SHELL);
+    code = new CodeViews({ window, userData: app.getPath('userData'), ideView: repo => views.get(repo), onChange: () => refresh() });
 
     ipcMain.on('select', (_event, repo: string, workspace?: string) => {
         const selected = workspaces.select(repo, workspace);
@@ -99,6 +105,10 @@ function start(): void {
     ipcMain.on('closeSwitcher', () => closeSwitcher());
     ipcMain.handle('switch', (_event, query: string) => switcherEntries(workspaces, repoName, typeof query === 'string' ? query : ''));
     ipcMain.handle('state', () => state());
+    ipcMain.on('ideSelected', (event, location: SourceLocation) => {
+        const repo = [...views].find(([, view]) => view.webContents === event.sender)?.[0];
+        if (repo && typeof location?.uri === 'string' && Number.isInteger(location.start)) code?.selected(repo, location);
+    });
 
     watchKeybindings();
     buildMenu();
@@ -162,6 +172,7 @@ function changed(): void {
     for (const repo of repos.all()) {
         if (!live.has(repo.id)) stop(repo.id);
     }
+    code?.sync(live);
     refresh();
     writeSession(userFile('session.json'), sessionOf(workspaces));
 }
@@ -225,7 +236,7 @@ function stop(id: string): void {
 /** A kept alive view of one repo's IDE: it may only show pages of its own server; links to the web open in the browser. */
 function view(url: string): WebContentsView {
     const origin = new URL(url).origin;
-    const view = new WebContentsView({ webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false } });
+    const view = new WebContentsView({ webPreferences: { preload: REPO_PRELOAD, contextIsolation: true, sandbox: true, nodeIntegration: false } });
     view.setBackgroundColor('#0c0a08');
     view.webContents.setWindowOpenHandler(({ url: target }) => {
         if (/^https:\/\//.test(target)) shell.openExternal(target);
@@ -300,6 +311,7 @@ function repoMenu(repo: string): void {
             }))
         },
         { label: 'Reveal in File Manager', click: () => shell.showItemInFolder(repo) },
+        { label: 'Open in VS Code', click: () => code?.openInVSCode(repo, false) },
         { type: 'separator' },
         { label: 'Close Repo', click: () => closeRepo(repo) }
     ]).popup({ window });
@@ -336,7 +348,10 @@ function layout(): void {
     if (!window) return;
     const [width, height] = window.getContentSize();
     const rail = workspaces.collapsed ? 0 : RAIL;
-    for (const view of views.values()) view.setBounds({ x: rail, y: 0, width: Math.max(0, width - rail), height });
+    const area = { x: rail, y: 0, width: Math.max(0, width - rail), height };
+    // the code view, when open, takes the right part of the repo
+    const ide = code?.layout(workspaces.activeRepo(), area, switcherOpen) ?? area;
+    for (const view of views.values()) view.setBounds(ide);
 }
 
 /** A repo's name in the rail and the switcher: the workspace file's display name, else the folder's name. */
@@ -413,6 +428,9 @@ const actions: Record<string, () => void> = {
     ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`workspace${i + 1}`, () => workspaces.selectWorkspaceAt(i) && changed()])),
     toggleRail: () => toggleRail(),
     toggleSource: () => activeView()?.webContents.executeJavaScript(`document.querySelector('.bar button[aria-pressed]')?.click()`),
+    toggleCode: () => { const repo = workspaces.activeRepo(); if (repo) code?.toggle(repo); },
+    openFileInVSCode: () => { const repo = workspaces.activeRepo(); if (repo) code?.openInVSCode(repo, true); },
+    openRepoInVSCode: () => { const repo = workspaces.activeRepo(); if (repo) code?.openInVSCode(repo, false); },
     reload: () => activeView()?.webContents.reload(),
     devTools: () => (activeView()?.webContents ?? window?.webContents)?.toggleDevTools(),
     keybindings: () => {
@@ -450,8 +468,8 @@ function buildMenu(): void {
             ]
         },
         { role: 'editMenu' },
-        { label: 'View', submenu: [item('toggleRail'), item('toggleSource'), item('reload'), item('devTools'), { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' }] },
-        { label: 'Repo', submenu: [item('switcher'), { type: 'separator' }, item('nextRepo'), item('previousRepo'), { type: 'separator' }, ...numbered('repo')] },
+        { label: 'View', submenu: [item('toggleRail'), item('toggleSource'), item('toggleCode'), item('reload'), item('devTools'), { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' }] },
+        { label: 'Repo', submenu: [item('switcher'), { type: 'separator' }, item('openFileInVSCode'), item('openRepoInVSCode'), { type: 'separator' }, item('nextRepo'), item('previousRepo'), { type: 'separator' }, ...numbered('repo')] },
         { label: 'Workspace', submenu: [item('nextWorkspace'), item('previousWorkspace'), { type: 'separator' }, ...numbered('workspace')] }
     ];
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
