@@ -1,7 +1,8 @@
 import { createConnection, type Socket } from 'node:net';
+import type { TerminalStatus } from './status.js';
 
 /** Bumped on every incompatible change; a client and a host of different versions refuse each other. */
-export const PROTOCOL = 1;
+export const PROTOCOL = 2;
 
 /** A terminal as the host reports it. */
 export interface TerminalInfo {
@@ -21,6 +22,10 @@ export interface TerminalInfo {
     exit?: { code: number, signal?: number };
     /** How many clients are attached right now. */
     attached: number;
+    /** Free metadata given at spawn or by `update`, such as an agent session's preset and label. */
+    meta?: Record<string, string>;
+    /** Running, waiting for input after a notification, or exited; kept by the host also while no client is attached. */
+    status: TerminalStatus;
 }
 
 export interface SpawnOptions {
@@ -28,14 +33,29 @@ export interface SpawnOptions {
     shell?: string;
     args?: string[];
     cwd: string;
-    /** The whole environment of the shell; the client library defaults it to its own. */
+    /** The whole environment of the shell; the client library defaults it to its own unless `addEnv` is given. */
     env?: Record<string, string>;
+    /**
+     * Variables added to the host's own environment (`null` removes one), for a client on another machine that does
+     * not know the environment there (a remote repo's terminals).
+     */
+    addEnv?: Record<string, string | null>;
     cols?: number;
     rows?: number;
     group?: string;
     title?: string;
     /** Lines kept above the screen, 10000 by default. */
     scrollback?: number;
+    /**
+     * Queue the output for the spawning client from the first byte on, until its `attach` (which follows right after),
+     * so it misses nothing a program prints at once. `PtyHostClient.spawnAttached` does both.
+     */
+    attach?: boolean;
+    /**
+     * Free string metadata the host keeps and lists (an agent session's `preset` and `label`, ...). The host reads
+     * two keys itself: `label` titles its desktop notifications, `notify: 'off'` turns them off for the terminal.
+     */
+    meta?: Record<string, string>;
 }
 
 /** Client to host. Messages with an `id` are requests and get exactly one response with that `id`. */
@@ -48,6 +68,11 @@ export type Request =
     | { type: 'resize', id: number, terminal: string, cols: number, rows: number }
     | { type: 'kill', id: number, terminal: string, signal?: string }
     | { type: 'shutdown', id: number }
+    /** Merges into the terminal's metadata (`null` removes a key) and sets its title. */
+    | { type: 'update', id: number, terminal: string, meta?: Record<string, string | null>, title?: string }
+    /** Every terminal's changes from now on (`terminal`, `status`, `removed`); the result is the current list. */
+    | { type: 'subscribe', id: number }
+    | { type: 'unsubscribe', id: number }
     | { type: 'input', terminal: string, data: string };
 
 /** Host to client: responses and the events of attached terminals. */
@@ -55,7 +80,13 @@ export type Message =
     | { type: 'response', id: number, ok: true, result?: unknown }
     | { type: 'response', id: number, ok: false, error: string }
     | { type: 'data', terminal: string, data: string }
-    | { type: 'exit', terminal: string, code: number, signal?: number };
+    | { type: 'exit', terminal: string, code: number, signal?: number }
+    /** For subscribed clients: a terminal's status changed. */
+    | { type: 'status', terminal: string, status: TerminalStatus }
+    /** For subscribed clients: a terminal was spawned or updated. */
+    | { type: 'terminal', info: TerminalInfo }
+    /** For subscribed clients: a terminal was killed and is gone. */
+    | { type: 'removed', terminal: string };
 
 export interface HelloResult { protocol: number, pid: number, version: string }
 export interface AttachResult { terminal: TerminalInfo, scrollback: string }

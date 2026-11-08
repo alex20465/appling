@@ -79,11 +79,10 @@ The agent then works through these steps:
 
 ## 4. Review the result
 
-Check the model and open it as a graph:
+Check the model, then open the project in [Appling Desktop](../tools/desktop.md) to explore it on the canvas:
 
 ```sh
 npx appling check models
-npx @appling/ide models
 ```
 
 `check` reports the number of files and `0 error(s)`; the agent never leaves the model invalid. Read the comments the agent left and its summary of what it could not model exactly. The model now describes what your application does; correct it where the code does something by accident rather than by intent.

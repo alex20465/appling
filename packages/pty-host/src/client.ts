@@ -5,6 +5,7 @@ import { createConnection, type Socket } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { defaultDir, ensureDir, logPath, socketPath, tokenPath } from './paths.js';
 import { answers, PROTOCOL, readLines, send, type AttachResult, type HelloResult, type Message, type Request, type SpawnOptions, type TerminalInfo } from './protocol.js';
+import type { TerminalStatus } from './status.js';
 
 export interface ConnectOptions {
     /** The host's folder, `defaultDir()` when left out. */
@@ -18,12 +19,21 @@ export interface ConnectOptions {
 export interface StartOptions {
     /** The Node binary; inside Electron its own executable, which runs as Node through `ELECTRON_RUN_AS_NODE`. */
     node?: string;
+    /** The host's entry, `hostMain()` by default; a packaged app passes its bundled copy. */
+    main?: string;
     /** The host's own environment. Shells get the environment of their spawn request. */
     env?: NodeJS.ProcessEnv;
     /** Milliseconds without clients and without running terminals before the host exits; 60000 by default, 0 never. */
     idleTimeout?: number;
     /** How long to wait for the host to answer, 10000 ms by default. */
     timeout?: number;
+    /**
+     * The program a click on a notification runs to open the app at the terminal, `{terminal}` standing for its id.
+     * Without it the notifications only show.
+     */
+    open?: string[];
+    /** Whether the host raises desktop notifications for terminals that need input while nobody is attached; true by default. */
+    notify?: boolean;
 }
 
 /** The host's entry, `appling-pty-host`. Resolves from `src/` and `out/` alike, to the built file. */
@@ -40,7 +50,9 @@ export async function startPtyHost(dir: string = defaultDir(), options: StartOpt
     const log = openSync(logPath(dir), 'a', 0o600);
     let exited: number | null | undefined;
     try {
-        const child = spawn(options.node ?? process.execPath, [hostMain(), 'serve', '--dir', dir, '--idle-timeout', String(options.idleTimeout ?? 60000)], {
+        const args = [options.main ?? hostMain(), 'serve', '--dir', dir, '--idle-timeout', String(options.idleTimeout ?? 60000),
+            ...options.open ? ['--open', JSON.stringify(options.open)] : [], ...options.notify === false ? ['--no-notify'] : []];
+        const child = spawn(options.node ?? process.execPath, args, {
             detached: true,
             stdio: ['ignore', log, log],
             env: { ...options.env ?? process.env, ELECTRON_RUN_AS_NODE: '1' },
@@ -92,11 +104,21 @@ interface Pending {
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
+export type ClientEvents = {
+    close: [];
+    /** After `subscribe`: a terminal's status changed (needs input, running again, exited). */
+    status: [terminal: string, status: TerminalStatus];
+    /** After `subscribe`: a terminal was spawned or updated. */
+    terminal: [info: TerminalInfo];
+    /** After `subscribe`: a terminal was killed. */
+    removed: [terminal: string];
+};
+
 /**
  * One connection to the host. Closing it (or losing it) detaches its terminals; they keep running in the host.
- * Emits `close` when the connection ends.
+ * Emits `close` when the connection ends, and after `subscribe` every terminal's changes.
  */
-export class PtyHostClient extends EventEmitter<{ close: [] }> {
+export class PtyHostClient extends EventEmitter<ClientEvents> {
     private nextId = 1;
     private readonly pending = new Map<number, Pending>();
     private readonly terminals = new Map<string, AttachedTerminal>();
@@ -142,9 +164,18 @@ export class PtyHostClient extends EventEmitter<{ close: [] }> {
         return this.socket.destroyed;
     }
 
-    /** Starts a terminal; the environment defaults to this process's. */
+    /** Starts a terminal; the environment defaults to this process's (the host's own plus `addEnv` with `addEnv`). */
     spawn(options: SpawnOptions): Promise<TerminalInfo> {
-        return this.request({ type: 'spawn', options: { env: process.env as Record<string, string>, ...options } }) as Promise<TerminalInfo>;
+        return this.request({ type: 'spawn', options: { ...options.addEnv ? {} : { env: process.env as Record<string, string> }, ...options } }) as Promise<TerminalInfo>;
+    }
+
+    /**
+     * Starts a terminal and attaches to it, with its output from the first byte on: what a program prints at once
+     * arrives as `data` too, not only in the scrollback.
+     */
+    async spawnAttached(options: SpawnOptions): Promise<AttachedTerminal> {
+        const info = await this.spawn({ ...options, attach: true });
+        return this.attach(info.id);
     }
 
     /** The host's terminals, those of one group when given, also the ended ones until they are killed. */
@@ -190,6 +221,23 @@ export class PtyHostClient extends EventEmitter<{ close: [] }> {
         await this.request({ type: 'detach', terminal });
     }
 
+    /** Merges into a terminal's metadata (`null` removes a key) and sets its title; resolves with the terminal. */
+    update(terminal: string, change: { meta?: Record<string, string | null>, title?: string }): Promise<TerminalInfo> {
+        return this.request({ type: 'update', terminal, ...change }) as Promise<TerminalInfo>;
+    }
+
+    /**
+     * Follows every terminal of the host, attached or not: resolves with the current list, then emits `terminal`,
+     * `status` and `removed`.
+     */
+    subscribe(): Promise<TerminalInfo[]> {
+        return this.request({ type: 'subscribe' }) as Promise<TerminalInfo[]>;
+    }
+
+    unsubscribe(): Promise<void> {
+        return this.request({ type: 'unsubscribe' }) as Promise<void>;
+    }
+
     /** Ends every terminal and the host. */
     shutdown(): Promise<void> {
         return this.request({ type: 'shutdown' }) as Promise<void>;
@@ -219,6 +267,12 @@ export class PtyHostClient extends EventEmitter<{ close: [] }> {
             this.terminals.get(message.terminal)?.receive(message.data);
         } else if (message.type === 'exit') {
             this.terminals.get(message.terminal)?.ended({ code: message.code, signal: message.signal });
+        } else if (message.type === 'status') {
+            this.emit('status', message.terminal, message.status);
+        } else if (message.type === 'terminal') {
+            this.emit('terminal', message.info);
+        } else if (message.type === 'removed') {
+            this.emit('removed', message.terminal);
         }
     }
 }

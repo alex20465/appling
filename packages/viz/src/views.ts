@@ -1,6 +1,7 @@
 import type { Access, Graph, GraphNode, TypeData } from '@appling/model';
 import { relevance } from '@appling/model/relevance';
 import { Simulator } from '@appling/model/simulator';
+import { rollupState, type ImplementationState } from '@appling/model/implementation';
 
 /** The layers the tree starts from: each tab grows the model from the declarations of its kinds, module by module. */
 export type Lens = 'domain' | 'behavior' | 'application' | 'interfaces' | 'access';
@@ -266,14 +267,85 @@ export class GraphIndex {
     }
 }
 
-/** The declarations a model change touches: `added` when the declaration itself is new, else `changed`. Removed elements are no longer in the graph. */
-export function changeMarks(index: GraphIndex, changes: { added: string[], changed: string[] }): Map<string, 'added' | 'changed'> {
-    const marks = new Map<string, 'added' | 'changed'>();
+export type ChangeMark = 'added' | 'changed' | 'removed';
+
+/** Model changes to mark on the canvas, such as a model diff (`@appling/model/diff`) or the changes of an AI session. */
+export interface MarkedChanges {
+    added: string[];
+    changed: string[];
+    /** Removed elements; they are marked only when the index has them, such as one built from `withRemoved`, and then drawn ghosted. */
+    removed?: string[];
+    /** The changes are only planned, such as a playbook step not done yet: the canvas previews them, dashed. */
+    planned?: boolean;
+}
+
+/**
+ * The declarations a model change touches: `added` or `removed` when the declaration itself is new or gone, else
+ * `changed`. Members lift to their declaration. Removed elements count only when the index still has them. With
+ * `modules`, the modules (and their parent modules) that hold a marked declaration are marked `changed` too, so the
+ * changes show before their module unfolds.
+ */
+export function changeMarks(index: GraphIndex, changes: MarkedChanges, modules = false): Map<string, ChangeMark> {
+    const marks = new Map<string, ChangeMark>();
     for (const qn of changes.added) if (index.nodes.has(qn) && index.declaration(qn) === qn) marks.set(qn, 'added');
-    for (const qn of [...changes.added, ...changes.changed]) {
+    for (const qn of changes.removed ?? []) if (index.nodes.has(qn) && index.declaration(qn) === qn) marks.set(qn, 'removed');
+    for (const qn of [...changes.added, ...changes.changed, ...changes.removed ?? []]) {
         if (index.nodes.has(qn) && !marks.has(index.declaration(qn))) marks.set(index.declaration(qn), 'changed');
     }
+    if (modules) {
+        for (const qn of [...marks.keys()]) {
+            for (const module of index.lineage(qn).slice(1)) if (!marks.has(module)) marks.set(module, 'changed');
+        }
+    }
     return marks;
+}
+
+/** Words for the implementation states, for marks and their tooltips. */
+export const IMPLEMENTATION_LABELS: Record<ImplementationState, string> = {
+    implemented: 'implemented', partial: 'partly implemented: open registry tasks', unimplemented: 'not implemented', shifted: 'code reference shifted', broken: 'code reference broken'
+};
+
+/**
+ * The implementation state the canvas draws per declaration: the declaration's own and its members' rolled up
+ * (`rollupState`), and per module that of its declarations.
+ */
+export function implementationMarks(index: GraphIndex, states: Record<string, { state: ImplementationState }>): Map<string, ImplementationState> {
+    const byDeclaration = new Map<string, ImplementationState[]>();
+    for (const [qn, { state }] of Object.entries(states)) {
+        const node = index.nodes.get(qn);
+        if (!node || node.kind === 'Module') continue;
+        const declaration = index.declaration(qn);
+        byDeclaration.set(declaration, [...byDeclaration.get(declaration) ?? [], state]);
+    }
+    const marks = new Map<string, ImplementationState>();
+    const byModule = new Map<string, ImplementationState[]>();
+    for (const [qn, list] of byDeclaration) {
+        const state = rollupState(list)!;
+        marks.set(qn, state);
+        for (const module of index.lineage(qn).slice(1)) byModule.set(module, [...byModule.get(module) ?? [], state]);
+    }
+    for (const [module, list] of byModule) marks.set(module, rollupState(list)!);
+    return marks;
+}
+
+/** An element an agent session claimed or highlighted, drawn in the session's colour. */
+export interface SessionMark {
+    element: string;
+    color: string;
+    /** The session's label. */
+    label: string;
+    session: string;
+}
+
+/** The declarations the canvas draws for session marks: a member's mark goes to its declaration; the first mark wins. */
+export function sessionMarks(index: GraphIndex, marks: SessionMark[]): Map<string, SessionMark> {
+    const result = new Map<string, SessionMark>();
+    for (const mark of marks) {
+        if (!index.nodes.has(mark.element)) continue;
+        const declaration = index.declaration(mark.element);
+        if (!result.has(declaration)) result.set(declaration, mark);
+    }
+    return result;
 }
 
 export type ViewKind = 'machine' | 'action' | 'usecase' | 'event' | 'node';

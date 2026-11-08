@@ -5,6 +5,7 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'" />
     <title>Appling</title>
     <link rel="stylesheet" href="./shell.css" />
+    <link rel="stylesheet" href="./agents.css" />
   </head>
   <body>
     <nav class="rail">
@@ -12,7 +13,8 @@
       <button id="new-workspace" class="workspace add" title="New Workspace…" aria-label="New Workspace">+</button>
       <hr />
       <div id="repos" role="group" aria-label="Repos"></div>
-      <button id="open" class="repo add" title="Add Folder to Workspace…" aria-label="Add Folder to Workspace">+</button>
+      <button id="open" class="repo add" title="Add Folder or Clone Repository…" aria-label="Add Folder or Clone Repository">+</button>
+      <div id="panes" role="group" aria-label="Panes moved into this window"></div>
     </nav>
     <main id="stage"></main>
     <div id="switcher" hidden role="dialog" aria-label="Go to repo">
@@ -21,6 +23,32 @@
         <ul role="listbox"></ul>
       </div>
     </div>
+    <form id="clone" class="overlay" hidden aria-label="Clone a repository">
+      <div class="panel">
+        <h2>Clone Repository</h2>
+        <label>Git URL <input name="url" type="text" placeholder="https://github.com/owner/repo.git or git@host:owner/repo.git" spellcheck="false" autocomplete="off" required /></label>
+        <label>Into <span class="row"><input name="parent" type="text" spellcheck="false" autocomplete="off" required /><button type="button" class="action choose">Choose…</button></span></label>
+        <p class="status" role="status" aria-live="polite"></p>
+        <div class="row end"><button type="button" class="action cancel">Cancel</button><button type="submit" class="action primary">Clone</button></div>
+      </div>
+    </form>
+    <form id="remote" class="overlay" hidden aria-label="Add a remote repository">
+      <div class="panel">
+        <h2>Add Remote Repository</h2>
+        <label>Remote folder <input name="location" type="text" list="remote-hosts" placeholder="ssh://host/path, ssh://user@host:2222/~/src/repo or wsl://Ubuntu/home/me/repo" spellcheck="false" autocomplete="off" required /></label>
+        <datalist id="remote-hosts"></datalist>
+        <p class="status" role="status" aria-live="polite"></p>
+        <div class="row end"><button type="button" class="action cancel">Cancel</button><button type="submit" class="action primary">Add</button></div>
+      </div>
+    </form>
+    <div id="tasks" class="overlay" hidden role="dialog" aria-label="Tasks">
+      <div class="panel">
+        <input type="text" placeholder="Run task…" aria-label="Task" spellcheck="false" autocomplete="off" />
+        <ul role="listbox"></ul>
+        <p class="problems" role="status"></p>
+      </div>
+    </div>
     <script type="module" src="./shell.js"></script>
+    <script type="module" src="./tasks.js"></script>
   </body>
 </html>

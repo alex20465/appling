@@ -164,7 +164,8 @@ For each target, `generate`:
 2. Checks the tools the extension needs (for example `uv` for Django) and stops with a hint for each one that is missing.
 3. Refuses to run when the `out` folder exists and is not empty. Generation creates a new draft project once.
 4. Runs the planned steps into `out`, printing one line per step, and writes the task registry `.appling/tasks.json` into it.
-5. Prints a summary such as `12 element(s): 11 generated, 1 partial, 0 todo`.
+5. Records the [code references](references.md) of the code it wrote in `.appling/references.json` and the fingerprints of the generated elements in `.appling/generation.json`, both in the current folder, so the IDE knows what is [implemented and what changed since](implementation.md#generation-records).
+6. Prints a summary such as `12 element(s): 11 generated, 1 partial, 0 todo`.
 
 Without targets in the configuration, `generate` prints how to add one and exits with 1. The extensions are described in [Code generation](../codegen/overview.md), the configuration in [Configuration](../reference/configuration.md).
 
@@ -235,7 +236,9 @@ conflicts: internal/sales/types.go
 build/shop: synced, 1 file(s) with conflict markers (registry tasks)
 ```
 
-The target must have been generated with a version of appling that stores the generation baseline in `.appling/baseline/`.
+The target must have been generated with a version of appling that stores the generation baseline in `.appling/baseline/`. Like a first generation, sync records the code references and the fingerprints of what it generated.
+
+The IDE generates the same way from its [Code tab](implementation.md#generate-from-the-ide), also for single elements or what changed since the last generation.
 
 `--plan`, `--migrate` and `--sync` must come directly after `generate`, before any path.
 
@@ -270,7 +273,7 @@ appling refs <qualified name> [paths...]
 appling refs --check [paths...]
 ```
 
-Prints the [code references](references.md) of the workspace in the current folder (`.appling/references.json`): where elements are implemented, by file and line range. The model must be valid. With a qualified name, it prints the references of that element and its members, each with its status when it is not `current`:
+Prints the [code references](references.md) of the workspace in the current folder (`.appling/references.json`): where elements are implemented, by file and line range. The model must be valid. With a qualified name, it prints the references of that element, its members and its [sub-anchors](../reference/graph.md#sub-anchors) (such as `sales.Checkout#step[2]`), each with its status when it is not `current`:
 
 ```
 $ appling refs sales.Order

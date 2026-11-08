@@ -11,8 +11,8 @@ Every tool in Appling is built on six public packages. Use them to build your ow
 | `@appling/lang/lsp` | The language server services |
 | `@appling/model` | Semantic graph, edit operations, releases |
 | `@appling/codegen` | Code generation core: plans, registry, migrations |
-| `@appling/ai` | Workspace access for AI, MCP server, chat |
-| `@appling/viz` | Model views, the canvases of the IDE and the visualization window |
+| `@appling/ai` | Workspace access for AI, MCP server, agent sessions, playbook |
+| `@appling/viz` | Model views, the canvases of Appling Desktop's repo view and the types of the visual tools |
 
 ## Language: @appling/lang
 
@@ -109,11 +109,22 @@ console.log(result.ok ? result.edits : result.errors);
 | `recordReferences(root, qn, ranges)` | Replaces the [code references](../tools/references.md) of one element in `<root>/.appling/references.json` and returns them; throws for a missing file, a range outside it or one that starts on an empty line |
 | `readReferences(root)`, `resolveReferences(root, graph?)` | The stored references by qualified name, and every reference with its status and where it is now; with a graph, references to elements it lacks are `orphaned` |
 | `REFERENCES`, `CodeReference`, `References`, `ResolvedReference`, `ReferenceStatus` | `.appling/references.json` and the reference types |
+| `replaceReferencesIn(root, folder, updates)` | Replaces the references of these elements that point into `folder` (such as a generated project) with the given ranges, relative to the folder, and keeps their references elsewhere |
+| `implementationStates(graph, { references, tasks, outstanding })` | The [implementation state](../tools/implementation.md#implementation-states) of every element (`ElementImplementation`: `state`, current `references`, open `tasks`, `outstanding`) |
+| `fingerprint(node)`, `fingerprints(graph)`, `outstandingElements(graph, records)` | The hash generation records per element, and the elements new or changed since the given `GenerationRecord`s (every element for a missing record) |
+| `anchorStates(graph, references, states)` | The state of every [sub-anchor](graph.md#sub-anchors) (`graph.anchors`): its own from its code references, else its element's (a handler's, its step's) |
+| `subAnchors(qns)`, `isAnchorAddress(name)`, `anchorOwner(name)` | The sub-anchors of the elements of `qualifiedNames(models)` with their AST nodes; whether a name is an address; the element an address belongs to (`@appling/model/anchors`, browser safe) |
+| `rollupState(states)`, `lineMarks(locations, texts, states)` | One state for several, and the mark of each model line that declares an element, by file URI (`LineMark`) |
+| `ImplementationState`, `IMPLEMENTATION_STATES`, `TaskEntry`, `GenerationRecord` | The implementation types |
 | `relevance(graph)` | The [relevance](../language/relevance.md) of every module and top level declaration, from 0 to 1, by qualified name |
 | `relevanceLevel(score)`, `RELEVANCE_LEVELS`, `RelevanceLevel` | The level a score falls in, and the score range of each level |
+| `diffGraphs(before, after)` | The model diff of two graphs as a `GraphDiff`: every `ElementChange` (`added`, `changed` or `removed`, by qualified name, with the properties and outgoing edges that differ), the lists of added, changed and removed names and `renamed`. Elements match by qualified name; the migration steps only the graph after has map old names to new ones, so a recorded rename is one change |
+| `withRemoved(before, after, diff)` | The graph after with the removed elements of a diff put back under their parents, with their edges, so a canvas can draw them where they were |
+| `migrationRenames(before, after)` | The function that maps a qualified name of the graph before to its name after through the new migration steps; undefined for a removed one |
+| `GraphDiff`, `ElementChange`, `ChangeStatus` | The diff types |
 | `findApplingFiles(path)` | The `.appling` files at a path, searching folders recursively and skipping hidden folders and `node_modules` |
 
-`@appling/model/graph`, `@appling/model/edit`, `@appling/model/simulator` and `@appling/model/relevance` export the graph, the edit operations, the simulator and the relevance functions without the file system functions of the rest of the package, so a browser bundle can import them.
+`@appling/model/graph`, `@appling/model/edit`, `@appling/model/simulator`, `@appling/model/relevance`, `@appling/model/diff` and `@appling/model/implementation` export the graph, the edit operations, the simulator, the relevance functions, the model diff and the implementation states without the file system functions of the rest of the package, so a browser bundle can import them.
 
 ## Code generation: @appling/codegen
 
@@ -150,8 +161,10 @@ Planning and running:
 | `coverageTable(coverage)` | That coverage as the Markdown table `--plan` prints, the total with the generated share |
 | `mapContext(graph, name, options)` | The `MapContext` passed to extensions |
 | `checkPrerequisites(prerequisites)` | One message per missing tool |
-| `runPlan(plan, out, log)` | Runs the steps into `out` and writes the registry |
-| `runSteps(steps, out, log)` | Runs steps without writing a registry |
+| `runPlan(plan, out, log, written?)` | Runs the steps into `out` and writes the registry; with `written`, collects what each step wrote |
+| `runSteps(steps, out, log, written?)` | Runs steps without writing a registry |
+| `locateWritten(out, written, only?)` | Where the collected code is in the final files, by node (`WrittenRange[]`) |
+| `addedRuns(before, after)`, `mainRun(runs)`, `Written`, `WrittenRange` | The runs of lines a template step added, and the one that holds its code |
 | `PROJECT` | The node name of setup steps, `(project)` |
 | `PlannedStep`, `Plan` | A step with its node, and the result of `plan` |
 
@@ -172,6 +185,16 @@ Migrations:
 | `runMigrations(out, plan, changes, log)` | Runs them, adds the tasks to the registry and records the changes as applied |
 | `readApplied(out)` | The ids in `<out>/.appling/migrations.json` |
 | `MigrationChange`, `ProjectFiles`, `APPLIED` | The change type, read access to the project for extensions, and the applied file path |
+
+Generation with code references and the implementation state, as the IDE does it:
+
+| Export | Purpose |
+|---|---|
+| `generateElements({ root, graph, selection, targets?, load?, onEvent? })` | Generates the selection (`{ mode: 'outstanding' }`, `{ mode: 'all' }` or `{ mode: 'elements', elements }`) into every target: creates a target without a registry, merges the selected elements' files into an existing one, records references and fingerprints, and calls back with every `GenerationEvent` |
+| `recordWritten(root, out, graph, written, elements)` | Records the references of collected code and the fingerprints of the elements for one target |
+| `readGenerations(root)`, `recordGeneration(root, out, graph, elements)`, `GENERATIONS` | `<root>/.appling/generation.json`: the fingerprints of each target's last generation |
+| `workspaceImplementation(root, graph)` | The implementation state of every element of a workspace, its targets (`TargetState`) and the open tasks of their registries (`TargetTask`) |
+| `GenerationSelection`, `GenerationEvent`, `GenerationOptions`, `MergeScope` | The generation types; `mergeGeneration(out, next, exclude, scope?)` merges only a scope's files and registry entries |
 
 How to write an extension is described in [Writing extensions](../codegen/extensions.md).
 
@@ -206,44 +229,40 @@ Tools and MCP:
 | `MODEL_TOOLS`, `AUTHORING_TOOLS`, `REGISTRY_TOOLS`, `REFERENCE_TOOLS`, `Tools` | The tool definitions: description, zod input shape and `run(context, input)` |
 | `operationSchema` | The zod schema of an edit operation |
 | `ToolContext`, `diskContext(project)`, `ProposalContext` | Where tools read and write: the files on disk, or a working copy that collects operations |
-| `createMcpServer(root, { visualizer? })` | An MCP server with all tools, the `implement_next_task` and `derive_model` prompts and `MCP_INSTRUCTIONS`; with a visualizer also the visualization tools, and it declares the `claude/channel` capability |
-| `sessionChanges(project)` | A function that returns the model changes since it was created, for `VisualizerOptions.changes` |
-| `visualTools(host)`, `VisualHost`, `VISUAL_INSTRUCTIONS` | The visualization tools over a window host, the part of `Visualizer` they use, and the server instructions that explain them |
+| `createMcpServer(root, { visualizer?, onToolCall? })`, `McpServerOptions` | An MCP server with all tools, the `implement_next_task` and `derive_model` prompts and `MCP_INSTRUCTIONS`; with a visualizer also the visual tools; `onToolCall(tool, input, result)` sees every call, such as to attribute the files it wrote |
+| `visualTools(host)`, `VisualHost`, `VISUAL_INSTRUCTIONS` | The visual tools over a host, what they need from it (the IDE server's canvas host of an agent session), and their server instructions |
+| `createMcpServer(root, { session })`, `SessionScope`, `sessionTools(scope)`, `SESSION_INSTRUCTIONS` | With a session (`{ id, store, host? }`): the session tools, every call attributed to the session, conflict warnings on edits, and the instructions for coordinating with other sessions |
+| `SessionStore`, `MemorySessionStore`, `AgentSession`, `SessionMessage`, `ClaimConflict`, `SESSION_STATUSES`, `SESSION_COLORS` | The [agent sessions](../tools/ai.md#agent-sessions): open (with its bearer token), authenticate, end, update label and status, claim, release, touch, send, post (a message from the user or the app), inbox, onChange |
+| `serveSessionStore(store, channel)`, `RemoteSessionStore`, `ipcChannel(process)`, `Channel` | A store served to another process, such as an IDE server child of Appling Desktop, and reached from there |
+| `IdeHost`, `IdeContext`, `IdeAction`, `AppHost`, `serveAppHost`, `remoteAppHost` | What `ide_context` and `ide_act` go through, and the part the app around the IDE server adds, also over IPC |
+| `findConflicts(sessions, self, touched)`, `overlaps(a, b)`, `peers(sessions, self)`, `sessionTitle(session)` | The claim rules and a session's display name |
+| `repoFolder(repo)`, `absolute(repo, file)` | A session's repo folder and a claimed file as the store keeps them: a local folder resolved, a remote one as it is on its machine (`ssh://` ids unchanged, POSIX folders by POSIX rules, also on Windows) |
+| `PlaybookStore`, `MemoryPlaybookStore(folder?)`, `Playbook`, `Chapter`, `PlaybookStep`, `StepInput`, `PlaybookPosition`, `CHANGE_KINDS`, `RESPONSE_KINDS` | The [workspace playbooks](../tools/ai.md#the-playbook): open a chapter, add steps, mark them done, close, read, move the user, respond, onChange; with a folder, each playbook is kept there as a JSON file |
+| `servePlaybookStore(store, channel)`, `RemotePlaybookStore` | A playbook store served to another process and reached from there, like the session store |
+| `openChapter(store, author, chapter)`, `ChapterAuthor`, `ChapterWriter` | Writes a chapter without MCP, such as for a code generation run: `add`, `done`, `close`, `read` |
+| `playbookTools(id, sessions, playbooks)`, `PLAYBOOK_INSTRUCTIONS`, `respondToStep(playbooks, sessions, chapter, step, response)` | The playbook tools of a session (`createMcpServer` adds them when `SessionScope.playbook` is set), their instructions, and the user's response, stored and delivered to the session's inbox |
+| `playbookKey(session)`, `isUnwatched(chapter)`, `unwatched(playbook)`, `playbookPosition(playbook)` | A session's playbook, the unwatched chapters in total, per session and per repo, and where the user is |
+| `handleMcpRequest(server, request, response, hosts?)` | Answers one Streamable HTTP request with a fresh server, as `serveHttp` and the IDE server do |
 | `serveHttp(root, port)` | The MCP server over Streamable HTTP on `127.0.0.1`; returns `{ url, close() }` |
-| `REGISTRY_PROMPT`, `CHAT_SYSTEM`, `MCP_INSTRUCTIONS` | The registry skill text, the chat system prompt and the MCP server instructions that make the model the source of truth for business logic |
+| `REGISTRY_PROMPT`, `MCP_INSTRUCTIONS` | The registry skill text and the MCP server instructions that make the model the source of truth for business logic |
 
-Chat:
+Proposals:
 
 | Export | Purpose |
 |---|---|
-| `chat(root, messages, model)` | One chat turn on a working copy; yields `ChatEvent`s: `text`, `tool`, `proposal`, `error` |
-| `modelSettings(root)`, `DEFAULT_MODEL`, `ModelSettings` | The `ai` section of `appling.config.json` with its defaults |
-| `languageModel(settings)` | The AI SDK model for the settings |
-| `Proposal`, `Hunk`, `ChatEvent` | The proposal and event types |
+| `proposal(project, context)` | The operations a `ProposalContext` collected, with their text and graph differences, as `propose_edits` shows them |
+| `Proposal`, `Hunk` | The proposal types |
 | `hunks(root, before, after)`, `graphDiff(before, after)` | The text and graph differences of a proposal |
 
-The tools and the chat are described in [AI tools](../tools/ai.md).
+The tools are described in [AI tools](../tools/ai.md).
 
 ## Visualization: @appling/viz
 
-Open the visualization window from your own Node program:
-
-```ts
-import { Project } from '@appling/ai';
-import { Visualizer } from '@appling/viz';
-
-const project = new Project('models');
-const window = new Visualizer({ root: 'models', graph: () => project.graph() });
-window.onAsk(ask => console.error(ask.text, ask.selected));
-await window.show({ view: 'machine', focus: ['sales.OrderFlow'], title: 'Order lifecycle' });
-```
+The root export (also `@appling/viz/protocol`) has the types the [visual tools](../tools/ai.md#visual-tools) exchange with the canvas:
 
 | Export | Purpose |
 |---|---|
-| `Visualizer` | The window host: `show(show)`, `bubble(bubble)`, `selection()`, `reply(text, askId)`, `review(review)` (resolves with the decision), `status(status)`, `onAsk(listener)`, `close()`. It serves the window on `127.0.0.1` with a random token, starts Electron on first use and pushes a new graph and the session changes when `.appling` files change, growing a `node` view by the declarations they touch |
-| `VisualizerOptions` | `root`, `graph()`, an optional `changes()` with the model changes of the session, an optional `launch(url)` that starts the window and an optional `edit(file, line)` that opens a file clicked in the window, for tests |
-| `Show`, `Bubble`, `Review`, `Decision`, `Ask`, `Selection`, `Changes`, `Status` | What the window draws, a note or code example on an element, a proposal to decide, the decision, a question from the window, the current selection, the model changes of the session (hunks and graph differences), the step the agent works on with its progress |
-| `HostMessage`, `WindowMessage` | The websocket messages between host and window |
+| `Show`, `Bubble`, `Review`, `Decision`, `Selection`, `Status` | A view of focused elements with a title and note, a note or code example on an element, a proposal to decide, the decision, the person's selection and view, the step the agent works on with its progress |
 | `nextShow(current, next)` | The view after the next one: a `node` view on a `node` view adds its elements, and whether the bubbles stay |
 
 `@appling/viz/views` holds the pure view logic, without React or DOM imports:
@@ -253,7 +272,8 @@ await window.show({ view: 'machine', focus: ['sales.OrderFlow'], title: 'Order l
 | `GraphIndex` | The graph with children, parents and lineage by qualified name, and `relevanceOf(qn)`, the relevance of the declaration an element belongs to |
 | `growTree(index, settings, unfolded, name?, trail?)` | The dependency tree of `settings.lens` as a `TreeNode`: the seed holds the modules, a module the declarations of the lens, a declaration the declarations that use it, grouped by kind when there is more than one; only the node ids in `unfolded` have children, the most relevant first; a node id in `trail` shows only its children in `unfolded` or `trail` |
 | `trailOf(index, settings, focus)`, `lensOf(kind)` | The `unfolded` and `trail` sets that draw the focused elements one after another, each unfolded in place, with the node id of each; the lens that starts from a kind |
-| `changeMarks(index, changes)` | The declarations that added and changed elements belong to, each `added` when the declaration itself is new, else `changed` |
+| `changeMarks(index, changes, modules?)`, `MarkedChanges`, `ChangeMark` | The declarations that added, changed and removed elements belong to, each `added` or `removed` when the declaration itself is new or gone, else `changed`; removed elements count only when the index has them (see `withRemoved`); with `modules`, the modules that hold a marked declaration are `changed` too |
+| `sessionMarks(index, marks)`, `SessionMark` | The declarations that the elements claimed or highlighted by agent sessions belong to, each with the first session's mark |
 | `revealPath(index, settings, qn)` | The node ids to unfold so that an element's declaration shows in its module |
 | `factOf(index, node)` | The short fact a tree node shows under its name, such as `on Order · draft, placed → cancelled` |
 | `LENSES`, `Lens` | The lenses (`domain`, `behavior`, `application`, `interfaces`, `access`) with their label and the kinds the tree starts from |
@@ -263,4 +283,4 @@ await window.show({ view: 'machine', focus: ['sales.OrderFlow'], title: 'Order l
 | `search`, `relations`, `entityActions`, `actionSummary`, `memberText`, `kindLabel`, `elementAt` | The search, relations and summaries the IDE side panel shows |
 | `ViewSettings`, `DEFAULT_VIEW` | The canvas options, the lens included |
 
-`@appling/viz/canvas` exports the SVG tree `ModelCanvas` (one lens at a time, unfolded node by node, circles sized by relevance, only trails when given a `focus`), the SVG flowchart `FlowCanvas` and the card grid `CardCanvas`, each with optional `bubbles`; `ModelCanvas` also marks the declarations of optional `changes`; import `@appling/viz/canvas.css` with them. They need `react` as a peer dependency.
+`@appling/viz/canvas` exports the SVG tree `ModelCanvas` (one lens at a time, unfolded node by node, circles sized by relevance, only trails when given a `focus`), the SVG flowchart `FlowCanvas` and the card grid `CardCanvas`, each with optional `bubbles`; `ModelCanvas` also marks the declarations and modules of optional `changes` (any `MarkedChanges`, such as a `GraphDiff`), draws removed ones ghosted (dashed while `changes.planned`, and played once more each time the optional `beat` changes) and rings those of optional `sessions` (`SessionMark[]`) in the session's colour; import `@appling/viz/canvas.css` with them. They need `react` as a peer dependency.

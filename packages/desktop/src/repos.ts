@@ -1,18 +1,14 @@
-import { basename, resolve } from 'node:path';
+import { locationName, parseLocation, repoId } from './remote/location.js';
 
 export type RepoStatus = 'starting' | 'ready' | 'failed';
 
-/** A repo with a running (or failed) IDE server; its id is its absolute path. */
+/** A repo with a running (or failed) IDE server; its id is its absolute path, or its URI when remote (`remote/location.ts`). What the rail shows of it is in `RailStatus`. */
 export interface Repo {
     id: string;
     name: string;
     status: RepoStatus;
     url?: string;
     error?: string;
-    /** Validation errors of its model, as its server last reported them. */
-    errors?: number;
-    /** The checked out branch (a short commit while detached); undefined outside git. */
-    branch?: string;
 }
 
 /** The repos that have an IDE server, whichever workspaces they belong to (see `Workspaces`). */
@@ -24,15 +20,21 @@ export class Repos {
     }
 
     get(id: string): Repo | undefined {
-        return this.map.get(resolve(id));
+        return this.map.get(repoId(id));
     }
 
     /** Registers a folder; one known already is returned as it is. Returns it and whether it is new. */
     add(folder: string): { repo: Repo, added: boolean } {
-        const id = resolve(folder);
+        const id = repoId(folder);
         const existing = this.map.get(id);
         if (existing) return { repo: existing, added: false };
-        const repo: Repo = { id, name: basename(id) || id, status: 'starting' };
+        let name = id;
+        try {
+            name = locationName(parseLocation(id));
+        } catch {
+            // a malformed remote id keeps its text as its name
+        }
+        const repo: Repo = { id, name, status: 'starting' };
         this.map.set(id, repo);
         return { repo, added: true };
     }

@@ -1,10 +1,10 @@
 import { expect, test } from 'vitest';
 import type { Model } from '@appling/lang';
-import { buildGraph, Simulator } from '@appling/model';
+import { buildGraph, diffGraphs, Simulator, withRemoved } from '@appling/model';
 import { buildWorkspace, examples } from '../../lang/test/workspace.js';
 import { layoutFlow } from '../src/layout.js';
 import {
-    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, policyText, relations, revealPath, search, trailOf, viewFor,
+    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, implementationMarks, sessionMarks, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, policyText, relations, revealPath, search, trailOf, viewFor,
     type Card, type Flow, type TreeNode
 } from '../src/views.js';
 
@@ -166,6 +166,44 @@ test('change marks lift members to their declaration and skip removed elements',
     const index = await indexOf(examples());
     const marks = changeMarks(index, { added: ['sales.OrderFlow', 'sales.Order.placed_at', 'sales.Gone'], changed: ['crm.Account', 'sales.OrderFlow'] });
     expect(Object.fromEntries(marks)).toEqual({ 'sales.OrderFlow': 'added', 'sales.Order': 'changed', 'crm.Account': 'changed' });
+});
+
+test('session marks lift members to their declaration; the first session wins', async () => {
+    const index = await indexOf(examples());
+    const marks = sessionMarks(index, [
+        { element: 'sales.Order.status', color: 'green', label: 'Totals', session: 'a' },
+        { element: 'sales.Order', color: 'blue', label: 'Status', session: 'b' },
+        { element: 'sales.Gone', color: 'blue', label: 'Status', session: 'b' }
+    ]);
+    expect([...marks].map(([qn, m]) => [qn, m.session])).toEqual([['sales.Order', 'a']]);
+});
+
+test('implementation marks roll members up into their declaration and declarations into their module', async () => {
+    const index = await indexOf(examples());
+    const states = Object.fromEntries(index.graph.nodes.map(n => [n.qn, { state: 'implemented' as const }]));
+    states['sales.Order.status'] = { state: 'unimplemented' as const };
+    states['crm.Account'] = { state: 'broken' as const };
+    const marks = implementationMarks(index, states);
+    expect(marks.get('sales.Order')).toBe('partial');
+    expect(marks.get('sales.OrderStatus')).toBe('implemented');
+    expect(marks.get('sales')).toBe('partial');
+    expect(marks.get('crm')).toBe('broken');
+    expect(marks.has('sales.Order.status')).toBe(false);
+});
+
+test('removed elements put back into the graph are marked removed, their members lift as changed', async () => {
+    const graphOf = async (source: string) => {
+        const { documents, services } = await buildWorkspace({ 'm.appling': source });
+        return buildGraph(documents.map(d => d.parseResult.value as Model), services);
+    };
+    const before = await graphOf('module m {\n  entity A {\n    x: String\n    y: String\n  }\n  entity B {\n    z: String\n  }\n}');
+    const after = await graphOf('module m {\n  entity A {\n    x: String\n  }\n}');
+    const diff = diffGraphs(before, after);
+    const index = new GraphIndex(withRemoved(before, after, diff));
+    expect(Object.fromEntries(changeMarks(index, diff))).toEqual({ 'm.A': 'changed', 'm.B': 'removed' });
+    expect(Object.fromEntries(changeMarks(index, diff, true))).toEqual({ 'm.A': 'changed', 'm.B': 'removed', m: 'changed' });
+    const drawn = (node: TreeNode): string[] => [...(node.type === 'element' ? [node.qn!] : []), ...(node.children ?? []).flatMap(drawn)];
+    expect(drawn(growTree(index, DOMAIN, new Set(['~', '~/m'])))).toEqual(['m.A', 'm.B']);
 });
 
 test('the element at an offset is the innermost one', () => {

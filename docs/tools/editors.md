@@ -53,6 +53,16 @@ When the workspace folder is reached through a symlink and the editor opens a fi
 > [!NOTE]
 > Rename in the language server changes the declaration and its references. Export lists are references too, so it covers them. It does not follow names inside expressions (`total` in `{ total >= 0 }`), transitions over enum values, `@Name` in `does` texts or message keys. The `rename` [edit operation](../reference/edit-operations.md#rename), used by the IDE inspector and the [AI tools](ai.md), follows all of them.
 
+## Appling Desktop
+
+Inside the code view of [Appling Desktop](desktop.md), the extension connects to the app and also shows the [implementation state](implementation.md):
+
+- a gutter mark on each model line that declares an element: implemented, partial, unimplemented, shifted or broken, with the element in its hover,
+- a CodeLens **Appling: sales.Order** above each code range that implements an element; it selects the element on the canvas,
+- a CodeLens **Open code** on model lines whose element has code, and the command **Appling: Open the code of this element** for the element at the cursor.
+
+The app sends the marks after every model or reference change. Outside Appling Desktop the extension shows none of them.
+
 ## Connect an editor
 
 Every LSP client needs the same four facts:
@@ -85,16 +95,17 @@ Format with `vim.lsp.buf.format()`, rename with `vim.lsp.buf.rename()`, and hove
 
 ### VS Code
 
-The Appling extension for VS Code bundles the language server and a TextMate grammar generated from the Appling grammar, so it needs no global install. It starts when the workspace contains a `.appling` file and loads every model file in the workspace folders. Build and install it from the repository:
+The Appling extension for VS Code bundles the language server and a TextMate grammar generated from the Appling grammar, so it needs no global install. It starts when the workspace contains a `.appling` file or an `.appling` file is opened, and loads every model file in the workspace folders. Build and install it from the repository (the build also writes `out/appling.vsix`):
 
 ```sh
 pnpm --filter @appling/lang build
 pnpm --filter appling-vscode build
-pnpm --filter appling-vscode package
 code --install-extension packages/vscode/out/appling.vsix
 ```
 
 Turn on `editor.formatOnSave` for `[appling]` to keep files canonical.
+
+Inside the code view of Appling Desktop (Code OSS, started by the app) the extension comes preinstalled and also syncs the selection with the model canvas: moving the cursor in a `.appling` file selects the element there on the canvas, and selecting an element on the canvas opens its source. Desktop hands the extension a local channel in the `APPLING_DESKTOP_BRIDGE` and `APPLING_DESKTOP_TOKEN` environment variables; in a plain VS Code they are not set and the extension only runs the language server.
 
 ## Embed the language server
 
@@ -108,7 +119,7 @@ import { createApplingLspServices } from '@appling/lang/lsp';
 startLanguageServer(createApplingLspServices({ connection, ...NodeFileSystem }).shared);
 ```
 
-`connection` is a `vscode-languageserver` connection. The IDE creates one per websocket with `vscode-ws-jsonrpc` and starts one server for each page. On Node, pass `realPath` too, as `appling-language-server` and the IDE do:
+`connection` is a `vscode-languageserver` connection. The IDE server of each repo in Appling Desktop creates one per websocket with `vscode-ws-jsonrpc` and starts one server for each view. On Node, pass `realPath` too, as `appling-language-server` and the IDE server do:
 
 ```ts
 import { existsSync, realpathSync } from 'node:fs';

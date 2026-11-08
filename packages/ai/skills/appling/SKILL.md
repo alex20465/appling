@@ -28,12 +28,12 @@ Appling is a new language, so never write it from memory. Call `language_referen
 
 A request such as "I want to design a todo app" is a modeling task. The draft is the model, not code.
 
-1. Open the window with `visual_status`, such as "Designing the todo app", and report each following step the same way, with done and total when you know them.
+1. When the visual tools are there (an agent session of Appling Desktop), report the start with `visual_status`, such as "Designing the todo app", and each following step the same way, with done and total when you know them.
 2. Ask the person only what the business decides: who uses the application, what they need to do, which rules must always hold. Decide the modeling yourself.
 3. Split the application into modules by bounded context, such as `tasks` and `accounts`.
 4. Write each module with `write_model_file`, in layer order: enums, value types and entities; then actions, state machines, events and jobs; then queries, projections and use cases; then interfaces and pages. Add roles, actors and policies for every action and query someone runs.
 5. Call `check` after each file and fix every error before you go on.
-6. Show each module as you finish it. The window already grows the tree by every declaration you add and marks it; draw a machine with the `machine` view of `visualize` and explain the decisions with `visual_bubble`.
+6. Show each module as you finish it. The canvas already marks every declaration you add; draw a machine with the `machine` view of `visualize` and explain the decisions with `visual_bubble`.
 7. Verify the behavior with `simulate`: every state reachable (`reach`), the right actors allowed (`actors`), no invariant at risk (`risks`), and an action on a sample record (`run`).
 8. Mark what the business runs on as `core` (page `relevance`).
 
@@ -54,7 +54,7 @@ Every feature, change request or behavior bug starts in the model:
 
 1. Find the elements involved with `graph_query`, `read_source` and `code_references`.
 2. Change the model with `edit` (`add`, `rename`, `retype`, `remove`, `set`), one operation at a time. A rejected edit comes back with the errors to fix. Use `write_model_file` only for a new module.
-3. Check the change with `check` and `simulate`. The window marks the changed declarations and lists the change with its text differences; show related views with `visualize`.
+3. Check the change with `check` and `simulate`. The canvas marks the changed declarations and lists the change with its text differences; show related views with `visualize`.
 4. Carry the change into the code:
    - When code generation covers it, run `npx appling generate --migrate` for renames, type changes and removals, or `npx appling generate --sync` for everything else, then work through the new registry tasks with the `appling-registry` skill.
    - When it does not (code that was not generated, or a target without that element), change the code by hand and record the lines with `record_code_references`.

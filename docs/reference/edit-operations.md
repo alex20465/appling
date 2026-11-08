@@ -3,7 +3,7 @@ title: Edit operations
 description: The five validated operations that change a model by qualified name, what each one touches, when an edit is rejected, and how edits record migration steps after a release.
 ---
 
-Tools never patch Appling text by hand. They change the model through five edit operations that address elements by qualified name: `add`, `rename`, `retype`, `remove` and `set`. The IDE inspector and graph, the IDE chat and the MCP `edit` tool all use them. Each operation is applied to the text, the touched element is printed canonically, the result is validated, and the edit is rejected when it would make the model worse.
+Tools never patch Appling text by hand. They change the model through five edit operations that address elements by qualified name: `add`, `rename`, `retype`, `remove` and `set`. The inspector of Appling Desktop's repo view, agent proposals and the MCP `edit` tool all use them. Each operation is applied to the text, the touched element is printed canonically, the result is validated, and the edit is rejected when it would make the model worse.
 
 ## applyEdit
 
@@ -234,4 +234,4 @@ module sales {
 
 Elements added after the release get no steps: adding `note: Text?` and removing it again leaves the block unchanged. Elements outside the domain layer get no steps either. See [Migrations](../language/migrations.md) for the rules of migration blocks.
 
-The IDE, the MCP server and the IDE chat always pass the latest release in the workspace's `.appling/releases/` folder.
+The repo view of Appling Desktop and the MCP server always pass the latest release in the workspace's `.appling/releases/` folder.

@@ -113,6 +113,27 @@ describe.skipIf(process.platform === 'win32')('pty host', () => {
         client.close();
     }, 20000);
 
+    test('spawnAttached streams the output from the first byte, also what a program prints at once', async () => {
+        const dir = hostDir();
+        const client = await connectPtyHost({ dir });
+        const terminal = await client.spawnAttached({ ...SH, args: ['-c', 'printf first-line; exit 4'], cwd: dir });
+        const live = output(terminal);
+        expect(await new Promise(done => terminal.onExit(done))).toMatchObject({ code: 4 });
+        expect(live.text()).toContain('first-line');
+        expect(terminal.info).toMatchObject({ attached: 1 });
+        client.close();
+    }, 20000);
+
+    test('addEnv adds to the host\'s own environment instead of sending the client\'s', async () => {
+        const dir = hostDir();
+        const client = await connectPtyHost({ dir, host: { env: { ...process.env, FROM_HOST: 'host', DROP_ME: 'x' } } });
+        const terminal = await client.spawnAttached({ shell: '/bin/sh', args: ['-c', 'printf "%s:%s:%s" "$FROM_HOST" "$ADDED" "${DROP_ME-gone}"'], cwd: dir, addEnv: { ADDED: 'added', DROP_ME: null } });
+        const live = output(terminal);
+        await new Promise(done => terminal.onExit(done));
+        expect(live.text()).toContain('host:added:gone');
+        client.close();
+    }, 20000);
+
     test('a client without the token is turned away', async () => {
         const dir = hostDir();
         (await connectPtyHost({ dir })).close();
@@ -141,7 +162,7 @@ describe.skipIf(process.platform === 'win32')('pty host', () => {
         const client = await connectPtyHost({ dir, host: { idleTimeout: 300 } });
         const info = await client.spawn({ ...SH, cwd: dir, group: 'crm' });
         const { stdout } = await run(process.execPath, [hostMain(), 'list', '--dir', dir]);
-        expect(stdout).toContain(`${info.id}\tpid ${info.pid}\tcrm`);
+        expect(stdout).toContain(`${info.id}\trunning\tpid ${info.pid}\tcrm`);
         await run(process.execPath, [hostMain(), 'kill', info.id, '--dir', dir]);
         expect(await client.list()).toEqual([]);
         client.close();

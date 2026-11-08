@@ -7,15 +7,14 @@ Appling keeps the model in `.appling` files and everything else out of them. Pro
 
 ## appling.config.json
 
-One JSON file in the project root with two optional sections:
+One JSON file in the project root with one optional section:
 
 ```json
 {
   "generate": [
     { "extension": "@appling/codegen-django", "out": "build/shop", "options": { "name": "shop" } },
     { "extension": "@appling/codegen-ash", "out": "build/shop_ash" }
-  ],
-  "ai": { "provider": "anthropic", "model": "claude-opus-5-5" }
+  ]
 }
 ```
 
@@ -25,9 +24,9 @@ Each tool looks for the file in a specific place:
 |---|---|---|
 | `appling generate` | `generate` | `./appling.config.json` in the current folder |
 | MCP server registry tools | `generate` | `appling.config.json` in the server's workspace folder |
-| IDE chat | `ai` | `appling.config.json` in the IDE's workspace folder |
+| The Code tab of the [repo view](../tools/ide.md#the-code-tab) | `generate` | `appling.config.json` in the repo's workspace folder |
 
-Keep the file in the folder you run the CLI from and open in the IDE, so all tools agree.
+Keep the file in the folder you run the CLI from and open in Appling Desktop, so all tools agree.
 
 ### generate
 
@@ -52,17 +51,6 @@ The built in extensions read one option:
 
 What each extension generates is described in [Django](../codegen/django.md) and [Ash](../codegen/ash.md). Third party extensions may read more options; see [Writing extensions](../codegen/extensions.md).
 
-### ai
-
-The model of the IDE chat. Both keys are optional and fall back to their defaults one by one.
-
-| Key | Values | Default |
-|---|---|---|
-| `provider` | `anthropic` or `openai` | `anthropic` |
-| `model` | A model id of the provider | `claude-opus-5-5` |
-
-API keys never go into this file. They come from the environment of the IDE: `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`. See [AI tools](../tools/ai.md#ide-chat).
-
 ## The workspace .appling folder
 
 Next to your models, in the workspace folder:
@@ -70,9 +58,13 @@ Next to your models, in the workspace folder:
 ```
 .appling/
   view.json
+  references.json
+  generation.json
   releases/
     1.0.0.json
 ```
+
+`references.json` holds the [code references](../tools/references.md) and `generation.json` the fingerprints of each target's last generation, which decide what is [outstanding](../tools/implementation.md#generation-records).
 
 ### View
 
@@ -115,7 +107,7 @@ Next to your models, in the workspace folder:
 | `created` | When the release was written, as an ISO timestamp |
 | `graph` | The [semantic graph](graph.md) at that point: `nodes` and `edges`, without `dependencies` |
 
-The IDE, the MCP server and the IDE chat use the release with the highest version. When you rename, retype or remove a domain element that exists in it, the edit appends a migration step to the module's `since_v<version>` block. See [Edit operations](edit-operations.md#release-aware-edits).
+Appling Desktop and the MCP server use the release with the highest version. When you rename, retype or remove a domain element that exists in it, the edit appends a migration step to the module's `since_v<version>` block. See [Edit operations](edit-operations.md#release-aware-edits).
 
 Commit the releases folder: it is the record of what your generated projects and databases were built from.
 

@@ -1,7 +1,6 @@
-import type { Graph } from '@appling/model';
 import type { ViewKind } from './views.js';
 
-/** What the window draws: a view of the focused elements, with Claude's title and note. */
+/** What an agent session shows on the canvas: a view of the focused elements, with its title and note. */
 export interface Show {
     view: ViewKind;
     focus: string[];
@@ -26,9 +25,6 @@ export interface Review {
     graph: { added: string[], removed: string[], changed: string[] };
 }
 
-/** The model changes since the session started, in the shape of a review. */
-export type Changes = Omit<Review, 'summary'>;
-
 /** What the agent works on now; with `done` and `total`, how far along it is. */
 export interface Status {
     text: string;
@@ -36,30 +32,14 @@ export interface Status {
     total?: number;
 }
 
-export type Decision = { accepted: true } | { accepted: false, comment?: string };
-
-export interface Ask {
-    id: string;
-    text: string;
-    selected?: string;
+/** What the person selected and the view on screen; `open` is false when no repo view is open. */
+export interface Selection {
+    open: boolean;
+    qn?: string;
     view?: Show;
 }
 
-export type HostMessage =
-    | { type: 'graph', graph: Graph }
-    | { type: 'show', show: Show }
-    | { type: 'bubble', bubble: Bubble }
-    | { type: 'reply', text: string, askId?: string }
-    | { type: 'review', id: string, review: Review }
-    | { type: 'reviewed', id: string }
-    | { type: 'changes', changes: Changes }
-    | { type: 'status', status: Status };
-
-export type WindowMessage =
-    | { type: 'select', qn?: string, view: Show }
-    | { type: 'ask', text: string }
-    | { type: 'open', file: string, line: number }
-    | { type: 'decide', id: string, decision: Decision };
+export type Decision = { accepted: true } | { accepted: false, comment?: string };
 
 /**
  * The view on screen after `next`: a node view on a node view adds its elements to the ones drawn. The bubbles stay

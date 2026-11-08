@@ -1,6 +1,6 @@
 # @appling/ai
 
-Appling for AI assistants: an MCP server over an Appling workspace, a provider agnostic model adapter for the IDE chat, and the skill that works through a generated project's task registry.
+Appling for AI assistants: an MCP server over an Appling workspace, the agent sessions and playbook of Appling Desktop, and the skills that design a model and work through a generated project's task registry.
 
 ## MCP server
 
@@ -22,32 +22,37 @@ The server instructions tell the assistant that the model is the source of truth
 | `language_reference` | The complete language documentation: the list of pages, or one page as Markdown |
 | `write_model_file` | Creates or replaces one `.appling` file, only when the workspace still validates with it |
 | `edit` | One edit operation (`add`, `rename`, `retype`, `remove`, `set`), validated, written to the files; `dryRun` only checks it |
-| `registry_next` | The next open task of a generated project, with its model context |
+| `registry_next` | The next open task of a generated project, with its model context; in an agent session it skips tasks other sessions claimed and claims it |
 | `registry_update` | Marks a task `done`, or `partial` with a note |
 | `run_tests` | Runs the generated project's tests |
 | `code_references` | Where an element and its members are implemented, by file and line range, with their status; without a name, every reference that is not current |
 | `record_code_references` | Records the line ranges that implement an element in `.appling/references.json`, each with its first line as the anchor |
+| `implementation_status` | How far the model is implemented: counts per state and the elements that are not implemented or changed since the last generation |
 
 The prompt `implement_next_task` carries the registry workflow.
 
-### Visualization window
+### Agent sessions
 
-Over stdio the server also drives a floating window (`@appling/viz`, Electron; macOS, Windows and Linux, through XWayland on Wayland). Ask Claude Code to show part of the model and the window opens at the top right of the main screen, above every other window.
+The IDE server of each repo serves this MCP server at `/mcp` for agent sessions, authenticated by a session's bearer token: Appling Desktop opens a session per agent terminal. The session tools `session_set_label`, `session_set_status`, `session_claim`, `session_release`, `sessions_list`, `session_message`, `session_inbox`, `ide_context` and `ide_act` let agents label their work, keep its status, claim elements and files, see and message each other and act on the IDE; edits that touch another session's claim come back with a warning. Sessions also get the visual tools below, drawing on the repo's canvas in Desktop (`VisualHost`), with proposals decided in the app; `onToolCall` of `createMcpServer` lets the IDE attribute written files to the session. `MemorySessionStore`, `serveSessionStore` and `RemoteSessionStore` share one store across processes; `MemorySessionStore.adopt` takes back a session with its earlier token (an agent that kept running while Desktop restarted). See https://www.appling.tools/docs/tools/ai/#agent-sessions.
+
+With a playbook store in the session scope (`SessionScope.playbook`), sessions also write the workspace's shared playbook: `playbook_open_chapter`, `playbook_add_steps`, `playbook_step_done`, `playbook_close_chapter` and `playbook_read` (`PLAYBOOK_INSTRUCTIONS` tells them not to interrupt the chapter being watched). `MemoryPlaybookStore(folder?)` keeps playbooks on disk, `servePlaybookStore` and `RemotePlaybookStore` share them across processes, `respondToStep` stores the user's response and delivers it to the session's inbox, and `openChapter(store, author, chapter)` writes chapters without MCP. See https://www.appling.tools/docs/tools/ai/#the-playbook.
+
+### Visual tools
+
+Agent sessions also get tools that draw on the repo's canvas in Appling Desktop. The stdio and `--http` servers have none of them: there is no window to draw in outside Desktop.
 
 | Tool | Does |
 |---|---|
-| `visualize` | Shows a `node` in the model tree, adding to the tree on screen so Claude can guide one node at a time, a flowchart of a `machine` or a `usecase`, or a card of an `action` or an `event` |
+| `visualize` | Shows a `node` in the model tree, adding to the tree on screen so the agent can guide one node at a time, a flowchart of a `machine` or a `usecase`, or a card of an `action` or an `event` |
 | `visual_bubble` | Places a note on an element or member of the view, or a code example with its file and line |
-| `visual_selection` | The element selected in the window and the view on screen |
-| `visual_reply` | Answers a question typed into the window |
-| `visual_status` | Shows the step Claude works on, with its progress; the window also marks and lists every model change of the session as it happens |
-| `propose_edits` | Shows edit operations as a proposal in the window and writes them only when accepted |
-
-Every file and line in the window opens in your editor on click. Questions typed into the window reach the session as Claude Code channel messages. Channels are a research preview, so start Claude Code with `claude --dangerously-load-development-channels server:appling`.
+| `visual_selection` | The element the person selected and the view on screen |
+| `visual_reply` | Answers the person next to the session's view; their questions typed there reach the session's inbox as messages from User |
+| `visual_status` | Shows the step the agent works on, with its progress; every model change is marked on the canvas by itself |
+| `propose_edits` | Shows edit operations as a proposal in the app and writes them only when accepted |
 
 ## Appling skill and rules
 
-`rules/appling.md` is a short, always loaded instruction: the model is the source of truth, every requirement goes through the model first, changes apply directly while only the model exists and go into model and code together once code exists, and the work shows in the visualization window. `skills/appling/SKILL.md` holds the knowledge: orient in the project, learn the language, design a new application layer by layer, generate it, and carry changes through model and code. `npx @appling/cli init` wires both into Claude Code, Codex, OpenCode, Gemini CLI and Antigravity CLI by reference into `node_modules`, so updating this package updates them.
+`rules/appling.md` is a short, always loaded instruction: the model is the source of truth, every requirement goes through the model first, changes apply directly while only the model exists and go into model and code together once code exists, and in a Desktop agent session the work shows on the canvas. `skills/appling/SKILL.md` holds the knowledge: orient in the project, learn the language, design a new application layer by layer, generate it, and carry changes through model and code. `npx @appling/cli init` wires both into Claude Code, Codex, OpenCode, Gemini CLI and Antigravity CLI by reference into `node_modules`, so updating this package updates them.
 
 ## Registry skill
 
@@ -56,16 +61,6 @@ Every file and line in the window opens in your editor on click. Questions typed
 ## Reverse engineering skill
 
 `skills/appling-reverse/SKILL.md` (also the MCP prompt `derive_model`) is an agent skill for deriving an Appling model from an existing application: survey the code, map it to the five layers (with rules for modeling access), write and validate module by module, record the code each element describes, compare behavior with `simulate`, and report what the model cannot say exactly.
-
-## Model adapter and chat
-
-The IDE chat uses the [AI SDK](https://ai-sdk.dev). The model is set in `appling.config.json`, the API key comes from the provider's environment variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`):
-
-```json
-{ "ai": { "provider": "anthropic", "model": "claude-opus-5-5" } }
-```
-
-`chat(root, messages, model)` runs one turn with the model tools on a working copy. Edits are not written: the turn ends with a proposal (the operations, text hunks per file and the graph elements added, changed and removed) that the IDE shows for review.
 
 ## License
 

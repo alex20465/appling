@@ -5,3 +5,6 @@ export * from './files.js';
 export * from './simulator.js';
 export * from './references.js';
 export * from './relevance.js';
+export * from './diff.js';
+export * from './implementation.js';
+export * from './anchors.js';

@@ -183,18 +183,20 @@ test('workspace files read like VS Code: comments, trailing commas, relative pat
         '    { "path": "shop", "name": "Shop // web" },',
         '    { "path": "../crm", },',
         '    { "uri": "vscode-remote://ssh-remote+box/srv/api" },',
+        '    { "uri": "vscode-vfs://github/owner/repo" },',
         '  ],',
         '  /* kept */ "settings": { "editor.tabSize": 2, "url": "http://x/*y*/" },',
         '}'
     ].join('\n'));
     const workspace = readCodeWorkspace(file);
     expect(workspaceName(file)).toBe('client');
-    expect(workspace.folders).toEqual([{ path: join(dir, 'shop'), name: 'Shop // web' }, { path: resolve(dir, '../crm') }]);
+    // remote folders open as remote repos; kinds Desktop cannot open are kept as they are
+    expect(workspace.folders).toEqual([{ path: join(dir, 'shop'), name: 'Shop // web' }, { path: resolve(dir, '../crm') }, { path: 'ssh://box/srv/api' }]);
     expect(workspace.data).toEqual({ settings: { 'editor.tabSize': 2, url: 'http://x/*y*/' } });
 
     writeCodeWorkspace(file, [...workspace.folders, { path: join(dir, 'docs') }]);
     expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({
-        folders: [{ name: 'Shop // web', path: 'shop' }, { path: '../crm' }, { path: 'docs' }, { uri: 'vscode-remote://ssh-remote+box/srv/api' }],
+        folders: [{ name: 'Shop // web', path: 'shop' }, { path: '../crm' }, { uri: 'vscode-remote://ssh-remote+box/srv/api' }, { path: 'docs' }, { uri: 'vscode-vfs://github/owner/repo' }],
         settings: { 'editor.tabSize': 2, url: 'http://x/*y*/' }
     });
 
@@ -222,7 +224,7 @@ test('a session restores workspaces, the shown repos, the active workspace and t
     before.hide(one, '/a', true);
     before.collapsed = true;
     const file = join(dir, 'session.json');
-    writeSession(file, sessionOf(before));
+    writeSession(file, sessionOf(before, {}, ['/b']));
     // a workspace file changed outside the app, and one is gone
     writeCodeWorkspace(two, folders('/c', '/d'));
     const session = readSession(file)!;
@@ -238,6 +240,10 @@ test('a session restores workspaces, the shown repos, the active workspace and t
     expect(after.get(one)).toMatchObject({ pinned: ['/b'], hidden: ['/a'] });
     expect(after.get(two)).toMatchObject({ pinned: [], hidden: [] });
     expect(after.collapsed).toBe(true);
+    // the open code views (#8)
+    expect(session.code).toEqual(['/b']);
+    writeFileSync(file, JSON.stringify({ workspaces: [], code: ['/x', 3] }));
+    expect(readSession(file)?.code).toEqual(['/x']);
     expect(readSession(join(dir, 'missing.json'))).toBeUndefined();
 });
 
@@ -301,7 +307,7 @@ test('each repo gets its own IDE server process that reports its URL and ends wi
     await exited;
 }, 30000);
 
-test('a repo server reports its validation errors at start and after every model change', async () => {
+test('a repo server reports its validation errors and unseen changes at start and after every model change', async () => {
     const root = mkdtempSync(join(tmpdir(), 'appling-desktop-'));
     writeFileSync(join(root, 'shop.appling'), 'module shop {\n  entity Order {\n    total: Missing\n  }\n}\n');
     const statuses: IdeStatus[] = [];
@@ -314,7 +320,9 @@ test('a repo server reports its validation errors at start and after every model
     first = reported();
     writeFileSync(join(root, 'shop.appling'), 'module shop {\n  entity Order {\n    total: Int\n  }\n}\n');
     await first;
-    expect(statuses.at(-1)).toEqual({ errors: 0 });
+    // the changed file is an unseen change until the user accepts it
+    while (!statuses.some(s => s.changes === 1)) await reported();
+    expect(statuses.findLast(s => s.errors !== undefined)!.errors).toBe(0);
 }, 30000);
 
 test('a server that cannot start rejects with its reason', async () => {

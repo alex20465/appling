@@ -17,5 +17,44 @@ contextBridge.exposeInMainWorld('appling', {
     toggleRail: () => ipcRenderer.send('toggleRail'),
     onSwitcher: (callback: () => void) => ipcRenderer.on('switcher', () => callback()),
     switch: (query: string) => ipcRenderer.invoke('switch', query),
-    closeSwitcher: () => ipcRenderer.send('closeSwitcher')
+    closeSwitcher: () => ipcRenderer.send('closeSwitcher'),
+    addMenu: () => ipcRenderer.send('addMenu'),
+    openClone: () => ipcRenderer.send('openClone'),
+    move: (repo: string, from: string, to: string) => ipcRenderer.send('move', repo, from, to),
+    onClone: (callback: (form: unknown) => void) => ipcRenderer.on('clone', (_event, form) => callback(form)),
+    onCloneProgress: (callback: (progress: unknown) => void) => ipcRenderer.on('cloneProgress', (_event, progress) => callback(progress)),
+    chooseCloneParent: (current: string) => ipcRenderer.invoke('chooseCloneParent', current),
+    clone: (url: string, parent: string, name?: string) => ipcRenderer.invoke('clone', url, parent, name),
+    closeClone: () => ipcRenderer.send('closeClone'),
+    // windows (issue #14): a drag out of the rail, a drop from another window's rail, the panes moved into this window
+    detach: (kind: string, id: string, x: number, y: number) => ipcRenderer.send('detach', kind, id, x, y),
+    drop: (kind: string, id: string) => ipcRenderer.send('drop', kind, id),
+    paneMenu: (pane: string) => ipcRenderer.send('paneMenu', pane),
+    focusPane: (pane: string) => ipcRenderer.send('focusPane', pane),
+    dockPane: (pane: string) => ipcRenderer.send('dockPane', pane),
+    onRemote: (callback: (form: unknown) => void) => ipcRenderer.on('remote', (_event, form) => callback(form)),
+    addRemote: (text: string) => ipcRenderer.invoke('addRemote', text),
+    closeRemote: () => ipcRenderer.send('closeRemote'),
+    // the task list (issue #13, tasks/ipc.ts)
+    tasks: {
+        view: () => ipcRenderer.invoke('tasks:view'),
+        onOpen: (callback: (view: unknown) => void) => ipcRenderer.on('tasks:open', (_event, view) => callback(view)),
+        onList: (callback: (view: unknown) => void) => ipcRenderer.on('tasks:list', (_event, view) => callback(view)),
+        onAsk: (callback: (label: string) => void) => ipcRenderer.on('tasks:ask', (_event, label) => callback(label)),
+        run: (label: string, inputs?: Record<string, string>, restart?: boolean) => ipcRenderer.send('tasks:run', label, inputs, restart),
+        stop: (label: string) => ipcRenderer.send('tasks:stop', label),
+        show: (label: string) => ipcRenderer.send('tasks:show', label),
+        close: () => ipcRenderer.send('tasks:close')
+    },
+    // agent sessions (#10): the rail's dots, the board and the answer form
+    agentJump: (id: string) => ipcRenderer.send('agents:jump', id),
+    agentBoard: () => ipcRenderer.send('agents:board'),
+    agentOpenAnswer: (id: string) => ipcRenderer.send('agents:openAnswer', id),
+    agentClose: () => ipcRenderer.send('agents:close'),
+    agentAnswer: (id: string, answer: unknown) => ipcRenderer.send('agents:answer', id, answer),
+    agentRename: (id: string, label: string) => ipcRenderer.send('agents:rename', id, label),
+    agentEnd: (id: string) => ipcRenderer.send('agents:end', id),
+    onAgentBoard: (callback: (entries: unknown) => void) => ipcRenderer.on('agents:board', (_event, entries) => callback(entries)),
+    onAgentAnswer: (callback: (entry: unknown) => void) => ipcRenderer.on('agents:answer', (_event, entry) => callback(entry)),
+    onAgentClose: (callback: () => void) => ipcRenderer.on('agents:close', () => callback())
 });

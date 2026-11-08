@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { Graph } from './graph.js';
 
 /** Where an element is implemented: a line range of a code file, and its first line as the anchor that finds it again. */
@@ -11,7 +11,7 @@ export interface CodeReference {
     anchor: string;
 }
 
-/** The code references of a workspace, by qualified name. */
+/** The code references of a workspace, by qualified name or sub-anchor address (`sales.PlaceOrder#step[2]`). */
 export type References = Record<string, CodeReference[]>;
 
 /**
@@ -58,7 +58,8 @@ export function recordReferences(root: string, qn: string, ranges: { file: strin
 
 /** Every reference with where it is now, nearest occurrence of its anchor first. With a graph, references to elements it lacks are orphaned. */
 export function resolveReferences(root: string, graph?: Graph): ResolvedReference[] {
-    const names = graph && new Set(graph.nodes.map(n => n.qn));
+    // elements and the sub-anchors of lines that are not elements (`anchors.ts`) carry references
+    const names = graph && new Set([...graph.nodes.map(n => n.qn), ...(graph.anchors ?? []).map(a => a.address)]);
     return Object.entries(readReferences(root)).flatMap(([qn, references]) => references.map(reference => {
         if (names && !names.has(qn)) return { qn, ...reference, status: 'orphaned' as const };
         const path = resolve(root, reference.file);
@@ -70,4 +71,38 @@ export function resolveReferences(root: string, graph?: Graph): ResolvedReferenc
         const recorded = { start: reference.start, end: reference.end };
         return { qn, ...reference, start: found, end: found + reference.end - reference.start, status: 'shifted' as const, recorded };
     }));
+}
+
+/**
+ * Replaces the references of these elements that point into one folder (absolute, such as a generated project) with
+ * the given line ranges, keeping their references elsewhere, such as ones an agent recorded in other code. Ranges
+ * are relative to the folder; ranges that start on an empty line or fall outside their file are skipped.
+ */
+export function replaceReferencesIn(root: string, folder: string, updates: Record<string, { file: string, start: number, end: number }[]>): References {
+    const all = readReferences(root);
+    const base = resolve(folder);
+    const inside = (file: string) => {
+        const rel = relative(base, resolve(root, file));
+        return !rel.startsWith('..') && !isAbsolute(rel);
+    };
+    const texts = new Map<string, string[]>();
+    const linesOf = (path: string) => {
+        if (!texts.has(path)) texts.set(path, existsSync(path) ? readFileSync(path, 'utf8').split('\n') : []);
+        return texts.get(path)!;
+    };
+    for (const [qn, ranges] of Object.entries(updates)) {
+        const kept = (all[qn] ?? []).filter(r => !inside(r.file));
+        const added = ranges.flatMap(({ file, start, end }) => {
+            const path = resolve(base, file);
+            const lines = linesOf(path);
+            const anchor = lines[start - 1]?.trim();
+            if (!anchor || end < start || end > lines.length) return [];
+            return [{ file: relative(resolve(root), path), start, end, anchor }];
+        });
+        if (kept.length + added.length) all[qn] = [...kept, ...added];
+        else delete all[qn];
+    }
+    mkdirSync(dirname(join(root, REFERENCES)), { recursive: true });
+    writeFileSync(join(root, REFERENCES), JSON.stringify(all, null, 2) + '\n');
+    return all;
 }

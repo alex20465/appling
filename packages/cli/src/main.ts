@@ -7,7 +7,7 @@ import { NodeFileSystem } from 'langium/node';
 import { createApplingServices, print, type ApplingServices, type Model } from '@appling/lang';
 import {
     BASELINE, checkPrerequisites, coverage, coverageTable, describe, loadExtension, mergeGeneration, pendingChanges, plan, planMigrations, readApplied, readConfig, readRegistry,
-    runMigrations, runPlan, type Plan
+    recordWritten, runMigrations, runPlan, type Plan, type Written
 } from '@appling/codegen';
 import { buildGraph, dependencies, findApplingFiles, resolveReferences, Simulator, writeRelease, type Graph, type ResolvedReference } from '@appling/model';
 import { init } from './init.js';
@@ -74,7 +74,7 @@ function refs(documents: LangiumDocument[], services: ApplingServices, target: s
     const all = resolveReferences('.', buildGraph(documents.map(doc => doc.parseResult.value as Model), services));
     const line = (r: ResolvedReference) => `${r.file}:${r.start}-${r.end} ${r.qn}`;
     if (target !== '--check') {
-        const found = all.filter(r => r.qn === target || r.qn.startsWith(`${target}.`));
+        const found = all.filter(r => r.qn === target || r.qn.startsWith(`${target}.`) || r.qn.startsWith(`${target}#`));
         for (const r of found) console.log(`${line(r)}${r.status === 'current' ? '' : ` (${r.status})`}`);
         if (!found.length) console.log(`no code references for ${target}`);
         return 0;
@@ -125,8 +125,10 @@ async function syncTarget(graph: Graph, name: string, out: string, options: Reco
     const temp = mkdtempSync(join(tmpdir(), 'appling-sync-'));
     try {
         const next = join(temp, basename(resolve(out)));
-        runPlan(plan(graph, extension, String(options.name ?? basename(resolve(out))), options), next, line => console.log(`  ${line}`));
+        const written: Written[] = [];
+        runPlan(plan(graph, extension, String(options.name ?? basename(resolve(out))), options), next, line => console.log(`  ${line}`), written);
         const report = mergeGeneration(out, next, extension.syncExclude ?? []);
+        recordWritten('.', out, graph, written, new Set(graph.nodes.map(n => n.qn)));
         for (const [label, files] of Object.entries(report)) if (files.length) console.log(`${label}: ${files.join(', ')}`);
         console.log(`${out}: synced${report.conflicts.length ? `, ${report.conflicts.length} file(s) with conflict markers (registry tasks)` : ''}`);
         return false;
@@ -185,7 +187,9 @@ async function generateTarget(graph: Graph, name: string, out: string, options: 
         return true;
     }
     try {
-        runPlan(result, out, line => console.log(line));
+        const written: Written[] = [];
+        runPlan(result, out, line => console.log(line), written);
+        recordWritten('.', out, graph, written, new Set(graph.nodes.map(n => n.qn)));
     } catch (error) {
         console.error((error as Error).message);
         return true;

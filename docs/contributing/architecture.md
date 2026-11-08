@@ -14,9 +14,11 @@ flowchart BT
   codegen["@appling/codegen<br/>plan, steps, registry, migrations"]
   django["@appling/codegen-django"]
   ash["@appling/codegen-ash"]
-  ai["@appling/ai<br/>MCP server, chat, registry skill"]
+  ai["@appling/ai<br/>MCP server, agent sessions, registry skill"]
   cli["@appling/cli<br/>the appling command"]
-  ide["@appling/ide<br/>local web IDE"]
+  viz["@appling/viz<br/>views and canvases"]
+  ide["@appling/ide<br/>repo view of Desktop"]
+  desktop["@appling/desktop<br/>the Electron app"]
   landing["@appling/landing<br/>site and docs"]
   model --> lang
   codegen --> model
@@ -26,8 +28,13 @@ flowchart BT
   ai --> codegen
   cli --> model
   cli --> codegen
+  ai --> viz
+  viz --> model
   ide --> model
   ide --> ai
+  ide --> viz
+  desktop --> ide
+  desktop --> ai
   landing --> model
 ```
 
@@ -37,9 +44,11 @@ flowchart BT
 | `@appling/model` | Turns resolved models into the serializable [semantic graph](../reference/graph.md); applies [edit operations](../reference/edit-operations.md) as minimal text edits; writes release snapshots and migration steps |
 | `@appling/codegen` | The extension contract, planning in layer order, the step runner, the task registry and migration planning |
 | `@appling/codegen-django`, `@appling/codegen-ash` | Extensions: a map from graph node kinds to commands, templates and tasks |
-| `@appling/ai` | The workspace `Project`, tool definitions shared by the MCP server and the IDE chat, and the registry skill |
+| `@appling/ai` | The workspace `Project`, the tool definitions of the MCP server, agent sessions, the playbook and the registry skill |
 | `@appling/cli` | `check`, `fmt`, `graph`, `release`, `generate` |
-| `@appling/ide` | A server (snapshot, file, edit, chat endpoints, a language server per websocket) and a React client with Monaco, React Flow and ELK |
+| `@appling/viz` | The pure view logic (tree, search, flowcharts, cards) and the SVG canvases |
+| `@appling/ide` | The repo view of Desktop: a server per repo (snapshot, file, edit, live changes, sessions, `/mcp`, a language server per websocket) and a React client with Monaco and the canvases of `@appling/viz`; also built as the browser demo of the landing site |
+| `@appling/desktop` | Appling Desktop: workspaces of repos, one IDE server and kept alive view per repo, code view, terminals and agent sessions |
 | `@appling/landing` | The Astro site, which also renders `docs/` |
 
 Extensions read only `GraphNode.data`, never the Langium AST. That keeps third party extensions independent of the grammar's internals.

@@ -162,7 +162,7 @@ export const REFERENCE_TOOLS = {
         run: async (context, input) => ({ references: await context.project.references(input.qn) })
     }),
     record_code_references: define({
-        description: 'Record where an element is implemented, replacing its earlier references: one line range per place in the code. The first line of each range becomes its anchor, so start at the line that declares the code, such as the class or function. An empty list removes the references.',
+        description: 'Record where an element is implemented, replacing its earlier references: one line range per place in the code. qn may also be the sub-anchor of a declaring line that is no element: `<usecase>#step[<n>]`, `<usecase>#step[<n>].on[<Error>]`, `<action>#requires[<n>]`, `<page>#component[<n>]`, `<navigation>#item[<label>/<label>]`, `<messages>#message[<key>]` (n from 1). The first line of each range becomes its anchor, so start at the line that declares the code, such as the class or function. An empty list removes the references.',
         input: {
             qn: z.string(),
             ranges: z.array(z.object({
@@ -172,6 +172,11 @@ export const REFERENCE_TOOLS = {
             }))
         },
         run: async (context, input) => context.project.recordReferences(input.qn, input.ranges)
+    }),
+    implementation_status: define({
+        description: 'How far the model is implemented: per element implemented (a current code reference, or generated code it has not changed since), partial (an open registry task), unimplemented (no code), shifted or broken (a code reference to fix). Returns the counts and every element that is not implemented or changed since the last generation, optionally within one module or element.',
+        input: { module: z.string().optional().describe('Qualified name of a module or element to narrow to') },
+        run: async (context, input) => context.project.implementation(input.module)
     })
 };
 

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { readCodeWorkspace } from './code-workspace.js';
+import type { SavedLayout } from './windows.js';
 import { Workspaces, type RailLayout } from './workspaces.js';
 
 /** What the app restores after a restart; written to `session.json` in the user data folder on every change. */
@@ -16,16 +17,22 @@ export interface Session {
     rail: Record<string, RailLayout>;
     /** Whether the rail is folded away. */
     collapsed: boolean;
+    /** The window layout per monitor setup, keyed by `displayFingerprint` (see `windows.ts`). */
+    layouts: Record<string, SavedLayout>;
+    /** The repos whose code view is open (#8); each opens again once its repo is in sight. */
+    code: string[];
 }
 
-export function sessionOf(workspaces: Workspaces): Session {
+export function sessionOf(workspaces: Workspaces, layouts: Record<string, SavedLayout> = {}, code: readonly string[] = []): Session {
     return {
         workspaces: workspaces.all().map(w => w.id),
         active: workspaces.active,
         shown: Object.fromEntries(workspaces.all().filter(w => w.active).map(w => [w.id, w.active!])),
         recent: workspaces.mostRecent(),
         rail: Object.fromEntries(workspaces.all().filter(w => w.pinned.length || w.hidden.length).map(w => [w.id, { pinned: [...w.pinned], hidden: [...w.hidden] }])),
-        collapsed: workspaces.collapsed
+        collapsed: workspaces.collapsed,
+        layouts,
+        code: [...code]
     };
 }
 
@@ -35,7 +42,9 @@ export function readSession(file: string): Session | undefined {
         const session = JSON.parse(readFileSync(file, 'utf8')) as Partial<Session>;
         return Array.isArray(session.workspaces) ? {
                 workspaces: session.workspaces, active: session.active, shown: session.shown ?? {}, recent: session.recent ?? [],
-                rail: session.rail && typeof session.rail === 'object' ? session.rail : {}, collapsed: session.collapsed === true
+                rail: session.rail && typeof session.rail === 'object' ? session.rail : {}, collapsed: session.collapsed === true,
+                layouts: session.layouts && typeof session.layouts === 'object' && !Array.isArray(session.layouts) ? session.layouts : {},
+                code: Array.isArray(session.code) ? session.code.filter((repo): repo is string => typeof repo === 'string') : []
             }
             : undefined;
     } catch {

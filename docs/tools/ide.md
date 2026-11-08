@@ -1,53 +1,31 @@
 ---
-title: IDE
-description: A local browser IDE that shows your model as canonical text next to a map of it from five angles, with a search over every element, and edits it through validated operations.
+title: Repo view
+description: The view of each repo in Appling Desktop, with the model canvas as its main area, a search over every element, an inspector that edits through validated operations and the source one click away.
 ---
 
-The Appling IDE (`@appling/ide`) is a local web application. It puts three panes side by side: the text editor with the language server, the model canvas, and a side panel with the search, the inspector and the AI chat. All of them show the same model: the text is the source, the views are computed from it, and every change from the inspector goes back into the text.
+Every repo you open in [Appling Desktop](desktop.md) gets its own view, served by an IDE server that Desktop runs for that repo. The model canvas is the main area. Next to it a side panel holds the search, the inspector, the live changes, the playbook, the review and the code tab, and the **Source** button in the header (**View › Toggle Source**) unfolds the text editor with the language server. All of them show the same model: the text is the source, the views are computed from it, and every change from the inspector goes back into the text.
 
 > [!TIP]
-> To try the IDE without installing anything, open the [demo](https://appling.tools/ide/). It runs the same IDE on the sample sales and CRM model entirely in your browser, language server included. Edits stay in the page until you reload, and the AI tab works only in a local IDE.
+> To try the repo view without installing anything, open the [demo](https://appling.tools/ide/). It runs the same view on the sample sales and CRM model entirely in your browser, language server included, with the source shown next to the canvas. Edits stay in the page until you reload; generation and the review of commits need Desktop.
 
-## Start the IDE
+The header shows the workspace folder, the release indicator (once a release exists), either `valid` or the number of errors in the model, and **Source** (**Hide source** while the editor is open).
 
-```sh
-npx @appling/ide [folder] [--port 4410]
-```
-
-| Argument | Default | Meaning |
-|---|---|---|
-| `folder` | the current folder | The workspace: every `.appling` file below it, searched recursively, skipping hidden folders and `node_modules` |
-| `--port <number>` | `4410` | The port on `127.0.0.1` |
-
-```sh
-npx @appling/ide examples
-```
-
-```
-Appling IDE for /home/you/project/examples at http://127.0.0.1:4410
-```
-
-Open the printed address in your browser. The package also installs the binary `appling-ide`, so after `npm install --save-dev @appling/ide` you can run `npx appling-ide models`.
-
-The header shows the workspace folder, the release indicator (once a release exists) and either `valid` or the number of errors in the model.
-
-> [!NOTE]
-> Appling Desktop, a native app in development, runs this IDE once per repo and groups repos into workspaces stored as VS Code `.code-workspace` files. There the model canvas is the main area, the editor is folded away behind the **Source** button in the header, and the AI tab is left out: AI work runs through terminal agents connected to the [MCP server](ai.md#mcp-server).
+AI works through agents in the repo's terminals, connected to the [MCP server](ai.md#mcp-server) of the repo as [agent sessions](ai.md#agent-sessions): their views, proposals and playbook chapters show up here. **View › Toggle Code View** opens a full Code OSS (VS Code) next to the canvas, with the [Appling extension](editors.md#vs-code); selecting an element on the canvas opens its source there, and the cursor in a `.appling` file there selects the element on the canvas. On Linux, **text diff** in the Review tab opens there too, in Code OSS's diff editor.
 
 ## The editor
 
-The left pane is Monaco with one tab per file. It talks to an Appling language server that the IDE starts for the page, so you get the same features as in any [LSP editor](editors.md): diagnostics, completion, hover with kind, qualified name and layer, go to definition, references, rename and formatting into canonical form. References to files that are not open resolve, because the server loads the whole workspace folder.
+**Source** opens Monaco with one tab per file to the left of the canvas. It talks to an Appling language server that the repo's server starts for the view, so you get the same features as in any [LSP editor](editors.md): diagnostics, completion, hover with kind, qualified name and layer, go to definition, references, rename and formatting into canonical form. References to files that are not open resolve, because the server loads the whole workspace folder.
 
 - Ctrl+S (Cmd+S on macOS) saves the current file.
 - A dot after the file name marks a file whose text differs from the file on disk.
-- When a file changes on disk, the IDE replaces its text only when you have no unsaved changes in it. Unsaved work is never overwritten.
+- When a file changes on disk, the editor replaces its text only when you have no unsaved changes in it. Unsaved work is never overwritten.
 
 > [!TIP]
 > To rename an element, use Rename in the inspector rather than the editor's rename (F2). The editor's rename comes from the language server and changes the declaration and its references only. The inspector runs the `rename` operation, which also follows names inside expressions, `@Name` in `does` texts, transitions and message keys, and records a migration step for released elements.
 
 ## The model canvas
 
-The middle pane draws the model as a tree that grows from a seed at the bottom, and it shows only what you unfold. The tabs at its top left choose the lens, the kinds of declarations the tree starts from:
+The canvas draws the model as a tree that grows from a seed at the bottom, and it shows only what you unfold. The tabs at its top left choose the lens, the kinds of declarations the tree starts from:
 
 | Lens | Starts from |
 |---|---|
@@ -73,7 +51,7 @@ Clicking a circle unfolds it and selects it: the inspector shows what it does, w
 - The line at the top right describes the current node, such as `quotes.Quote · entity · core · 29 fields · 26 actions on it · used by 84`.
 - At the bottom, **link entities** adds [link entities](../language/domain.md#link-entities) such as join records, which are left out by default. The zoom level, **−** and **+** zoom, **Fit** shows the whole tree, and **Replant** folds it back to the seed. Drag to pan and scroll to zoom.
 
-The lens and the link entities option are saved in `.appling/view.json` in the workspace folder, so the IDE opens the same way next time.
+The lens and the link entities option are saved in `.appling/view.json` in the workspace folder, so the view opens the same way next time.
 
 ## Search
 
@@ -90,8 +68,8 @@ Click a result to open it in the inspector.
 
 Selection is shared between text, canvas and inspector:
 
-- Moving the cursor in the editor selects the innermost element at the cursor. When the lens starts from the kind of the declaration that contains it, the canvas unfolds its module and marks it.
-- Clicking a circle, a module, a search result or a link in the inspector selects that element, opens the Inspector tab and reveals its source in the editor, switching files when needed.
+- Moving the cursor in the editor (or in a `.appling` file of the code view) selects the innermost element at the cursor. When the lens starts from the kind of the declaration that contains it, the canvas unfolds its module and marks it.
+- Clicking a circle, a module, a search result or a link in the inspector selects that element, opens the Inspector tab and reveals its source in the editor while it is open, switching files when needed.
 
 ## The inspector
 
@@ -100,7 +78,10 @@ The Inspector tab shows the selected element: its kind and layer, its qualified 
 - **What it does**, for an action: the entity it works on, its inputs, what it requires (with the error raised otherwise), what it changes (its own effects, then each machine transition it drives with that transition's effects), its errors and its consistency,
 - **Actions**, for an entity: the actions declared on it, each with the machine transitions it drives, such as `draft, placed -> cancelled`, followed by the actions elsewhere that create its records, marked `creates`,
 - **What they can do**, for an actor: what this person may do, by the [simulator](simulator.md#how-it-decides), in five groups: Actions, Pages, Use cases, Queries and Data (each entity operation, and fields that a policy guards separately). Only what the actor may do is listed: each entry says `may` or `depends on the data` and lists the policies that decide it with their conditions. What the actor is refused is left out, and so is a group with nothing allowed. A page also lists the actions it offers that the actor may use, because seeing a page does not mean being allowed to use its buttons,
+- its [implementation state](implementation.md#implementation-states), with its open registry tasks, **Open code** (the element's code, see [From the model to the code and back](implementation.md#from-the-model-to-the-code-and-back)) and **Generate** (the element with its members, when `appling.config.json` has targets),
 - **Code**: where the element is implemented, one `file:start-end` line per [code reference](references.md), with its status when it is not `current`. Expand one to read its lines,
+- **line**, when the cursor or a code link selected a declaring line that is no element, such as a use case step, a handler, a `requires`, a page component, a navigation item or a message: its [sub-anchor](../reference/graph.md#sub-anchors) (`#step[2]`), its own implementation state and **Open code** for its own code references. The canvas shows its element. Such a line has its own gutter mark, its element's state until it has a code reference of its own,
+- **text diff**, while the canvas marks the element as added, changed or removed (by the Review tab or as a live change): with the review's marks it opens the element's text diff at the review's commit, in Desktop's code view where it runs, else below; with the live marks it opens the Changes tab at the file's diff,
 - **Members**: the elements inside it, one line each, such as `status: OrderStatus state` for a field,
 - **Used by**: every declaration that references the element or one of its members, grouped by layer. For an entity this is the overview of its behavior and use: the events, actions, machines and jobs in Behavior, the queries, projections and use cases in Application, the endpoints in Interfaces and the pages in Experience,
 - **Uses**: every declaration the element or one of its members references, grouped by layer.
@@ -125,7 +106,7 @@ When the model rejects an edit, the inspector lists the reasons, such as `Unknow
 
 ## How edits are applied
 
-Every change from the inspector and accepted AI proposals runs through the same path:
+Every change from the inspector and every accepted proposal of an agent session runs through the same path:
 
 1. The client sends the current text of every open file, saved or not, with the operation to `/api/edit`.
 2. The server runs `applyEdit` on those texts with the latest release. It writes nothing. The touched element is printed canonically, renames follow every place that names the element, and the edit is rejected when it does not parse or adds a validation error.
@@ -135,7 +116,7 @@ Every change from the inspector and accepted AI proposals runs through the same 
 ```mermaid
 sequenceDiagram
     participant I as Inspector
-    participant C as IDE client
+    participant C as Repo view
     participant S as IDE server
     participant M as Monaco
     participant D as Disk
@@ -155,45 +136,76 @@ Because edits work on the texts in the editor, an edit sees your unsaved changes
 
 After a rename, the selection moves to the new name.
 
-## The AI tab
+## Reviewing changes
 
-The AI tab is a chat about the model. Ask a question ("which actions change Order?") or ask for a change ("add an invoice entity with a due date"). The assistant uses the model tools described in [AI tools](ai.md): it looks elements up with `graph_query` and `read_source`, checks the model with `check` and changes it with `edit`. The tools it calls are listed above its answer.
+The **Review** tab of the side panel shows what changed in a workspace that lives in a git repository. By default it compares the working tree with `HEAD`, so you see the uncommitted changes; the picker on top compares it with any of the latest 50 commits that touch the workspace folder instead.
 
-The assistant never writes your files. It edits a working copy, and when the turn ends with changes it shows a proposal:
+- **Model** lists the elements that were added, changed or removed, by qualified name. A changed element names the properties that differ and how many of its references changed. A rename recorded as a migration step (see [Migrations](../language/migrations.md)) shows as one change with its old name, not as a removal and an addition. Click an element to select it on the canvas; **text diff** shows the element's text at the commit and now.
+- **Files** lists every file of the workspace folder that differs from the commit, `.appling` or not: added (A), modified (M), deleted (D), renamed (R) and untracked (U). Click one for its text diff.
+- **mark on the canvas** (on by default) marks the changes on the canvas: added declarations glow green, changed ones and the modules that hold changes glow yellow, and removed declarations are drawn ghosted with a dashed circle where they were.
 
-- the number of edits,
-- the text differences per file (removed lines with `-`, added lines with `+`),
-- the graph elements added, changed and removed; added and changed ones are links that select the element.
+The tab follows every change on disk. The server reads git with the git CLI: `git ls-tree` and `git show` for the `.appling` files at the commit, which it builds into a graph the same way as the working tree, and `git diff --name-status` plus `git status --porcelain` for the changed files. A folder outside git shows a message instead. The code view takes over the text diffs where it runs (see below); elsewhere they show in the panel.
 
-**Accept** replays the proposal's operations one by one through the same path as an inspector edit, so they land in the editor as undoable steps and are saved. If one is rejected, for example because you changed the text in the meantime, the remaining ones are not applied and the reasons appear in the chat. **Reject** discards the proposal.
+| Endpoint | Returns |
+|---|---|
+| `GET /api/diff?rev=HEAD` | `{ ok, rev, commit, files, diff, before }`: the changed files, the model diff (`diffGraphs` of `@appling/model/diff`) and the model at the commit (graph, files, locations); `{ ok: false, error }` outside git or for an unknown revision |
+| `GET /api/diff/file?rev=&path=&before=` | One file at the commit and now, `null` where it does not exist |
+| `GET /api/revisions` | The latest commits that touch the workspace folder |
 
-The assistant reads the files on disk, so save before you ask about unsaved changes.
+> [!NOTE]
+> The code view opens text diffs in its own editor: when `window.applingDesktop.openTextDiff(request)` exists, **text diff** calls it with the file path, the commit, the line and the element's qualified name instead of showing the diff in the panel.
 
-Configure the model in `appling.config.json` and set the provider's API key in the environment before you start the IDE:
+## Live changes
 
-```json
-{ "ai": { "provider": "anthropic", "model": "claude-opus-5-5" } }
-```
+Every change to the model is marked on the canvas the moment it lands on disk, whoever wrote it: an [agent session](ai.md#agent-sessions) through the MCP tools, an agent or editor that writes the files directly, `appling fmt` or a `git checkout`. Added declarations glow green, changed ones and the modules that hold them glow yellow, and removed declarations stay drawn ghosted where they were. Marking never moves the camera and never unfolds the tree: what you look at stays where it is.
 
-```sh
-ANTHROPIC_API_KEY=... npx @appling/ide models
-```
+The changes are compared with a baseline: the text of each model file when you last accepted it. When the IDE server starts, the baseline is the files on disk, so only what changes while you work is marked; what differs from the last commit is what the [Review](#reviewing-changes) tab shows. Your own saves from the editor and the inspector move the baseline with them, unless the file already has an unseen change, which then stays marked. The baseline lives in the server's memory: a restart of the server accepts every change.
 
-The defaults, the OpenAI provider and the settings are described in [AI tools](ai.md#ide-chat).
+The **Changes** tab of the side panel, with the count of unseen changed files on its tab, lists them per file, newest first:
+
+- the file with its status (A added, M modified, D deleted), the agent sessions whose tool calls wrote it in their colour, or **written to disk** for any other writer, and when it last changed,
+- the model changes in the file: the elements added, changed (with the properties that differ) or removed; click one to select it,
+- **text diff**: the file as last accepted and now,
+- **Accept** moves the file's baseline to its text now, so it is no longer marked; **accept all** does it for every file,
+- **Revert** writes the text last accepted back to disk, or deletes a file that did not exist then.
+
+While the Review tab marks its own diff on the canvas, the review's marks replace the live ones.
+
+### Agent views and proposals
+
+The [visual tools](ai.md#visual-tools) of the repo's agent sessions draw on this canvas. A view a session shows, with its bubbles, its current step and its last reply, waits as a chip at the top right of the canvas under the session's name and colour. Click it to open the view: the canvas draws the session's tree, flowchart or cards, one bubble at a time with Back and Next, and follows each new view and bubble of that session; **Back to the model** returns to your own tree. Nothing opens by itself. The field under the view's bar sends the session a question: it reaches the session's inbox as a message from User, stays listed in the view, and the session's answer (`visual_reply`) shows below it.
+
+A change a session proposes with `propose_edits` shows at the top of the Changes tab with its summary, text and model differences and a comment field; a banner on the canvas points there while the tab is closed. **Accept** writes it and **Reject** sends your comment back to the agent, whose tool call waits for the decision. When the session ends, its views go and its waiting proposals are rejected.
+
+## The playbook
+
+The **Playbook** tab lists the chapters of the workspace's [playbook](ai.md#the-playbook) in order, with the count of unwatched chapters on its tab. A chapter is unwatched until you step to its last step. Each chapter shows its session's colour and label, its title, its steps done of planned, and the chapters it builds on. **replay** plays it from its plan, **session** jumps to its session (its tab in Desktop, else its agent view), and **diff** opens the Changes tab with only the files that session wrote. A chapter written in another repo of the workspace opens that repo's Changes tab, in its own view, in Desktop (`window.applingDesktop.showChanges`). While chapters wait unwatched, a chip at the top right of the canvas counts them.
+
+**Play** (or **Resume**) puts the player on the canvas. The bar shows the chapter, its session and the step, with **←** and **→** to step back and forward (the arrow keys too), **Replay**, **Session**, **Diff** and **Back to the model**. The canvas draws the trail of the chapter so far, starting with the elements of the chapters it builds on, and marks the current step's elements: added ones green, changed ones yellow, removed ones ghosted. The marks pulse once on every step. A planned step previews its change with dashed rings; a done step is drawn solid. Under the bar, the step's note, its responses and the queue of chapters that come next.
+
+The canvas moves only when you step. A chapter that arrives while you watch another one joins the queue. Past the last step of a chapter, **→** goes on to the next chapter. **Approve**, **Reject** and **Comment** answer the current step: the response is kept with the step and reaches the session that wrote it as a message. Your position is kept with the playbook, so every repo view of the workspace and every session knows where you are.
+
+## The Code tab
+
+The **Code** tab shows how far the model is implemented and generates from the repo view: the count of elements per [implementation state](implementation.md#implementation-states), the targets of `appling.config.json`, buttons to generate the outstanding elements, the selected element, the checked ones or everything, the running generation with its log, and the open registry tasks with their status, attempts, notes and the agent session that claimed each. The tab counts the open tasks. See [Seed to code](implementation.md).
+
+The editor marks each model line with the state of the element it declares, and the canvas marks each declaration; after a model change adds outstanding elements, the canvas offers to generate them.
 
 ## Releases and migration steps
 
 Once the workspace has a release (`appling release 1.0.0`, see [CLI](cli.md#release)), the header shows a button such as `release 1.0.0 · 2 migration step(s) since`. It counts the steps in the `since_v1_0_0` blocks of all modules; click it to select the first such block.
 
-Renaming, retyping or removing a released domain element from the inspector or an accepted proposal appends the matching migration step automatically. See [Edit operations](../reference/edit-operations.md#release-aware-edits). The IDE reads the latest release when the page loads; reload the page after creating a release.
+Renaming, retyping or removing a released domain element from the inspector or an accepted proposal appends the matching migration step automatically. See [Edit operations](../reference/edit-operations.md#release-aware-edits). The view reads the latest release when it loads; reload it (**View › Reload Repo View**) after creating a release.
 
 ## Live updates
 
-The server watches the workspace folder for changes to `.appling` files (ignoring hidden folders and `node_modules`) and to `.appling/references.json`, and pushes a new snapshot to the page about 100 ms after the last change. Edits from another editor, `appling fmt` or an AI agent through the [MCP server](ai.md#mcp-server) appear in the views without a reload.
+The server watches the workspace folder for changes to `.appling` files (ignoring hidden folders and `node_modules`), to `.appling/references.json`, `.appling/generation.json` and the registries of the generate targets inside the folder, and pushes a new snapshot to the view about 100 ms after the last change. Edits from another editor, `appling fmt` or an AI agent through the [MCP server](ai.md#mcp-server) appear in the views without a reload.
+
+The canvas also marks what [agent sessions](ai.md#agent-sessions) of the repo claimed or highlighted: a dashed ring in the session's colour around the declaration, with the session's label in its tooltip. In [Appling Desktop](desktop.md#agent-sessions) a click on the ring goes to the session's terminal tab.
 
 ## Security
 
-The IDE is meant for your machine only:
+Each repo's IDE server is meant for your machine only:
 
 - It listens on `127.0.0.1` only, never on other interfaces.
 - Every request and websocket must carry a `Host` header of `127.0.0.1:<port>` or `localhost:<port>`, and an `Origin` header, when present, must be one of `http://127.0.0.1:<port>` and `http://localhost:<port>`. Anything else gets `403 Forbidden`. This blocks other websites and DNS rebinding.
@@ -208,6 +220,13 @@ The server endpoints, for reference:
 | `GET`, `PUT /api/view` | Reads and writes `.appling/view.json` |
 | `PUT /api/file?path=` | Writes one `.appling` file |
 | `GET /api/release` | Version and date of the latest release, or `null` |
-| `POST /api/chat` | One chat turn as a stream of JSON lines |
-| websocket `/events` | Snapshot pushes on file changes |
+| `POST /mcp` | The repo's MCP server for [agent sessions](ai.md#agent-sessions); needs a session's bearer token |
+| `GET`, `POST /api/sessions` | Lists the agent sessions, opens one (returns its token and the MCP URL) |
+| `PATCH`, `DELETE /api/sessions/<id>` | Renames a session or sets its status, ends it |
+| `GET /api/playbook?workspace=` | The playbook of the view's workspace (an absolute path; without it, the one the app shows) |
+| `POST /api/sessions/<id>/ask` | Delivers `{ text }`, a question typed in the session's view, to its inbox |
+| `POST /api/live/accept` | Accepts the live changes of `{ paths }`, or of every changed file; returns the changes left |
+| `POST /api/live/revert` | Writes the text last accepted of `{ path }` back |
+| `POST /api/proposals/<id>` | Decides a waiting proposal with `{ decision: { accepted, comment? } }` |
+| websocket `/events?workspace=` | Snapshot pushes on file changes, the live changes (`live`), the agent sessions, their `ide_act` actions, views (`agent-view`), proposals and the playbook of the view's workspace; the view reports its selection, view, the agent view it shows on it and its workspace (a view that moves to another workspace gets that one's playbook) |
 | websocket `/lsp` | One language server per connection |

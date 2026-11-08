@@ -38,14 +38,14 @@ flowchart LR
   text[".appling files"] --> lang["Parse, link, validate"]
   lang --> semantic["Semantic graph"]
   semantic --> cli["CLI: check, fmt, graph, release"]
-  semantic --> ide["IDE: text and graph side by side"]
-  semantic --> ai["AI: MCP server and chat"]
+  semantic --> ide["Desktop: canvas, search, inspector, text"]
+  semantic --> ai["AI: MCP server and agent sessions"]
   semantic --> gen["Code generation: Django, Ash"]
   ide -- "edit operations" --> text
   ai -- "reviewable proposals" --> text
 ```
 
-Every change, whether you type it, drag it in the graph or accept it from the AI, is an edit of the text. Edits are validated before they land, so the model never holds an error you did not write yourself.
+Every change, whether you type it, make it in the inspector or accept it from an agent, is an edit of the text. Edits are validated before they land, so the model never holds an error you did not write yourself.
 
 ## The model in five layers
 
@@ -63,8 +63,8 @@ Each concept is defined once, in the layer that owns it. References only point d
 ## What you can do with it
 
 - **Validate** the whole model on every build: references, types, layer rules, exports and migrations. See [the CLI](tools/cli.md).
-- **Explore and edit** it in [the IDE](tools/ide.md): the text with a language server next to a map of modules and entities, and a search over every element.
-- **Work with AI** through [the MCP server or the IDE chat](tools/ai.md). AI changes pass the same validation and arrive as reviewable diffs.
+- **Explore and edit** it in [Appling Desktop](tools/desktop.md): the [model canvas](tools/ide.md) of every repo with a search over every element, an inspector that edits, and the text with a language server one click away.
+- **Work with AI** through [the MCP server](tools/ai.md), from any agent or as agent sessions in Desktop that show their work on the canvas. AI changes pass the same validation and arrive as reviewable diffs.
 - **Generate** a draft [Django](codegen/django.md) or [Ash](codegen/ash.md) project, or the domain and behavior layers as [Go](codegen/go.md) packages or a [Rust](codegen/rust.md) crate. What the generator cannot write becomes a task in a [registry](codegen/registry.md) for you or an AI.
 - **Evolve** it safely: once you cut a [release](language/migrations.md), renames and type changes of stored data are recorded as migration steps and [carried into generated projects](codegen/migrations.md).
 

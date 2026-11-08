@@ -1,17 +1,17 @@
 ---
-// The IDE itself, built by @appling/ide as a browser only demo and copied to /ide/ by the build
+// The repo view of Appling Desktop, built by @appling/ide as a browser only demo and copied to /ide/ by the build
 ---
 
 <section id="showcase" class="border-t border-line px-4 py-16 sm:px-8">
   <div class="mx-auto flex max-w-[1200px] flex-col gap-8">
     <div class="flex max-w-[640px] flex-col gap-3">
       <span class="eyebrow">Try it</span>
-      <h2 class="text-h1">The IDE, right here</h2>
-      <p class="text-ink-soft">The real IDE on the sample sales and CRM model, running in your browser with its language server. Unfold the canvas, search, open the inspector and edit the text; every change is validated, and nothing leaves this page.</p>
+      <h2 class="text-h1">Appling Desktop, right here</h2>
+      <p class="text-ink-soft">The repo view of Appling Desktop on the sample sales and CRM model, running in your browser with its language server. Unfold the canvas, search, open the inspector and edit the text; every change is validated, and nothing leaves this page.</p>
     </div>
     <div class="overflow-hidden rounded-sm border border-line bg-surface-raised">
       <div class="flex items-center justify-between gap-4 border-b border-line px-4 py-2 font-mono text-xs leading-5 text-ink-muted">
-        <span class="truncate">npx @appling/ide examples</span>
+        <span class="truncate">Appling Desktop · examples</span>
         <a href="/ide/" target="_blank" class="font-semibold whitespace-nowrap">Open full screen →</a>
       </div>
       <div id="ide-stage" class="relative h-[min(760px,80vh)] min-h-[480px] bg-surface">
@@ -23,7 +23,7 @@
           <div class="border-l border-line bg-surface-raised max-sm:hidden"></div>
         </div>
         <div class="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
-          <button type="button" class="inline-flex min-h-11 cursor-pointer items-center rounded-md bg-leaf px-6 font-mono text-[13px] leading-4 font-semibold text-on-leaf hover:bg-leaf-hover">Try the IDE</button>
+          <button type="button" class="inline-flex min-h-11 cursor-pointer items-center rounded-md bg-leaf px-6 font-mono text-[13px] leading-4 font-semibold text-on-leaf hover:bg-leaf-hover">Try the demo</button>
           <p class="max-w-[420px] text-sm leading-[22px] text-ink-muted">Loads the editor, the language server and the model canvas, a few megabytes. Edits stay in your browser until you reload.</p>
         </div>
       </div>
@@ -36,7 +36,7 @@
   stage.querySelector("button")!.addEventListener("click", () => {
     const frame = document.createElement("iframe");
     frame.src = "/ide/";
-    frame.title = "Appling IDE on the sample model";
+    frame.title = "Appling Desktop's repo view on the sample model";
     frame.className = "absolute inset-0 size-full border-0";
     stage.replaceChildren(frame);
     frame.focus();

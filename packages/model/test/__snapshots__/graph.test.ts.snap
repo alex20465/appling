@@ -2,6 +2,58 @@
 
 exports[`graph of examples 1`] = `
 {
+  "anchors": [
+    {
+      "address": "sales.PlaceOrder#requires[1]",
+      "kind": "requires",
+      "owner": "sales.PlaceOrder",
+    },
+    {
+      "address": "sales.Checkout#step[1]",
+      "kind": "step",
+      "owner": "sales.Checkout",
+    },
+    {
+      "address": "sales.Checkout#step[2]",
+      "kind": "step",
+      "owner": "sales.Checkout",
+    },
+    {
+      "address": "sales.Checkout#step[2].on[Declined]",
+      "kind": "on",
+      "owner": "sales.Checkout",
+    },
+    {
+      "address": "sales.Checkout#step[3]",
+      "kind": "step",
+      "owner": "sales.Checkout",
+    },
+    {
+      "address": "sales.Orders#component[1]",
+      "kind": "component",
+      "owner": "sales.Orders",
+    },
+    {
+      "address": "sales.OrderDetail#component[1]",
+      "kind": "component",
+      "owner": "sales.OrderDetail",
+    },
+    {
+      "address": "sales.OrderDetail#component[2]",
+      "kind": "component",
+      "owner": "sales.OrderDetail",
+    },
+    {
+      "address": "sales.Main#item[Orders]",
+      "kind": "item",
+      "owner": "sales.Main",
+    },
+    {
+      "address": "sales.en#message[OrderSummary.total]",
+      "kind": "message",
+      "owner": "sales.en",
+    },
+  ],
   "edges": [
     {
       "from": "crm",
