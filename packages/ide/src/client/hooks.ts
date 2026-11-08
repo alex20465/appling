@@ -6,6 +6,10 @@ import type { TextDiffRequest } from '../shared/review.js';
  */
 export interface DesktopHooks {
     openTextDiff?(request: TextDiffRequest): void;
+    /** An element was selected: Desktop opens its source in the code view. */
+    selected?(location: { uri: string, start: number, end: number }): void;
+    /** The cursor moved in a `.appling` file of the code view. */
+    onCodeCursor?(callback: (uri: string, offset: number) => void): void;
 }
 
 declare global {

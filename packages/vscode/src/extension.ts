@@ -1,5 +1,5 @@
-import { join } from 'node:path';
-import { Range, Selection, TextEditorRevealType, Uri, window, workspace, type ExtensionContext } from 'vscode';
+import { basename, join } from 'node:path';
+import { commands, Range, Selection, TextEditorRevealType, Uri, window, workspace, type ExtensionContext } from 'vscode';
 import { LanguageClient, TransportKind, type LanguageClientOptions, type ServerOptions } from 'vscode-languageclient/node';
 import { connectDesktop } from './desktop-bridge.js';
 
@@ -37,6 +37,18 @@ function startDesktopBridge(context: ExtensionContext): void {
                 const from = document.positionAt(start);
                 editor.selection = new Selection(from, from);
                 editor.revealRange(new Range(from, document.positionAt(end)), TextEditorRevealType.InCenterIfOutsideViewport);
+            },
+            diff: async (path, before, rev, line) => {
+                // the built in git extension serves `git:` URIs: the file's text at a revision
+                const old = Uri.file(before).with({ scheme: 'git', query: JSON.stringify({ path: before, ref: rev }) });
+                const now = Uri.file(path);
+                const exists = await workspace.fs.stat(now).then(() => true, () => false);
+                const at = line ? new Range(line - 1, 0, line - 1, 0) : undefined;
+                if (!exists) {
+                    await window.showTextDocument(old, { preview: true, selection: at });
+                    return;
+                }
+                await commands.executeCommand('vscode.diff', old, now, `${basename(path)} (${rev.slice(0, 12)} ↔ Working Tree)`, { preview: true, selection: at });
             }
         }
     });

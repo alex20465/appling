@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, expect, test, vi } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
 import { connectDesktop } from '../../vscode/src/desktop-bridge.js';
-import { CodeBridge, parseExtensionMessage } from '../src/code-bridge.js';
+import { CodeBridge, diffMessage, parseExtensionMessage } from '../src/code-bridge.js';
 import { CODE_SERVER, codeServerAsset, ensureCodeServer, type CodeServerRelease } from '../src/code-download.js';
 import { CodeInstances, type InstanceStatus } from '../src/code-instances.js';
 import { authorized, CodeProxy, PROXY_COOKIE, rewriteCookies, routeOf } from '../src/code-proxy.js';
@@ -304,16 +304,21 @@ test('the Appling extension bridge syncs the selection both ways and reconnects'
     const token = bridge.token('/repo');
     let report: ((uri: string, offset: number) => void) | undefined;
     const reveals: [string, number, number][] = [];
+    const diffs: unknown[][] = [];
+    // a diff asked for while the code view still starts waits for the extension
+    bridge.send('/repo', diffMessage('/repo', { path: 'm/sales.appling', rev: 'HEAD~1', line: 4 })!);
     const client = connectDesktop({
         url: proxy.bridgeUrl, token, debounce: 10, retry: 20,
         WebSocket: globalThis.WebSocket,
         editor: {
             onCursor: listener => { report = listener; return { dispose: () => report = undefined }; },
-            reveal: (uri, start, end) => { reveals.push([uri, start, end]); }
+            reveal: (uri, start, end) => { reveals.push([uri, start, end]); },
+            diff: (...args) => { diffs.push(args); }
         }
     });
     cleanup.push(() => client.dispose());
     await client.welcomed;
+    await vi.waitFor(() => expect(diffs).toEqual([['/repo/m/sales.appling', '/repo/m/sales.appling', 'HEAD~1', 4]]));
 
     report!('file:///repo/a.appling', 5);
     report!('file:///repo/a.appling', 7);
@@ -335,6 +340,16 @@ test('the Appling extension bridge syncs the selection both ways and reconnects'
     await vi.waitFor(() => expect(cursors.at(-1)).toEqual(['/repo', 'file:///repo/a.appling', 1]));
     client.dispose();
     expect(report).toBeUndefined();
+});
+
+test('text diffs stay inside the repo and take plain revisions only', () => {
+    expect(diffMessage('/repo', { path: 'a.appling', before: 'old/a.appling', rev: 'abc123', line: 3 }))
+        .toEqual({ type: 'diff', path: '/repo/a.appling', before: '/repo/old/a.appling', rev: 'abc123', line: 3 });
+    expect(diffMessage('/repo', { path: 'a.appling', rev: 'HEAD~2', line: 0 })).toEqual({ type: 'diff', path: '/repo/a.appling', before: '/repo/a.appling', rev: 'HEAD~2' });
+    expect(diffMessage('/repo', { path: '../etc/passwd', rev: 'HEAD' })).toBeUndefined();
+    expect(diffMessage('/repo', { path: 'a.appling', before: '/etc/passwd', rev: 'HEAD' })).toBeUndefined();
+    expect(diffMessage('/repo', { path: 'a.appling', rev: '--output=x' })).toBeUndefined();
+    expect(diffMessage('/repo', { path: 'a.appling', rev: 'a b' })).toBeUndefined();
 });
 
 test('code view settings read the codeView section and report bad values', () => {

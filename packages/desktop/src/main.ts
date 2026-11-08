@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell, WebContentsView, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell, WebContentsView, type MenuItemConstructorOptions, type WebContents } from 'electron';
+import type { TextDiffRequest } from './code-bridge.js';
 import { CodeViews, type SourceLocation } from './code-view.js';
 import { EXTENSION, readCodeWorkspace, writeCodeWorkspace } from './code-workspace.js';
 import { gitBranch, watchGit } from './git.js';
@@ -105,9 +106,15 @@ function start(): void {
     ipcMain.on('closeSwitcher', () => closeSwitcher());
     ipcMain.handle('switch', (_event, query: string) => switcherEntries(workspaces, repoName, typeof query === 'string' ? query : ''));
     ipcMain.handle('state', () => state());
+    ipcMain.on('codeViewSupported', event => event.returnValue = CodeViews.supported());
+    const repoOf = (sender: WebContents) => [...views].find(([, view]) => view.webContents === sender)?.[0];
     ipcMain.on('ideSelected', (event, location: SourceLocation) => {
-        const repo = [...views].find(([, view]) => view.webContents === event.sender)?.[0];
+        const repo = repoOf(event.sender);
         if (repo && typeof location?.uri === 'string' && Number.isInteger(location.start)) code?.selected(repo, location);
+    });
+    ipcMain.on('ideTextDiff', (event, request: TextDiffRequest) => {
+        const repo = repoOf(event.sender);
+        if (repo) code?.textDiff(repo, request);
     });
 
     watchKeybindings();

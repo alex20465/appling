@@ -1,7 +1,7 @@
 /**
  * The Appling Desktop bridge (decision 8A of epic #15): inside a repo's code view (Code OSS started by Appling Desktop)
  * the extension connects to the Desktop main process, reports the cursor in `.appling` files, so the canvas selects
- * the element there, and opens the source of the element selected on the canvas. Desktop passes the channel in
+ * the element there, opens the source of the element selected on the canvas and opens the Review tab's text diffs. Desktop passes the channel in
  * `APPLING_DESKTOP_BRIDGE` (a websocket URL on 127.0.0.1) and `APPLING_DESKTOP_TOKEN`; without them nothing runs.
  * The messages mirror `packages/desktop/src/code-bridge.ts`.
  */
@@ -12,6 +12,8 @@ export interface BridgeEditor {
     onCursor(listener: (uri: string, offset: number) => void): { dispose(): void };
     /** Opens a file and puts the cursor at `start`, showing `start` to `end`. */
     reveal(uri: string, start: number, end: number): Promise<void> | void;
+    /** Opens the diff editor of a file between a git revision (`before`, its absolute path then) and now (`path`). */
+    diff(path: string, before: string, rev: string, line?: number): Promise<void> | void;
 }
 
 export interface BridgeOptions {
@@ -70,7 +72,7 @@ export function connectDesktop(options: BridgeOptions): Bridge {
         socket = ws;
         ws.onopen = () => ws.send(JSON.stringify({ type: 'hello', token: options.token }));
         ws.onmessage = event => {
-            let message: { type?: string, uri?: unknown, start?: unknown, end?: unknown };
+            let message: { type?: string, uri?: unknown, start?: unknown, end?: unknown, path?: unknown, before?: unknown, rev?: unknown, line?: unknown };
             try {
                 message = JSON.parse(String(event.data));
             } catch {
@@ -83,6 +85,9 @@ export function connectDesktop(options: BridgeOptions): Bridge {
                 const end = typeof message.end === 'number' ? message.end : message.start;
                 revealed = `${message.uri}#${message.start}`;
                 Promise.resolve(options.editor.reveal(message.uri, message.start, end)).catch(error => options.log?.(`Appling Desktop: ${error}`));
+            } else if (message.type === 'diff' && typeof message.path === 'string' && typeof message.before === 'string' && typeof message.rev === 'string') {
+                const line = typeof message.line === 'number' ? message.line : undefined;
+                Promise.resolve(options.editor.diff(message.path, message.before, message.rev, line)).catch(error => options.log?.(`Appling Desktop: ${error}`));
             }
         };
         ws.onclose = event => {

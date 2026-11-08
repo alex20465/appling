@@ -17,11 +17,8 @@ import { applyTextEdits, modelTexts, monaco } from './monaco.js';
 /** Inside Appling Desktop (`?shell=desktop`) the canvas is the main area, the source is folded away and there is no chat. */
 const DESKTOP = new URLSearchParams(location.search).get('shell') === 'desktop';
 
-/** Appling Desktop's bridge to its code view (Code OSS), from the repo view's preload; absent elsewhere. */
-const desktop = (window as { applingDesktop?: {
-    selected(location: { uri: string, start: number, end: number }): void;
-    onCodeCursor(callback: (uri: string, offset: number) => void): void;
-} }).applingDesktop;
+/** Appling Desktop's hooks (`hooks.ts`), from the repo view's preload; absent elsewhere. */
+const desktop = window.applingDesktop;
 
 export function App() {
     const [source, setSource] = useState(!DESKTOP);
@@ -48,7 +45,7 @@ export function App() {
     locations.current = snapshot?.locations ?? {};
 
     // the cursor in a `.appling` file of Desktop's code view selects the element there
-    useEffect(() => desktop?.onCodeCursor((uri, offset) => {
+    useEffect(() => desktop?.onCodeCursor?.((uri, offset) => {
         const qn = elementAt(locations.current, uri, offset);
         if (qn) setSelected(qn);
     }), []);
@@ -92,7 +89,7 @@ export function App() {
         if (location) {
             setActive(location.uri);
             setReveal({ ...location });
-            desktop?.selected(location);
+            desktop?.selected?.(location);
         }
     }, [snapshot]);
 

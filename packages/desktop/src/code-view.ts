@@ -5,8 +5,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { dialog, session, shell, WebContentsView, type BrowserWindow, type Session } from 'electron';
-import { BRIDGE_ENV, CodeBridge, TOKEN_ENV } from './code-bridge.js';
-import { ensureCodeServer } from './code-download.js';
+import { BRIDGE_ENV, CodeBridge, diffMessage, TOKEN_ENV, type TextDiffRequest } from './code-bridge.js';
+import { codeServerAsset, ensureCodeServer } from './code-download.js';
 import { CodeInstances, type InstanceState } from './code-instances.js';
 import { CodeProxy, PROXY_COOKIE } from './code-proxy.js';
 import { codeDirs, installExtension, repoKey, startCodeServer, type CodeServer } from './code-server.js';
@@ -149,6 +149,19 @@ export class CodeViews {
     selected(repo: string, location: SourceLocation): void {
         this.current.set(repo, location);
         this.bridge.reveal(repo, location.uri, location.start, location.end ?? location.start);
+    }
+
+    /** Whether this platform has a code view: openvscode-server builds exist for Linux only. */
+    static supported(): boolean {
+        return !!process.env.APPLING_CODE_SERVER || !!codeServerAsset(process.platform, process.arch);
+    }
+
+    /** The IDE's Review tab asks for a text diff: the code view opens (starting when needed) on Code OSS's diff editor. */
+    textDiff(repo: string, request: TextDiffRequest): void {
+        const message = diffMessage(repo, request);
+        if (!message) return;
+        this.bridge.send(repo, message);
+        if (!this.shown.has(repo)) this.toggle(repo);
     }
 
     /** Opens the repo in VS Code, or the file last in focus at its line. */
