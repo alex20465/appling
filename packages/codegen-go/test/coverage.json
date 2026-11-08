@@ -113,10 +113,10 @@
   },
   {
     "kind": "Invariant",
-    "generated": 0,
-    "partial": 3,
+    "generated": 2,
+    "partial": 1,
     "todo": 0,
-    "tasks": 3
+    "tasks": 1
   },
   {
     "kind": "Job",
@@ -246,9 +246,9 @@
   },
   {
     "kind": "total",
-    "generated": 99,
-    "partial": 22,
+    "generated": 101,
+    "partial": 20,
     "todo": 19,
-    "tasks": 44
+    "tasks": 42
   }
 ]

@@ -368,11 +368,27 @@ func CanOpenOrders(actor access.Actor, order *Order) bool {
 
 import (
 	"testing"
+	"time"
 )
 
 
+// validOrder returns an Order with the defaults of the model and a sample value for every other required field.
+func validOrder() *Order {
+	x := NewOrder()
+	x.Reference = "reference-1"
+	x.CreatedAt = time.Now()
+	return x
+}
+
 func TestOrderTotalNeverNegative(t *testing.T) {
-	t.Skip("registry task: sales.Order.invariant[\\"total never negative\\"]")
+	t.Run("holds for a valid record", func(t *testing.T) {
+		if err := validOrder().Validate(); err != nil {
+			t.Fatalf("a valid Order: %v", err)
+		}
+	})
+	t.Run("rejects a violation", func(t *testing.T) {
+		t.Skip("registry task: sales.Order.invariant[\\"total never negative\\"]")
+	})
 }
 
 func TestOrderPolicyRead(t *testing.T) {

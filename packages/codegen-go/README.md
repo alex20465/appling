@@ -26,7 +26,8 @@ Requires Go 1.22 or later. Money and decimals use [shopspring/decimal](https://g
 | `errors` | `Err<Name>` variables |
 | `role`, `actor`, `tenant` | the package `internal/access`: `Actor` (type, roles, tenant, the actor fields, records by ID), `Is<Role>(actor)` checks, `New<Actor>()`, and `InTenant` with `TenantID()` on every entity that belongs to the tenant |
 | `policy` | pure checks in `policies.go`: `Can<Op><Entity>`, `Can<Op><Entity><Field>`, `Can<Action>` (called by the action, which then takes the actor and returns `access.ErrForbidden`), `Can<Query>`, `Can<UseCase>`. Once the model has any policy, every entity, action and query gets its check, and what no policy covers is denied |
-| rules | skipped tests in `<module>_test.go`; writing their bodies is a registry task |
+| invariants | a test in `<module>_test.go`: `valid<Entity>()` passes `Validate`, and one field set to a value the simulator proves to break the invariant fails with its label (without such a value that case stays a registry task) |
+| policies, transitions, preconditions | skipped tests in `<module>_test.go`; writing their bodies is a registry task |
 
 Queries, projections, interfaces, pages, use cases, external systems and jobs become registry tasks, as do policies Go cannot translate (their check returns false until written): they need storage, HTTP and scheduling choices the model does not make. The project ends with `gofmt -w .`, and `go test ./...` is the registry's test command. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
 
