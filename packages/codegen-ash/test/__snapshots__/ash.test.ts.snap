@@ -49,13 +49,20 @@ end
 end
 ",
   "lib/shop/crm/employee.ex": "defmodule Shop.Crm.Employee do
-  use Ash.Resource, otp_app: :shop, domain: Shop.Crm, data_layer: AshPostgres.DataLayer
+  use Ash.Resource, otp_app: :shop, domain: Shop.Crm, data_layer: AshPostgres.DataLayer,
+    authorizers: [Ash.Policy.Authorizer]
 
   attributes do
     attribute :roles, {:array, :atom} do
       default []
       constraints items: [one_of: [:clerk]]
       public? false
+    end
+  end
+
+  policies do
+    policy always() do
+      forbid_if always()
     end
   end
 end
