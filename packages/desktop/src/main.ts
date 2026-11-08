@@ -3,7 +3,7 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell, WebContentsView, type MenuItemConstructorOptions } from 'electron';
 import { EXTENSION, readCodeWorkspace, writeCodeWorkspace } from './code-workspace.js';
-import { gitBranch, headFile } from './git.js';
+import { gitBranch, watchGit } from './git.js';
 import { agentSessions, desktopHost } from './agent-sessions.js';
 import { startIdeProcess, type IdeProcess } from './ide-process.js';
 import { COMMANDS, loadKeybindings } from './keybindings.js';
@@ -39,7 +39,7 @@ if (!app.requestSingleInstanceLock({ paths: initial })) {
     app.on('window-all-closed', () => app.quit());
     app.on('will-quit', () => {
         for (const process of processes.values()) process.close();
-        for (const watcher of heads.values()) watcher.close();
+        for (const unwatch of heads.values()) unwatch();
         keybindingsWatcher?.close();
     });
 }
@@ -51,7 +51,7 @@ const processes = new Map<string, IdeProcess>();
 /** The agent sessions of every workspace, shared by the repo servers (issue #16). */
 const sessions = agentSessions();
 /** Watchers of each repo's git `HEAD`, so the rail follows checkouts made anywhere. */
-const heads = new Map<string, FSWatcher>();
+const heads = new Map<string, () => void>();
 let window: BrowserWindow | undefined;
 let keybindingsWatcher: FSWatcher | undefined;
 /** While the switcher is open the repo views are hidden, so the shell page (which draws it) is on top. */
@@ -203,27 +203,19 @@ function retry(id: string): void {
     if (repo?.status === 'failed') launch(repo.id);
 }
 
-/** Reads a repo's branch now and again whenever its git `HEAD` changes (git replaces the file, so the folder is watched). */
+/** Follows a repo's branch, ahead and behind counts and dirty state for the rail (see `watchGit`). */
 function watchBranch(id: string): void {
     repos.update(id, { branch: gitBranch(id) });
-    const head = headFile(id);
-    if (!head) return;
-    try {
-        heads.set(id, watch(dirname(head), (_, name) => {
-            if (name !== 'HEAD') return;
-            const branch = gitBranch(id);
-            if (repos.get(id)?.branch === branch) return;
-            repos.update(id, { branch });
-            refresh();
-        }));
-    } catch {
-        // the rail then shows the branch from the start only
-    }
+    heads.set(id, watchGit(id, state => {
+        if (!repos.get(id)) return;
+        repos.update(id, { branch: state.branch, ahead: state.ahead, behind: state.behind, dirty: state.dirty, upstream: state.upstream });
+        refresh();
+    }));
 }
 
 function stop(id: string): void {
     repos.close(id);
-    heads.get(id)?.close();
+    heads.get(id)?.();
     heads.delete(id);
     processes.get(id)?.close();
     processes.delete(id);
@@ -369,7 +361,7 @@ function state() {
                     const repo = repos.get(f.path);
                     return {
                         id: f.path, name: repoName(f.path, f.name), status: repo?.status ?? 'starting', error: repo?.error,
-                        errors: repo?.errors ?? 0, branch: repo?.branch,
+                        errors: repo?.errors ?? 0, branch: repo?.branch, ahead: repo?.ahead ?? 0, behind: repo?.behind ?? 0, dirty: repo?.dirty ?? 0, upstream: repo?.upstream,
                         pinned: w.pinned.includes(f.path), hidden: w.hidden.includes(f.path)
                     };
                 })

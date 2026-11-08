@@ -13,6 +13,12 @@ export interface Repo {
     errors?: number;
     /** The checked out branch (a short commit while detached); undefined outside git. */
     branch?: string;
+    /** The branch it tracks, and the commits it is ahead of and behind it. */
+    upstream?: string;
+    ahead?: number;
+    behind?: number;
+    /** Files with uncommitted changes. */
+    dirty?: number;
 }
 
 /** The repos that have an IDE server, whichever workspaces they belong to (see `Workspaces`). */

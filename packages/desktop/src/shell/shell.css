@@ -32,6 +32,8 @@ body { display: grid; grid-template-columns: 48px 1fr; background: var(--surface
 .repo.pinned::after { content: ''; position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--leaf); }
 .repo.hidden { border-style: dotted; }
 .repo, .workspace { position: relative; }
+.dirty-dot { position: absolute; top: 3px; left: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--rust, #f2b632); pointer-events: none; }
+.sync { position: absolute; left: -4px; bottom: -4px; height: 13px; padding: 0 2px; border-radius: 6px; background: var(--surface-elevated); border: 1px solid var(--line); color: var(--ink-muted); font: 600 8px/11px system-ui, sans-serif; pointer-events: none; }
 .badge { position: absolute; right: -4px; bottom: -4px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px; background: var(--error); color: var(--surface); font: 700 9px/15px system-ui, sans-serif; text-align: center; pointer-events: none; }
 /* Collapsed: the rail is gone and main.ts places the repo views at the left edge. */
 body.collapsed { grid-template-columns: 0 1fr; }

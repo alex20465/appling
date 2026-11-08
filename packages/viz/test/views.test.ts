@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import type { Model } from '@appling/lang';
-import { buildGraph, Simulator } from '@appling/model';
+import { buildGraph, diffGraphs, Simulator, withRemoved } from '@appling/model';
 import { buildWorkspace, examples } from '../../lang/test/workspace.js';
 import { layoutFlow } from '../src/layout.js';
 import {
@@ -176,6 +176,21 @@ test('session marks lift members to their declaration; the first session wins', 
         { element: 'sales.Gone', color: 'blue', label: 'Status', session: 'b' }
     ]);
     expect([...marks].map(([qn, m]) => [qn, m.session])).toEqual([['sales.Order', 'a']]);
+});
+
+test('removed elements put back into the graph are marked removed, their members lift as changed', async () => {
+    const graphOf = async (source: string) => {
+        const { documents, services } = await buildWorkspace({ 'm.appling': source });
+        return buildGraph(documents.map(d => d.parseResult.value as Model), services);
+    };
+    const before = await graphOf('module m {\n  entity A {\n    x: String\n    y: String\n  }\n  entity B {\n    z: String\n  }\n}');
+    const after = await graphOf('module m {\n  entity A {\n    x: String\n  }\n}');
+    const diff = diffGraphs(before, after);
+    const index = new GraphIndex(withRemoved(before, after, diff));
+    expect(Object.fromEntries(changeMarks(index, diff))).toEqual({ 'm.A': 'changed', 'm.B': 'removed' });
+    expect(Object.fromEntries(changeMarks(index, diff, true))).toEqual({ 'm.A': 'changed', 'm.B': 'removed', m: 'changed' });
+    const drawn = (node: TreeNode): string[] => [...(node.type === 'element' ? [node.qn!] : []), ...(node.children ?? []).flatMap(drawn)];
+    expect(drawn(growTree(index, DOMAIN, new Set(['~', '~/m'])))).toEqual(['m.A', 'm.B']);
 });
 
 test('the element at an offset is the innermost one', () => {

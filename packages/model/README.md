@@ -89,6 +89,10 @@ An action is allowed when its own policies, the `update` policies of its entity 
 
 `relevance(graph)` scores every module and top level declaration from 0 to 1 by how much it matters to the application (`import { relevance } from '@appling/model'`, or `@appling/model/relevance` without the language dependencies). The score counts the declarations that use it and those it uses, on a log scale against the busiest one; a declared level (`core`, `supporting`, `peripheral`), its own or its module's, maps it into the ranges 0.7 to 1, 0.35 to 0.7 and 0 to 0.35. A module scores as its best declaration. `relevanceLevel(score)` names the level of a score.
 
+## Model diff
+
+`diffGraphs(before, after)` compares two graphs, such as the model at a git commit and in the working tree (`import { diffGraphs } from '@appling/model/diff'`, browser safe). It lists the added, changed and removed elements by qualified name; an element changed when its properties or its outgoing edges other than `contains` differ. The migration steps that only the graph after has map the old names to the new ones, so a rename recorded as a step is one change with `was` set, not a removal and an addition. `withRemoved(before, after, diff)` puts the removed elements back into the graph after, under their parents, so a canvas can draw them where they were.
+
 ## License
 
 MIT

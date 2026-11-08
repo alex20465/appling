@@ -111,9 +111,13 @@ console.log(result.ok ? result.edits : result.errors);
 | `REFERENCES`, `CodeReference`, `References`, `ResolvedReference`, `ReferenceStatus` | `.appling/references.json` and the reference types |
 | `relevance(graph)` | The [relevance](../language/relevance.md) of every module and top level declaration, from 0 to 1, by qualified name |
 | `relevanceLevel(score)`, `RELEVANCE_LEVELS`, `RelevanceLevel` | The level a score falls in, and the score range of each level |
+| `diffGraphs(before, after)` | The model diff of two graphs as a `GraphDiff`: every `ElementChange` (`added`, `changed` or `removed`, by qualified name, with the properties and outgoing edges that differ), the lists of added, changed and removed names and `renamed`. Elements match by qualified name; the migration steps only the graph after has map old names to new ones, so a recorded rename is one change |
+| `withRemoved(before, after, diff)` | The graph after with the removed elements of a diff put back under their parents, with their edges, so a canvas can draw them where they were |
+| `migrationRenames(before, after)` | The function that maps a qualified name of the graph before to its name after through the new migration steps; undefined for a removed one |
+| `GraphDiff`, `ElementChange`, `ChangeStatus` | The diff types |
 | `findApplingFiles(path)` | The `.appling` files at a path, searching folders recursively and skipping hidden folders and `node_modules` |
 
-`@appling/model/graph`, `@appling/model/edit`, `@appling/model/simulator` and `@appling/model/relevance` export the graph, the edit operations, the simulator and the relevance functions without the file system functions of the rest of the package, so a browser bundle can import them.
+`@appling/model/graph`, `@appling/model/edit`, `@appling/model/simulator`, `@appling/model/relevance` and `@appling/model/diff` export the graph, the edit operations, the simulator, the relevance functions and the model diff without the file system functions of the rest of the package, so a browser bundle can import them.
 
 ## Code generation: @appling/codegen
 
@@ -259,7 +263,7 @@ await window.show({ view: 'machine', focus: ['sales.OrderFlow'], title: 'Order l
 | `GraphIndex` | The graph with children, parents and lineage by qualified name, and `relevanceOf(qn)`, the relevance of the declaration an element belongs to |
 | `growTree(index, settings, unfolded, name?, trail?)` | The dependency tree of `settings.lens` as a `TreeNode`: the seed holds the modules, a module the declarations of the lens, a declaration the declarations that use it, grouped by kind when there is more than one; only the node ids in `unfolded` have children, the most relevant first; a node id in `trail` shows only its children in `unfolded` or `trail` |
 | `trailOf(index, settings, focus)`, `lensOf(kind)` | The `unfolded` and `trail` sets that draw the focused elements one after another, each unfolded in place, with the node id of each; the lens that starts from a kind |
-| `changeMarks(index, changes)` | The declarations that added and changed elements belong to, each `added` when the declaration itself is new, else `changed` |
+| `changeMarks(index, changes, modules?)`, `MarkedChanges`, `ChangeMark` | The declarations that added, changed and removed elements belong to, each `added` or `removed` when the declaration itself is new or gone, else `changed`; removed elements count only when the index has them (see `withRemoved`); with `modules`, the modules that hold a marked declaration are `changed` too |
 | `sessionMarks(index, marks)`, `SessionMark` | The declarations that the elements claimed or highlighted by agent sessions belong to, each with the first session's mark |
 | `revealPath(index, settings, qn)` | The node ids to unfold so that an element's declaration shows in its module |
 | `factOf(index, node)` | The short fact a tree node shows under its name, such as `on Order · draft, placed → cancelled` |
@@ -270,4 +274,4 @@ await window.show({ view: 'machine', focus: ['sales.OrderFlow'], title: 'Order l
 | `search`, `relations`, `entityActions`, `actionSummary`, `memberText`, `kindLabel`, `elementAt` | The search, relations and summaries the IDE side panel shows |
 | `ViewSettings`, `DEFAULT_VIEW` | The canvas options, the lens included |
 
-`@appling/viz/canvas` exports the SVG tree `ModelCanvas` (one lens at a time, unfolded node by node, circles sized by relevance, only trails when given a `focus`), the SVG flowchart `FlowCanvas` and the card grid `CardCanvas`, each with optional `bubbles`; `ModelCanvas` also marks the declarations of optional `changes` and rings those of optional `sessions` (`SessionMark[]`) in the session's colour; import `@appling/viz/canvas.css` with them. They need `react` as a peer dependency.
+`@appling/viz/canvas` exports the SVG tree `ModelCanvas` (one lens at a time, unfolded node by node, circles sized by relevance, only trails when given a `focus`), the SVG flowchart `FlowCanvas` and the card grid `CardCanvas`, each with optional `bubbles`; `ModelCanvas` also marks the declarations and modules of optional `changes` (any `MarkedChanges`, such as a `GraphDiff`), draws removed ones ghosted and rings those of optional `sessions` (`SessionMark[]`) in the session's colour; import `@appling/viz/canvas.css` with them. They need `react` as a peer dependency.

@@ -29,6 +29,10 @@
     "./relevance": {
       "types": "./out/relevance.d.ts",
       "default": "./out/relevance.js"
+    },
+    "./diff": {
+      "types": "./out/diff.d.ts",
+      "default": "./out/diff.js"
     }
   },
   "files": [

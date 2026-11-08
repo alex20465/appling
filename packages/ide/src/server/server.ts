@@ -12,6 +12,7 @@ import { chat, createMcpServer, handleMcpRequest, languageModel, MemorySessionSt
 import { applyEdit, latestRelease, readReleases, REFERENCES, type EditOperation } from '@appling/model';
 import type { ModelMessage } from 'ai';
 import type { Snapshot } from '../shared/snapshot.js';
+import { fileDiff, review, revisions } from './git.js';
 import { readView, snapshot, writeView } from './workspace.js';
 import { ideHost, type ClientContext } from './sessions.js';
 
@@ -150,6 +151,12 @@ async function serveSessions(request: IncomingMessage, response: ServerResponse,
 async function handle(request: IncomingMessage, response: ServerResponse, root: string): Promise<void> {
     const url = new URL(request.url!, 'http://localhost');
     if (url.pathname === '/api/snapshot' && request.method === 'GET') return json(response, await snapshot(root));
+    if (url.pathname === '/api/diff' && request.method === 'GET') return json(response, await review(root, url.searchParams.get('rev') || 'HEAD', await snapshot(root)));
+    if (url.pathname === '/api/diff/file' && request.method === 'GET') {
+        const [rev, path] = [url.searchParams.get('rev') || 'HEAD', url.searchParams.get('path') ?? ''];
+        return json(response, await fileDiff(root, rev, path, url.searchParams.get('before') ?? path).catch(error => ({ error: (error as Error).message })));
+    }
+    if (url.pathname === '/api/revisions' && request.method === 'GET') return json(response, await revisions(root));
     if (url.pathname === '/api/view' && request.method === 'GET') return json(response, readView(root));
     if (url.pathname === '/api/view' && request.method === 'PUT') {
         writeView(root, JSON.parse(await body(request)));

@@ -1,6 +1,7 @@
 import type { ChatEvent } from '@appling/ai';
 import { applyEdit, type EditOperation, type EditResult } from '@appling/model/edit';
 import { buildSnapshot } from '../shared/model.js';
+import type { FileDiff, Review, Revision } from '../shared/review.js';
 import { DEFAULT_VIEW, type ClientReport, type IdeEvents, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
 import { monaco } from '../client/monaco.js';
 
@@ -44,6 +45,18 @@ export function requestEdit(sources: Record<string, string>, operation: EditOper
 
 export async function loadRelease(): Promise<null> {
     return null;
+}
+
+export async function loadReview(): Promise<Review> {
+    return { ok: false, error: 'The review compares the model with a git commit. Run the IDE on a git repository on your machine: npx @appling/ide' };
+}
+
+export async function loadRevisions(): Promise<Revision[]> {
+    return [];
+}
+
+export async function loadFileDiff(): Promise<FileDiff | { error: string }> {
+    return { error: 'No git in the demo.' };
 }
 
 export async function* chatTurn(): AsyncGenerator<ChatEvent> {
