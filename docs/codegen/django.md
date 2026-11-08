@@ -173,14 +173,18 @@ A job needs an action on an entity without required inputs; otherwise it becomes
 
 ### Tests
 
-Invariants, policies, transitions and actions with preconditions get a `TestCase` class in `<app>/tests.py`, with one skipped method per case. The skip reason names the registry entry, and writing the bodies is a task of that entry. See [test skeletons](registry.md#test-skeletons).
+Invariants, policies, transitions and actions with preconditions get a `TestCase` class in `<app>/tests.py`, with one method per case. A case the model says everything about gets a body and runs; every other case is skipped, its skip reason names the registry entry, and writing the missing bodies is a task of that entry (the task lists the methods when only some are skipped). See [test skeletons](registry.md#test-skeletons).
 
-| Rule | Test methods |
-|---|---|
-| invariant | `test_holds_for_valid_rows`, `test_rejects_violations` |
-| policy | `test_allows_permitted_actors`, `test_denies_other_actors` |
-| transition | `test_moves_from_allowed_states`, `test_refuses_other_states` |
-| action with preconditions | `test_precondition_<n>_is_enforced` |
+| Rule | Test methods | Body |
+|---|---|---|
+| invariant | `test_holds_for_valid_rows`, `test_rejects_violations` | skipped |
+| policy | `test_allows_permitted_actors`, `test_denies_other_actors` | skipped |
+| transition | `test_moves_from_allowed_states`, `test_refuses_other_states` | creates the entity in each allowed state, runs the action (or sends the event) and asserts the target state; in every state no transition of that action or event leaves, asserts `InvalidTransition` |
+| action with preconditions | `test_precondition_<n>_is_enforced` | creates a row for which the precondition fails and asserts its error (`ValueError` without one) |
+
+Test bodies create rows through factories in `<app>/factories.py`, one `make_<entity>(**fields)` per entity: every required stored field without a default gets a sample value (`"<field>-<n>"` for strings, `1` for numbers, `False`, the current date or time, one hour, a new UUID, the first enum literal), and a required reference gets a row from the referenced entity's factory. An entity with a required file, a value type or a cycle of required references has no factory.
+
+A case only gets a body when the Appling simulator proves, on the factory's row, that the invariants hold, that the preconditions and the guard hold (or, for a precondition test, that the earlier preconditions hold and this one fails), and that the effects do not create rows or depend on the actor. Otherwise it stays skipped. In the examples, `PlaceOrder` requires order lines that the factory does not add, so its precondition test runs, while the tests of `draft -> placed` stay tasks. Event transitions are tested only when no job or other machine also handles the event. The actions run without an actor, which skips their policy checks.
 
 ### Pages
 
@@ -227,7 +231,8 @@ build/shop/
     pages.py, urls.py    pages and the action runners they post to
     messages.py          labels per language
     templates/sales/     base.html with the navigation, page.html
-    tests.py             skipped test skeletons
+    tests.py             tests of the rules, skipped where the model does not say enough
+    factories.py         a make_<entity>() per entity the tests create
     migrations/
   crm/
     ...
