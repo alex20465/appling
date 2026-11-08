@@ -2,7 +2,7 @@
 
 Appling Desktop: one native app for many repos. Repos are grouped into workspaces, each repo gets its own Appling IDE server and a view that stays alive while you switch, with the model canvas, search and inspector as its main area.
 
-In development (epic #15); the package is private until the first release. This is the shell with workspaces: the rail (collapsible, with pinned, reordered and hidden repos), one IDE server per repo, `.code-workspace` files, session restore, the fuzzy switcher, the app menu and rebindable shortcuts. The rail shows each repo's validation errors and git state (branch, ahead and behind, dirty). Each repo's IDE has a Review tab with the model diff against any commit. Each repo has a code view, an embedded Code OSS. Cloning, agent, task and unsaved file status in the rail, terminals, agent sessions and packaging follow.
+In development (epic #15); the package is private until the first release. This is the shell with workspaces: the rail (collapsible, with pinned, reordered and hidden repos), one IDE server per repo, `.code-workspace` files, session restore, the fuzzy switcher, the app menu and rebindable shortcuts. Repos are added by folder or by cloning a git URL. The rail shows each repo's agent sessions, validation errors, unsaved files and git state (branch, ahead and behind, dirty). Each repo's IDE has a Review tab with the model diff against any commit. Each repo has a code view, an embedded Code OSS. Task status in the rail, terminals and packaging follow.
 
 ## Run it
 
@@ -20,8 +20,9 @@ A workspace (for example a client or a product) groups git repos. It is a VS Cod
 - **File › New Workspace…** creates the file where you choose (by default in the app's user data folder, `workspaces/`). Choosing an existing file opens it instead, so it is never emptied.
 - **File › Open Workspace…** opens existing files, also ones written by VS Code. Comments and trailing commas are read; relative folder paths resolve against the file's folder; a folder's `name` is shown instead of its folder name; remote folders (`uri`) are kept but not opened.
 - **File › Add Folder to Workspace…** adds folders to the active workspace. Folders opened while no workspace is open go to `workspaces/Default.code-workspace` in the user data folder.
+- **File › Clone Repository…** (also on the `+` below the repos) asks for a git URL (https, ssh or a path) and the folder to clone into, proposed next to the workspace's first repo (else `~/src` or the home folder). It runs `git clone --progress` and shows its progress; when it is done the new folder joins the active workspace. A failure shows git's own message and removes the half cloned folder; Escape or Cancel stops a running clone. Git never asks for a password here: use a credential helper or an ssh agent.
 - Adding, closing or moving a repo writes the file back: folder paths relative to the file, every other key (`settings`, `extensions`, ...) kept. Comments in the file are lost on that write. A file that does not parse is never overwritten; the app reports it instead.
-- Right click a repo in the rail to pin it to the top, hide it, move it to another open workspace, reveal it or close it; right click a workspace to show its hidden repos again, reveal its file or close it.
+- Right click a repo in the rail to pin it to the top, hide it, move it to another open workspace, reveal it or close it; right click a workspace to show its hidden repos again, reveal its file or close it. Dropping a repo on another workspace's button moves it there too. A move writes both workspace files.
 
 ## The rail
 
@@ -29,7 +30,16 @@ The rail is 48px wide: workspaces on top, the repos of the active workspace belo
 
 - **Pinned** repos (a green dot) stay at the top of the rail, in their workspace's folder order.
 - **Hidden** repos leave the rail and `CmdOrCtrl+1..9`, which count the rail's repos. They keep their server and view, and the switcher still finds them; a hidden repo you switch to shows on the rail with a dotted border while it is shown. Pinning a hidden repo shows it again.
-- **Validation errors** of a repo's model show as a red count in the corner of its button; a workspace's button shows the sum over all its repos, hidden ones included. The count follows every saved change of a `.appling` file.
+- **Status**: each repo's button carries a badge with its most urgent count, and its tooltip lists them all; a workspace's button shows the sums over all its repos, hidden ones included. In order of urgency:
+
+  | Count | Badge |
+  |---|---|
+  | Agent sessions that need input or are blocked | amber |
+  | Agent sessions that failed, tasks that failed | red |
+  | Validation errors of the model (after every saved change of a `.appling` file) | red |
+  | Agent sessions working, tasks running (the button is also ringed green) | green |
+  | Files with unsaved edits in the repo's view (named in the tooltip) | grey |
+
 - The **git state**: the branch (a short commit while the head is detached), the commits ahead of and behind its upstream and the number of changed files are in the repo's tooltip. A dot in the top left corner marks uncommitted changes, and `↑2↓1` in the bottom left corner the ahead and behind counts. It follows commits, checkouts, fetches and edits made anywhere, also in a terminal outside the app: the git folder is watched and `git status` runs every 5 seconds. Worktrees and submodules (a `.git` file) work too.
 - **Drag** a repo onto another to place it before that one; it joins the group (pinned or not) of the repo it lands on. Drop it on the `+` below the repos to move it to the end. The new order is written to the workspace file's `folders`, so VS Code shows it too.
 
@@ -66,8 +76,9 @@ Each instance listens on its own port on 127.0.0.1 and requires its own connecti
 ## How it works
 
 - `bin.ts` resolves the paths and starts Electron detached with `main.js -- <paths>`. The main process takes Electron's single instance lock with the paths as additional data; a second instance hands them to the first through `second-instance` and quits.
-- `workspaces.ts` holds the pure state (open workspaces, the shown repo per workspace, pins and hidden repos, the rail order, the collapsed rail, the most recently used order); `switcher.ts` ranks the switcher's lines (`fuzzyMatch`, `switcherEntries`); `code-workspace.ts` reads and writes the files; `session.ts` saves and restores the session; `repos.ts` tracks the repos that have a server; `git.ts` reads the branch from `HEAD` without running git and the full state with `git status --porcelain=v2 --branch` (`parseGitStatus`, `readGitState`); `watchGit` follows it for the main process.
-- Every repo runs `appling-ide <folder> --port 0` in its own child process (Electron's binary with `ELECTRON_RUN_AS_NODE`), so a failing repo cannot take the app down. The server reports its URL over the IPC channel, then `{ type: 'status', errors }` at start and after every model change, and ends when the channel closes, also when the app is killed. A server that ends shows its error with Retry and Close.
+- `workspaces.ts` holds the pure state (open workspaces, the shown repo per workspace, pins and hidden repos, the rail order, the collapsed rail, the most recently used order); `switcher.ts` ranks the switcher's lines (`fuzzyMatch`, `switcherEntries`); `code-workspace.ts` reads and writes the files; `session.ts` saves and restores the session; `repos.ts` tracks the repos that have a server; `git.ts` reads the branch from `HEAD` without running git and the full state with `git status --porcelain=v2 --branch` (`parseGitStatus`, `readGitState`); `watchGit` follows it for the main process; `clone.ts` runs `git clone` with progress (`clone-ipc.ts` connects it to the shell's form).
+- `rail-status.ts` is the rail's status model. Each feature reports through its own source, `rail.source('name').set(repo, { counts, branch, notes })` (or `replace` for every repo at once, `clear`), so no feature overwrites another's numbers; `repo(id)` sums the sources and `sum(repos)` a workspace. Sources today: `validation` (the server's error count), `editor` (unsaved files), `git` (branch, ahead, behind and dirty from `watchGit`) and `agents` (the agent sessions store, through `agentContributions`). A new count is a key of `RailCounts` and a place in `RAIL_COUNTS`, which orders them by urgency for the badge.
+- Every repo runs `appling-ide <folder> --port 0` in its own child process (Electron's binary with `ELECTRON_RUN_AS_NODE`), so a failing repo cannot take the app down. The server reports its URL over the IPC channel, then `{ type: 'status', errors }` at start and after every model change and `{ type: 'status', unsaved }` (repo relative paths) whenever the files with unsaved edits change; the IDE client sends those to its server over `/events` (`{ type: 'unsaved', files }`). It ends when the channel closes, also when the app is killed. A server that ends shows its error with Retry and Close.
 - The window holds the shell page (`src/shell`: the 48px rail with workspaces on top and the repos of the active workspace below, and the empty and error states) and one `WebContentsView` per repo loading `<ide url>/?shell=desktop`: the IDE client with the canvas as the main area, the source folded away behind **Source** and no AI chat. Views of inactive repos are hidden, not destroyed. A view may navigate only within its own server; `https` links open in the browser.
 - `agent-sessions.ts`: the main process holds one store of agent sessions for every workspace and serves it to each repo's server over its IPC channel (`--shared-sessions`), with `desktopHost` adding the active repo, the workspace and the focus action to the sessions' IDE context. Agents reach the repo server's `/mcp` with their session's token (`openAgentSession`).
 - The shell talks to the main process only through the preload bridge (`preload.cts`); every page runs sandboxed with context isolation. A repo view's own preload (`repo-preload.cts`) exposes `window.applingDesktop` for the code view's selection sync and `openTextDiff` (only where the code view runs).
@@ -79,6 +90,7 @@ Each instance listens on its own port on 127.0.0.1 and requires its own connecti
 |---|---|
 | `newWorkspace`, `openWorkspace` | `CmdOrCtrl+Shift+N`, `CmdOrCtrl+Shift+O` |
 | `open` (Add Folder to Workspace…) | `CmdOrCtrl+O` |
+| `clone` (Clone Repository…) | none |
 | `closeRepo` (removes it from the active workspace) | `CmdOrCtrl+W` |
 | `switcher` (Go to Repo…) | `CmdOrCtrl+P` |
 | `closeWorkspace` | `CmdOrCtrl+Shift+W` |

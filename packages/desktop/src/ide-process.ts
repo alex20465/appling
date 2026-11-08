@@ -18,7 +18,7 @@ export interface IdeProcessOptions {
     timeout?: number;
     /** Called when the server ends on its own, such as after a crash. */
     onExit?(code: number | null, stderr: string): void;
-    /** Called with the repo's status whenever the server reports it: at start and after every model change. */
+    /** Called with what the server reports for the rail: the errors at start and after every model change, the unsaved files after each change. */
     onStatus?(status: IdeStatus): void;
     /** The agent sessions shared by every repo server, served to this one over its IPC channel. */
     sessions?: SessionStore;
@@ -26,10 +26,12 @@ export interface IdeProcessOptions {
     host?: AppHost;
 }
 
-/** What a repo's server reports for the rail. */
+/** What a repo's server reports for the rail; each report carries one of the two. */
 export interface IdeStatus {
     /** Validation errors in the repo's model. */
-    errors: number;
+    errors?: number;
+    /** Repo relative paths of the files with unsaved edits in the repo's view. */
+    unsaved?: string[];
 }
 
 /** The IDE server's entry, `appling-ide`. */
@@ -62,8 +64,9 @@ export function startIdeProcess(root: string, options: IdeProcessOptions = {}): 
             reject(error);
         };
         child.once('error', fail);
-        child.on('message', (message: { type?: string, url?: string, errors?: unknown }) => {
+        child.on('message', (message: { type?: string, url?: string, errors?: unknown, unsaved?: unknown }) => {
             if (message.type === 'status' && typeof message.errors === 'number') return options.onStatus?.({ errors: message.errors });
+            if (message.type === 'status' && Array.isArray(message.unsaved)) return options.onStatus?.({ unsaved: message.unsaved.filter(f => typeof f === 'string') });
             if (message.type !== 'ready' || !message.url || ready) return;
             ready = true;
             clearTimeout(timer);

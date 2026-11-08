@@ -1,33 +1,36 @@
 /**
  * The shell page: the rail on the left (workspaces, then the repos of the active one), behind the active repo's view
- * the empty and error states, and the switcher (shown while the main process hides the repo views).
+ * the empty and error states, and the switcher and the clone form (shown while the main process hides the repo views).
  */
+import type { CloneProgress } from '../clone.js';
+import type { RailCount, RailCounts } from '../rail-status.js';
 
-interface RepoState {
+/** The rail status of a repo or a workspace (see `rail-status.ts`). */
+interface RailView {
+    counts: RailCounts;
+    branch?: string;
+    /** The most urgent count above zero. */
+    badge?: { kind: RailCount, count: number };
+    /** The repo's git state beyond the branch. */
+    git?: { upstream?: string, ahead: number, behind: number, dirty: number };
+    /** The tooltip lines: branch and git state, counts, notes. */
+    lines: string[];
+}
+
+interface RepoState extends RailView {
     id: string;
     name: string;
     status: 'starting' | 'ready' | 'failed';
     error?: string;
-    /** Validation errors of its model. */
-    errors: number;
-    /** The checked out branch; undefined outside git. */
-    branch?: string;
-    upstream?: string;
-    ahead: number;
-    behind: number;
-    /** Files with uncommitted changes. */
-    dirty: number;
     pinned: boolean;
     hidden: boolean;
 }
 
-interface WorkspaceState {
+interface WorkspaceState extends RailView {
     id: string;
     name: string;
     /** How many repos are hidden from the rail. */
     hidden: number;
-    /** Validation errors summed over its repos. */
-    errors: number;
     repos: RepoState[];
 }
 
@@ -65,6 +68,14 @@ interface Bridge {
     onSwitcher(callback: () => void): void;
     switch(query: string): Promise<SwitcherEntry[]>;
     closeSwitcher(): void;
+    addMenu(): void;
+    openClone(): void;
+    move(repo: string, from: string, to: string): void;
+    onClone(callback: (form: { parent: string }) => void): void;
+    onCloneProgress(callback: (progress: CloneProgress) => void): void;
+    chooseCloneParent(current: string): Promise<string | undefined>;
+    clone(url: string, parent: string, name?: string): Promise<{ folder?: string, error?: string }>;
+    closeClone(): void;
 }
 
 const bridge = (window as unknown as { appling: Bridge }).appling;
@@ -89,6 +100,13 @@ function render(state: ShellState): void {
         const button = railButton(`workspace${workspace.id === state.active ? ' active' : ''}`, workspace.name, `${workspace.name}\n${workspace.id}\nRight click for more`);
         button.dataset.id = workspace.id;
         button.onclick = () => bridge.selectWorkspace(workspace.id);
+        // a repo dropped on another workspace moves there
+        button.ondragover = event => dragged && workspace.id !== state.active && event.preventDefault();
+        button.ondrop = event => {
+            event.preventDefault();
+            if (dragged && state.active && workspace.id !== state.active) bridge.move(dragged, state.active, workspace.id);
+            dragged = undefined;
+        };
         button.oncontextmenu = event => {
             event.preventDefault();
             bridge.workspaceMenu(workspace.id);
@@ -98,15 +116,16 @@ function render(state: ShellState): void {
 
     const workspace = state.workspaces.find(w => w.id === state.active);
     for (const button of workspaceRail.querySelectorAll<HTMLElement>('.workspace')) {
-        const { hidden = 0, errors = 0 } = state.workspaces.find(w => w.id === button.dataset.id) ?? {};
-        if (hidden) button.title += `\n${hidden} hidden repo${hidden > 1 ? 's' : ''}`;
-        badge(button, errors);
+        const shown = state.workspaces.find(w => w.id === button.dataset.id);
+        if (!shown) continue;
+        if (shown.hidden) button.title += `\n${shown.hidden} hidden repo${shown.hidden > 1 ? 's' : ''}`;
+        badge(button, shown);
     }
     repoRail.replaceChildren(...(workspace?.repos ?? []).map(repo => {
         const flags = `${repo.pinned ? ' pinned' : ''}${repo.hidden ? ' hidden' : ''}${repo.id === state.repo ? ' active' : ''}`;
         const note = repo.pinned ? 'Pinned. ' : repo.hidden ? 'Hidden from the rail. ' : '';
-        const button = railButton(`repo ${repo.status}${flags}`, repo.name, `${repo.name}\n${repo.id}\n${gitLine(repo)}${note}Drag to reorder, middle click closes, right click for more`);
-        badge(button, repo.errors);
+        const button = railButton(`repo ${repo.status}${flags}`, repo.name, `${repo.name}\n${repo.id}\n${note}Drag to reorder or onto a workspace, middle click closes, right click for more`);
+        badge(button, repo);
         gitMarks(button, repo);
         button.onclick = () => bridge.select(repo.id, workspace!.id);
         button.draggable = true;
@@ -133,9 +152,10 @@ function render(state: ShellState): void {
     stage.replaceChildren();
     if (!workspace) {
         stage.append(heading('No workspace open'), paragraph('A workspace groups git repos and is stored as a .code-workspace file, which VS Code opens too.'),
-            action('New Workspace…', () => bridge.newWorkspace()), action('Add Folder…', () => bridge.open()));
+            action('New Workspace…', () => bridge.newWorkspace()), action('Add Folder…', () => bridge.open()), action('Clone Repository…', () => bridge.openClone()));
     } else if (!active) {
-        stage.append(heading(workspace.name), paragraph('This workspace has no repos yet. Add a folder, or run appling-desktop <folder> in a terminal.'), action('Add Folder…', () => bridge.open()));
+        stage.append(heading(workspace.name), paragraph('This workspace has no repos yet. Add a folder, clone one, or run appling-desktop <folder> in a terminal.'),
+            action('Add Folder…', () => bridge.open()), action('Clone Repository…', () => bridge.openClone()));
     } else if (active.status === 'starting') {
         stage.append(heading(active.name), paragraph('Starting the IDE server…'));
     } else if (active.status === 'failed') {
@@ -154,38 +174,36 @@ function railButton(className: string, name: string, title: string): HTMLButtonE
     return button;
 }
 
-/** The tooltip line of a repo's git state, such as "On main, 2 ahead and 1 behind origin/main, 3 changed files". */
-function gitLine(repo: RepoState): string {
-    if (!repo.branch) return '';
-    const sync = repo.ahead || repo.behind ? `, ${[repo.ahead && `${repo.ahead} ahead`, repo.behind && `${repo.behind} behind`].filter(Boolean).join(' and ')} ${repo.upstream ?? 'its upstream'}` : '';
-    const dirty = repo.dirty ? `, ${repo.dirty} changed file${repo.dirty > 1 ? 's' : ''}` : '';
-    return `On ${repo.branch}${sync}${dirty}\n`;
-}
-
 /** A dot in the top left corner while the repo has uncommitted changes, and the ahead and behind counts below it. */
 function gitMarks(button: HTMLElement, repo: RepoState): void {
-    if (repo.dirty) {
+    const git = repo.git;
+    if (!git) return;
+    if (git.dirty) {
         button.classList.add('dirty');
         const dot = document.createElement('span');
         dot.className = 'dirty-dot';
         button.append(dot);
     }
-    if (repo.ahead || repo.behind) {
+    if (git.ahead || git.behind) {
         const sync = document.createElement('span');
         sync.className = 'sync';
-        sync.textContent = `${repo.ahead ? `↑${repo.ahead > 9 ? '9+' : repo.ahead}` : ''}${repo.behind ? `↓${repo.behind > 9 ? '9+' : repo.behind}` : ''}`;
+        sync.textContent = `${git.ahead ? `↑${git.ahead > 9 ? '9+' : git.ahead}` : ''}${git.behind ? `↓${git.behind > 9 ? '9+' : git.behind}` : ''}`;
         button.append(sync);
     }
 }
 
-/** The count of validation errors in the button's corner, and in its tooltip. */
-function badge(button: HTMLElement, errors: number): void {
-    if (!errors) return;
+/**
+ * The status in the button's corner: the most urgent count, coloured by its kind (agent waiting, failure, errors,
+ * work in progress, unsaved files); an agent at work also rings the button. Every line goes into the tooltip.
+ */
+function badge(button: HTMLElement, status: RailView): void {
+    if (status.lines.length) button.title += `\n${status.lines.join('\n')}`;
+    button.classList.toggle('working', status.counts.agentsWorking > 0 || status.counts.tasksRunning > 0);
+    if (!status.badge) return;
     const count = document.createElement('span');
-    count.className = 'badge';
-    count.textContent = errors > 99 ? '99+' : String(errors);
+    count.className = `badge ${status.badge.kind}`;
+    count.textContent = status.badge.count > 99 ? '99+' : String(status.badge.count);
     button.append(count);
-    button.title += `\n${errors} validation error${errors > 1 ? 's' : ''}`;
 }
 
 function heading(text: string): HTMLElement {
@@ -291,7 +309,7 @@ switcher.onclick = event => event.target === switcher && closeSwitcher();
 bridge.onSwitcher(openSwitcher);
 
 const open = document.querySelector<HTMLButtonElement>('#open')!;
-open.onclick = () => bridge.open();
+open.onclick = () => bridge.addMenu();
 // a repo dropped on the add button goes to the end of the rail
 open.ondragover = event => dragged && event.preventDefault();
 open.ondrop = event => {
@@ -303,3 +321,56 @@ open.ondrop = event => {
 document.querySelector<HTMLButtonElement>('#new-workspace')!.onclick = () => bridge.newWorkspace();
 bridge.onState(render);
 bridge.state().then(render);
+
+/** The clone form: a git URL and the folder to clone into; progress and git's error show below. */
+const cloneForm = document.querySelector<HTMLFormElement>('#clone')!;
+const cloneUrl = cloneForm.querySelector<HTMLInputElement>('[name=url]')!;
+const cloneParent = cloneForm.querySelector<HTMLInputElement>('[name=parent]')!;
+const cloneStatus = cloneForm.querySelector<HTMLElement>('.status')!;
+const cloneSubmit = cloneForm.querySelector<HTMLButtonElement>('[type=submit]')!;
+let cloning = false;
+
+function closeClone(): void {
+    if (cloneForm.hidden) return;
+    cloneForm.hidden = true;
+    cloning = false;
+    bridge.closeClone();
+}
+
+function cloneMessage(text: string, error = false): void {
+    cloneStatus.textContent = text;
+    cloneStatus.classList.toggle('error', error);
+}
+
+bridge.onClone(({ parent }) => {
+    cloneForm.hidden = false;
+    cloneUrl.value = '';
+    cloneParent.value = parent;
+    cloneMessage('');
+    cloneSubmit.disabled = false;
+    cloneUrl.focus();
+});
+bridge.onCloneProgress(progress => cloning && cloneMessage(progress.percent === undefined ? `${progress.phase}…` : `${progress.phase}: ${progress.percent}%`));
+cloneForm.querySelector<HTMLButtonElement>('.choose')!.onclick = async () => {
+    const chosen = await bridge.chooseCloneParent(cloneParent.value);
+    if (chosen) cloneParent.value = chosen;
+};
+cloneForm.querySelector<HTMLButtonElement>('.cancel')!.onclick = () => closeClone();
+cloneForm.onsubmit = async event => {
+    event.preventDefault();
+    if (cloning) return;
+    cloning = true;
+    cloneSubmit.disabled = true;
+    cloneMessage('Cloning…');
+    const result = await bridge.clone(cloneUrl.value, cloneParent.value);
+    if (!cloning) return;
+    cloning = false;
+    cloneSubmit.disabled = false;
+    if (result.error) cloneMessage(result.error, true);
+    else cloneForm.hidden = true;
+};
+cloneForm.onkeydown = event => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    closeClone();
+};

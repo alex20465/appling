@@ -7,6 +7,8 @@ import { CodeViews, type SourceLocation } from './code-view.js';
 import { EXTENSION, readCodeWorkspace, writeCodeWorkspace } from './code-workspace.js';
 import { gitBranch, watchGit } from './git.js';
 import { agentSessions, desktopHost } from './agent-sessions.js';
+import { cloneIpc } from './clone-ipc.js';
+import { agentContributions, RailStatus, railBadge, railLines } from './rail-status.js';
 import { startIdeProcess, type IdeProcess } from './ide-process.js';
 import { COMMANDS, loadKeybindings } from './keybindings.js';
 import { Repos } from './repos.js';
@@ -54,6 +56,11 @@ const views = new Map<string, WebContentsView>();
 const processes = new Map<string, IdeProcess>();
 /** The agent sessions of every workspace, shared by the repo servers (issue #16). */
 const sessions = agentSessions();
+/** What the rail shows per repo and per workspace; every feature reports into its own source (`rail-status.ts`). */
+const rail = new RailStatus();
+const railSources = { validation: rail.source('validation'), editor: rail.source('editor'), git: rail.source('git'), agents: rail.source('agents') };
+sessions.onChange(list => railSources.agents.replace(agentContributions(list)));
+rail.onChange(() => refresh());
 /** Watchers of each repo's git `HEAD`, so the rail follows checkouts made anywhere. */
 const heads = new Map<string, () => void>();
 let window: BrowserWindow | undefined;
@@ -62,6 +69,18 @@ let keybindingsWatcher: FSWatcher | undefined;
 let code: CodeViews | undefined;
 /** While the switcher is open the repo views are hidden, so the shell page (which draws it) is on top. */
 let switcherOpen = false;
+/** The same while the clone form is open. */
+let cloneOpen = false;
+const openClone = cloneIpc({
+    window: () => window,
+    folders: () => workspaces.current()?.folders.map(f => f.path) ?? [],
+    shown: open => {
+        cloneOpen = open;
+        refresh();
+        if (!open) activeView()?.webContents.focus();
+    },
+    add: folder => openPaths([folder])
+});
 
 function userFile(...parts: string[]): string {
     return join(app.getPath('userData'), ...parts);
@@ -92,6 +111,9 @@ function start(): void {
     ipcMain.on('selectWorkspace', (_event, id: string) => workspaces.selectWorkspace(id) && changed());
     ipcMain.on('close', (_event, repo: string) => closeRepo(repo));
     ipcMain.on('open', () => addFolderDialog());
+    ipcMain.on('addMenu', () => addMenu());
+    ipcMain.on('openClone', () => openClone());
+    ipcMain.on('move', (_event, repo: string, from: string, to: string) => moveRepo(repo, from, to));
     ipcMain.on('newWorkspace', () => newWorkspaceDialog());
     ipcMain.on('retry', (_event, id: string) => retry(id));
     ipcMain.on('repoMenu', (_event, repo: string) => repoMenu(repo));
@@ -193,16 +215,18 @@ async function launch(id: string): Promise<void> {
             env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
             sessions,
             host: desktopHost(workspaces),
-            onStatus: ({ errors }) => {
+            onStatus: ({ errors, unsaved }) => {
                 if (processes.get(id) !== ide && processes.has(id)) return;
-                repos.update(id, { errors });
-                refresh();
+                if (errors !== undefined) railSources.validation.set(id, { counts: { errors } });
+                if (unsaved) railSources.editor.set(id, { counts: { unsaved: unsaved.length }, notes: unsaved.map(f => `Unsaved: ${f}`) });
             },
             onExit: (code, stderr) => {
                 if (processes.get(id) !== ide) return;
                 processes.delete(id);
                 drop(id);
-                repos.update(id, { status: 'failed', url: undefined, errors: undefined, error: `The IDE server ended with code ${code}.${stderr ? `\n${stderr.trim()}` : ''}` });
+                railSources.validation.clear(id);
+                railSources.editor.clear(id);
+                repos.update(id, { status: 'failed', url: undefined, error: `The IDE server ended with code ${code}.${stderr ? `\n${stderr.trim()}` : ''}` });
                 refresh();
             }
         });
@@ -223,16 +247,16 @@ function retry(id: string): void {
 
 /** Follows a repo's branch, ahead and behind counts and dirty state for the rail (see `watchGit`). */
 function watchBranch(id: string): void {
-    repos.update(id, { branch: gitBranch(id) });
+    railSources.git.set(id, { branch: gitBranch(id) });
     heads.set(id, watchGit(id, state => {
         if (!repos.get(id)) return;
-        repos.update(id, { branch: state.branch, ahead: state.ahead, behind: state.behind, dirty: state.dirty, upstream: state.upstream });
-        refresh();
+        railSources.git.set(id, { branch: state.branch, git: { upstream: state.upstream, ahead: state.ahead, behind: state.behind, dirty: state.dirty } });
     }));
 }
 
 function stop(id: string): void {
     repos.close(id);
+    rail.clear(undefined, id);
     heads.get(id)?.();
     heads.delete(id);
     processes.get(id)?.close();
@@ -309,18 +333,27 @@ function repoMenu(repo: string): void {
         { type: 'separator' },
         {
             label: 'Move to Workspace', enabled: others.length > 0,
-            submenu: others.map(to => ({
-                label: to.name,
-                click: () => {
-                    if (workspaces.moveRepo(repo, from.id, to.id)) [from.id, to.id].forEach(persist);
-                    changed();
-                }
-            }))
+            submenu: others.map(to => ({ label: to.name, click: () => moveRepo(repo, from.id, to.id) }))
         },
         { label: 'Reveal in File Manager', click: () => shell.showItemInFolder(repo) },
         { label: 'Open in VS Code', click: () => code?.openInVSCode(repo, false) },
         { type: 'separator' },
         { label: 'Close Repo', click: () => closeRepo(repo) }
+    ]).popup({ window });
+}
+
+/** Moves a repo to another workspace (rail menu, or a repo dropped on a workspace) and writes both workspace files. */
+function moveRepo(repo: string, from: string, to: string): void {
+    if (workspaces.moveRepo(repo, from, to)) [from, to].forEach(persist);
+    changed();
+}
+
+/** The `+` below the repos: add a folder or clone a repository. */
+function addMenu(): void {
+    if (!window) return;
+    Menu.buildFromTemplate([
+        { label: 'Add Folder…', click: () => addFolderDialog() },
+        { label: 'Clone Repository…', click: () => openClone() }
     ]).popup({ window });
 }
 
@@ -343,7 +376,7 @@ function workspaceMenu(id: string): void {
 function refresh(): void {
     if (!window) return;
     const active = workspaces.activeRepo();
-    for (const [id, view] of views) view.setVisible(id === active && !switcherOpen);
+    for (const [id, view] of views) view.setVisible(id === active && !switcherOpen && !cloneOpen);
     layout();
     const repo = active ? repos.get(active) : undefined;
     const workspace = workspaces.current();
@@ -357,7 +390,7 @@ function layout(): void {
     const rail = workspaces.collapsed ? 0 : RAIL;
     const area = { x: rail, y: 0, width: Math.max(0, width - rail), height };
     // the code view, when open, takes the right part of the repo
-    const ide = code?.layout(workspaces.activeRepo(), area, switcherOpen) ?? area;
+    const ide = code?.layout(workspaces.activeRepo(), area, switcherOpen || cloneOpen) ?? area;
     for (const view of views.values()) view.setBounds(ide);
 }
 
@@ -376,14 +409,14 @@ function state() {
             name: w.name,
             hidden: w.hidden.length,
             // summed over every repo of the workspace, hidden ones included
-            errors: w.folders.reduce((sum, f) => sum + (repos.get(f.path)?.errors ?? 0), 0),
+            ...railView({ counts: rail.sum(w.folders.map(f => f.path)) }),
             repos: w.folders.filter(f => workspaces.rail(w.id).includes(f) || (w === current && f.path === shownHidden))
                 .sort((a, b) => Number(!w.pinned.includes(a.path)) - Number(!w.pinned.includes(b.path)))
                 .map(f => {
                     const repo = repos.get(f.path);
                     return {
                         id: f.path, name: repoName(f.path, f.name), status: repo?.status ?? 'starting', error: repo?.error,
-                        errors: repo?.errors ?? 0, branch: repo?.branch, ahead: repo?.ahead ?? 0, behind: repo?.behind ?? 0, dirty: repo?.dirty ?? 0, upstream: repo?.upstream,
+                        ...railView(rail.repo(f.path)),
                         pinned: w.pinned.includes(f.path), hidden: w.hidden.includes(f.path)
                     };
                 })
@@ -392,6 +425,11 @@ function state() {
         repo: workspaces.activeRepo(),
         collapsed: workspaces.collapsed
     };
+}
+
+/** A rail button's status for the shell: the counts, the badge (the most urgent count) and the tooltip lines. */
+function railView(status: Parameters<typeof railLines>[0]) {
+    return { counts: status.counts, branch: status.branch, git: status.git, badge: railBadge(status.counts), lines: railLines(status) };
 }
 
 function toggleRail(): void {
@@ -422,6 +460,7 @@ function activeView(): WebContentsView | undefined {
 
 const actions: Record<string, () => void> = {
     open: () => addFolderDialog(),
+    clone: () => openClone(),
     closeRepo: () => { const repo = workspaces.activeRepo(); if (repo) closeRepo(repo); },
     switcher: () => switcherOpen ? closeSwitcher() : openSwitcher(),
     nextRepo: () => workspaces.stepRecent(1, Date.now()) && changed(),
@@ -470,7 +509,7 @@ function buildMenu(): void {
         ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
         {
             label: 'File', submenu: [
-                item('newWorkspace'), item('openWorkspace'), item('open'), { type: 'separator' },
+                item('newWorkspace'), item('openWorkspace'), item('open'), item('clone'), { type: 'separator' },
                 item('closeRepo'), item('closeWorkspace'), { type: 'separator' }, item('keybindings'), { type: 'separator' }, item('quit')
             ]
         },

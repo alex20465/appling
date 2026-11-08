@@ -33,6 +33,8 @@ export interface Ide {
 export interface IdeOptions {
     /** Called with every snapshot the server pushes after a model file changed. */
     onSnapshot?(snapshot: Snapshot): void;
+    /** Called with the files that have unsaved edits in any connected client (repo relative paths), after each change. */
+    onUnsaved?(files: string[]): void;
     /** The agent sessions, shared by the repos of a workspace; default: a store of this server's own. */
     sessions?: SessionStore;
     /** What the app around the IDE adds to a session's context and does with its actions, such as Appling Desktop. */
@@ -45,6 +47,15 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
     let origins: string[] = [];
     const sessions = options.sessions ?? new MemorySessionStore();
     const client: ClientContext = {};
+    // the unsaved files each connected client reports, for Appling Desktop's rail
+    const unsaved = new Map<WebSocket, string[]>();
+    let reportedUnsaved = '[]';
+    const reportUnsaved = () => {
+        const files = [...new Set([...unsaved.values()].flat())].sort();
+        if (JSON.stringify(files) === reportedUnsaved) return;
+        reportedUnsaved = JSON.stringify(files);
+        options.onUnsaved?.(files);
+    };
     const broadcast = (message: unknown) => {
         const text = JSON.stringify(message);
         events.forEach(ws => ws.send(text));
@@ -66,12 +77,19 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
             if (request.url === '/lsp') serveLanguage(ws, root);
             else if (request.url === '/events') {
                 events.add(ws);
-                ws.on('close', () => events.delete(ws));
-                // The client reports what it shows, for the sessions' IDE context.
+                ws.on('close', () => {
+                    events.delete(ws);
+                    if (unsaved.delete(ws)) reportUnsaved();
+                });
+                // The client reports what it shows, for the sessions' IDE context, and its unsaved files.
                 ws.on('message', data => {
                     try {
-                        const message = JSON.parse(data.toString()) as { type?: string } & ClientContext;
+                        const message = JSON.parse(data.toString()) as { type?: string, files?: unknown } & ClientContext;
                         if (message.type === 'context') Object.assign(client, { selection: message.selection, view: message.view, file: message.file });
+                        if (message.type === 'unsaved' && Array.isArray(message.files)) {
+                            unsaved.set(ws, message.files.filter((f): f is string => typeof f === 'string'));
+                            reportUnsaved();
+                        }
                     } catch {
                         // not JSON: ignored
                     }

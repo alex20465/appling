@@ -34,9 +34,9 @@ export async function saveFile(path: string, text: string): Promise<void> {
 }
 
 /** The demo has no agent sessions: only snapshots. */
-export function onEvents(handlers: IdeEvents): { close(): void, report(report: ClientReport): void } {
+export function onEvents(handlers: IdeEvents): { close(): void, report(report: ClientReport): void, unsaved(files: string[]): void } {
     listeners.add(handlers.snapshot);
-    return { close: () => listeners.delete(handlers.snapshot), report: () => undefined };
+    return { close: () => listeners.delete(handlers.snapshot), report: () => undefined, unsaved: () => undefined };
 }
 
 export function requestEdit(sources: Record<string, string>, operation: EditOperation): Promise<EditResult> {

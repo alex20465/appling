@@ -12,7 +12,7 @@
       <button id="new-workspace" class="workspace add" title="New Workspace…" aria-label="New Workspace">+</button>
       <hr />
       <div id="repos" role="group" aria-label="Repos"></div>
-      <button id="open" class="repo add" title="Add Folder to Workspace…" aria-label="Add Folder to Workspace">+</button>
+      <button id="open" class="repo add" title="Add Folder or Clone Repository…" aria-label="Add Folder or Clone Repository">+</button>
     </nav>
     <main id="stage"></main>
     <div id="switcher" hidden role="dialog" aria-label="Go to repo">
@@ -21,6 +21,15 @@
         <ul role="listbox"></ul>
       </div>
     </div>
+    <form id="clone" class="overlay" hidden aria-label="Clone a repository">
+      <div class="panel">
+        <h2>Clone Repository</h2>
+        <label>Git URL <input name="url" type="text" placeholder="https://github.com/owner/repo.git or git@host:owner/repo.git" spellcheck="false" autocomplete="off" required /></label>
+        <label>Into <span class="row"><input name="parent" type="text" spellcheck="false" autocomplete="off" required /><button type="button" class="action choose">Choose…</button></span></label>
+        <p class="status" role="status" aria-live="polite"></p>
+        <div class="row end"><button type="button" class="action cancel">Cancel</button><button type="submit" class="action primary">Clone</button></div>
+      </div>
+    </form>
     <script type="module" src="./shell.js"></script>
   </body>
 </html>
