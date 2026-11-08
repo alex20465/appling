@@ -1,3 +1,4 @@
+import { spawn as spawnProcess } from 'node:child_process';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { chmodSync, mkdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type Server, type Socket } from 'node:net';
@@ -5,8 +6,10 @@ import { join } from 'node:path';
 import { SerializeAddon } from '@xterm/addon-serialize';
 import headless from '@xterm/headless';
 import * as pty from 'node-pty';
+import { notificationText, type Notifier } from './notifier.js';
 import { ensureDir, socketPath, tokenPath } from './paths.js';
 import { answers, PROTOCOL, readLines, send, type HelloResult, type Message, type Request, type SpawnOptions, type TerminalInfo } from './protocol.js';
+import { StatusTracker, type TerminalStatus } from './status.js';
 import { VERSION } from './version.js';
 
 const { Terminal } = headless;
@@ -22,6 +25,16 @@ export interface HostOptions {
     /** Exit after this many milliseconds without clients and without running terminals; 0 never. */
     idleTimeout?: number;
     log?(message: string): void;
+    /**
+     * Raises a desktop notification when a terminal needs input (OSC 9 or OSC 777) while no client is attached to it.
+     * None by default: the command line passes the system's, tests a fake, a remote host none.
+     */
+    notifier?: Notifier;
+    /**
+     * The program that opens the app at a terminal when its notification is clicked, `{terminal}` standing for its id
+     * (`['appling-desktop', '--session', '{terminal}']`). Without it a click does nothing.
+     */
+    open?: string[];
 }
 
 interface Client {
@@ -29,10 +42,15 @@ interface Client {
     authenticated: boolean;
     /** Attached terminals; while an attach waits for its snapshot, the output that arrives meanwhile is queued. */
     attached: Map<string, string[] | undefined>;
+    /** Whether it gets every terminal's changes (`subscribe`). */
+    subscribed: boolean;
 }
 
 interface Session {
-    info: Omit<TerminalInfo, 'attached'>;
+    info: Omit<TerminalInfo, 'attached' | 'status'>;
+    status: StatusTracker;
+    /** The `since` of the needs input status whose notification went out, so each one is raised once. */
+    notified?: number;
     pty: pty.IPty;
     screen: Headless;
     serializer: SerializeAddon;
@@ -132,7 +150,7 @@ export class PtyHost {
     }
 
     private accept(socket: Socket): void {
-        const client: Client = { socket, authenticated: false, attached: new Map() };
+        const client: Client = { socket, authenticated: false, attached: new Map(), subscribed: false };
         this.clients.add(client);
         const hello = setTimeout(() => client.authenticated || socket.destroy(), 5000);
         readLines(socket, message => this.handle(client, message as Request), () => client.authenticated ? LINE_LIMIT : UNAUTHENTICATED_LIMIT);
@@ -140,7 +158,11 @@ export class PtyHost {
         socket.on('close', () => {
             clearTimeout(hello);
             this.clients.delete(client);
-            for (const id of client.attached.keys()) this.sessions.get(id)?.clients.delete(client);
+            for (const id of client.attached.keys()) {
+                const session = this.sessions.get(id);
+                session?.clients.delete(client);
+                if (session) this.maybeNotify(session);
+            }
             // Probes that never authenticate, such as `answers`, do not keep the host alive or reset its idle timer.
             if (client.authenticated) this.scheduleIdle();
         });
@@ -164,7 +186,7 @@ export class PtyHost {
         }
         if (request.type === 'input') {
             const session = this.sessions.get(request.terminal);
-            if (session && !session.info.exit && typeof request.data === 'string') session.pty.write(request.data);
+            if (session && !session.info.exit && typeof request.data === 'string') this.input(session, request.data);
             return;
         }
         try {
@@ -211,8 +233,11 @@ export class PtyHost {
             }
             case 'detach': {
                 client.attached.delete(request.terminal);
-                this.sessions.get(request.terminal)?.clients.delete(client);
-                return respond(client, request.id);
+                const session = this.sessions.get(request.terminal);
+                session?.clients.delete(client);
+                respond(client, request.id);
+                if (session) this.maybeNotify(session);
+                return;
             }
             case 'resize':
                 this.resize(this.session(request.terminal), request.cols, request.rows);
@@ -223,6 +248,27 @@ export class PtyHost {
                 else session.pty.kill(request.signal);
                 return respond(client, request.id);
             }
+            case 'update': {
+                const session = this.session(request.terminal);
+                if (request.meta && typeof request.meta === 'object') {
+                    const meta = { ...session.info.meta };
+                    for (const [key, value] of Object.entries(request.meta)) {
+                        if (value === null) delete meta[key];
+                        else if (typeof value === 'string') meta[key] = value;
+                    }
+                    session.info.meta = meta;
+                }
+                if (typeof request.title === 'string') session.info.title = request.title;
+                respond(client, request.id, undefined, describe(session));
+                this.broadcast({ type: 'terminal', info: describe(session) });
+                return;
+            }
+            case 'subscribe':
+                client.subscribed = true;
+                return respond(client, request.id, undefined, [...this.sessions.values()].map(describe));
+            case 'unsubscribe':
+                client.subscribed = false;
+                return respond(client, request.id);
             case 'shutdown':
                 respond(client, request.id);
                 void this.close();
@@ -254,12 +300,14 @@ export class PtyHost {
         screen.loadAddon(serializer as never);
         const id = randomUUID();
         const session: Session = {
-            info: { id, group: options.group, title: options.title, shell, args, cwd: options.cwd, pid: child.pid, cols, rows, created: Date.now() },
-            pty: child, screen, serializer, clients: new Set()
+            info: { id, group: options.group, title: options.title, shell, args, cwd: options.cwd, pid: child.pid, cols, rows, created: Date.now(), ...stringRecord(options.meta) },
+            status: new StatusTracker(), pty: child, screen, serializer, clients: new Set()
         };
         this.sessions.set(id, session);
         child.onData(data => {
             screen.write(data);
+            const status = session.status.output(data);
+            if (status) this.changed(session, status);
             for (const client of session.clients) {
                 const queue = client.attached.get(id);
                 if (queue) queue.push(data);
@@ -269,6 +317,7 @@ export class PtyHost {
         child.onExit(({ exitCode, signal }) => {
             session.info.exit = { code: exitCode, ...signal ? { signal } : {} };
             this.log(`terminal ${id} exited with ${exitCode}`);
+            this.changed(session, session.status.exit(exitCode, signal || undefined));
             // Let the last output reach the screen and the clients before the exit.
             screen.write('', () => {
                 for (const client of session.clients) {
@@ -278,6 +327,7 @@ export class PtyHost {
             });
         });
         this.log(`terminal ${id} started: ${shell} in ${options.cwd}`);
+        this.broadcast({ type: 'terminal', info: describe(session) });
         return describe(session);
     }
 
@@ -299,7 +349,64 @@ export class PtyHost {
             client.attached.delete(session.info.id);
             if (!session.info.exit) send(client.socket, { type: 'exit', terminal: session.info.id, code: -1 });
         }
+        this.broadcast({ type: 'removed', terminal: session.info.id });
         this.scheduleIdle();
+    }
+
+    private input(session: Session, data: string): void {
+        session.pty.write(data);
+        const status = session.status.input();
+        if (status) this.changed(session, status);
+    }
+
+    private changed(session: Session, status: TerminalStatus): void {
+        this.broadcast({ type: 'status', terminal: session.info.id, status });
+        this.maybeNotify(session);
+    }
+
+    /** Sends a message to every subscribed client. */
+    private broadcast(message: Message): void {
+        for (const client of this.clients) if (client.subscribed) send(client.socket, message);
+    }
+
+    /**
+     * Raises the notification of a terminal that needs input once nobody is attached to it (also when the last client
+     * detaches later); a click opens the app at it, a reply is typed into it.
+     */
+    private maybeNotify(session: Session): void {
+        const status = session.status.status;
+        const { notifier } = this.options;
+        if (!notifier || this.closing || status.state !== 'needsInput' || session.clients.size || session.notified === status.since) return;
+        if (session.info.meta?.notify === 'off') return;
+        session.notified = status.since;
+        const { title, body } = notificationText(status.notification, session.info);
+        const id = session.info.id;
+        this.log(`terminal ${id} needs input: notifying`);
+        notifier.notify({ terminal: id, title, body, reply: true }).then(answer => {
+            const current = this.sessions.get(id);
+            if (!answer || !current || current.info.exit) return;
+            if (answer.action === 'reply') {
+                this.log(`terminal ${id}: answered from the notification`);
+                this.input(current, `${answer.text}\r`);
+            } else this.open(id);
+        }, error => this.log(`notification of terminal ${id} failed: ${(error as Error).message}`));
+    }
+
+    /** Starts the app at the terminal with the `open` command. */
+    private open(terminal: string): void {
+        const [command, ...args] = (this.options.open ?? []).map(arg => arg.replaceAll('{terminal}', terminal));
+        if (!command) return;
+        const env = { ...process.env };
+        // the host runs as Node inside Electron's binary; the app must not
+        delete env.ELECTRON_RUN_AS_NODE;
+        try {
+            const child = spawnProcess(command, args, { detached: true, stdio: 'ignore', env });
+            child.on('error', error => this.log(`opening the app failed: ${error.message}`));
+            child.unref();
+            this.log(`opening the app at terminal ${terminal}`);
+        } catch (error) {
+            this.log(`opening the app failed: ${(error as Error).message}`);
+        }
     }
 
     private scheduleIdle(): void {
@@ -315,7 +422,14 @@ export class PtyHost {
 }
 
 function describe(session: Session): TerminalInfo {
-    return { ...session.info, args: [...session.info.args], attached: session.clients.size };
+    return { ...session.info, args: [...session.info.args], ...session.info.meta ? { meta: { ...session.info.meta } } : {}, attached: session.clients.size, status: session.status.status };
+}
+
+/** The string entries of a client's metadata, as `{ meta }`, or nothing. */
+function stringRecord(meta: unknown): { meta?: Record<string, string> } {
+    if (!meta || typeof meta !== 'object') return {};
+    const entries = Object.entries(meta).filter(([, value]) => typeof value === 'string');
+    return entries.length ? { meta: Object.fromEntries(entries) } : {};
 }
 
 function respond(client: Client, id: number, error?: string, result?: unknown): void {

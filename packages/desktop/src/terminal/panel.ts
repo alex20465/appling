@@ -6,6 +6,7 @@ import { app, clipboard, dialog, ipcMain, Menu, shell, WebContentsView, type Bas
 import type { CodeViews } from '../code-view.js';
 import { readCodeWorkspace } from '../code-workspace.js';
 import type { Keybindings } from '../keybindings.js';
+import { openCommand, type AppLaunch } from '../app-flags.js';
 import { registerPaneType, STRIP } from '../panes.js';
 import { programPath } from '../resources.js';
 import { asset } from './assets.js';
@@ -73,7 +74,8 @@ export class TerminalPanel {
     constructor(private readonly options: PanelOptions) {
         this.service = new TerminalService({
             registryFile: join(options.userData, 'terminals.json'),
-            host: { host: { node: process.execPath, env: process.env, main: programPath('pty-host') } },
+            // a click on the host's notification for a terminal that needs input opens the app at it (`--session`)
+            host: { host: { node: process.execPath, env: process.env, main: programPath('pty-host'), open: openCommand(appLaunch()) } },
             settings: () => this.settings(),
             profiles: repo => this.profiles(repo, true),
             version: app.getVersion()
@@ -162,6 +164,24 @@ export class TerminalPanel {
             if (entry.open && entry.tabs.length) this.ensureView(repo);
             this.arrange(repo);
         }, error => console.error(`The terminals of ${repo} did not reattach: ${(error as Error).message}`));
+    }
+
+    /** The repo whose terminal this is, from the pty host (also before the repo is open). */
+    async repoOfTerminal(id: string): Promise<string | undefined> {
+        const client = await this.service.connection();
+        return (await client.list()).find(info => info.id === id)?.group;
+    }
+
+    /** Opens the repo's panel at the terminal's tab and focuses it (`--session`, a click on a notification). */
+    async reveal(repo: string, id: string): Promise<void> {
+        await this.service.openRepo(repo);
+        // a repo that just went live may still be attaching its terminals
+        for (let i = 0; i < 50 && !this.service.registry.repoOf(id); i++) await new Promise(done => setTimeout(done, 100));
+        if (this.service.registry.repoOf(id) !== repo) return;
+        this.service.update(repo, registry => registry.focus(id));
+        this.service.update(repo, registry => registry.setOpen(repo, true));
+        this.ensureView(repo).webContents.focus();
+        this.arrange(repo);
     }
 
     /** The repo left every workspace: its terminals end and its panel goes. */
@@ -497,4 +517,9 @@ function isFile(path: string): boolean {
     } catch {
         return false;
     }
+}
+
+/** How the pty host and the tray start this app. */
+export function appLaunch(): AppLaunch {
+    return { execPath: process.execPath, main: fileURLToPath(new URL('../main.js', import.meta.url)), packaged: app.isPackaged, appImage: process.env.APPIMAGE };
 }

@@ -152,7 +152,7 @@ describe.skipIf(process.platform === 'win32')('pty host', () => {
         const client = await connectPtyHost({ dir, host: { idleTimeout: 300 } });
         const info = await client.spawn({ ...SH, cwd: dir, group: 'crm' });
         const { stdout } = await run(process.execPath, [hostMain(), 'list', '--dir', dir]);
-        expect(stdout).toContain(`${info.id}\tpid ${info.pid}\tcrm`);
+        expect(stdout).toContain(`${info.id}\trunning\tpid ${info.pid}\tcrm`);
         await run(process.execPath, [hostMain(), 'kill', info.id, '--dir', dir]);
         expect(await client.list()).toEqual([]);
         client.close();

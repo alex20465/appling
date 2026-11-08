@@ -18,7 +18,7 @@
     "out"
   ],
   "scripts": {
-    "build": "tsc && cp src/shell/index.html src/shell/shell.css out/shell/ && node build-terminal.mjs",
+    "build": "tsc && cp src/shell/index.html src/shell/shell.css out/shell/ && cp ../landing/public/icon-192.png out/tray-icon.png && node build-terminal.mjs",
     "bundle": "node scripts/bundle.mjs",
     "package": "node scripts/bundle.mjs && electron-builder --config electron-builder.config.mjs --publish never"
   },

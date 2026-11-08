@@ -8,6 +8,7 @@ import { EXTENSION, readCodeWorkspace, writeCodeWorkspace } from './code-workspa
 import { displayFingerprint, displayOf, placeWindow, type DisplayInfo } from './displays.js';
 import { gitBranch, watchGit } from './git.js';
 import { agentSessions, desktopHost } from './agent-sessions.js';
+import { appCommand, sessionArg, trayMode, withoutAppFlags } from './app-flags.js';
 import { cloneIpc } from './clone-ipc.js';
 import { agentContributions, RailStatus, railBadge, railLines } from './rail-status.js';
 import { desktopPlaybooks, playbookRail } from './playbooks.js';
@@ -17,12 +18,15 @@ import { IDE_PANE, paneId, paneLabel, parsePane, registerPaneType } from './pane
 import { Repos } from './repos.js';
 import { readSession, restore, sessionOf, writeSession } from './session.js';
 import { switcherEntries } from './switcher.js';
-import { codeViewOpener, TERMINAL_PANE, TerminalPanel } from './terminal/panel.js';
+import { appLaunch, codeViewOpener, TERMINAL_PANE, TerminalPanel } from './terminal/panel.js';
+import { startTray } from './tray.js';
 import { Updater } from './updater.js';
 import { currentDisplays, WindowHost } from './window-host.js';
 import { dropTarget, layoutFor, MAIN, rememberLayout, type SavedLayout } from './windows.js';
 import { Workspaces } from './workspaces.js';
+import { systemNotifier } from '@appling/pty-host';
 import { RemoteRepos } from './remote/desktop.js';
+import { RemoteStatus } from './remote/notify.js';
 import { findDevcontainer } from './remote/devcontainer.js';
 import { serverBundle } from './remote/install.js';
 import { isRemoteId } from './remote/location.js';
@@ -41,17 +45,24 @@ const CODE_PANE = 'code';
  * the packaged app also takes them without `--` (`Appling.AppImage shop`), relative to the current folder.
  */
 function pathsOf(argv: string[]): string[] {
+    argv = withoutAppFlags(argv);
     const at = argv.indexOf('--');
     if (at >= 0) return argv.slice(at + 1);
     return app.isPackaged ? argv.slice(1).filter(arg => !arg.startsWith('-')).map(arg => isRemoteId(arg) ? arg : resolve(arg)) : [];
 }
 
 const initial = pathsOf(process.argv);
+/** `--session <terminal>`: open at that terminal of the pty host, as a click on its notification asks (issue #18). */
+const initialSession = sessionArg(process.argv);
 // `--version` prints and quits before any window, so it runs without a display (the release check uses it).
 if (process.argv.slice(0, process.argv.includes('--') ? process.argv.indexOf('--') : undefined).includes('--version')) {
     console.log(app.getVersion());
     app.exit(0);
-} else if (!app.requestSingleInstanceLock({ paths: initial })) {
+} else if (trayMode(process.argv)) {
+    // the tray only mode: a process of its own (own profile, own lock) that holds no windows and no terminals
+    app.setPath('userData', join(app.getPath('appData'), 'Appling Tray'));
+    app.whenReady().then(() => startTray({ icon: fileURLToPath(new URL('./tray-icon.png', import.meta.url)), command: args => appCommand(appLaunch(), args) }));
+} else if (!app.requestSingleInstanceLock({ paths: initial, session: initialSession })) {
     // An instance runs already: it receives the paths through `second-instance`.
     app.quit();
 } else {
@@ -59,6 +70,8 @@ if (process.argv.slice(0, process.argv.includes('--') ? process.argv.indexOf('--
         const paths = (data as { paths?: string[] } | undefined)?.paths ?? pathsOf(argv);
         host.show(windows.focused().id);
         openPaths(paths);
+        const session = (data as { session?: string } | undefined)?.session ?? sessionArg(argv);
+        if (session) void openSession(session);
     });
     app.whenReady().then(start);
     app.on('window-all-closed', () => app.quit());
@@ -73,6 +86,7 @@ if (process.argv.slice(0, process.argv.includes('--') ? process.argv.indexOf('--
         keybindingsWatcher?.close();
         code?.close();
         remotes.killAll();
+        remoteStatus.close();
     });
 }
 
@@ -85,6 +99,15 @@ const sessions = agentSessions();
 const rail = new RailStatus();
 const railSources = { validation: rail.source('validation'), editor: rail.source('editor'), git: rail.source('git'), agents: rail.source('agents'), live: rail.source('live'), playbook: rail.source('playbook'), connection: rail.source('connection') };
 /** Repos on SSH hosts, in dev containers and in WSL (`remote/`): their servers run there, reached over the transport. */
+/** Notifications here for the terminals of remote repos that need input while no view is attached (#18). */
+const remoteStatus = new RemoteStatus({
+    notifier: systemNotifier(),
+    open: repo => {
+        host.show(windows.focused().id);
+        if (workspaces.select(repo)) changed();
+    },
+    log: message => console.error(message)
+});
 const remotes = new RemoteRepos({ userData: app.getPath('userData'), app: () => serverBundle(), rail: { connection: railSources.connection, git: railSources.git } });
 sessions.onChange(list => railSources.agents.replace(agentContributions(list)));
 rail.onChange(() => refresh());
@@ -254,7 +277,21 @@ function start(): void {
     if (problems.length) dialog.showErrorBox('Some workspaces did not reopen', problems.join('\n'));
     openPaths(initial);
     changed();
+    if (initialSession) void openSession(initialSession);
     updater.start();
+}
+
+/** Shows a terminal of the pty host: adds its repo when no workspace has it, selects the repo and opens its tab. */
+async function openSession(terminal: string): Promise<void> {
+    try {
+        const repo = await terminals.repoOfTerminal(terminal);
+        if (!repo) return;
+        if (!workspaces.all().some(w => w.folders.some(f => f.path === repo))) openPaths([repo]);
+        if (workspaces.select(repo)) changed();
+        await terminals.reveal(repo, terminal);
+    } catch (error) {
+        console.error(`The session ${terminal} did not open: ${(error as Error).message}`);
+    }
 }
 
 /** Opens workspace files as workspaces and adds folders to the active workspace (the default one when none is open). */
@@ -385,6 +422,7 @@ async function launchRemote(id: string): Promise<void> {
                 if (!repos.get(id)) return;
                 processes.set(id, ide);
                 repos.update(id, { status: 'ready', url, error: undefined });
+                if (!remotes.get(id)?.terminalsProblem) remoteStatus.watch(id, remotes.ptyDir(id)).catch(error => console.error(`The terminal status of ${id} is not followed: ${(error as Error).message}`));
                 const existing = host.panes.get(paneId(IDE_PANE, id));
                 if (!existing) host.addPane(paneId(IDE_PANE, id), view(url));
                 else if (again) existing.webContents.reload();
@@ -429,7 +467,10 @@ function stop(id: string): void {
     heads.delete(id);
     processes.get(id)?.close();
     processes.delete(id);
-    if (isRemoteId(id)) void remotes.stop(id);
+    if (isRemoteId(id)) {
+        remoteStatus.unwatch(id);
+        void remotes.stop(id);
+    }
     drop(id);
     terminals.closeRepo(id);
 }

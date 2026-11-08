@@ -58,7 +58,29 @@ Every repo has its own terminals in a panel under its canvas. **Terminal › Tog
 - New terminals start the shell of `$SHELL`, or another profile from the ▾ menu. Profiles are the shells of the system and those in VS Code's `terminal.integrated.profiles.*` settings.
 - In bash, zsh and fish, Appling knows every command, its exit status and the folder it ran in: the tab shows the running command and a dot for how the last one ended, and `Ctrl+Up` and `Ctrl+Down` jump between commands.
 - Ctrl+click (Cmd+click on macOS) opens a URL in the browser and a file path in the code view.
-- Terminals keep running when the app closes or crashes. At the next start they come back in their tabs, with their screen and scrollback. To end them with the app instead, check **Terminal › End Terminals with the App**.
+- Terminals and agent sessions keep running when the app closes or crashes. At the next start they come back in their tabs, with their screen and scrollback. To end them with the app instead, check **Terminal › End Terminals with the App**.
+
+### While the app is closed
+
+The pty host, the background process that owns the terminals, keeps watching them. When a program asks for attention with an OSC 9 or OSC 777 notification (Claude Code and Codex do when they wait for you) and the app is not attached to it, the host shows a desktop notification:
+
+- **Linux**: through `org.freedesktop.Notifications`. Where the notification server offers inline replies (KDE Plasma, for one), the notification has a reply field; otherwise `notify-send` shows it with an **Open** action.
+- **macOS**: a dialog with **Open** and a reply field.
+- **Windows**: a toast with **Open** and a reply field.
+
+Clicking it (or **Open**) starts Appling at that session: its repo, its tab, the terminal panel open. A reply is typed into the session followed by Enter. Each wait notifies once; typing into the session clears it.
+
+For a remote repo the pty host on the other machine shows nothing there. While Appling is connected to the repo, it shows the notification on your machine instead; a click shows the repo, and a reply goes to the remote session.
+
+To see or stop sessions without the app, use the `appling-pty-host` command (from a clone of the repository, `node packages/pty-host/out/main.js`):
+
+```sh
+appling-pty-host list            # id, status, pid, repo, title, metadata, folder
+appling-pty-host kill <id>
+appling-pty-host stop            # every session and the host
+```
+
+The status is `running`, `needs input` or `exited <code>`. The packaged app has no such command on your `PATH`; start the tray instead: `Appling --tray` (from a clone, `node packages/desktop/out/bin.js --tray`). It is a small Appling process without windows that lists the sessions with their status and can open the app at one, stop one or stop all. `Appling --session <id>` opens the app at a session directly.
 
 ## Remote repos
 

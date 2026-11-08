@@ -44,6 +44,11 @@ export interface CreateOptions {
     cwd?: string;
     cols?: number;
     rows?: number;
+    /**
+     * Kept and listed by the pty host, also while the app is closed (`appling-pty-host list`, the tray): an agent
+     * session's `preset` and `label`, for instance. The host titles its notifications with `label`.
+     */
+    meta?: Record<string, string>;
 }
 
 /** What the view and the API know about a terminal. */
@@ -63,6 +68,8 @@ export interface TerminalState {
     running?: CommandRecord;
     last?: CommandRecord;
     exit?: { code: number, signal?: number };
+    /** The metadata given at spawn (`CreateOptions.meta`). */
+    meta?: Record<string, string>;
 }
 
 interface Live {
@@ -171,7 +178,8 @@ export class TerminalService extends EventEmitter<Events> {
         // attached from the first byte, so the scanner sees the first prompt's marks and a program's first notification
         const attached = await client.spawnAttached({
             shell: launch.shell, args: launch.args, env: launch.env, cwd: options.cwd ?? repo,
-            cols: options.cols, rows: options.rows, group: repo, title: name, scrollback: settings.scrollback
+            cols: options.cols, rows: options.rows, group: repo, title: name, scrollback: settings.scrollback,
+            ...options.meta ? { meta: options.meta } : {}
         });
         const info = attached.info;
         this.opened.add(repo);
@@ -318,7 +326,8 @@ export class TerminalService extends EventEmitter<Events> {
             integration: live.integration.active,
             ...live.integration.running ? { running: live.integration.running } : {},
             ...live.integration.commands.length ? { last: live.integration.commands.at(-1) } : {},
-            ...live.info.exit ? { exit: live.info.exit } : {}
+            ...live.info.exit ? { exit: live.info.exit } : {},
+            ...live.info.meta ? { meta: live.info.meta } : {}
         };
     }
 
