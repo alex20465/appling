@@ -1,0 +1,179 @@
+name: CI
+
+# Checks every pull request and every push to main: build (the landing site validates the docs examples), the tests,
+# `appling check examples` and that `appling fmt` leaves the examples unchanged. The codegen coverage report plans
+# every extension over the all-constructs fixture and the examples (scripts/ci/codegen-coverage.mjs), compares a pull
+# request with its base and keeps one sticky comment on it; on main it publishes the badge to the `badges` branch.
+# Compiling the generated projects is codegen-e2e.yml.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # No test starts Electron, and pnpm runs no build script of electron (it is not in allowBuilds); this keeps it so
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - name: Cloning
+        uses: actions/checkout@v4
+
+      - name: Use pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: pnpm
+
+      # packages/desktop/test/remote-integration.test.ts runs against a real sshd of this user and a docker container,
+      # and skips each without them. The runner has docker; sshd is added so both remote transports are tested.
+      - name: sshd for the remote tests
+        run: |
+          if [ ! -x /usr/sbin/sshd ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq --no-install-recommends openssh-server
+          fi
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
+
+      - run: pnpm test
+
+      - name: Check the examples
+        run: node packages/cli/out/main.js check examples
+
+      - name: The examples are in canonical form
+        run: |
+          node packages/cli/out/main.js fmt examples
+          git diff --exit-code -- examples
+
+  coverage:
+    name: Codegen coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - name: Cloning
+        uses: actions/checkout@v4
+
+      # The base is measured by this checkout's script with the base's own language, fixture, examples and extensions
+      - name: Cloning the base
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .base
+
+      - name: Use pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter "@appling/codegen-*..." build
+
+      # A base that does not build only loses the comparison
+      - name: Coverage of the base
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          pnpm --dir .base install --frozen-lockfile
+          pnpm --dir .base --filter "@appling/codegen-*..." build
+          node scripts/ci/codegen-coverage.mjs --root .base --json "$RUNNER_TEMP/base.json" --markdown /dev/null
+
+      - name: Coverage
+        env:
+          NOTE: ${{ github.event_name == 'pull_request' && format('Compared with {0} at {1}.', github.base_ref, github.event.pull_request.base.sha) || format('At {0}.', github.sha) }}
+        run: |
+          mkdir -p coverage
+          node scripts/ci/codegen-coverage.mjs --json coverage/coverage.json --markdown coverage/coverage.md \
+            --badge coverage/badge.json --base "$RUNNER_TEMP/base.json" --note "$NOTE"
+          cat coverage/coverage.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codegen-coverage
+          path: coverage/
+          if-no-files-found: error
+
+  # The only job that writes to the pull request; fork pull requests get no write token, so they keep the job summary
+  coverage-comment:
+    name: Coverage comment
+    needs: coverage
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: codegen-coverage
+          path: coverage
+
+      - name: Post or update the sticky comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const body = fs.readFileSync('coverage/coverage.md', 'utf8');
+            const marker = body.split('\n')[0];
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 });
+            const sticky = comments.find(c => c.user?.type === 'Bot' && c.body?.startsWith(marker));
+            if (sticky) await github.rest.issues.updateComment({ owner, repo, comment_id: sticky.id, body });
+            else await github.rest.issues.createComment({ owner, repo, issue_number, body });
+
+  # Publishes the shields.io endpoint JSON to the `badges` branch, which holds nothing else; README.md shows it
+  badge:
+    name: Coverage badge
+    needs: coverage
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: codegen-coverage
+          path: coverage
+
+      - name: Push the badge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git init -q badges
+          cd badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git fetch -q --depth 1 origin badges; then git checkout -q -b badges FETCH_HEAD; else git checkout -q --orphan badges; fi
+          cp ../coverage/badge.json codegen-coverage.json
+          git add codegen-coverage.json
+          if git diff --cached --quiet; then echo "The badge is unchanged."; exit 0; fi
+          git commit -q -m "ci: codegen coverage badge for ${GITHUB_SHA}"
+          git push -q origin badges
