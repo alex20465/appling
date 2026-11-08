@@ -266,12 +266,33 @@ export class GraphIndex {
     }
 }
 
-/** The declarations a model change touches: `added` when the declaration itself is new, else `changed`. Removed elements are no longer in the graph. */
-export function changeMarks(index: GraphIndex, changes: { added: string[], changed: string[] }): Map<string, 'added' | 'changed'> {
-    const marks = new Map<string, 'added' | 'changed'>();
+export type ChangeMark = 'added' | 'changed' | 'removed';
+
+/** Model changes to mark on the canvas, such as a model diff (`@appling/model/diff`) or the changes of an AI session. */
+export interface MarkedChanges {
+    added: string[];
+    changed: string[];
+    /** Removed elements; they are marked only when the index has them, such as one built from `withRemoved`, and then drawn ghosted. */
+    removed?: string[];
+}
+
+/**
+ * The declarations a model change touches: `added` or `removed` when the declaration itself is new or gone, else
+ * `changed`. Members lift to their declaration. Removed elements count only when the index still has them. With
+ * `modules`, the modules (and their parent modules) that hold a marked declaration are marked `changed` too, so the
+ * changes show before their module unfolds.
+ */
+export function changeMarks(index: GraphIndex, changes: MarkedChanges, modules = false): Map<string, ChangeMark> {
+    const marks = new Map<string, ChangeMark>();
     for (const qn of changes.added) if (index.nodes.has(qn) && index.declaration(qn) === qn) marks.set(qn, 'added');
-    for (const qn of [...changes.added, ...changes.changed]) {
+    for (const qn of changes.removed ?? []) if (index.nodes.has(qn) && index.declaration(qn) === qn) marks.set(qn, 'removed');
+    for (const qn of [...changes.added, ...changes.changed, ...changes.removed ?? []]) {
         if (index.nodes.has(qn) && !marks.has(index.declaration(qn))) marks.set(index.declaration(qn), 'changed');
+    }
+    if (modules) {
+        for (const qn of [...marks.keys()]) {
+            for (const module of index.lineage(qn).slice(1)) if (!marks.has(module)) marks.set(module, 'changed');
+        }
     }
     return marks;
 }

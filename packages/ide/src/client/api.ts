@@ -1,5 +1,6 @@
 import type { ChatEvent } from '@appling/ai';
 import type { EditOperation, EditResult } from '@appling/model';
+import type { FileDiff, Review, Revision } from '../shared/review.js';
 import { DEFAULT_VIEW, type ClientReport, type IdeEvents, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
 import { monaco } from './monaco.js';
 
@@ -50,6 +51,19 @@ export async function requestEdit(sources: Record<string, string>, operation: Ed
 
 export async function loadRelease(): Promise<{ version: string, created: string } | null> {
     return (await fetch('/api/release')).json();
+}
+
+/** The model at a revision against the working tree, with the changed files. */
+export async function loadReview(rev: string): Promise<Review> {
+    return (await fetch(`/api/diff?rev=${encodeURIComponent(rev)}`)).json();
+}
+
+export async function loadRevisions(): Promise<Revision[]> {
+    return (await fetch('/api/revisions')).json();
+}
+
+export async function loadFileDiff(rev: string, path: string, before = path): Promise<FileDiff | { error: string }> {
+    return (await fetch(`/api/diff/file?rev=${encodeURIComponent(rev)}&path=${encodeURIComponent(path)}&before=${encodeURIComponent(before)}`)).json();
 }
 
 /** Streams the events of one chat turn: text, tool calls, a proposal, errors. */

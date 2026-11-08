@@ -12,6 +12,11 @@ interface RepoState {
     errors: number;
     /** The checked out branch; undefined outside git. */
     branch?: string;
+    upstream?: string;
+    ahead: number;
+    behind: number;
+    /** Files with uncommitted changes. */
+    dirty: number;
     pinned: boolean;
     hidden: boolean;
 }
@@ -100,9 +105,9 @@ function render(state: ShellState): void {
     repoRail.replaceChildren(...(workspace?.repos ?? []).map(repo => {
         const flags = `${repo.pinned ? ' pinned' : ''}${repo.hidden ? ' hidden' : ''}${repo.id === state.repo ? ' active' : ''}`;
         const note = repo.pinned ? 'Pinned. ' : repo.hidden ? 'Hidden from the rail. ' : '';
-        const branch = repo.branch ? `On ${repo.branch}\n` : '';
-        const button = railButton(`repo ${repo.status}${flags}`, repo.name, `${repo.name}\n${repo.id}\n${branch}${note}Drag to reorder, middle click closes, right click for more`);
+        const button = railButton(`repo ${repo.status}${flags}`, repo.name, `${repo.name}\n${repo.id}\n${gitLine(repo)}${note}Drag to reorder, middle click closes, right click for more`);
         badge(button, repo.errors);
+        gitMarks(button, repo);
         button.onclick = () => bridge.select(repo.id, workspace!.id);
         button.draggable = true;
         button.ondragstart = event => {
@@ -147,6 +152,30 @@ function railButton(className: string, name: string, title: string): HTMLButtonE
     button.title = title;
     button.setAttribute('aria-label', name);
     return button;
+}
+
+/** The tooltip line of a repo's git state, such as "On main, 2 ahead and 1 behind origin/main, 3 changed files". */
+function gitLine(repo: RepoState): string {
+    if (!repo.branch) return '';
+    const sync = repo.ahead || repo.behind ? `, ${[repo.ahead && `${repo.ahead} ahead`, repo.behind && `${repo.behind} behind`].filter(Boolean).join(' and ')} ${repo.upstream ?? 'its upstream'}` : '';
+    const dirty = repo.dirty ? `, ${repo.dirty} changed file${repo.dirty > 1 ? 's' : ''}` : '';
+    return `On ${repo.branch}${sync}${dirty}\n`;
+}
+
+/** A dot in the top left corner while the repo has uncommitted changes, and the ahead and behind counts below it. */
+function gitMarks(button: HTMLElement, repo: RepoState): void {
+    if (repo.dirty) {
+        button.classList.add('dirty');
+        const dot = document.createElement('span');
+        dot.className = 'dirty-dot';
+        button.append(dot);
+    }
+    if (repo.ahead || repo.behind) {
+        const sync = document.createElement('span');
+        sync.className = 'sync';
+        sync.textContent = `${repo.ahead ? `↑${repo.ahead > 9 ? '9+' : repo.ahead}` : ''}${repo.behind ? `↓${repo.behind > 9 ? '9+' : repo.behind}` : ''}`;
+        button.append(sync);
+    }
 }
 
 /** The count of validation errors in the button's corner, and in its tooltip. */

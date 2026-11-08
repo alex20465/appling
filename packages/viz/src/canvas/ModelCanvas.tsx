@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { layoutTree, type Placed } from '../layout.js';
 import { relevanceLevel } from '@appling/model/relevance';
 import type { Bubble } from '../protocol.js';
-import { anchorOf, changeMarks, growTree, sessionMarks, kindLabel, LENSES, revealPath, trailOf, type GraphIndex, type Lens, type SessionMark, type TreeNode, type ViewSettings } from '../views.js';
+import { anchorOf, changeMarks, growTree, sessionMarks, kindLabel, LENSES, revealPath, trailOf, type GraphIndex, type Lens, type MarkedChanges, type SessionMark, type TreeNode, type ViewSettings } from '../views.js';
 import { BubbleView, LooseBubbles, memberOf, type BubbleStep } from './Bubble.js';
 
 interface CanvasProps {
@@ -14,8 +14,8 @@ interface CanvasProps {
     selected?: string;
     settings: ViewSettings;
     bubbles?: Bubble[];
-    /** Elements added and changed, such as since the session started; their declarations are marked. */
-    changes?: { added: string[], changed: string[] };
+    /** Elements added, changed and removed, such as since the session started or a model diff; their declarations are marked, removed ones (when the index has them, see `withRemoved` in `@appling/model/diff`) ghosted. */
+    changes?: MarkedChanges;
     /** Elements agent sessions claimed or highlighted: their declarations get a ring in the session's colour. */
     sessions?: SessionMark[];
     /** The place of the shown bubble among all, for its back and next buttons. */
@@ -70,7 +70,7 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
     const here = byId.get(current) ?? byId.get('~')!;
     const lit = new Set(lineage(here).map(p => p.node.id));
     const chosen = selected && index.declaration(selected);
-    const marks = useMemo(() => changes ? changeMarks(index, changes) : new Map<string, string>(), [index, changes]);
+    const marks = useMemo(() => changes ? changeMarks(index, changes, true) : new Map<string, string>(), [index, changes]);
     const claimed = useMemo(() => sessions?.length ? sessionMarks(index, sessions) : new Map<string, SessionMark>(), [index, sessions]);
 
     const replant = () => {

@@ -32,9 +32,10 @@ The window is a frameless Electron window at the top right of the main screen, a
 | `revealPath(index, settings, qn)`, `factOf(index, node)` | The node ids that show a declaration, and the fact a node shows under its name |
 | `cardView(index, view, focus)` | The `action` or `event` view as cards of facts |
 | `flowView(index, view, focus)` | The `machine` or `usecase` view as a flowchart: states and transitions, or steps in order with their error handlers and timeouts. `FlowCanvas` routes edges with right angle corners; with `edgesOnClick`, as for machines, it draws only the edges of the clicked node |
+| `changeMarks(index, changes, modules?)` | The marks of a model change (such as a `GraphDiff` from `@appling/model/diff`, or an AI session's changes) per declaration: `added`, `changed` or `removed`, members lifted to their declaration, optionally their modules too |
 | `GraphIndex`, `search`, `relations`, `entityActions`, `actionSummary` | The index and queries the IDE side panel uses |
 
-`@appling/viz/canvas` exports `ModelCanvas`, the tree that grows from a seed and sizes its circles by relevance, `FlowCanvas` and `CardCanvas`, each drawing optional bubbles; import `@appling/viz/canvas.css` with them. `react` is a peer dependency.
+`@appling/viz/canvas` exports `ModelCanvas`, the tree that grows from a seed, sizes its circles by relevance and marks optional `changes` (removed elements drawn ghosted when its index comes from `withRemoved`), `FlowCanvas` and `CardCanvas`, each drawing optional bubbles; import `@appling/viz/canvas.css` with them. `react` is a peer dependency.
 
 ## License
 

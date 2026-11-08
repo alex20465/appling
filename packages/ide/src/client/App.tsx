@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentSession } from '@appling/ai';
 import { DEFAULT_VIEW, type ClientReport, type SessionAct, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
 import type { EditOperation } from '@appling/model';
-import { connectLanguageServer, loadRelease, loadSnapshot, loadView, onEvents, requestEdit, saveFile, saveView } from './api.js';
+import { withRemoved } from '@appling/model/diff';
+import type { Review as ReviewData, Revision } from '../shared/review.js';
+import { connectLanguageServer, loadRelease, loadReview, loadRevisions, loadSnapshot, loadView, onEvents, requestEdit, saveFile, saveView } from './api.js';
 import { Editor, type Reveal } from './Editor.js';
 import { ModelCanvas } from '@appling/viz/canvas';
 import { elementAt, GraphIndex, type SessionMark } from '@appling/viz/views';
 import { Chat } from './Chat.js';
 import { Inspector } from './Inspector.js';
+import { Review } from './Review.js';
 import { Search } from './Search.js';
 import { applyTextEdits, modelTexts, monaco } from './monaco.js';
 
@@ -21,13 +24,19 @@ export function App() {
     const [active, setActive] = useState<string>();
     const [reveal, setReveal] = useState<Reveal>();
     const [release, setRelease] = useState<{ version: string } | null>(null);
-    const [side, setSide] = useState<'search' | 'inspector' | 'ai'>('search');
+    const [side, setSide] = useState<'search' | 'inspector' | 'review' | 'ai'>('search');
     const [view, setView] = useState<ViewSettings>(DEFAULT_VIEW);
     const [sessions, setSessions] = useState<AgentSession[]>([]);
     /** The elements each agent session highlighted with ide_act. */
     const [highlights, setHighlights] = useState<Record<string, string[]>>({});
     const report = useRef<(report: ClientReport) => void>(() => undefined);
     const act = useRef<(act: SessionAct) => void>(() => undefined);
+    const [rev, setRev] = useState('HEAD');
+    const [review, setReview] = useState<ReviewData>();
+    const [revisions, setRevisions] = useState<Revision[]>([]);
+    const [marked, setMarked] = useState(true);
+    /** The review loads once its tab opens, then follows every snapshot and revision change. */
+    const [reviewing, setReviewing] = useState(false);
 
     useEffect(() => {
         loadSnapshot().then(first => {
@@ -47,7 +56,18 @@ export function App() {
         report.current({ selection: selected, view: { ...view }, file: snapshot?.files.find(f => f.uri === active)?.path });
     }, [selected, view, active, snapshot]);
 
+    useEffect(() => {
+        if (!reviewing || !snapshot) return;
+        let current = true;
+        loadReview(rev).then(next => current && setReview(next));
+        loadRevisions().then(next => current && setRevisions(next));
+        return () => { current = false; };
+    }, [reviewing, rev, snapshot]);
+
     const index = useMemo(() => snapshot && new GraphIndex(snapshot.graph), [snapshot]);
+    /** While the review marks the canvas, it draws the working tree with the removed elements put back, ghosted. */
+    const marking = reviewing && marked && review?.ok ? review : undefined;
+    const canvasIndex = useMemo(() => snapshot && marking ? new GraphIndex(withRemoved(marking.before.graph, snapshot.graph, marking.diff)) : index, [index, marking]);
 
     /** Selects an element, reveals its source and, unless asked not to, shows it in the inspector. */
     const select = useCallback((qn: string, inspect = true) => {
@@ -92,7 +112,7 @@ export function App() {
         return sessions.filter(s => s.repo === repo).flatMap(s => [...s.claims.elements, ...highlights[s.id] ?? []].map((element): SessionMark => ({ element, color: s.color, label: s.label ?? s.name, session: s.id })));
     }, [sessions, highlights, snapshot]);
 
-    if (!snapshot || !index) return <div className="loading">Loading the model</div>;
+    if (!snapshot || !index || !canvasIndex) return <div className="loading">Loading the model</div>;
     const block = release && `since_v${release.version.replaceAll('.', '_')}`;
     const pending = block ? snapshot.graph.nodes.filter(n => n.kind === 'Migration' && n.qn.endsWith(`.${block}`)) : [];
     const steps = pending.reduce((count, m) => count + ((m.props.steps as string[] | undefined)?.length ?? 0), 0);
@@ -119,15 +139,19 @@ export function App() {
                     onCursor={(uri, offset) => setSelected(elementAt(snapshot.locations, uri, offset))}
                     onSave={(path, text) => saveFile(path, text)}
                 />
-                <ModelCanvas index={index} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={selected} settings={view} sessions={marks} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />
+                <ModelCanvas index={canvasIndex} changes={marking?.diff} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={selected} settings={view} sessions={marks} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />
                 <div className="side">
                     <nav className="tabs" aria-label="Side panel">
                         <button className={side === 'search' ? 'active' : ''} onClick={() => setSide('search')}>Search</button>
                         <button className={side === 'inspector' ? 'active' : ''} onClick={() => setSide('inspector')}>Inspector</button>
+                        <button className={side === 'review' ? 'active' : ''} onClick={() => { setSide('review'); setReviewing(true); }}>Review</button>
                         {!DESKTOP && <button className={side === 'ai' ? 'active' : ''} onClick={() => setSide('ai')}>AI</button>}
                     </nav>
                     <div hidden={side !== 'search'} className="side-panel"><Search index={index} onSelect={select} /></div>
                     <div hidden={side !== 'inspector'} className="side-panel"><Inspector index={index} qn={selected} code={selected ? snapshot.code[selected] ?? [] : []} onSelect={select} onEdit={edit} /></div>
+                    <div hidden={side !== 'review'} className="side-panel">
+                        {reviewing && <Review snapshot={snapshot} review={review} rev={rev} revisions={revisions} marked={marked} onRev={next => { setReview(undefined); setRev(next); }} onMarked={setMarked} onSelect={qn => select(qn, false)} />}
+                    </div>
                     {!DESKTOP && <div hidden={side !== 'ai'} className="side-panel"><Chat onEdit={edit} onSelect={qn => select(qn, false)} /></div>}
                 </div>
             </main>
