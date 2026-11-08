@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Duplex, type Readable } from 'node:stream';
 import { describeLocation, type RepoLocation, type RemoteLocation } from './location.js';
+import { stdioReverse, type ReverseForward } from './reverse.js';
 
 /** Where a stream goes on the other side: a TCP port on its loopback, or a Unix socket. */
 export type StreamTarget = { port: number } | { socket: string };
@@ -50,6 +51,11 @@ export interface Transport {
     exec(script: string, options?: ExecOptions): Promise<ExecResult>;
     /** A byte stream to a port or socket on the other side; it ends when either end closes. */
     stream(target: StreamTarget): Duplex;
+    /**
+     * Makes a TCP port of this machine reachable on the other side's 127.0.0.1 (`reverse.ts`), on `preferred` there
+     * when it is free; resolves with the port there.
+     */
+    reverse(localPort: number, preferred?: number): Promise<ReverseForward>;
     /** Whether the connection still works; false after a network drop. */
     alive(): Promise<boolean>;
     /** Calls back once when the connection ends on its own (the ssh master died). Returns the unsubscribe function. */
@@ -130,6 +136,12 @@ abstract class CommandTransport implements Transport {
         return childStream(this.spawn(agentScript(this.agent, ['bridge', 'port' in target ? String(target.port) : target.socket])));
     }
 
+    /** Through the agent's `reverse` command, its connections multiplexed over its stdio. */
+    reverse(localPort: number, preferred = 0): Promise<ReverseForward> {
+        if (!this.agent) return Promise.reject(new Error(`Reverse forwards to ${this.label} need the installed server.`));
+        return stdioReverse(this.spawn(agentScript(this.agent, ['reverse', preferred])), localPort);
+    }
+
     async alive(): Promise<boolean> {
         try {
             return (await this.exec('true', { timeout: 10000 })).code === 0;
@@ -206,6 +218,12 @@ export function sshArgs(location: Extract<RepoLocation, { kind: 'ssh' }>, contro
         exit: ['-S', control, '-O', 'exit', ...common, ...target],
         /** A script through the remote user's login shell, which hands it to `sh` so fish or csh logins work too. */
         exec: (script: string) => ['-S', control, '-o', 'ControlMaster=no', ...common, ...target, `sh -c ${shellQuote(script)}`],
+        /**
+         * A reverse forward on the master (`-O forward -R`): the host's 127.0.0.1:<remote> (0 lets sshd pick one, which
+         * ssh prints) to this machine's 127.0.0.1:<local>. `cancel` removes it again.
+         */
+        forward: (spec: string) => ['-S', control, '-O', 'forward', '-R', spec, ...common, ...target],
+        cancel: (spec: string) => ['-S', control, '-O', 'cancel', '-R', spec, ...common, ...target],
         /** A stdio stream to a TCP port on the host's loopback (`ssh -W`), multiplexed over the master. */
         stream: (port: number) => ['-S', control, '-o', 'ControlMaster=no', ...common, '-W', `127.0.0.1:${port}`, ...target]
     };
@@ -285,6 +303,40 @@ export class SshTransport extends CommandTransport {
 
     override async alive(): Promise<boolean> {
         return !!this.master && this.master.exitCode === null && await this.check();
+    }
+
+    /**
+     * `ssh -O forward -R` on the control master. A port that is still taken there (sshd holds the forward of a master
+     * whose network went away until it times out) falls back to one sshd picks. The forward ends with the master.
+     */
+    override async reverse(localPort: number, preferred = 0): Promise<ReverseForward> {
+        const master = this.master;
+        if (!master) throw new Error(`${this.label} is not connected.`);
+        const spec = (port: number) => `127.0.0.1:${port}:127.0.0.1:${localPort}`;
+        let port = preferred;
+        let result = await execFile(this.ssh, this.args.forward(spec(port)), { timeout: 15000 });
+        if (result.code !== 0 && port) {
+            port = 0;
+            result = await execFile(this.ssh, this.args.forward(spec(port)), { timeout: 15000 });
+        }
+        if (result.code !== 0) throw new Error(`The reverse forward to ${this.label} failed: ${result.stderr.trim() || `exit code ${result.code}`}`);
+        if (!port) port = Number(/\d+/.exec(result.stdout)?.[0]);
+        if (!Number.isInteger(port) || port <= 0) throw new Error(`ssh did not tell the port of the reverse forward to ${this.label}: ${result.stdout.trim()}`);
+        const ends = new Set<() => void>();
+        let ended = false;
+        master.once('exit', () => {
+            ended = true;
+            for (const listener of [...ends]) listener();
+            ends.clear();
+        });
+        return {
+            port,
+            onEnd: listener => ended ? listener() : ends.add(listener),
+            close: async () => {
+                ends.clear();
+                if (this.master === master && master.exitCode === null) await execFile(this.ssh, this.args.cancel(spec(port)), { timeout: 5000 }).catch(() => undefined);
+            }
+        };
     }
 
     /** Ends the master at once (also while the app quits), and with it every command and stream over it. */

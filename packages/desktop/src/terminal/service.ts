@@ -108,6 +108,8 @@ type Events = {
     changed: [repo: string];
     /** This process attached to a terminal it did not just start (after a restart, for a view): its screen and scrollback. */
     attached: [id: string, scrollback: string];
+    /** A remote repo's terminals were attached again after its connection came back (`reconnectRepo`). */
+    reconnected: [repo: string];
 };
 
 /**
@@ -147,7 +149,7 @@ export class TerminalService extends EventEmitter<Events> {
      */
     async connection(repo?: string): Promise<PtyHostClient> {
         const remote = repo === undefined ? undefined : this.options.remote?.(repo);
-        const key = remote ? remote.host.dir ?? repo! : '';
+        const key = this.keyOf(repo, remote);
         const known = this.clients.get(key);
         if (known && !known.closed) return known;
         let connecting = this.connecting.get(key);
@@ -168,6 +170,41 @@ export class TerminalService extends EventEmitter<Events> {
             this.connecting.set(key, connecting);
         }
         return connecting;
+    }
+
+    private keyOf(repo: string | undefined, remote = repo === undefined ? undefined : this.options.remote?.(repo)): string {
+        return remote ? remote.host.dir ?? repo! : '';
+    }
+
+    /**
+     * A remote repo's connection came back (`RemoteRepo` reconnected and forwards its pty host again): the old
+     * connection to that host is dead, so the repo's terminals are attached again over a new one, task terminals too
+     * (their output meanwhile is in the scrollback, `attached` events carry it), and terminals started there meanwhile
+     * get their tabs. Emits `reconnected` once done, so views draw the terminals again.
+     */
+    async reconnectRepo(repo: string): Promise<void> {
+        await this.opening.get(repo)?.catch(() => undefined);
+        if (!this.opened.has(repo)) return this.openRepo(repo);
+        let key: string;
+        try {
+            key = this.keyOf(repo);
+        } catch {
+            return;
+        }
+        const old = this.clients.get(key);
+        if (old) {
+            this.clients.delete(key);
+            old.close();
+        }
+        for (const live of this.live.values()) {
+            if (live.info.group !== repo || (live.client && live.client !== old && !live.client.closed)) continue;
+            for (const stop of live.unsubscribe) stop();
+            live.unsubscribe = [];
+            live.attached = undefined;
+        }
+        this.opened.delete(repo);
+        await this.openRepo(repo);
+        this.emit('reconnected', repo);
     }
 
     /**

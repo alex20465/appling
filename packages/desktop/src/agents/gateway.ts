@@ -22,6 +22,8 @@ const MAX_HOOK_BODY = 1024 * 1024;
 export class Gateway {
     private server?: Server;
     port?: number;
+    /** The ports agents on other machines reach the gateway at (reverse forwards of remote repos), for the Host check. */
+    private readonly forwarded = new Set<number>();
 
     constructor(private readonly options: GatewayOptions) {}
 
@@ -31,6 +33,16 @@ export class Gateway {
 
     get hookUrl(): string {
         return `http://127.0.0.1:${this.port}/hooks`;
+    }
+
+    /** The URLs of the gateway for an agent that reaches it at another port (a reverse forward on its machine). */
+    urlsAt(port: number): { mcpUrl: string, hookUrl: string } {
+        return { mcpUrl: `http://127.0.0.1:${port}/mcp`, hookUrl: `http://127.0.0.1:${port}/hooks` };
+    }
+
+    /** Accepts requests whose Host names this port: a reverse forward to the gateway on a remote repo's machine. */
+    allowPort(port: number): void {
+        this.forwarded.add(port);
     }
 
     /** Listens on the given port, else (taken, or none given) on a free one; resolves with the port. */
@@ -59,8 +71,9 @@ export class Gateway {
     }
 
     private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
-        const host = req.headers.host;
-        if (host !== `127.0.0.1:${this.port}` && host !== `localhost:${this.port}`) return deny(res, 403, 'Unknown host');
+        const host = req.headers.host ?? '';
+        const [, name, port] = /^(127\.0\.0\.1|localhost):(\d+)$/.exec(host) ?? [];
+        if (!name || (Number(port) !== this.port && !this.forwarded.has(Number(port)))) return deny(res, 403, 'Unknown host');
         if (req.headers.origin !== undefined) return deny(res, 403, 'No browser requests');
         const token = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization ?? '')?.[1];
         const session = token ? await this.options.authenticate(token) : undefined;

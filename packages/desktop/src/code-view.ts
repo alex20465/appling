@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { dialog, session, shell, WebContentsView, type Session } from 'electron';
@@ -12,7 +12,7 @@ import { CodeProxy, PROXY_COOKIE } from './code-proxy.js';
 import { codeDirs, installExtension, repoKey, startCodeServer, type CodeServer } from './code-server.js';
 import { loadCodeViewSettings, type CodeViewSettings } from './code-settings.js';
 import { programPath } from './resources.js';
-import { findCode, lineColumn, vscodeArgs } from './vscode-cli.js';
+import { findCode, lineColumn, vscodeArgs, vscodeRemoteArgs } from './vscode-cli.js';
 
 /** A source location as the IDE client knows it. */
 export interface SourceLocation {
@@ -46,8 +46,14 @@ export interface CodeViewsOptions {
 
 /** Code OSS on a remote repo's machine, forwarded to a local port. */
 export interface RemoteCode {
+    /** The repo's folder there. */
     folder: string;
-    start(key: string): Promise<{ port: number, token: string, close(): Promise<void>, onExit(listener: (output: string) => void): void }>;
+    /** Starts Code OSS there with this environment (the code bridge's URL and token there). */
+    start(key: string, env: Record<string, string>): Promise<{ port: number, token: string, close(): Promise<void>, onExit(listener: (output: string) => void): void }>;
+    /** Makes a local port (the proxy with the code bridge) reachable there; resolves with its port there. */
+    forward(localPort: number): Promise<number>;
+    /** VS Code's remote URI of a path there (`vscode-remote://ssh-remote+host/path`), for Open in VS Code. */
+    vscodeUri(path: string): string;
 }
 
 /** The Appling extension's package: bundled in the packaged app, else built by `appling-vscode`; `APPLING_VSIX` overrides it. */
@@ -174,7 +180,9 @@ export class CodeViews {
 
     /** The IDE's Review tab asks for a text diff: the code view opens (starting when needed) on Code OSS's diff editor. */
     textDiff(repo: string, request: TextDiffRequest): void {
-        const message = diffMessage(repo, request);
+        const remote = this.options.remote?.(repo);
+        // a remote repo's code view runs there: the paths are that machine's
+        const message = remote ? diffMessage(remote.folder, request, posix) : diffMessage(repo, request);
         if (!message) return;
         this.bridge.send(repo, message);
         if (!this.shown.has(repo)) this.toggle(repo);
@@ -187,7 +195,8 @@ export class CodeViews {
 
     /** The jump from an element to its code: the code view opens (starting when needed) on the file at its lines. */
     openCode(repo: string, request: { path: string, start: number, end?: number }): void {
-        const message = openMessage(repo, request);
+        const remote = this.options.remote?.(repo);
+        const message = remote ? openMessage(remote.folder, request, posix) : openMessage(repo, request);
         if (!message) return;
         this.bridge.send(repo, message);
         if (!this.shown.has(repo)) this.toggle(repo);
@@ -201,6 +210,15 @@ export class CodeViews {
             return;
         }
         const location = file ? this.current.get(repo) : undefined;
+        const remote = this.options.remote?.(repo);
+        if (remote) {
+            // VS Code's own remote extensions open the folder (and the file) there
+            const path = location?.uri.startsWith('file:') ? decodeURIComponent(new URL(location.uri).pathname) : undefined;
+            const child = spawn(code, vscodeRemoteArgs(remote.vscodeUri(remote.folder), path ? remote.vscodeUri(path) : undefined), { detached: true, stdio: 'ignore', shell: process.platform === 'win32' });
+            child.on('error', error => dialog.showErrorBox('VS Code did not start', error.message));
+            child.unref();
+            return;
+        }
         let target: { path: string, line?: number, column?: number } | undefined;
         if (location?.uri.startsWith('file:')) {
             const path = fileURLToPath(location.uri);
@@ -234,10 +252,17 @@ export class CodeViews {
     private async launch(repo: string): Promise<Instance> {
         const remote = this.options.remote?.(repo);
         if (remote) {
-            // on the other machine: no selection sync yet (its extension cannot reach the local bridge)
+            // on the other machine: its extension reaches the bridge through a reverse forward of the proxy there
             this.status(repo, 'Starting Code OSS on the remote side…');
             const key = repoKey(repo);
-            const started = await remote.start(key);
+            const env: Record<string, string> = {};
+            try {
+                const port = await remote.forward(this.proxy.port);
+                Object.assign(env, { [BRIDGE_ENV]: `ws://127.0.0.1:${port}/bridge`, [TOKEN_ENV]: this.bridge.token(repo) });
+            } catch (error) {
+                console.error(`The code view of ${repo} has no selection sync: ${(error as Error).message}`);
+            }
+            const started = await remote.start(key, env);
             let instance: Instance | undefined = undefined;
             started.onExit(output => instance && this.instances.exited(repo, instance, `Code OSS ended.\n${output.trim().split('\n').slice(-20).join('\n')}`));
             this.proxy.route(key, { port: started.port, token: started.token });
@@ -245,6 +270,7 @@ export class CodeViews {
                 server: { port: started.port, token: started.token, close: started.close } as CodeServer,
                 close: async () => {
                     this.proxy.route(key, undefined);
+                    this.bridge.revoke(repo);
                     await started.close();
                 }
             };

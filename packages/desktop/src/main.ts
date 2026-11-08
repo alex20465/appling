@@ -34,7 +34,8 @@ import { RemoteRepos } from './remote/desktop.js';
 import { RemoteStatus } from './remote/notify.js';
 import { findDevcontainer } from './remote/devcontainer.js';
 import { serverBundle } from './remote/install.js';
-import { isRemoteId } from './remote/location.js';
+import { isRemoteId, parseLocation, vscodeUriAt, type RemoteLocation } from './remote/location.js';
+import { CODE_BRIDGE_FORWARD, remoteAgentHost } from './remote/agents.js';
 import { remoteIpc } from './remote/remote-ipc.js';
 
 /** The width of the rail on the left (none while it is collapsed); every repo view fills the rest of the window. */
@@ -108,9 +109,11 @@ const railSources = { validation: rail.source('validation'), editor: rail.source
 /** Notifications here for the terminals of remote repos that need input while no view is attached (#18). */
 const remoteStatus = new RemoteStatus({
     notifier: systemNotifier(),
-    open: repo => {
+    open: (repo, terminal) => {
         host.show(windows.focused().id);
         if (workspaces.select(repo)) changed();
+        // the panel holds the remote repo's terminals too: open it at the one that waits
+        void terminals.reveal(repo, terminal);
     },
     log: message => console.error(message)
 });
@@ -219,6 +222,7 @@ const agents = new AgentUi({
     store: sessions,
     panel: terminals,
     ideMcp: repo => processes.get(repo)?.mcp,
+    remote: repo => isRemoteId(repo) ? remoteAgentHost(remotes.get(repo)) : undefined,
     activeRepo: () => workspaces.activeRepo(),
     activeWorkspace: () => workspaces.current()?.id,
     repoName: repo => repoName(repo),
@@ -264,7 +268,13 @@ function start(): void {
         onChange: () => refresh(),
         remote: repo => {
             const remote = remotes.get(repo);
-            return remote?.root ? { folder: remote.root, start: key => remote.startCode(key) } : undefined;
+            return remote?.root ? {
+                folder: remote.root,
+                start: (key, env) => remote.startCode(key, env),
+                // the Appling extension there reaches the code bridge through a reverse forward
+                forward: local => remote.reverse(CODE_BRIDGE_FORWARD, local),
+                vscodeUri: path => vscodeUriAt(parseLocation(repo) as RemoteLocation, path)
+            } : undefined;
         }
     });
     registerPaneType({ type: CODE_PANE, label: 'Code', region: 'side', share: code.settings.width });
@@ -486,6 +496,8 @@ async function launchRemote(id: string): Promise<void> {
                 sessions,
                 playbooks,
                 host: desktopHost(workspaces, { tabs: session => agents.tabs(session), focus: session => agents.jump(session.id) }),
+                // the marks and links carry the paths there, which the code view there uses as they are
+                onImplementation: state => code?.implementation(id, state),
                 onStatus: ({ errors, unsaved, changes }) => {
                     if (errors !== undefined) railSources.validation.set(id, { counts: { errors } });
                     if (changes !== undefined) railSources.live.set(id, { counts: { unseen: changes } });
@@ -500,8 +512,10 @@ async function launchRemote(id: string): Promise<void> {
                 const existing = host.panes.get(paneId(IDE_PANE, id));
                 if (!existing) host.addPane(paneId(IDE_PANE, id), view(url));
                 else if (again) existing.webContents.reload();
-                // the terminals and tasks in the pty host there
-                void terminals.openRepo(id).then(() => tasks.openRepo(id));
+                // the terminals and tasks in the pty host there; after a reconnect they attach again over the new connection
+                void (again ? terminals.reconnectRepo(id) : terminals.openRepo(id)).then(() => tasks.openRepo(id));
+                // agent sessions there reach the gateway through the reverse forward, which may have moved
+                void agents.sessions.remoteConnected(id).catch(error => console.error(`The agent sessions of ${id} lost the gateway: ${(error as Error).message}`));
                 refresh();
             },
             onFailed: error => {

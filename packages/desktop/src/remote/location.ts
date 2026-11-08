@@ -152,6 +152,11 @@ export function toVscodeUri(location: RemoteLocation): string {
     }
 }
 
+/** VS Code's remote URI of a path on the location's machine: `toVscodeUri` of the location with that path. */
+export function vscodeUriAt(location: RemoteLocation, path: string): string {
+    return toVscodeUri(location.kind === 'container' ? { ...location, workspace: path } : { ...location, path });
+}
+
 /** Reads a VS Code remote URI (see `toVscodeUri`, also the hex encoded JSON authorities VS Code writes). Throws for other kinds. */
 export function fromVscodeUri(uri: string): RemoteLocation {
     const match = /^vscode-remote:\/\/([^/+]+)\+([^/]*)(\/.*)?$/.exec(uri);

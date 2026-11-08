@@ -76,6 +76,8 @@ await bundle(join(packages, 'pty-host/out/main.js'), 'pty-host/out/main.js', [no
 // The agent that runs the remote side of remote repos (src/remote/agent.ts); with the IDE server, the pty host,
 // node-pty and the Appling extension it is the server bundle that src/remote/install.ts uploads (BUNDLE_PARTS).
 await bundle(join(root, 'out/remote/agent.js'), 'remote/agent.js');
+// the command hook of agent sessions on that machine (src/remote/agents.ts), next to the agent
+cpSync(join(root, 'out/agents/hook.cjs'), join(app, 'remote/hook.cjs'));
 // The Appling extension that Desktop installs into the code view, built by appling-vscode.
 const vsix = join(packages, 'vscode/out/appling.vsix');
 if (!existsSync(vsix)) throw new Error(`${vsix} is missing; build appling-vscode first.`);

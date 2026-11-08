@@ -1,12 +1,18 @@
 import { execFileSync, spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
+import { MemorySessionStore } from '@appling/ai';
 import { connectPtyHost } from '@appling/pty-host';
+import { agentPresets } from '../src/agents/presets.js';
+import { AgentSessions } from '../src/agents/sessions.js';
+import { remoteAgentHost } from '../src/remote/agents.js';
 import type { ConnectionState } from '../src/remote/connection.js';
+import { codeServerAsset } from '../src/code-download.js';
 import { RemoteRepo } from '../src/remote/remote-repo.js';
+import { shellQuote } from '../src/remote/transport.js';
 import { TaskRunner } from '../src/tasks/runner.js';
 import { remoteTasks, remoteTerminals } from '../src/tasks/remote.js';
 import { TerminalService } from '../src/terminal/service.js';
@@ -49,6 +55,38 @@ function repoFolder(name: string, text = MODEL): string {
     return folder;
 }
 
+/** Fetches a URL on the other side, with the Node binary installed there. */
+async function fetchThere(repo: RemoteRepo, url: string): Promise<string> {
+    const script = `fetch(${JSON.stringify(url)}, { method: 'POST', body: 'there' }).then(r => r.text()).then(t => console.log(t), e => { console.error(e.message); process.exit(1); })`;
+    const result = await repo.transport.exec(`${shellQuote(repo.installed!.agent.node)} -e ${shellQuote(script)}`, { timeout: 20000 });
+    expect(result.stderr).toBe('');
+    return result.stdout.trim();
+}
+
+/** An HTTP server here that tells what reached it: a stand-in for the agent gateway or the code bridge. */
+async function echoServer(): Promise<{ port: number, close(): void }> {
+    const { createServer: createHttp } = await import('node:http');
+    const server = createHttp((req, res) => {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => res.end(`here ${req.url} ${body}`));
+    });
+    await new Promise<void>(done => server.listen(0, '127.0.0.1', done));
+    return { port: (server.address() as { port: number }).port, close: () => server.close() };
+}
+
+const FAKE = join(import.meta.dirname, 'fixtures/fake-agent.mjs');
+
+async function until<T>(check: () => T | undefined | false, debug?: () => string, timeout = 30000): Promise<T> {
+    const deadline = Date.now() + timeout;
+    for (;;) {
+        const value = check();
+        if (value) return value;
+        if (Date.now() > deadline) throw new Error(`Timed out.${debug ? `\n${debug()}` : ''}`);
+        await new Promise(done => setTimeout(done, 50));
+    }
+}
+
 async function snapshot(url: string): Promise<{ files: { path?: string, uri?: string }[], errors: unknown[] }> {
     const response = await fetch(`${url}/api/snapshot`);
     expect(response.status).toBe(200);
@@ -63,6 +101,9 @@ describe.skipIf(!SSH)('over ssh', () => {
     const states: ConnectionState[] = [];
     const progress: string[] = [];
     let connects = 0;
+    /** The shared agent sessions, as the app keeps them, served to the IDE server there. */
+    const store = new MemorySessionStore();
+    const reversed: [string, number][] = [];
 
     beforeAll(async () => {
         mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -90,11 +131,13 @@ describe.skipIf(!SSH)('over ssh', () => {
                 }
             },
             install: { app, cache: join(dir, 'cache'), node: process.execPath },
+            ide: { sessions: store },
             ptyDir: join(dir, 'local-pty'),
             backoff: { initial: 200, factor: 2, max: 2000, attempts: 10 },
             onState: state => states.push(state),
             onProgress: line => progress.push(line),
-            onConnected: () => connects++
+            onConnected: () => connects++,
+            onReverse: (name, port) => reversed.push([name, port])
         });
     }, 30000);
 
@@ -180,6 +223,148 @@ describe.skipIf(!SSH)('over ssh', () => {
         await service.closeRepo(id);
         service.dispose();
     }, 90000);
+
+    test('a reverse forward over the ssh master reaches a port here from there, and comes back on its port after a drop', async () => {
+        const server = await echoServer();
+        const port = await repo.reverse('code-bridge', server.port);
+        expect(port).not.toBe(server.port);
+        expect(await repo.reverse('code-bridge', server.port)).toBe(port);
+        expect(await fetchThere(repo, `http://127.0.0.1:${port}/bridge`)).toBe('here /bridge there');
+        const before = connects;
+        (repo.transport as unknown as { master: ChildProcess }).master.kill('SIGKILL');
+        await vi.waitFor(() => expect(connects).toBe(before + 1), { timeout: 60000 });
+        const after = repo.reversePort('code-bridge')!;
+        // the same port there, unless sshd still held it (then the move is reported)
+        if (after !== port) expect(reversed).toContainEqual(['code-bridge', after]);
+        expect(await fetchThere(repo, `http://127.0.0.1:${after}/again`)).toBe('here /again there');
+        server.close();
+    }, 90000);
+
+    test('Code OSS there gets the code bridge\'s URL there and its token over stdin, and reaches the bridge here', async () => {
+        // a stand-in for openvscode-server, already installed there: it serves its environment
+        const asset = codeServerAsset('linux', process.arch)!;
+        const bin = join(dir, 'server', 'code', asset.name, 'bin');
+        mkdirSync(bin, { recursive: true });
+        writeFileSync(join(bin, 'openvscode-server'), [
+            `#!${process.execPath}`,
+            "if (process.argv.includes('--install-extension')) process.exit(0);",
+            "const server = require('node:http').createServer((req, res) => res.end(JSON.stringify({ bridge: process.env.APPLING_DESKTOP_BRIDGE, token: process.env.APPLING_DESKTOP_TOKEN, argv: process.argv.join(' ') })));",
+            "server.listen(0, '127.0.0.1', () => console.log(`Server bound to 127.0.0.1:${server.address().port} (IPv4)`));"
+        ].join('\n'), { mode: 0o755 });
+        const bridge = await echoServer();
+        const port = await repo.reverse('code-bridge', bridge.port);
+        const code = await repo.startCode('k1', { APPLING_DESKTOP_BRIDGE: `ws://127.0.0.1:${port}/bridge`, APPLING_DESKTOP_TOKEN: 'secret-token' });
+        const seen = await (await fetch(`http://127.0.0.1:${code.port}/`)).json() as { bridge: string, token: string, argv: string };
+        expect(seen).toMatchObject({ bridge: `ws://127.0.0.1:${port}/bridge`, token: 'secret-token' });
+        // the token went over stdin, never into a command line there
+        expect(seen.argv).not.toContain('secret-token');
+        expect(await fetchThere(repo, seen.bridge.replace('ws:', 'http:'))).toBe('here /bridge there');
+        await code.close();
+        bridge.close();
+    }, 90000);
+
+    test('an agent session in the ssh repo runs there and reaches MCP and its hooks through the gateway\'s reverse forward', async () => {
+        const id = `ssh://127.0.0.1/${repo.root}`;
+        const service = new TerminalService({
+            host: { dir: join(dir, 'unused-local-pty'), start: false },
+            settings: () => DEFAULT_TERMINAL_SETTINGS,
+            remote: () => remoteTerminals(repo, id, join(dir, 'local-pty'))
+        });
+        let output = '';
+        service.on('data', (_, chunk) => output += chunk);
+        const agents = new AgentSessions({
+            store, terminals: service, folder: join(dir, 'local-agents'),
+            ideMcp: () => repo.ide?.mcp,
+            presets: () => agentPresets({ 'agents.presets': [{ name: 'Fake Claude', command: process.execPath, args: [FAKE], wiring: 'claude' }] }).presets,
+            remote: () => remoteAgentHost(repo)
+        });
+        await agents.start();
+        const record = await agents.create(id, 'Fake Claude');
+        // the configuration files are on that machine, next to its server install, and only its user reads them
+        expect(record.remote!.dir).toBe(join(dir, 'server', 'agent-sessions', record.id));
+        expect(statSync(join(record.remote!.dir, 'mcp.json')).mode & 0o777).toBe(0o600);
+        expect(statSync(record.remote!.dir).mode & 0o777).toBe(0o700);
+        expect(JSON.parse(readFileSync(join(record.remote!.dir, 'mcp.json'), 'utf8')).mcpServers.appling.url).toBe(`http://127.0.0.1:${record.remote!.port}/mcp`);
+        expect(record.remote!.port).not.toBe(agents.gateway.port);
+        expect(existsSync(join(dir, 'local-agents', 'sessions', record.id))).toBe(false);
+        // the command hook client of Gemini CLI style agents is part of the server bundle there
+        expect(existsSync(join(dir, 'server', repo.installed!.version, 'remote', 'hook.cjs'))).toBe(true);
+
+        // MCP (label, claims) and the PermissionRequest hook, both through the forward there
+        await until(() => agents.get(record.id)?.status === 'needs-input', () => output);
+        expect(agents.get(record.id)).toMatchObject({ label: 'Fake work', claims: { elements: ['sales.Order'] } });
+        // the MCP session works in the repo's folder there; the Desktop record keeps the repo id
+        expect(await store.get(record.id)).toMatchObject({ label: 'Fake work', repo: repo.root });
+        expect(record.repo).toBe(id);
+
+        // the network drops; after the reconnect the terminals attach again and the gateway is reachable there again
+        const before = connects;
+        (repo.transport as unknown as { master: ChildProcess }).master.kill('SIGKILL');
+        await vi.waitFor(() => expect(connects).toBe(before + 1), { timeout: 60000 });
+        await service.reconnectRepo(id);
+        await agents.remoteConnected(id);
+        if (agents.get(record.id)!.remote!.port !== record.remote!.port) {
+            // it moved: the files there name the new port
+            expect(JSON.parse(readFileSync(join(record.remote!.dir, 'settings.json'), 'utf8')).hooks.Stop[0].hooks[0].url).toContain(`:${agents.get(record.id)!.remote!.port}/`);
+        }
+
+        expect(agents.get(record.id)).toMatchObject({ status: 'needs-input' });
+        expect(agents.answer(record.id, { kind: 'allow' })).toBe(true);
+        await until(() => agents.get(record.id)?.status === 'done', () => output);
+        expect(agents.get(record.id)).toMatchObject({ note: 'All done' });
+        agents.answer(record.id, { kind: 'reply', text: 'thanks' });
+        await until(() => agents.get(record.id)?.status === 'exited', () => output);
+        expect(output).toContain('reply:"thanks"');
+        // the token and the files there go with the agent
+        await until(() => !existsSync(record.remote!.dir));
+        await agents.close(record.id);
+        agents.dispose();
+        service.dispose();
+    }, 120000);
+
+    test('after the ssh master dies, terminals and task terminals attach again and take input', async () => {
+        const id = `ssh://127.0.0.1/${repo.root}`;
+        writeFileSync(join(repo.root!, '.vscode', 'tasks.json'), JSON.stringify({
+            version: '2.0.0',
+            tasks: [{ label: 'ask', type: 'shell', command: 'echo task-started; read line; echo "$line" > answer.txt' }]
+        }));
+        const service = new TerminalService({
+            host: { dir: join(dir, 'unused-local-pty'), start: false },
+            settings: () => DEFAULT_TERMINAL_SETTINGS,
+            remote: () => remoteTerminals(repo, id, join(dir, 'local-pty'))
+        });
+        const output = new Map<string, string>();
+        service.on('data', (terminal, chunk) => output.set(terminal, (output.get(terminal) ?? '') + chunk));
+        const attached = new Map<string, string>();
+        service.on('attached', (terminal, scrollback) => attached.set(terminal, scrollback));
+        const reconnected: string[] = [];
+        service.on('reconnected', repo => reconnected.push(repo));
+        const runner = new TaskRunner(service, { platform: 'linux', remote: () => remoteTasks(repo, id) });
+        await runner.openRepo(id);
+        const shell = await service.create(id, { command: '/bin/sh', args: ['-c', 'echo before-drop; while read line; do echo "got:$line"; done'] });
+        await until(() => output.get(shell.id)?.includes('before-drop'));
+        const run = runner.run(id, 'ask');
+        const task = await until(() => runner.state(id, 'ask').terminal);
+        await until(() => output.get(task)?.includes('task-started'));
+
+        const before = connects;
+        (repo.transport as unknown as { master: ChildProcess }).master.kill('SIGKILL');
+        await vi.waitFor(() => expect(connects).toBe(before + 1), { timeout: 60000 });
+        // what the app does on a reconnect (`launchRemote`)
+        await service.reconnectRepo(id);
+        expect(reconnected).toEqual([id]);
+        expect(attached.get(shell.id)).toContain('before-drop');
+        expect(attached.get(task)).toContain('task-started');
+        expect(service.registry.terminals(id)).toEqual(expect.arrayContaining([shell.id, task]));
+
+        service.write(shell.id, 'after-drop\r');
+        await until(() => output.get(shell.id)?.includes('got:after-drop'), () => output.get(shell.id) ?? '');
+        service.write(task, 'answered\r');
+        expect(await run).toMatchObject({ status: 'succeeded' });
+        expect(readFileSync(join(repo.root!, 'answer.txt'), 'utf8').trim()).toBe('answered');
+        await service.closeRepo(id);
+        service.dispose();
+    }, 120000);
 });
 
 const IMAGE = process.env.APPLING_TEST_IMAGE ?? 'debian:bookworm-slim';
@@ -229,4 +414,19 @@ describe.skipIf(!DOCKER)('in a dev container', () => {
         await vi.waitFor(() => expect(repo.connection.state).toBe('connected'), { timeout: 90000 });
         expect(JSON.stringify((await snapshot(repo.url!)).files)).toContain('shop.appling');
     }, 240000);
+
+    test('a reverse forward through the agent\'s stdio reaches a port here from the container, again after it restarted', async () => {
+        const server = await echoServer();
+        const port = await repo.reverse('agents', server.port);
+        expect(await fetchThere(repo, `http://127.0.0.1:${port}/mcp`)).toBe('here /mcp there');
+        const container = (repo.transport as unknown as { container: string }).container;
+        execFileSync('docker', ['restart', '-t', '1', container], { stdio: 'ignore' });
+        await vi.waitFor(() => expect(repo.connection.state).not.toBe('connected'), { timeout: 30000 });
+        await vi.waitFor(() => expect(repo.connection.state).toBe('connected'), { timeout: 90000 });
+        await vi.waitFor(() => expect(repo.reversePort('agents')).toBeDefined(), { timeout: 10000 });
+        // the container came back empty of listeners: the same port there
+        expect(repo.reversePort('agents')).toBe(port);
+        expect(await fetchThere(repo, `http://127.0.0.1:${port}/hooks/Stop`)).toBe('here /hooks/Stop there');
+        server.close();
+    }, 180000);
 });

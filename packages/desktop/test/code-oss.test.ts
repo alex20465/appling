@@ -8,14 +8,16 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, expect, test, vi } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
 import { connectDesktop } from '../../vscode/src/desktop-bridge.js';
-import { CodeBridge, diffMessage, parseExtensionMessage } from '../src/code-bridge.js';
+import { CodeBridge, diffMessage, openMessage, parseExtensionMessage } from '../src/code-bridge.js';
 import { CODE_SERVER, codeServerAsset, ensureCodeServer, type CodeServerRelease } from '../src/code-download.js';
 import { CodeInstances, type InstanceStatus } from '../src/code-instances.js';
 import { authorized, CodeProxy, PROXY_COOKIE, rewriteCookies, routeOf } from '../src/code-proxy.js';
 import { boundPort, codeDirs, codeServerArgs, installExtension, repoKey, startCodeServer, type CodeServer } from '../src/code-server.js';
 import { DEFAULT_CODE_VIEW, loadCodeViewSettings, splitBounds } from '../src/code-settings.js';
 import { DEFAULT_KEYBINDINGS } from '../src/keybindings.js';
-import { findCode, lineColumn, vscodeArgs } from '../src/vscode-cli.js';
+import { findCode, lineColumn, vscodeArgs, vscodeRemoteArgs } from '../src/vscode-cli.js';
+import { vscodeUriAt } from '../src/remote/location.js';
+import { posix, win32 } from 'node:path';
 
 const cleanup: (() => unknown)[] = [];
 afterEach(async () => {
@@ -350,6 +352,28 @@ test('text diffs stay inside the repo and take plain revisions only', () => {
     expect(diffMessage('/repo', { path: 'a.appling', before: '/etc/passwd', rev: 'HEAD' })).toBeUndefined();
     expect(diffMessage('/repo', { path: 'a.appling', rev: '--output=x' })).toBeUndefined();
     expect(diffMessage('/repo', { path: 'a.appling', rev: 'a b' })).toBeUndefined();
+});
+
+test('a remote repo\'s diffs and code jumps carry the paths of its machine, also from a Windows Desktop', () => {
+    // the remote code view runs on that machine: paths resolve against its folder there with POSIX rules
+    const root = '/home/dev/shop';
+    expect(diffMessage(root, { path: 'm/a.appling', rev: 'HEAD', line: 2 }, posix)).toEqual({ type: 'diff', path: '/home/dev/shop/m/a.appling', before: '/home/dev/shop/m/a.appling', rev: 'HEAD', line: 2 });
+    expect(diffMessage(root, { path: '../../etc/passwd', rev: 'HEAD' }, posix)).toBeUndefined();
+    expect(openMessage(root, { path: 'app/models.py', start: 3, end: 9 }, posix)).toEqual({ type: 'open', path: '/home/dev/shop/app/models.py', start: 3, end: 9 });
+    // an absolute path of that machine (the IDE server there names it so) stays as it is
+    expect(openMessage(root, { path: '/home/dev/shop/app/views.py', start: 1 }, posix)).toEqual({ type: 'open', path: '/home/dev/shop/app/views.py', start: 1, end: 1 });
+    expect(openMessage(root, { path: '/home/dev/app/views.py', start: 1 }, posix)).toMatchObject({ path: '/home/dev/app/views.py' });
+    expect(openMessage(root, { path: '/etc/passwd', start: 1 }, posix)).toBeUndefined();
+    // with this machine's rules on Windows the same request would become a C:\ path
+    expect(openMessage('C:\\work\\shop', { path: 'app/models.py', start: 1 }, win32)).toMatchObject({ path: 'C:\\work\\shop\\app\\models.py' });
+});
+
+test('Open in VS Code opens a remote repo through its vscode-remote URI', () => {
+    const ssh = { kind: 'ssh' as const, host: 'shop', path: '~/shop' };
+    expect(vscodeUriAt(ssh, '/home/dev/shop')).toBe('vscode-remote://ssh-remote+shop/home/dev/shop');
+    expect(vscodeUriAt({ kind: 'container', folder: '/work/shop' }, '/workspaces/shop/a.appling')).toMatch(/^vscode-remote:\/\/dev-container\+[0-9a-f]+\/workspaces\/shop\/a\.appling$/);
+    expect(vscodeRemoteArgs('vscode-remote://ssh-remote+shop/home/dev/shop')).toEqual(['--folder-uri', 'vscode-remote://ssh-remote+shop/home/dev/shop']);
+    expect(vscodeRemoteArgs('vscode-remote://ssh-remote+shop/r', 'vscode-remote://ssh-remote+shop/r/a.appling')).toEqual(['--folder-uri', 'vscode-remote://ssh-remote+shop/r', '--file-uri', 'vscode-remote://ssh-remote+shop/r/a.appling']);
 });
 
 test('code view settings read the codeView section and report bad values', () => {
