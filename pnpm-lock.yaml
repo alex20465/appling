@@ -576,9 +576,6 @@ importers:
       '@types/vscode':
         specifier: 1.100.0
         version: 1.100.0
-      '@types/ws':
-        specifier: 8.18.2
-        version: 8.18.2
       '@vscode/vsce':
         specifier: 4.0.0
         version: 4.0.0
@@ -591,9 +588,6 @@ importers:
       vscode-languageclient:
         specifier: 10.1.2
         version: 10.1.2
-      ws:
-        specifier: 8.22.0
-        version: 8.22.0
 
 packages:
 

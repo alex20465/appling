@@ -48,11 +48,9 @@
     "@appling/lang": "workspace:*",
     "@types/node": "^24.19.2",
     "@types/vscode": "1.100.0",
-    "@types/ws": "8.18.2",
     "@vscode/vsce": "4.0.0",
     "esbuild": "0.28.2",
     "typescript": "7.0.2",
-    "vscode-languageclient": "10.1.2",
-    "ws": "8.22.0"
+    "vscode-languageclient": "10.1.2"
   }
 }
