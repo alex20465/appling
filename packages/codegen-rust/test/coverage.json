@@ -4,7 +4,7 @@
     "generated": 0,
     "partial": 3,
     "todo": 0,
-    "tasks": 6
+    "tasks": 5
   },
   {
     "kind": "Actor",
@@ -198,8 +198,8 @@
   {
     "kind": "Query",
     "generated": 0,
-    "partial": 1,
-    "todo": 1,
+    "partial": 2,
+    "todo": 0,
     "tasks": 2
   },
   {
@@ -247,8 +247,8 @@
   {
     "kind": "total",
     "generated": 100,
-    "partial": 21,
-    "todo": 19,
-    "tasks": 44
+    "partial": 22,
+    "todo": 18,
+    "tasks": 43
   }
 ]
