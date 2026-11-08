@@ -26,6 +26,7 @@ test('from the workspace every program resolves to its built package entry', () 
     expect(programPath('pty-host', base)).toMatch(/packages[\\/]pty-host[\\/]out[\\/]main\.js$/);
     expect(programPath('language-server', base)).toMatch(/packages[\\/]lang[\\/]out[\\/]language-server\.js$/);
     expect(programPath('mcp', base)).toMatch(/packages[\\/]ai[\\/]out[\\/]main\.js$/);
+    expect(programPath('ide')).toBe(programPath('ide', base));
 });
 
 test('packaged, the bundled copy next to the main file wins', () => {
@@ -58,9 +59,9 @@ test('the bundle holds every program where Desktop looks, and the bundled IDE se
     await run(process.execPath, [join(import.meta.dirname, '../scripts/bundle.mjs'), '--out', app], { env: { ...process.env, APPLING_DESKTOP_VERSION: '9.8.7' } });
     for (const program of PROGRAMS) expect(programPath(program, app), program).toBe(join(app, BUNDLED[program]));
     const manifest = JSON.parse(readFileSync(join(app, 'package.json'), 'utf8'));
-    expect(manifest).toMatchObject({ name: 'appling-desktop', version: '9.8.7', main: 'main.js', type: 'module' });
+    expect(manifest).toMatchObject({ name: 'appling-desktop', version: '9.8.7', main: 'out/main.js', type: 'module' });
     expect(manifest.dependencies).toBeUndefined();
-    for (const file of ['main.js', 'preload.cjs', 'shell/index.html', 'ide/dist/client/index.html', 'ide/out/skills', 'ai/language', 'pty-host/package.json', 'native/node-pty/lib/index.js']) {
+    for (const file of ['out/main.js', 'out/preload.cjs', 'out/shell/index.html', 'skills/appling-registry/SKILL.md', 'ide/dist/client/index.html', 'ide/out/skills', 'ai/language', 'pty-host/package.json', 'native/node-pty/lib/index.js']) {
         expect(existsSync(join(app, file)), file).toBe(true);
     }
 

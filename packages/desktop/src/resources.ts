@@ -7,8 +7,9 @@ import { fileURLToPath } from 'node:url';
 export type Program = 'ide' | 'pty-host' | 'language-server' | 'mcp';
 
 /**
- * Where `scripts/bundle.mjs` puts each program in the packaged app, relative to the bundled `main.js`. Every bundle keeps
- * its package's layout, so the files a package finds next to its own code (the IDE client, the AI skills) are there.
+ * Where `scripts/bundle.mjs` puts each program in the packaged app, relative to the app's root (Desktop's main is
+ * `out/main.js` there). Every bundle keeps its package's layout, so the files a package finds next to its own code (the
+ * IDE client, the AI skills) are there.
  */
 export const BUNDLED: Record<Program, string> = {
     ide: 'ide/out/server/main.js',
@@ -26,10 +27,10 @@ const INSTALLED: Record<Program, [string, string]> = {
 };
 
 /**
- * The entry file of a program: the bundled one when Desktop runs packaged (it lies next to the bundled main), else the
- * built one of its workspace package. `base` is the folder of Desktop's main file.
+ * The entry file of a program: the bundled one when Desktop runs packaged, else the built one of its workspace package.
+ * `base` is the folder above Desktop's main file: the app's root when packaged, `packages/desktop` in the workspace.
  */
-export function programPath(program: Program, base: string = dirname(fileURLToPath(import.meta.url))): string {
+export function programPath(program: Program, base: string = dirname(dirname(fileURLToPath(import.meta.url)))): string {
     const bundled = join(base, BUNDLED[program]);
     if (existsSync(bundled)) return bundled;
     const [pkg, entry] = INSTALLED[program];

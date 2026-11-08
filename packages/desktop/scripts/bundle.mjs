@@ -49,13 +49,16 @@ async function bundle(entry, out, plugins = []) {
     });
 }
 
-// Desktop: main process, preload and the shell page.
-await bundle(join(root, 'out/main.js'), 'main.js');
-cpSync(join(root, 'out/preload.cjs'), join(app, 'preload.cjs'));
-cpSync(join(root, 'out/shell'), join(app, 'shell'), { recursive: true });
+// The AI package reads its skills and language pages from `../skills/` and `../language/` of the code that bundles it.
+const aiFiles = (to) => ['skills', 'language'].forEach(dir => cpSync(join(packages, 'ai', dir), join(app, to, dir), { recursive: true }));
+
+// Desktop: main process, preload and the shell page in `out/`, as in this package.
+await bundle(join(root, 'out/main.js'), 'out/main.js');
+cpSync(join(root, 'out/preload.cjs'), join(app, 'out/preload.cjs'));
+cpSync(join(root, 'out/shell'), join(app, 'out/shell'), { recursive: true });
+aiFiles('.');
 
 // The programs, at the paths of BUNDLED in src/resources.ts, each with the files its package reads next to its code.
-const aiFiles = (to) => ['skills', 'language'].forEach(dir => cpSync(join(packages, 'ai', dir), join(app, to, dir), { recursive: true }));
 await bundle(join(packages, 'ide/out/server/main.js'), 'ide/out/server/main.js');
 cpSync(join(packages, 'ide/dist/client'), join(app, 'ide/dist/client'), { recursive: true });
 aiFiles('ide/out');
@@ -94,7 +97,7 @@ writeFileSync(join(app, 'package.json'), JSON.stringify({
     author: 'Alexandros Fotiadis',
     license: desktop.license,
     type: 'module',
-    main: 'main.js'
+    main: 'out/main.js'
 }, null, 2));
 
 console.log(`Bundled Appling Desktop ${process.env.APPLING_DESKTOP_VERSION || desktop.version} into ${app}`);

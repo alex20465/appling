@@ -95,7 +95,7 @@ pnpm --filter @appling/desktop... build
 pnpm --filter @appling/desktop package --linux   # or --win, --mac; more electron-builder flags pass through
 ```
 
-`package` runs two steps. `scripts/bundle.mjs` writes `app/`: Desktop's main process (`main.js`, electron-updater included) and each program Desktop runs, bundled by esbuild into one ESM file at the path of `BUNDLED` in `src/resources.ts`, next to the files its package reads at runtime:
+`package` runs two steps. `scripts/bundle.mjs` writes `app/`: Desktop's main process (`out/main.js`, electron-updater and the parts of `@appling/ai` it uses included, with the AI skills and language pages in `skills/` and `language/` beside `out/`, the preload and the shell page) and each program Desktop runs, bundled by esbuild into one ESM file at the path of `BUNDLED` in `src/resources.ts`, next to the files its package reads at runtime:
 
 | Program | In `app/` | Brings along |
 |---|---|---|
@@ -106,7 +106,7 @@ pnpm --filter @appling/desktop package --linux   # or --win, --mac; more electro
 
 node-pty is native and not bundled: its JavaScript and this platform's native files (a local build on Linux, the prebuilds on Windows and macOS) are copied to `native/node-pty`, outside the asar archive. It is N-API, so the Node build loads in Electron without a rebuild. `APPLING_DESKTOP_VERSION` sets the app's version, else this package's is used; `--out <folder>` writes elsewhere. Then electron-builder (`electron-builder.config.mjs`) packs `app/` into `release/`: `Appling-<version>-linux-x86_64.AppImage`, `Appling-Setup-<version>-x64.exe`, `Appling-<version>-mac-{arm64,x64}.{dmg,zip}` and the `latest*.yml` update manifests. It installs and collects no `node_modules`; `app/` is complete.
 
-`programPath(program)` (`src/resources.ts`) finds each program at run time: the bundled copy next to the bundled `main.js` when it exists, else the built entry of the workspace package. `startIdeProcess` and the pty host's `startPtyHost({ main })` take the result, and every program runs with Electron's binary as Node (`ELECTRON_RUN_AS_NODE`).
+`programPath(program)` (`src/resources.ts`) finds each program at run time: the bundled copy in the app's root (the folder above the bundled `out/main.js`) when it exists, else the built entry of the workspace package. `startIdeProcess` and the pty host's `startPtyHost({ main })` take the result, and every program runs with Electron's binary as Node (`ELECTRON_RUN_AS_NODE`).
 
 ## Updates
 
