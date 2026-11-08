@@ -143,7 +143,7 @@ test "invariant total never negative holds for valid records"
 
 Writing the bodies is a task of the same entry, for example `write the test bodies of OrderTotalNeverNegativeTest in sales/tests.py`. When only some cases are skipped, the task names them, such as `(test_moves_from_allowed_states)`. When you write a test, remove its skip.
 
-Django already writes the bodies of invariant, entity policy, transition and precondition tests where the model says everything they need; see [Django tests](django.md#tests).
+Django already writes the bodies of invariant, entity policy, transition and precondition tests where the model says everything they need; see [Django tests](django.md#tests). Ash writes the bodies of invariant tests the same way; see [Ash tests](ash.md#tests).
 
 ## Working through the registry
 

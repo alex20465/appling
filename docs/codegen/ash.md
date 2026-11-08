@@ -233,6 +233,17 @@ Invariants, policies on entities, transitions and actions with preconditions get
 test "transition draft -> placed moves from allowed states"
 ```
 
+An invariant that becomes a validation gets test bodies when the model says everything they need. Both tests build a changeset for the resource's `create` action with `Ash.Changeset.for_create(..., authorize?: false)`, which runs the validations without a database. The input has a sample value for every required attribute without a default (`"<attribute>-1"` for strings, `1` for numbers, `false`, the current date or time, one hour, a new UUID, the first enum literal). `holds for valid records` asserts that this changeset is valid; `rejects violations` sets one attribute the condition compares to a value (`-1`, `0` or `1000000` for numbers, either boolean, each enum literal) and refutes it.
+
+```elixir
+test "invariant positive rejects violations" do
+  changeset = Ash.Changeset.for_create(Shop.Shop.Item, :create, %{code: "code-1", quantity: -1}, authorize?: false)
+  refute changeset.valid?
+end
+```
+
+A case only gets a body when the Appling simulator proves that the sample input satisfies every translated invariant (for `rejects violations`, also that the changed input breaks this invariant and no other, with every attribute the condition compares set, since the validations pass on nil). Resources with a required relationship, a required value type or file, a default that does not translate, and actor resources keep both tests skipped, as do invariants that stay a task. Policy, transition and precondition tests stay skipped.
+
 
 ## Actors
 
