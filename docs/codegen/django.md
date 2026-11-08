@@ -177,14 +177,14 @@ Invariants, policies, transitions and actions with preconditions get a `TestCase
 
 | Rule | Test methods | Body |
 |---|---|---|
-| invariant | `test_holds_for_valid_rows`, `test_rejects_violations` | skipped |
+| invariant | `test_holds_for_valid_rows`, `test_rejects_violations` | for an invariant enforced as a `CheckConstraint`: stores the factory's row; then sets one field the condition compares to a value (`-1`, `0` or `1000000` for numbers, either boolean, each enum literal) that breaks this invariant and no other, and asserts `IntegrityError` |
 | policy | `test_allows_permitted_actors`, `test_denies_other_actors` | skipped |
 | transition | `test_moves_from_allowed_states`, `test_refuses_other_states` | creates the entity in each allowed state, runs the action (or sends the event) and asserts the target state; in every state no transition of that action or event leaves, asserts `InvalidTransition` |
 | action with preconditions | `test_precondition_<n>_is_enforced` | creates a row for which the precondition fails and asserts its error (`ValueError` without one) |
 
 Test bodies create rows through factories in `<app>/factories.py`, one `make_<entity>(**fields)` per entity: every required stored field without a default gets a sample value (`"<field>-<n>"` for strings, `1` for numbers, `False`, the current date or time, one hour, a new UUID, the first enum literal), and a required reference gets a row from the referenced entity's factory. An entity with a required file, a value type or a cycle of required references has no factory.
 
-A case only gets a body when the Appling simulator proves, on the factory's row, that the invariants hold, that the preconditions and the guard hold (or, for a precondition test, that the earlier preconditions hold and this one fails), and that the effects do not create rows or depend on the actor. Otherwise it stays skipped. In the examples, `PlaceOrder` requires order lines that the factory does not add, so its precondition test runs, while the tests of `draft -> placed` stay tasks. Event transitions are tested only when no job or other machine also handles the event. The actions run without an actor, which skips their policy checks.
+A case only gets a body when the Appling simulator proves, on the factory's row, that the invariants hold (for an invariant test, also that the changed row breaks it; a field read only by `has()` may stay null, any other field the condition compares must not be null, because a database check passes on null), that the preconditions and the guard hold (or, for a precondition test, that the earlier preconditions hold and this one fails), and that the effects do not create rows or depend on the actor. Otherwise it stays skipped. In the examples, `PlaceOrder` requires order lines that the factory does not add, so its precondition test runs, while the tests of `draft -> placed` stay tasks. Event transitions are tested only when no job or other machine also handles the event. The actions run without an actor, which skips their policy checks.
 
 ### Pages
 

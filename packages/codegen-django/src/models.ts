@@ -1,7 +1,7 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
 import { annotation, children, documented, pythonFile, task, template } from './files.js';
-import { testSteps } from './tests.js';
+import { invariantTests } from './model-tests.js';
 import { appOf, constantOf, lastOf, parentOf, python, q, type PythonScope } from './python.js';
 
 const PRIMITIVES: Record<string, string> = {
@@ -140,8 +140,9 @@ export function fieldSteps(field: GraphNode, context: MapContext): Step[] | unde
 }
 
 export function invariantSteps(invariant: GraphNode, context: MapContext): Step[] {
-    const rule = constraint(invariant, context) ? [] : [task(`enforce the invariant "${invariant.data.label}": ${invariant.props.condition}`)];
-    return [...rule, ...testSteps(invariant, String(invariant.props.condition), ['holds_for_valid_rows', 'rejects_violations'], context)];
+    const enforced = constraint(invariant, context) !== undefined;
+    const rule = enforced ? [] : [task(`enforce the invariant "${invariant.data.label}": ${invariant.props.condition}`)];
+    return [...rule, ...invariantTests(invariant, enforced, context)];
 }
 
 function modelClass(entity: GraphNode, context: MapContext, imports: Set<string>): string {
