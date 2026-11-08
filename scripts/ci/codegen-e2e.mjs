@@ -8,7 +8,7 @@
 // Needs the workspace built (`pnpm build`) and the target's toolchain on PATH: uv (Django), Elixir with Mix and
 // Postgres on localhost (Ash), Go, or Rust. scripts/ci/codegen-e2e-docker.sh runs it in the official images.
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,7 +28,9 @@ const TARGETS = {
             ['uv', 'run', 'python', 'manage.py', 'makemigrations', '--check', '--dry-run'],
             ['uv', 'run', 'python', 'manage.py', 'migrate'],
             ['uv', 'run', 'python', 'manage.py', 'test']
-        ]
+        ],
+        // Must stop and name the variable when a secret is not set.
+        withoutSecrets: ['uv', 'run', 'python', 'manage.py', 'check']
     },
     ash: {
         // The archives igniter.new and phx.new are user level Mix installs; the extension checks for them first.
@@ -42,6 +44,7 @@ const TARGETS = {
             ['mix', 'compile', '--warnings-as-errors'],
             ['mix', 'test']
         ],
+        withoutSecrets: ['mix', 'run', '--no-start', '-e', ':ok'],
         env: { MIX_ENV: 'test' }
     },
     go: {
@@ -97,10 +100,19 @@ for (const model of models.length ? models : Object.keys(MODELS)) {
     mkdirSync(join(workspace, 'node_modules/@appling'), { recursive: true });
     symlinkSync(join(ROOT, 'packages', `codegen-${target}`), join(workspace, 'node_modules', extension), 'dir');
     let ok = run([process.execPath, CLI, 'generate'], workspace);
+    const keys = ok ? envKeys(join(workspace, name, '.env.example')) : [];
+    const secrets = keys.filter(k => k.secret).map(k => k.name);
+    // Every key gets a placeholder, the way a developer fills .env from .env.example ('0' parses as Int and Bool too).
+    const env = { ...config.env, ...Object.fromEntries(keys.map(k => [k.name, '0'])) };
     for (const check of config.checks) {
         if (!ok) break;
         group(`${target}: ${model}: ${check.join(' ')}`);
-        ok = run(check, join(workspace, name), config.env);
+        ok = run(check, join(workspace, name), env);
+    }
+    // After the checks, so the compile check above sees a clean build.
+    if (ok && config.withoutSecrets && secrets.length) {
+        group(`${target}: ${model}: without ${secrets.join(', ')}`);
+        ok = failsNaming(config.withoutSecrets, join(workspace, name), config.env, secrets);
     }
     endGroup();
     if (!ok) failed.push(model);
@@ -108,6 +120,32 @@ for (const model of models.length ? models : Object.keys(MODELS)) {
 
 console.log(`\n${target}: ${failed.length ? `failed for ${failed.join(', ')}` : 'every model generated and built'} (projects in ${root})`);
 process.exit(failed.length ? 1 : 0);
+
+/** The keys `.env.example` lists, each with whether the comment above it marks a secret. */
+function envKeys(file) {
+    if (!existsSync(file)) return [];
+    const lines = readFileSync(file, 'utf8').split('\n');
+    return lines.flatMap((line, i) => {
+        const key = /^([A-Z0-9_]+)=$/.exec(line);
+        return key ? [{ name: key[1], secret: (lines[i - 1] ?? '').startsWith('# secret of ') }] : [];
+    });
+}
+
+/** Runs a command with the secrets unset and expects it to fail with a message naming the first one. */
+function failsNaming([command, ...rest], cwd, env, secrets) {
+    console.log(`$ ${[command, ...rest].join(' ')}   (in ${cwd}, without ${secrets.join(', ')})`);
+    const clean = { ...process.env, ...env };
+    for (const name of secrets) delete clean[name];
+    const result = spawnSync(command, rest, { cwd, encoding: 'utf8', env: clean });
+    const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+    if (result.status !== 0 && secrets.some(name => output.includes(name))) {
+        console.log(`stopped as expected: ${output.trim().split('\n').filter(l => secrets.some(n => l.includes(n))).at(-1)}`);
+        return true;
+    }
+    console.error(output.slice(-4000));
+    console.error(result.status === 0 ? 'expected the app to stop without its secrets, but it started' : 'the app failed without naming the missing secret');
+    return false;
+}
 
 function run([command, ...rest], cwd, env = {}) {
     console.log(`$ ${[command, ...rest].join(' ')}   (in ${cwd})`);

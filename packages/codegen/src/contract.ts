@@ -14,6 +14,8 @@ export interface CommandStep extends StepOrder {
     creates?: string[];
     /** Text fed to the command's standard input. */
     input?: string;
+    /** Variables added to the inherited environment, such as placeholders for secrets the generated settings require. */
+    env?: Record<string, string>;
 }
 
 /** Writes or patches one file, relative to the output folder. `write` gets the current content when the file exists. */

@@ -166,7 +166,16 @@ Each `setting` and `secret` of an external becomes a constant in `config/setting
 |---|---|
 | `Int` | `CLERK_MAX_SESSIONS = int(os.environ["CLERK_MAX_SESSIONS"]) if "CLERK_MAX_SESSIONS" in os.environ else None` |
 | `Bool` | `CLERK_TEST_MODE = os.environ.get("CLERK_TEST_MODE", "").lower() in ("1", "true", "yes")` |
-| any other | `CLERK_SECRET_KEY = os.environ.get("CLERK_SECRET_KEY")` |
+| any other | `CLERK_REGION = os.environ.get("CLERK_REGION")` |
+
+A missing setting is `None` (`False` for a `Bool`). A `secret` is required: it is read through `required_env`, which `settings.py` defines once before the first secret, so the app stops at startup with `ImproperlyConfigured: Set the environment variable CLERK_SECRET_KEY (see .env.example)` when it is not set:
+
+```python
+CLERK_SECRET_KEY = required_env("CLERK_SECRET_KEY")
+CLERK_INSTANCE = int(required_env("CLERK_INSTANCE"))   # a secret of type Int
+```
+
+Every management command loads the settings, so tests, `migrate` and `runserver` need the secrets too: fill `.env` from `.env.example` and load it into the environment. While generating, Appling runs its own `makemigrations` with a placeholder for each secret.
 
 `.env.example` lists every key with an empty value, under a comment with its kind, its external and its `does` text:
 

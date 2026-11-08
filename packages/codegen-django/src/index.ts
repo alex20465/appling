@@ -6,7 +6,7 @@ import { externalSteps, projectionFieldSteps, projectionSteps, querySteps, useCa
 import { actionSteps, errorSteps, eventSteps, jobSteps, machineSteps, transitionSteps } from './behavior.js';
 import { hasKind, task } from './files.js';
 import { actorSteps, entityPolicySteps, policySteps, roleSteps, tenantSteps } from './access.js';
-import { externalKeySteps } from './vendors.js';
+import { externalKeySteps, secretPlaceholders } from './vendors.js';
 import { entitySteps, enumSteps, fieldSteps, installApp, invariantSteps, moduleSteps, valueSteps } from './models.js';
 
 const DJANGO = 'django~=6.1.0';
@@ -72,6 +72,6 @@ function setup(context: MapContext): Step[] {
         { kind: 'command', run: ['uv', 'add', DJANGO, ...(api ? [REST_FRAMEWORK] : []), ...(hasKind(context, 'Role', 'Actor') ? [RULES] : [])], creates: ['uv.lock'] },
         { kind: 'command', run: ['uv', 'run', 'django-admin', 'startproject', 'config', '.'], creates: ['manage.py', 'config/'] },
         ...(api ? [installApp('rest_framework')] : []),
-        { kind: 'command', run: ['uv', 'run', 'python', 'manage.py', 'makemigrations'], phase: 3 }
+        { kind: 'command', run: ['uv', 'run', 'python', 'manage.py', 'makemigrations'], phase: 3, ...secretPlaceholders(context) }
     ];
 }

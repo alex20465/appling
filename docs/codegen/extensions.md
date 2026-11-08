@@ -79,6 +79,8 @@ interface CommandStep {
   creates?: string[];
   /** Text fed to the command's standard input. */
   input?: string;
+  /** Variables added to the inherited environment, such as placeholders for secrets the generated settings require. */
+  env?: Record<string, string>;
   phase?: number;
 }
 
@@ -131,7 +133,7 @@ interface MapContext {
 
 | Step | Behavior |
 |---|---|
-| `command` | Runs `run[0]` with the other items as arguments, without a shell: no pipes, no globs, no variables. `cwd` is relative to the output folder and is created when missing. `input` goes to standard input. The run stops at the first command that exits with a non zero code. `creates` lists files or folders for the registry entry. |
+| `command` | Runs `run[0]` with the other items as arguments, without a shell: no pipes, no globs, no variables. `cwd` is relative to the output folder and is created when missing. `input` goes to standard input. `env` adds variables to the environment the command inherits. The run stops at the first command that exits with a non zero code. `creates` lists files or folders for the registry entry. |
 | `template` | Writes `file`, relative to the output folder, with what `write` returns. `write` gets the current content, or `undefined` when the file does not exist yet, so several steps can add to one file. Return the whole new content. |
 | `task` | Never runs. Its `what` becomes an open task in the node's registry entry, with the node's properties and related elements as context. Write it as an instruction a person or an AI can act on. |
 

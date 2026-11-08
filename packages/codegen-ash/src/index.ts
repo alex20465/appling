@@ -11,7 +11,7 @@ import { actorCheckSteps, closeResource, enforced, policySteps, policyTask, role
 import { tenantSteps } from './tenants.js';
 import { check, defaultValue, invariantTests } from './model-tests.js';
 import { testSteps } from './tests.js';
-import { externalKeySteps } from './vendors.js';
+import { externalKeySteps, secretPlaceholders } from './vendors.js';
 import { app, attributeType, calculation, fieldPolicyOf, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, task, typeModule } from './naming.js';
 
 const extension: CodegenExtension = {
@@ -37,7 +37,7 @@ const extension: CodegenExtension = {
         return [
             { kind: 'command', run: ['mix', 'igniter.new', app(context), ...(pages ? ['--with', 'phx.new', '--with-args=--no-install'] : []), '--install', install.join(','), '--yes', '--no-git'], cwd: '..', creates: ['mix.exs', 'lib/'] },
             ...(api && !pages ? [mix(['igniter.install', 'ash_json_api,bandit'])] : []),
-            { kind: 'command', run: ['mix', 'ash.codegen', 'initial_resources'], phase: 3 }
+            { kind: 'command', run: ['mix', 'ash.codegen', 'initial_resources'], phase: 3, ...secretPlaceholders(context) }
         ];
     },
 
