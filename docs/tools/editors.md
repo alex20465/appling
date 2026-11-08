@@ -85,16 +85,17 @@ Format with `vim.lsp.buf.format()`, rename with `vim.lsp.buf.rename()`, and hove
 
 ### VS Code
 
-The Appling extension for VS Code bundles the language server and a TextMate grammar generated from the Appling grammar, so it needs no global install. It starts when the workspace contains a `.appling` file and loads every model file in the workspace folders. Build and install it from the repository:
+The Appling extension for VS Code bundles the language server and a TextMate grammar generated from the Appling grammar, so it needs no global install. It starts when the workspace contains a `.appling` file or an `.appling` file is opened, and loads every model file in the workspace folders. Build and install it from the repository (the build also writes `out/appling.vsix`):
 
 ```sh
 pnpm --filter @appling/lang build
 pnpm --filter appling-vscode build
-pnpm --filter appling-vscode package
 code --install-extension packages/vscode/out/appling.vsix
 ```
 
 Turn on `editor.formatOnSave` for `[appling]` to keep files canonical.
+
+Inside the code view of Appling Desktop (Code OSS, started by the app) the extension comes preinstalled and also syncs the selection with the model canvas: moving the cursor in a `.appling` file selects the element there on the canvas, and selecting an element on the canvas opens its source. Desktop hands the extension a local channel in the `APPLING_DESKTOP_BRIDGE` and `APPLING_DESKTOP_TOKEN` environment variables; in a plain VS Code they are not set and the extension only runs the language server.
 
 ## Embed the language server
 

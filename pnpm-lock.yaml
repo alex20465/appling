@@ -335,9 +335,15 @@ importers:
       '@appling/ide':
         specifier: workspace:*
         version: link:../ide
+      appling-vscode:
+        specifier: workspace:*
+        version: link:../vscode
       electron:
         specifier: 44.9.1
         version: 44.9.1
+      ws:
+        specifier: 8.22.0
+        version: 8.22.0
     devDependencies:
       '@modelcontextprotocol/sdk':
         specifier: 1.32.1
@@ -345,6 +351,9 @@ importers:
       '@types/node':
         specifier: ^24.19.2
         version: 24.19.2
+      '@types/ws':
+        specifier: 8.18.2
+        version: 8.18.2
       typescript:
         specifier: 7.0.2
         version: 7.0.2

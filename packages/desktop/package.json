@@ -23,11 +23,14 @@
   "dependencies": {
     "@appling/ai": "workspace:*",
     "@appling/ide": "workspace:*",
-    "electron": "44.9.1"
+    "appling-vscode": "workspace:*",
+    "electron": "44.9.1",
+    "ws": "8.22.0"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
     "@types/node": "^24.19.2",
+    "@types/ws": "8.18.2",
     "typescript": "7.0.2"
   },
   "license": "MIT"

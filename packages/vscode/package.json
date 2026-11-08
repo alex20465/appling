@@ -16,14 +16,19 @@
   ],
   "main": "./out/extension.js",
   "activationEvents": [
-    "workspaceContains:**/*.appling"
+    "workspaceContains:**/*.appling",
+    "onLanguage:appling"
   ],
   "contributes": {
     "languages": [
       {
         "id": "appling",
-        "aliases": ["Appling"],
-        "extensions": [".appling"],
+        "aliases": [
+          "Appling"
+        ],
+        "extensions": [
+          ".appling"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -36,7 +41,7 @@
     ]
   },
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=out/extension.js && esbuild ../lang/out/language-server.js --bundle --platform=node --format=cjs --outfile=out/server.js && cp ../lang/src/syntaxes/appling.tmLanguage.json out/",
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=out/extension.js && esbuild ../lang/out/language-server.js --bundle --platform=node --format=cjs --outfile=out/server.js && cp ../lang/src/syntaxes/appling.tmLanguage.json out/ && vsce package --no-dependencies --out out/appling.vsix",
     "package": "vsce package --no-dependencies --out out/appling.vsix"
   },
   "devDependencies": {

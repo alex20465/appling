@@ -32,7 +32,7 @@ Open the printed address in your browser. The package also installs the binary `
 The header shows the workspace folder, the release indicator (once a release exists) and either `valid` or the number of errors in the model.
 
 > [!NOTE]
-> Appling Desktop, a native app in development, runs this IDE once per repo and groups repos into workspaces stored as VS Code `.code-workspace` files. There the model canvas is the main area, the editor is folded away behind the **Source** button in the header, and the AI tab is left out: AI work runs through terminal agents connected to the [MCP server](ai.md#mcp-server).
+> Appling Desktop, a native app in development, runs this IDE once per repo and groups repos into workspaces stored as VS Code `.code-workspace` files. There the model canvas is the main area, the editor is folded away behind the **Source** button in the header, and the AI tab is left out: AI work runs through terminal agents connected to the [MCP server](ai.md#mcp-server). **View › Toggle Code View** opens a full Code OSS (VS Code) next to the canvas, with the [Appling extension](editors.md#vs-code); selecting an element on the canvas opens its source there, and the cursor in a `.appling` file there selects the element on the canvas. On Linux, **text diff** in the Review tab opens there too, in Code OSS's diff editor.
 
 ## The editor
 
