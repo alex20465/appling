@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { dialog, session, shell, WebContentsView, type BrowserWindow, type Session } from 'electron';
@@ -11,6 +10,7 @@ import { CodeInstances, type InstanceState } from './code-instances.js';
 import { CodeProxy, PROXY_COOKIE } from './code-proxy.js';
 import { codeDirs, installExtension, repoKey, startCodeServer, type CodeServer } from './code-server.js';
 import { loadCodeViewSettings, splitBounds, type Bounds, type CodeViewSettings } from './code-settings.js';
+import { programPath } from './resources.js';
 import { findCode, lineColumn, vscodeArgs } from './vscode-cli.js';
 
 /** A source location as the IDE client knows it. */
@@ -35,11 +35,11 @@ export interface CodeViewsOptions {
     onChange(): void;
 }
 
-/** The Appling extension's package, built by `appling-vscode`'s build; `APPLING_VSIX` overrides it. */
+/** The Appling extension's package: bundled in the packaged app, else built by `appling-vscode`; `APPLING_VSIX` overrides it. */
 function applingVsix(): string | undefined {
     if (process.env.APPLING_VSIX) return process.env.APPLING_VSIX;
     try {
-        return join(dirname(createRequire(import.meta.url).resolve('appling-vscode/package.json')), 'out', 'appling.vsix');
+        return programPath('vsix');
     } catch {
         return undefined;
     }

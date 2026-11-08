@@ -18,19 +18,26 @@
     "out"
   ],
   "scripts": {
-    "build": "tsc && cp src/shell/index.html src/shell/shell.css out/shell/"
+    "build": "tsc && cp src/shell/index.html src/shell/shell.css out/shell/",
+    "bundle": "node scripts/bundle.mjs",
+    "package": "node scripts/bundle.mjs && electron-builder --config electron-builder.config.mjs --publish never"
   },
   "dependencies": {
     "@appling/ai": "workspace:*",
     "@appling/ide": "workspace:*",
+    "@appling/lang": "workspace:*",
+    "@appling/pty-host": "workspace:*",
     "appling-vscode": "workspace:*",
     "electron": "44.9.1",
+    "electron-updater": "6.8.11",
     "ws": "8.22.0"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
     "@types/node": "^24.19.2",
     "@types/ws": "8.18.2",
+    "electron-builder": "26.18.0",
+    "esbuild": "0.28.2",
     "typescript": "7.0.2"
   },
   "license": "MIT"

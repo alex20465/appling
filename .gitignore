@@ -6,3 +6,5 @@ dist/
 .astro/
 **/.appling/layout.json
 packages/ai/language/
+packages/desktop/app/
+packages/desktop/release/

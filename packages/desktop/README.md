@@ -2,7 +2,9 @@
 
 Appling Desktop: one native app for many repos. Repos are grouped into workspaces, each repo gets its own Appling IDE server and a view that stays alive while you switch, with the model canvas, search and inspector as its main area.
 
-In development (epic #15); the package is private until the first release. This is the shell with workspaces: the rail (collapsible, with pinned, reordered and hidden repos), one IDE server per repo, `.code-workspace` files, session restore, the fuzzy switcher, the app menu and rebindable shortcuts. Repos are added by folder or by cloning a git URL. The rail shows each repo's agent sessions, validation errors, unsaved files and git state (branch, ahead and behind, dirty). Each repo's IDE has a Review tab with the model diff against any commit. Each repo has a code view, an embedded Code OSS. Task status in the rail, terminals and packaging follow.
+In development (epic #15); the package is private until the first release. This is the shell with workspaces: the rail (collapsible, with pinned, reordered and hidden repos), one IDE server per repo, `.code-workspace` files, session restore, the fuzzy switcher, the app menu and rebindable shortcuts. Repos are added by folder or by cloning a git URL. The rail shows each repo's agent sessions, validation errors, unsaved files and git state (branch, ahead and behind, dirty). Each repo's IDE has a Review tab with the model diff against any commit. Each repo has a code view, an embedded Code OSS. It packages as an AppImage, an NSIS installer and a dmg, and updates itself from GitHub Releases. Task status in the rail and terminals follow.
+
+To install a release, see [Desktop](https://appling.tools/docs/tools/desktop/) in the docs.
 
 ## Run it
 
@@ -12,6 +14,8 @@ node packages/desktop/out/bin.js [folders or .code-workspace files...]
 ```
 
 `appling-desktop [paths...]` opens each `.code-workspace` file as a workspace and adds each folder (default: the current folder) to the active workspace, in the running app or in a new one. A second call hands its paths to the running instance and returns. Electron downloads its binary on the first start. Exit code 2 when an argument is neither a folder nor a `.code-workspace` file.
+
+The packaged app takes the same paths without `bin.js` (`Appling.AppImage ~/work/shop`, relative to the current folder). `--version` prints the version and quits before any window opens, so it runs without a display.
 
 ## Workspaces
 
@@ -84,6 +88,50 @@ Each instance listens on its own port on 127.0.0.1 and requires its own connecti
 - The shell talks to the main process only through the preload bridge (`preload.cts`); every page runs sandboxed with context isolation. A repo view's own preload (`repo-preload.cts`) exposes `window.applingDesktop` for the code view's selection sync and `openTextDiff` (only where the code view runs).
 - The code view: `code-download.ts` (pinned release, verified download), `code-server.ts` (one openvscode-server per repo: `--host 127.0.0.1 --port 0 --connection-token-file --server-base-path /r/<key>` with the shared `--user-data-dir`, `--extensions-dir` and `--server-data-dir`), `code-instances.ts` (the pure lifecycle: lazy start, idle suspend, always alive), `code-proxy.ts` (the one origin proxy, which swaps the cookie for each instance's token), `code-bridge.ts` (the extension channel), `code-settings.ts`, `vscode-cli.ts` and the Electron glue in `code-view.ts` (one kept alive `WebContentsView` per repo in the `persist:appling-code` session).
 
+## Packaging
+
+```sh
+pnpm --filter @appling/desktop... build
+pnpm --filter @appling/desktop package --linux   # or --win, --mac; more electron-builder flags pass through
+```
+
+`package` runs two steps. `scripts/bundle.mjs` writes `app/`: Desktop's main process (`out/main.js`, electron-updater and the parts of `@appling/ai` it uses included, with the AI skills and language pages in `skills/` and `language/` beside `out/`, both preloads and the shell page) and each program Desktop runs, bundled by esbuild into one ESM file at the path of `BUNDLED` in `src/resources.ts`, next to the files its package reads at runtime:
+
+| Program | In `app/` | Brings along |
+|---|---|---|
+| IDE server (`appling-ide`) | `ide/out/server/main.js` | `ide/dist/client/`, the AI skills and language pages in `ide/out/` |
+| pty host (`appling-pty-host`) | `pty-host/out/main.js` | `pty-host/package.json` (its version) |
+| language server (`appling-language-server`) | `lang/out/language-server.js` | |
+| MCP server (`appling-mcp`) | `ai/out/main.js` | `ai/skills/`, `ai/language/` |
+| Appling extension for the code view (`appling-vscode`) | `vscode/appling.vsix`, outside the asar archive | |
+
+node-pty is native and not bundled: its JavaScript and this platform's native files (a local build on Linux, the prebuilds on Windows and macOS) are copied to `native/node-pty`, outside the asar archive. It is N-API, so the Node build loads in Electron without a rebuild. `APPLING_DESKTOP_VERSION` sets the app's version, else this package's is used; `--out <folder>` writes elsewhere. Then electron-builder (`electron-builder.config.mjs`) packs `app/` into `release/`: `Appling-<version>-linux-x86_64.AppImage`, `Appling-Setup-<version>-x64.exe`, `Appling-<version>-mac-{arm64,x64}.{dmg,zip}` and the `latest*.yml` update manifests. It installs and collects no `node_modules`; `app/` is complete.
+
+`programPath(program)` (`src/resources.ts`) finds each program at run time: the bundled copy in the app's root (the folder above the bundled `out/main.js`) when it exists, else the built entry of the workspace package. For files that a program outside Electron reads (`UNPACKED`: the vsix, which openvscode-server installs) it returns the path in `app.asar.unpacked`. `startIdeProcess`, the code view and the pty host's `startPtyHost({ main })` take the result, and every program runs with Electron's binary as Node (`ELECTRON_RUN_AS_NODE`).
+
+## Updates
+
+`src/updater.ts` uses electron-updater with the GitHub provider: a quiet check at start and **File › Check for Updates…** (`checkForUpdates`, no default shortcut). `updateMode` in `src/update-policy.ts` decides how:
+
+| Mode | When | Does |
+|---|---|---|
+| `auto` | Windows; Linux started from its AppImage (`APPIMAGE` is set); macOS when signed | Downloads, then asks to restart (or installs on quit) |
+| `manual` | macOS unsigned (macOS installs only signed updates); Linux not run from the AppImage | Reports the new version and opens its release page |
+| `none` | Not packaged, or `APPLING_DISABLE_UPDATES` set (not `0`) | Does not look; the menu item says why |
+
+Whether a build is signed comes from `signed` in the packaged `package.json`, which the builder config sets when the signing secrets are present. electron-updater asks for the repository's latest release, so stable Desktop releases are marked latest.
+
+## Releases
+
+Pushing a tag `desktop-v<version>` runs `.github/workflows/desktop-release.yml`: an ubuntu, windows and macos matrix builds, bundles and packages with that version (the Linux job also extracts the AppImage and checks `--version`), then one job publishes every file to a GitHub Release of the tag (a prerelease for versions with a `-` suffix). Builds are unsigned until these optional secrets exist:
+
+| Secrets | For |
+|---|---|
+| `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD` | macOS signing with a Developer ID Application certificate (base64 `.p12`) |
+| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | macOS notarization, with signing |
+| `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` | Windows signing with a certificate (base64 `.pfx`) |
+| `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_SIGNING_PROFILE`, `AZURE_PUBLISHER_NAME` | Windows signing with Azure Trusted Signing instead |
+
 ## Shortcuts
 
 | Command | Default |
@@ -105,6 +153,7 @@ Each instance listens on its own port on 127.0.0.1 and requires its own connecti
 | `reload` (the active repo's view) | `CmdOrCtrl+R` |
 | `devTools` | `CmdOrCtrl+Alt+I` |
 | `keybindings` (opens the keybindings file) | `CmdOrCtrl+K` |
+| `checkForUpdates` | none |
 | `quit` | `CmdOrCtrl+Q` |
 
 Ctrl+Tab goes to the repo you saw before; pressing it again within 1.2 seconds goes one further back along the same order, so a single press toggles between the last two repos and quick presses reach older ones.

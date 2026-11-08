@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell, WebContentsView, type MenuItemConstructorOptions, type WebContents } from 'electron';
 import type { TextDiffRequest } from './code-bridge.js';
@@ -14,6 +14,7 @@ import { COMMANDS, loadKeybindings } from './keybindings.js';
 import { Repos } from './repos.js';
 import { readSession, restore, sessionOf, writeSession } from './session.js';
 import { switcherEntries } from './switcher.js';
+import { Updater } from './updater.js';
 import { Workspaces } from './workspaces.js';
 
 /** The width of the rail on the left (none while it is collapsed); every repo view fills the rest of the window. */
@@ -22,14 +23,22 @@ const SHELL = fileURLToPath(new URL('./shell/index.html', import.meta.url));
 const PRELOAD = fileURLToPath(new URL('./preload.cjs', import.meta.url));
 const REPO_PRELOAD = fileURLToPath(new URL('./repo-preload.cjs', import.meta.url));
 
-/** Folders and workspace files handed to this instance on the command line, after `--`, as absolute paths (see `bin.ts`). */
+/**
+ * Folders and workspace files handed to this instance on the command line, after `--`, as absolute paths (see `bin.ts`);
+ * the packaged app also takes them without `--` (`Appling.AppImage shop`), relative to the current folder.
+ */
 function pathsOf(argv: string[]): string[] {
     const at = argv.indexOf('--');
-    return at < 0 ? [] : argv.slice(at + 1);
+    if (at >= 0) return argv.slice(at + 1);
+    return app.isPackaged ? argv.slice(1).filter(arg => !arg.startsWith('-')).map(arg => resolve(arg)) : [];
 }
 
 const initial = pathsOf(process.argv);
-if (!app.requestSingleInstanceLock({ paths: initial })) {
+// `--version` prints and quits before any window, so it runs without a display (the release check uses it).
+if (process.argv.slice(0, process.argv.includes('--') ? process.argv.indexOf('--') : undefined).includes('--version')) {
+    console.log(app.getVersion());
+    app.exit(0);
+} else if (!app.requestSingleInstanceLock({ paths: initial })) {
     // An instance runs already: it receives the paths through `second-instance`.
     app.quit();
 } else {
@@ -64,6 +73,7 @@ rail.onChange(() => refresh());
 /** Watchers of each repo's git `HEAD`, so the rail follows checkouts made anywhere. */
 const heads = new Map<string, () => void>();
 let window: BrowserWindow | undefined;
+const updater = new Updater(() => window);
 let keybindingsWatcher: FSWatcher | undefined;
 /** The code view (Code OSS) of every repo. */
 let code: CodeViews | undefined;
@@ -146,6 +156,7 @@ function start(): void {
     if (problems.length) dialog.showErrorBox('Some workspaces did not reopen', problems.join('\n'));
     openPaths(initial);
     changed();
+    updater.start();
 }
 
 /** Opens workspace files as workspaces and adds folders to the active workspace (the default one when none is open). */
@@ -484,6 +495,7 @@ const actions: Record<string, () => void> = {
         if (!existsSync(file)) writeFileSync(file, '{\n}\n');
         shell.openPath(file);
     },
+    checkForUpdates: () => updater.check(),
     quit: () => app.quit()
 };
 
@@ -510,7 +522,7 @@ function buildMenu(): void {
         {
             label: 'File', submenu: [
                 item('newWorkspace'), item('openWorkspace'), item('open'), item('clone'), { type: 'separator' },
-                item('closeRepo'), item('closeWorkspace'), { type: 'separator' }, item('keybindings'), { type: 'separator' }, item('quit')
+                item('closeRepo'), item('closeWorkspace'), { type: 'separator' }, item('keybindings'), item('checkForUpdates'), { type: 'separator' }, item('quit')
             ]
         },
         { role: 'editMenu' },

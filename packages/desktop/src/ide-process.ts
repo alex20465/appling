@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { createRequire } from 'node:module';
 import { ipcChannel, serveAppHost, serveSessionStore, type AppHost, type SessionStore } from '@appling/ai';
+import { programPath } from './resources.js';
 
 export interface IdeProcess {
     url: string;
@@ -14,6 +14,8 @@ export interface IdeProcessOptions {
     /** The Node binary; inside Electron its own executable with `ELECTRON_RUN_AS_NODE`. */
     node?: string;
     env?: NodeJS.ProcessEnv;
+    /** The server's entry, `ideMain()` by default. */
+    main?: string;
     /** How long to wait for the server to report its URL. */
     timeout?: number;
     /** Called when the server ends on its own, such as after a crash. */
@@ -34,9 +36,9 @@ export interface IdeStatus {
     unsaved?: string[];
 }
 
-/** The IDE server's entry, `appling-ide`. */
+/** The IDE server's entry, `appling-ide`: bundled in the packaged app, else the workspace package's. */
 export function ideMain(): string {
-    return createRequire(import.meta.url).resolve('@appling/ide/out/server/main.js');
+    return programPath('ide');
 }
 
 /**
@@ -44,7 +46,7 @@ export function ideMain(): string {
  * The server reports its URL over the IPC channel and ends when that channel closes, also when the app is killed.
  */
 export function startIdeProcess(root: string, options: IdeProcessOptions = {}): Promise<IdeProcess> {
-    const child = spawn(options.node ?? process.execPath, [ideMain(), root, '--port', '0', ...(options.sessions ? ['--shared-sessions'] : [])], {
+    const child = spawn(options.node ?? process.execPath, [options.main ?? ideMain(), root, '--port', '0', ...(options.sessions ? ['--shared-sessions'] : [])], {
         stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
         env: options.env ?? process.env
     });
