@@ -44,6 +44,7 @@ export interface AgentSession {
 }
 
 export interface SessionMessage {
+    /** The sending session's id, or `user` for the user (such as a response to a playbook step). */
     from: string;
     fromLabel: string;
     to: string;
@@ -86,6 +87,8 @@ export interface SessionStore {
     touch(id: string, tool: string): Promise<void>;
     /** Sends a message to a session, named by its id or its label. Returns the recipient's id. */
     send(from: string, to: string, text: string): Promise<string>;
+    /** Delivers a message from the user or the app (not a session) to a session's inbox, such as a response to a step of its playbook chapter. */
+    post(to: string, message: { fromLabel: string, text: string }): Promise<void>;
     /** The session's unread messages; reading them marks them read. */
     inbox(id: string): Promise<SessionMessage[]>;
     /** Calls back with every session after each change. */
@@ -228,6 +231,13 @@ export class MemorySessionStore implements SessionStore {
         return recipient.id;
     }
 
+    async post(to: string, message: { fromLabel: string, text: string }): Promise<void> {
+        const recipient = this.session(to);
+        this.messages.get(to)!.push({ from: 'user', fromLabel: message.fromLabel, to, text: message.text, at: new Date().toISOString() });
+        recipient.unread++;
+        this.changed();
+    }
+
     async inbox(id: string): Promise<SessionMessage[]> {
         const session = this.session(id);
         const messages = this.messages.get(id)!.splice(0);
@@ -276,7 +286,7 @@ export function ipcChannel(target: { connected?: boolean, send?(message: unknown
 }
 
 type StoreMethod = Exclude<keyof SessionStore, 'onChange'>;
-const METHODS: StoreMethod[] = ['open', 'authenticate', 'end', 'get', 'list', 'update', 'claim', 'release', 'touch', 'send', 'inbox'];
+const METHODS: StoreMethod[] = ['open', 'authenticate', 'end', 'get', 'list', 'update', 'claim', 'release', 'touch', 'send', 'post', 'inbox'];
 
 interface Call { type: 'sessions:call', call: number, method: StoreMethod, args: unknown[] }
 interface Result { type: 'sessions:result', call: number, result?: unknown, error?: string }
@@ -330,6 +340,7 @@ export class RemoteSessionStore implements SessionStore {
     release(id: string, claims?: Partial<Claims>) { return this.call<AgentSession>('release', id, claims); }
     touch(id: string, tool: string) { return this.call<void>('touch', id, tool); }
     send(from: string, to: string, text: string) { return this.call<string>('send', from, to, text); }
+    post(to: string, message: { fromLabel: string, text: string }) { return this.call<void>('post', to, message); }
     inbox(id: string) { return this.call<SessionMessage[]>('inbox', id); }
 
     onChange(listener: (sessions: AgentSession[]) => void): () => void {

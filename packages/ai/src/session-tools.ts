@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { EditOperation } from '@appling/model';
 import { define, type Tools } from './tools.js';
+import type { PlaybookStore } from './playbook.js';
 import { findConflicts, peers, SESSION_STATUSES, sessionTitle, type AgentSession, type Channel, type ClaimConflict, type Claims, type SessionStore } from './sessions.js';
 
 /** What the IDE shows, as far as the IDE server and the app around it know it. */
@@ -92,6 +93,8 @@ export interface SessionScope {
     id: string;
     store: SessionStore;
     host?: IdeHost;
+    /** The workspace playbooks; with them the session gets the playbook tools. */
+    playbook?: PlaybookStore;
 }
 
 export const SESSION_INSTRUCTIONS = `You work in an agent session of Appling Desktop, next to other agent sessions that may change the same model and files at the same time. The session tools keep you coordinated with them and show the person what each session does:

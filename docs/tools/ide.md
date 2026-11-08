@@ -222,6 +222,14 @@ The [visual tools](ai.md#visual-tools-on-the-canvas) of the repo's agent session
 
 A change a session proposes with `propose_edits` shows at the top of the Changes tab with its summary, text and model differences and a comment field; a banner on the canvas points there while the tab is closed. **Accept** writes it and **Reject** sends your comment back to the agent, whose tool call waits for the decision. When the session ends, its views go and its waiting proposals are rejected.
 
+## The playbook
+
+The **Playbook** tab lists the chapters of the workspace's [playbook](ai.md#the-playbook) in order, with the count of unwatched chapters on its tab. A chapter is unwatched until you step to its last step. Each chapter shows its session's colour and label, its title, its steps done of planned, and the chapters it builds on. **replay** plays it from its plan, **session** jumps to its session (its tab in Appling Desktop, else its agent view), and **diff** opens the Changes tab with only the files that session wrote. While chapters wait unwatched, a chip at the top right of the canvas counts them.
+
+**Play** (or **Resume**) puts the player on the canvas. The bar shows the chapter, its session and the step, with **←** and **→** to step back and forward (the arrow keys too), **Replay**, **Session**, **Diff** and **Back to the model**. The canvas draws the trail of the chapter so far, starting with the elements of the chapters it builds on, and marks the current step's elements: added ones green, changed ones yellow, removed ones ghosted. The marks pulse once on every step. A planned step previews its change with dashed rings; a done step is drawn solid. Under the bar, the step's note, its responses and the queue of chapters that come next.
+
+The canvas moves only when you step. A chapter that arrives while you watch another one joins the queue. Past the last step of a chapter, **→** goes on to the next chapter. **Approve**, **Reject** and **Comment** answer the current step: the response is kept with the step and reaches the session that wrote it as a message. Your position is kept with the playbook, so every repo view of the workspace and every session knows where you are.
+
 ## Releases and migration steps
 
 Once the workspace has a release (`appling release 1.0.0`, see [CLI](cli.md#release)), the header shows a button such as `release 1.0.0 · 2 migration step(s) since`. It counts the steps in the `since_v1_0_0` blocks of all modules; click it to select the first such block.

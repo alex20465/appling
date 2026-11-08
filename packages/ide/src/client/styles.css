@@ -162,3 +162,25 @@ button:focus-visible { outline: 2px solid var(--leaf); outline-offset: 2px; }
 .review-summary .changed { color: var(--rust); }
 .review-summary .removed { color: var(--ink-muted); }
 .review .hunk { margin: 2px 0 8px; }
+
+/* The playbook (#19): chapters beside the canvas, the player over it. */
+.chapters { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.chapter { padding: 6px 8px; border-left: 3px solid var(--session, var(--line)); border-radius: 4px; background: var(--surface); }
+.chapter.here { background: var(--surface-elevated); }
+.chapter.unwatched .result > span:first-child { font-weight: 600; }
+.chapter .result { display: flex; justify-content: space-between; gap: 8px; width: 100%; padding: 0; background: none; border: 0; color: var(--ink); text-align: left; font-size: 12.5px; cursor: pointer; }
+.chapter-meta { font-size: 11.5px; margin-top: 2px; }
+.chapter-meta .link { word-break: normal; }
+.chapter-result { margin: 4px 0 0; font-size: 12px; color: var(--ink-soft); }
+.player { grid-template-rows: auto auto 1fr; }
+.player-step { padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--surface); font-size: 12.5px; display: grid; gap: 4px; }
+.player-step p { margin: 0; }
+.player-comment { flex: 1; min-width: 120px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-raised); color: var(--ink); font: 12px var(--font-sans); }
+.step-state, .step-change { font: 600 10px var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
+.step-state.planned { color: var(--ink-muted); }
+.step-state.done { color: var(--leaf); }
+.step-change.add { color: var(--leaf); }
+.step-change.change { color: var(--rust); }
+.step-change.remove { color: var(--ink-muted); }
+.player-queue { font-size: 11.5px; }
+.playbook-chip { position: absolute; top: 60px; right: 12px; z-index: 2; padding: 4px 10px; border: 1px solid var(--leaf); border-radius: 14px; background: var(--surface-raised); color: var(--ink); font-size: 12px; }

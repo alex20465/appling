@@ -20,6 +20,8 @@ interface CanvasProps {
     sessions?: SessionMark[];
     /** The place of the shown bubble among all, for its back and next buttons. */
     step?: BubbleStep;
+    /** Changing it plays the marks of `changes` once more, such as on every step of the playbook player. */
+    beat?: number;
     onSelect(qn: string): void;
     onSettings(settings: ViewSettings): void;
     onOpenFile?(file: string, line: number): void;
@@ -49,7 +51,7 @@ const LABEL: Record<TreeNode['type'], number> = { seed: 0, module: 210, group: 1
  * The model as a tree that grows from a seed: modules first, then the declarations of the lens, then on every
  * unfold what uses the unfolded declaration. Only what you unfold is drawn.
  */
-export function ModelCanvas({ index, name, focus, selected, settings, bubbles = [], changes, sessions, onSelect, onSettings, onOpenFile, step }: CanvasProps) {
+export function ModelCanvas({ index, name, focus, selected, settings, bubbles = [], changes, sessions, onSelect, onSettings, onOpenFile, step, beat }: CanvasProps) {
     const box = useRef<HTMLDivElement>(null);
     const drag = useRef<{ x: number, y: number, moved: boolean }>(undefined);
     const [camera, setCamera] = useState<Camera>({ x: 0, y: 0, k: 1 });
@@ -232,7 +234,7 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
                         <path key={`branch ${p.node.id}`} className={`branch${lit.has(p.node.id) ? ' lit' : ''}`} pathLength={1} style={{ d: `path("${branch(p)}")` } as React.CSSProperties} />
                     ))}
                     {placed.map(p => (
-                        <TreeItem key={p.node.id} placed={p} current={p.node.id === current} chosen={!!chosen && p.node.qn === chosen} unfolded={!!p.node.children} mark={p.node.qn && marks.get(p.node.qn)} session={p.node.qn ? claimed.get(p.node.qn) : undefined} onPress={press} />
+                        <TreeItem key={p.node.id} placed={p} current={p.node.id === current} chosen={!!chosen && p.node.qn === chosen} unfolded={!!p.node.children} mark={p.node.qn && marks.get(p.node.qn) && [marks.get(p.node.qn), changes?.planned && 'planned', beat !== undefined && `beat-${beat % 2}`].filter(Boolean).join(' ')} session={p.node.qn ? claimed.get(p.node.qn) : undefined} onPress={press} />
                     ))}
                 </g>
             </svg>

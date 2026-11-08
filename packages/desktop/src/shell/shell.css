@@ -45,6 +45,7 @@ body { display: grid; grid-template-columns: 48px 1fr; background: var(--surface
 .badge.agentsWaiting { background: var(--attention); }
 .badge.agentsWorking, .badge.tasksRunning { background: var(--leaf); }
 .badge.unsaved { background: var(--ink-muted); }
+.badge.unwatched { background: #4dabf7; }
 .repo.working, .workspace.working { outline: 2px solid color-mix(in srgb, var(--leaf) 55%, transparent); outline-offset: 1px; }
 /* Collapsed: the rail is gone and main.ts places the repo views at the left edge. */
 body.collapsed { grid-template-columns: 0 1fr; }

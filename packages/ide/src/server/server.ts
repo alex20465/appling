@@ -8,7 +8,7 @@ import { createConnection } from 'vscode-languageserver/node';
 import { WebSocketMessageReader, WebSocketMessageWriter, type IWebSocket } from 'vscode-ws-jsonrpc';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { createApplingLspServices } from '@appling/lang/lsp';
-import { chat, createMcpServer, handleMcpRequest, languageModel, MemorySessionStore, modelSettings, touchedBy, type AppHost, type SessionStore } from '@appling/ai';
+import { chat, createMcpServer, handleMcpRequest, languageModel, MemoryPlaybookStore, MemorySessionStore, modelSettings, touchedBy, type AppHost, type PlaybookStore, type SessionStore } from '@appling/ai';
 import { applyEdit, latestRelease, readReleases, REFERENCES, type EditOperation } from '@appling/model';
 import type { ModelMessage } from 'ai';
 import type { Snapshot } from '../shared/snapshot.js';
@@ -17,6 +17,7 @@ import { readView, snapshot, writeView } from './workspace.js';
 import { ideHost, type ClientContext } from './sessions.js';
 import { LiveTracker } from './live.js';
 import { AgentViews } from './visuals.js';
+import { playbookWorkspace, servePlaybook } from './playbook.js';
 import { unseen, type LiveChanges } from '../shared/live.js';
 import type { Decision } from '@appling/viz/protocol';
 
@@ -31,6 +32,8 @@ export interface Ide {
     /** The repo's MCP server; agents reach it with a session's token as bearer token. */
     mcp: string;
     sessions: SessionStore;
+    /** The workspace playbooks the sessions write and the client plays; also for the app's own chapters (`openChapter`). */
+    playbooks: PlaybookStore;
     close(): Promise<void>;
 }
 
@@ -43,6 +46,8 @@ export interface IdeOptions {
     sessions?: SessionStore;
     /** What the app around the IDE adds to a session's context and does with its actions, such as Appling Desktop. */
     host?: AppHost;
+    /** The workspace playbooks, shared like the sessions; default: a store of this server's own, in memory. */
+    playbooks?: PlaybookStore;
     /** Called with the number of unseen model changes (changed files since the user last accepted) after each change. */
     onUnseen?(count: number): void;
 }
@@ -52,6 +57,8 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
     const events = new Set<WebSocket>();
     let origins: string[] = [];
     const sessions = options.sessions ?? new MemorySessionStore();
+    const playbooks = options.playbooks ?? new MemoryPlaybookStore();
+    const workspace = () => playbookWorkspace(root, options.host);
     const client: ClientContext = {};
     // the unsaved files each connected client reports, for Appling Desktop's rail
     const unsaved = new Map<WebSocket, string[]>();
@@ -77,11 +84,16 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
         broadcast({ type: 'sessions', sessions: list });
         views.prune(list.map(s => s.id));
     });
-    const agents: Agents = { live, views, sessions, host };
+    // Only the playbook of the workspace this view shows goes to its clients.
+    const stopPlaybooks = playbooks.onChange(async book => {
+        if (events.size && book.workspace === await workspace()) broadcast({ type: 'playbook', playbook: book });
+    });
+    const agents: Agents = { live, views, sessions, host, playbooks };
 
     const server = createServer((request, response) => {
         if (!trusted(request, origins)) return send(response, 403, 'Forbidden');
         const work = request.url === '/mcp' ? serveMcp(request, response, root, agents)
+            : request.url?.startsWith('/api/playbook') ? servePlaybook(request, response, playbooks, sessions, workspace, () => body(request))
             : request.url?.startsWith('/api/sessions') ? serveSessions(request, response, root, sessions)
             : request.url?.startsWith('/api/live/') || request.url?.startsWith('/api/proposals/') ? serveLive(request, response, live, views)
             : handle(request, response, root, live);
@@ -115,6 +127,7 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
                 ws.send(JSON.stringify({ type: 'live', live: live.current() }));
                 for (const view of views.all()) ws.send(JSON.stringify({ type: 'agent-view', view }));
                 ws.send(JSON.stringify({ type: 'proposals', proposals: views.proposals() }));
+                workspace().then(playbooks.read.bind(playbooks)).then(playbook => ws.send(JSON.stringify({ type: 'playbook', playbook })), () => undefined);
             } else ws.close();
         });
     });
@@ -139,8 +152,10 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
         url: origins[0],
         mcp: `${origins[0]}/mcp`,
         sessions,
+        playbooks,
         close: () => new Promise(done => {
             stopSessions();
+            stopPlaybooks();
             watcher.close();
             clearTimeout(timer);
             sockets.clients.forEach(ws => ws.terminate());
@@ -156,13 +171,14 @@ interface Agents {
     views: AgentViews;
     sessions: SessionStore;
     host: ReturnType<typeof ideHost>;
+    playbooks: PlaybookStore;
 }
 
 /**
  * The repo's MCP server for one agent session, named by the bearer token of the request. Its visual tools draw on
  * this repo's canvas, and the files its tool calls write are attributed to it in the live changes.
  */
-async function serveMcp(request: IncomingMessage, response: ServerResponse, root: string, { live, views, sessions, host }: Agents): Promise<void> {
+async function serveMcp(request: IncomingMessage, response: ServerResponse, root: string, { live, views, sessions, host, playbooks }: Agents): Promise<void> {
     const token = /^Bearer (.+)$/.exec(request.headers.authorization ?? '')?.[1];
     const id = token && await sessions.authenticate(token);
     if (!id) {
@@ -175,7 +191,7 @@ async function serveMcp(request: IncomingMessage, response: ServerResponse, root
         const ok = !!result && typeof result === 'object' && (result as { ok?: boolean }).ok !== false && !('error' in result);
         if (ok && files.length) live.attribute(id, files).catch(error => console.error(error));
     };
-    await handleMcpRequest(createMcpServer(root, { session: { id, store: sessions, host }, visualizer: views.host(id), onToolCall }), request, response);
+    await handleMcpRequest(createMcpServer(root, { session: { id, store: sessions, host, playbook: playbooks }, visualizer: views.host(id), onToolCall }), request, response);
 }
 
 /**

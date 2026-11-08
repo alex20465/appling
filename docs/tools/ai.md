@@ -300,6 +300,39 @@ The sessions sit in a session store that the IDE servers of a workspace share. A
 
 The IDE server pushes every change of the sessions over its `/events` websocket as `{ type: "sessions", sessions }`, and every `ide_act` except `focus` as `{ type: "act", session, color, action, ... }`. The IDE client reports what it shows (`{ type: "context", selection, view, file, watching }`) on the same socket, which `ide_context` returns, and draws the claimed and highlighted elements of its repo's sessions with a ring in the session's colour.
 
+## The playbook
+
+Sessions work in parallel, but the person follows one story at a time. Every workspace has one playbook: the chapters the sessions of all its repos write about what they plan and do, which the person plays on the canvas of the [IDE](ide.md#the-playbook) step by step. A session opens a chapter when it starts a piece of work, with its plan as ordered steps. Each step names the elements it adds, changes or removes, with a note. The person previews the planned steps and responds before the work is done. As the session works, it marks the steps done in the same chapter and closes the chapter with the result.
+
+The playbook moves only when the person steps forward. A chapter opened while the person watches another one queues after it and never moves the canvas. The server instructions tell sessions to read the playbook first, to never interrupt, to append after the chapter being watched, and to name the earlier chapters they build on in `refs`.
+
+### Playbook tools
+
+| Tool | Input | Returns |
+|---|---|---|
+| `playbook_open_chapter` | `title`, `plan`; `steps?`: `[{ elements, change, note }]` with `change` one of `add`, `change`, `remove` or `show`; `refs?`: ids of earlier chapters | `{ chapter, watching, queued, unwatched }`: the chapter with numbered steps, and where the person is |
+| `playbook_add_steps` | `chapter?`, `steps` | The same, with the steps appended |
+| `playbook_step_done` | `chapter?`, `steps`: step numbers; `note?` | The same, with the steps marked done |
+| `playbook_close_chapter` | `chapter?`, `result` | The same, with the chapter closed |
+| `playbook_read` | none | `{ watching, queued, unwatched, chapters }`: the chapter and step the person watches (`null` when none), the unwatched chapters after it, and every chapter with its steps, states and the person's responses |
+
+Without `chapter`, the tools write the session's last open chapter. A session writes only its own chapters; it reads all of them.
+
+The person approves, rejects or comments on any step. The response is stored with the step, and while the session that wrote the chapter runs, it also lands in that session's inbox as a message from `User` (`from: "user"`), so the next tool result says a message waits.
+
+### Where playbooks live
+
+Appling Desktop holds the playbooks next to the sessions in its main process and serves them to every repo's IDE server over the same IPC channel. It keeps each workspace's playbook as a JSON file in the `playbooks` folder of the app's data folder, so playbooks outlive the sessions and the app. A session's playbook is the one of its workspace, or of its repo folder when it has none. An IDE server started on its own keeps its playbooks in memory.
+
+The app writes chapters of its own, such as for a code generation run, without MCP, through `openChapter(store, author, chapter)` from `@appling/ai`. It returns a writer with `add(steps)`, `done(numbers, note?)`, `close(result)` and `read()`:
+
+```ts
+const chapter = await openChapter(ide.playbooks, { workspace, repo, label: 'Generate Django', color: '#1971c2' },
+    { title: 'Generate the Django project', plan: 'One app per module', steps: [{ elements: ['sales.Order'], change: 'show', note: 'models.py' }] });
+await chapter.done([1]);
+await chapter.close('Generated 12 files');
+```
+
 ## IDE chat
 
 The AI tab of the [IDE](ide.md#the-ai-tab) runs one chat turn per message with the four model tools and a system prompt about Appling's layers. It uses the [AI SDK](https://ai-sdk.dev) and works with Anthropic and OpenAI models.

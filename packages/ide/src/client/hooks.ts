@@ -10,6 +10,8 @@ export interface DesktopHooks {
     selected?(location: { uri: string, start: number, end: number }): void;
     /** The cursor moved in a `.appling` file of the code view. */
     onCodeCursor?(callback: (uri: string, offset: number) => void): void;
+    /** Shows an agent session's tab, such as from its playbook chapter; the session tabs come with #10. */
+    focusSession?(session: string): void;
 }
 
 declare global {
