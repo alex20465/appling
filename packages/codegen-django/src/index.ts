@@ -6,6 +6,7 @@ import { externalSteps, projectionFieldSteps, projectionSteps, querySteps, useCa
 import { actionSteps, errorSteps, eventSteps, jobSteps, machineSteps, transitionSteps } from './behavior.js';
 import { hasKind, task } from './files.js';
 import { actorSteps, entityPolicySteps, policySteps, roleSteps, tenantSteps } from './access.js';
+import { externalKeySteps } from './vendors.js';
 import { entitySteps, enumSteps, fieldSteps, installApp, invariantSteps, moduleSteps, valueSteps } from './models.js';
 
 const DJANGO = 'django~=6.1.0';
@@ -39,6 +40,7 @@ const extension: CodegenExtension = {
             case 'Projection': return projectionSteps(node, context);
             case 'ProjectionField': return projectionFieldSteps(node, context);
             case 'External': return externalSteps(node, context);
+            case 'ExternalKey': return externalKeySteps(node);
             case 'UseCase': return useCaseSteps(node, context);
             case 'Interface': return interfaceSteps(node, context);
             case 'Page': return pageSteps(node, context);

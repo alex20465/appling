@@ -78,10 +78,10 @@
   },
   {
     "kind": "ExternalKey",
-    "generated": 0,
-    "partial": 0,
-    "todo": 2,
-    "tasks": 3
+    "generated": 1,
+    "partial": 1,
+    "todo": 0,
+    "tasks": 1
   },
   {
     "kind": "ExternalOperation",
@@ -109,7 +109,7 @@
     "generated": 0,
     "partial": 1,
     "todo": 3,
-    "tasks": 8
+    "tasks": 10
   },
   {
     "kind": "Invariant",
@@ -246,9 +246,9 @@
   },
   {
     "kind": "total",
-    "generated": 99,
-    "partial": 20,
-    "todo": 21,
+    "generated": 100,
+    "partial": 21,
+    "todo": 19,
     "tasks": 60
   }
 ]

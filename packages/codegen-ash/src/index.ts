@@ -10,6 +10,7 @@ import { actorAttributeSpecs, actorFieldSteps, actorSteps, constrainRoles, homeA
 import { actorCheckSteps, closeResource, policySteps, policyTask, roleCalculations, roleSteps } from './roles.js';
 import { tenantSteps } from './tenants.js';
 import { testSteps } from './tests.js';
+import { externalKeySteps } from './vendors.js';
 import { app, attributeType, calculation, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, storedAttributes, task, typeModule } from './naming.js';
 
 const extension: CodegenExtension = {
@@ -69,6 +70,7 @@ const extension: CodegenExtension = {
             case 'Flow': return [task(`guide people through ${((node.data.pages ?? []) as string[]).map(p => p.split('.').pop()).join(', ')} for the use case ${String(node.data.usecase).split('.').pop()}, for example with links between the LiveViews`)];
             case 'Event': return [task(`publish ${lastOf(node.qn)} with an Ash notifier, for example Ash.Notifier.PubSub`)];
             case 'External': return [task(`implement ${lastOf(node.qn)} as a client module or generic actions`)];
+            case 'ExternalKey': return externalKeySteps(node, context);
             case 'UseCase': return [task(`implement ${lastOf(node.qn)} as a Reactor or a generic action`)];
             case 'Role': return roleSteps(node, context);
             case 'Actor': return [...actorSteps(node, context, patchResource), ...actorCheckSteps(node, context)];
