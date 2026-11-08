@@ -69,7 +69,7 @@ Use an absolute folder here, since the client decides the working directory.
 
 ## Tools
 
-The server registers twelve tools, and over stdio six more for the [visualization window](#visualization-window). Each returns its result as JSON text.
+The server registers twelve tools, and six more for the [visualization window](#visualization-window) over stdio or for the [canvas](#visual-tools-on-the-canvas) over the IDE server's `/mcp`. Each returns its result as JSON text.
 
 ### Model tools
 
@@ -288,11 +288,17 @@ A claim of an element covers its members, and a claim of a member touches its el
 
 When another session claimed what a tool call touches, `edit`, `propose_edits` and `write_model_file` return `conflicts` (`session`, `label`, `claimed`, `touched`) and a `warning`. The edit target, the parent of an `add`, and every file the edit changed count. Every tool result also carries `messages` while messages wait unread.
 
+### Visual tools on the canvas
+
+Over the IDE server's `/mcp`, every session also gets the visual tools (`visualize`, `visual_bubble`, `visual_selection`, `visual_reply`, `visual_status`, `propose_edits`), and they draw on the repo's canvas in the [IDE](ide.md#agent-views-and-proposals) instead of a floating window. The canvas never moves on its own: a session's view waits beside the canvas until the person opens it. `visual_selection` returns the element selected in the IDE, `open` while an IDE page is connected, and the session's view while the person looks at it. `propose_edits` waits until the person accepts or rejects the proposal in the app. Questions typed into the floating window reach a stdio session as a channel; the IDE has no such channel, so `visual_reply` there shows the answer with the session's view.
+
+Every file a session's tool call writes is attributed to the session in the IDE's [live changes](ide.md#live-changes), which mark every change to the model, by a session or by anything else that writes the files.
+
 ### Where sessions live
 
 The sessions sit in a session store that the IDE servers of a workspace share. Appling Desktop holds one store in its main process and serves it to every repo's IDE server child over the child's IPC channel (`appling-ide --shared-sessions`), so sessions of different repos see each other and keep their claims while a server restarts. A session belongs to a workspace and works in one repo; it sees the sessions of its workspace, or of its repo when it has none. An IDE server started on its own keeps a store of its own.
 
-The IDE server pushes every change of the sessions over its `/events` websocket as `{ type: "sessions", sessions }`, and every `ide_act` except `focus` as `{ type: "act", session, color, action, ... }`. The IDE client reports what it shows (`{ type: "context", selection, view, file }`) on the same socket, which `ide_context` returns, and draws the claimed and highlighted elements of its repo's sessions with a ring in the session's colour.
+The IDE server pushes every change of the sessions over its `/events` websocket as `{ type: "sessions", sessions }`, and every `ide_act` except `focus` as `{ type: "act", session, color, action, ... }`. The IDE client reports what it shows (`{ type: "context", selection, view, file, watching }`) on the same socket, which `ide_context` returns, and draws the claimed and highlighted elements of its repo's sessions with a ring in the session's colour.
 
 ## IDE chat
 

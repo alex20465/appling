@@ -34,6 +34,8 @@ export interface IdeStatus {
     errors?: number;
     /** Repo relative paths of the files with unsaved edits in the repo's view. */
     unsaved?: string[];
+    /** Unseen model changes: files changed since the user last accepted them in the repo's view. */
+    changes?: number;
 }
 
 /** The IDE server's entry, `appling-ide`: bundled in the packaged app, else the workspace package's. */
@@ -66,7 +68,8 @@ export function startIdeProcess(root: string, options: IdeProcessOptions = {}): 
             reject(error);
         };
         child.once('error', fail);
-        child.on('message', (message: { type?: string, url?: string, errors?: unknown, unsaved?: unknown }) => {
+        child.on('message', (message: { type?: string, url?: string, errors?: unknown, unsaved?: unknown, changes?: unknown }) => {
+            if (message.type === 'status' && typeof message.changes === 'number') return options.onStatus?.({ changes: message.changes });
             if (message.type === 'status' && typeof message.errors === 'number') return options.onStatus?.({ errors: message.errors });
             if (message.type === 'status' && Array.isArray(message.unsaved)) return options.onStatus?.({ unsaved: message.unsaved.filter(f => typeof f === 'string') });
             if (message.type !== 'ready' || !message.url || ready) return;

@@ -7,7 +7,7 @@ import { extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { Graph } from '@appling/model';
-import { nextShow, type Ask, type Bubble, type Changes, type Decision, type HostMessage, type Review, type Show, type Status, type WindowMessage } from './protocol.js';
+import { nextShow, type Ask, type Bubble, type Changes, type Decision, type HostMessage, type Review, type Selection, type Show, type Status, type WindowMessage } from './protocol.js';
 import { changeMarks, GraphIndex } from './views.js';
 
 const WINDOW = fileURLToPath(new URL('../dist/window/', import.meta.url));
@@ -28,12 +28,6 @@ export interface VisualizerOptions {
     launch?(url: string): Launched | Promise<Launched>;
     /** Opens a file at a line, for a file reference clicked in the window; the editor `launch-editor` finds by default. */
     edit?(file: string, line: number): void;
-}
-
-export interface Selection {
-    open: boolean;
-    qn?: string;
-    view?: Show;
 }
 
 /**

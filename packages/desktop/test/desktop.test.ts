@@ -301,7 +301,7 @@ test('each repo gets its own IDE server process that reports its URL and ends wi
     await exited;
 }, 30000);
 
-test('a repo server reports its validation errors at start and after every model change', async () => {
+test('a repo server reports its validation errors and unseen changes at start and after every model change', async () => {
     const root = mkdtempSync(join(tmpdir(), 'appling-desktop-'));
     writeFileSync(join(root, 'shop.appling'), 'module shop {\n  entity Order {\n    total: Missing\n  }\n}\n');
     const statuses: IdeStatus[] = [];
@@ -314,7 +314,9 @@ test('a repo server reports its validation errors at start and after every model
     first = reported();
     writeFileSync(join(root, 'shop.appling'), 'module shop {\n  entity Order {\n    total: Int\n  }\n}\n');
     await first;
-    expect(statuses.at(-1)).toEqual({ errors: 0 });
+    // the changed file is an unseen change until the user accepts it
+    while (!statuses.some(s => s.changes === 1)) await reported();
+    expect(statuses.findLast(s => s.errors !== undefined)!.errors).toBe(0);
 }, 30000);
 
 test('a server that cannot start rejects with its reason', async () => {

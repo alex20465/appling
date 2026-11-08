@@ -44,6 +44,8 @@ The rail is 48px wide: workspaces on top, the repos of the active workspace belo
   | Agent sessions working, tasks running (the button is also ringed green) | green |
   | Files with unsaved edits in the repo's view (named in the tooltip) | grey |
 
+  Unseen model changes, the changed files the repo's IDE marks live until you accept them in its Changes tab, are counted in the tooltip and put a green dot in the top right corner of a background repo (and of a workspace other than the active one) instead of a badge.
+
 - The **git state**: the branch (a short commit while the head is detached), the commits ahead of and behind its upstream and the number of changed files are in the repo's tooltip. A dot in the top left corner marks uncommitted changes, and `↑2↓1` in the bottom left corner the ahead and behind counts. It follows commits, checkouts, fetches and edits made anywhere, also in a terminal outside the app: the git folder is watched and `git status` runs every 5 seconds. Worktrees and submodules (a `.git` file) work too.
 - **Drag** a repo onto another to place it before that one; it joins the group (pinned or not) of the repo it lands on. Drop it on the `+` below the repos to move it to the end. The new order is written to the workspace file's `folders`, so VS Code shows it too.
 

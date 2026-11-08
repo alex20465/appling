@@ -24,6 +24,8 @@ To try it without installing anything, open the demo at https://appling.tools/id
 - A Review tab for a workspace in git: the model diff between any commit (the uncommitted changes by default) and the working tree, marked on the canvas with removed elements ghosted where they were, the changed files and a text diff per element or file.
 - Once a release exists (`appling release`), the header shows how many migration steps were recorded since; renames, type changes and removals of released domain elements add them automatically.
 
+- Live changes: every model change, by an agent session or any process that writes the files, is marked on the canvas (added, changed, removed ghosted) without moving the camera, and listed in the Changes tab per file with the session that wrote it, its model and text diff, Accept and Revert. The baseline is the text last accepted, starting with the files on disk when the server starts; `onUnseen` reports the count (Appling Desktop marks the repo in the rail).
+- The visual tools of agent sessions draw on the canvas: each session's view and bubbles wait as a chip until you open them, and `propose_edits` is decided in the Changes tab.
 - The repo's MCP server at `/mcp` for agent sessions (bearer token per session, `POST /api/sessions` opens one): agents label their work, set their status, claim elements and files and message each other; the canvas rings the claimed elements in the session's colour.
 
 The views and the files update when the files change on disk.

@@ -121,7 +121,7 @@ export function Review({ snapshot, review, rev, revisions, marked, onRev, onMark
     );
 }
 
-function TextDiff({ before, after }: { before: string, after: string }) {
+export function TextDiff({ before, after }: { before: string, after: string }) {
     const lines = lineDiff(before, after);
     if (lines.length > 2000) return <p className="muted">The diff is too long to show here.</p>;
     return (

@@ -18,6 +18,10 @@
       "types": "./out/views.d.ts",
       "default": "./out/views.js"
     },
+    "./protocol": {
+      "types": "./out/protocol.d.ts",
+      "default": "./out/protocol.js"
+    },
     "./canvas": {
       "types": "./out/canvas/index.d.ts",
       "default": "./out/canvas/index.js"

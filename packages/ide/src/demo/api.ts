@@ -2,6 +2,7 @@ import type { ChatEvent } from '@appling/ai';
 import { applyEdit, type EditOperation, type EditResult } from '@appling/model/edit';
 import { buildSnapshot } from '../shared/model.js';
 import type { FileDiff, Review, Revision } from '../shared/review.js';
+import type { LiveChanges } from '../shared/live.js';
 import { DEFAULT_VIEW, type ClientReport, type IdeEvents, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
 import { monaco } from '../client/monaco.js';
 
@@ -38,6 +39,15 @@ export function onEvents(handlers: IdeEvents): { close(): void, report(report: C
     listeners.add(handlers.snapshot);
     return { close: () => listeners.delete(handlers.snapshot), report: () => undefined, unsaved: () => undefined };
 }
+
+/** The demo marks no live changes and has no agent sessions. */
+export async function acceptChanges(): Promise<LiveChanges> {
+    return { files: [], diff: { changes: [], added: [], changed: [], removed: [], renamed: {} }, ghosts: { nodes: [], edges: [] } };
+}
+
+export async function revertChange(): Promise<void> {}
+
+export async function decideProposal(): Promise<void> {}
 
 export function requestEdit(sources: Record<string, string>, operation: EditOperation): Promise<EditResult> {
     return applyEdit(sources, operation);

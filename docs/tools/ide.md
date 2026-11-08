@@ -32,7 +32,7 @@ Open the printed address in your browser. The package also installs the binary `
 The header shows the workspace folder, the release indicator (once a release exists) and either `valid` or the number of errors in the model.
 
 > [!NOTE]
-> [Appling Desktop](desktop.md), a native app in development, runs this IDE once per repo and groups repos into workspaces stored as VS Code `.code-workspace` files. There the model canvas is the main area, the editor is folded away behind the **Source** button in the header, and the AI tab is left out: AI work runs through terminal agents connected to the [MCP server](ai.md#mcp-server). **View › Toggle Code View** opens a full Code OSS (VS Code) next to the canvas, with the [Appling extension](editors.md#vs-code); selecting an element on the canvas opens its source there, and the cursor in a `.appling` file there selects the element on the canvas. On Linux, **text diff** in the Review tab opens there too, in Code OSS's diff editor. Its rail shows per repo, and summed per workspace, what needs attention: agents waiting for input, validation errors, unsaved files and the git branch.
+> [Appling Desktop](desktop.md), a native app in development, runs this IDE once per repo and groups repos into workspaces stored as VS Code `.code-workspace` files. There the model canvas is the main area, the editor is folded away behind the **Source** button in the header, and the AI tab is left out: AI work runs through terminal agents connected to the [MCP server](ai.md#mcp-server). **View › Toggle Code View** opens a full Code OSS (VS Code) next to the canvas, with the [Appling extension](editors.md#vs-code); selecting an element on the canvas opens its source there, and the cursor in a `.appling` file there selects the element on the canvas. On Linux, **text diff** in the Review tab opens there too, in Code OSS's diff editor. Its rail shows per repo, and summed per workspace, what needs attention: agents waiting for input, validation errors, unsaved files, the git branch and, on a background repo, a dot for [unseen changes](#live-changes).
 
 ## The editor
 
@@ -200,6 +200,28 @@ The tab follows every change on disk. The server reads git with the git CLI: `gi
 > [!NOTE]
 > A host page can open text diffs in its own editor: when `window.applingDesktop.openTextDiff(request)` exists, **text diff** calls it with the file path, the commit, the line and the element's qualified name instead of showing the diff in the panel. Appling Desktop's code view implements it.
 
+## Live changes
+
+Every change to the model is marked on the canvas the moment it lands on disk, whoever wrote it: an [agent session](ai.md#agent-sessions) through the MCP tools, an agent or editor that writes the files directly, `appling fmt` or a `git checkout`. Added declarations glow green, changed ones and the modules that hold them glow yellow, and removed declarations stay drawn ghosted where they were. Marking never moves the camera and never unfolds the tree: what you look at stays where it is.
+
+The changes are compared with a baseline: the text of each model file when you last accepted it. When the IDE server starts, the baseline is the files on disk, so only what changes while you work is marked; what differs from the last commit is what the [Review](#reviewing-changes) tab shows. Your own saves from the editor and the inspector move the baseline with them, unless the file already has an unseen change, which then stays marked. The baseline lives in the server's memory: a restart of the server accepts every change.
+
+The **Changes** tab of the side panel, with the count of unseen changed files on its tab, lists them per file, newest first:
+
+- the file with its status (A added, M modified, D deleted), the agent sessions whose tool calls wrote it in their colour, or **written to disk** for any other writer, and when it last changed,
+- the model changes in the file: the elements added, changed (with the properties that differ) or removed; click one to select it,
+- **text diff**: the file as last accepted and now,
+- **Accept** moves the file's baseline to its text now, so it is no longer marked; **accept all** does it for every file,
+- **Revert** writes the text last accepted back to disk, or deletes a file that did not exist then.
+
+While the Review tab marks its own diff on the canvas, the review's marks replace the live ones.
+
+### Agent views and proposals
+
+The [visual tools](ai.md#visual-tools-on-the-canvas) of the repo's agent sessions draw on this canvas. A view a session shows, with its bubbles, its current step and its last reply, waits as a chip at the top right of the canvas under the session's name and colour. Click it to open the view: the canvas draws the session's tree, flowchart or cards, one bubble at a time with Back and Next, and follows each new view and bubble of that session; **Back to the model** returns to your own tree. Nothing opens by itself.
+
+A change a session proposes with `propose_edits` shows at the top of the Changes tab with its summary, text and model differences and a comment field; a banner on the canvas points there while the tab is closed. **Accept** writes it and **Reject** sends your comment back to the agent, whose tool call waits for the decision. When the session ends, its views go and its waiting proposals are rejected.
+
 ## Releases and migration steps
 
 Once the workspace has a release (`appling release 1.0.0`, see [CLI](cli.md#release)), the header shows a button such as `release 1.0.0 · 2 migration step(s) since`. It counts the steps in the `since_v1_0_0` blocks of all modules; click it to select the first such block.
@@ -233,5 +255,8 @@ The server endpoints, for reference:
 | `POST /mcp` | The repo's MCP server for [agent sessions](ai.md#agent-sessions); needs a session's bearer token |
 | `GET`, `POST /api/sessions` | Lists the agent sessions, opens one (returns its token and the MCP URL) |
 | `PATCH`, `DELETE /api/sessions/<id>` | Renames a session or sets its status, ends it |
-| websocket `/events` | Snapshot pushes on file changes, the agent sessions and their `ide_act` actions; the page reports its selection and view on it |
+| `POST /api/live/accept` | Accepts the live changes of `{ paths }`, or of every changed file; returns the changes left |
+| `POST /api/live/revert` | Writes the text last accepted of `{ path }` back |
+| `POST /api/proposals/<id>` | Decides a waiting proposal with `{ decision: { accepted, comment? } }` |
+| websocket `/events` | Snapshot pushes on file changes, the live changes (`live`), the agent sessions, their `ide_act` actions, views (`agent-view`) and proposals; the page reports its selection, view and the agent view it shows on it |
 | websocket `/lsp` | One language server per connection |
