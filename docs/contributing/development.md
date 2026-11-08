@@ -69,6 +69,7 @@ completion = (generated + partial / 2) / (generated + partial + todo)
 ```
 
 A `partial` element has code and open registry tasks, so it counts as half. With `--base`, each figure shows its change: `▲` for a gain, `▼` for a drop, in percentage points for shares. Fewer registry tasks is a gain, so `▲ -2` means two tasks fewer. `appling generate --coverage` prints the same report for the targets of a project (see [the CLI](../tools/cli.md#coverage)).
+
 ## Generated projects end to end
 
 The codegen tests apply the steps in memory and compare snapshots; they never run a framework command or a compiler. `scripts/ci/codegen-e2e.mjs` does: for one target it generates `examples/` and the all constructs fixture (`packages/lang/test/fixtures/constructs/`), each in its own workspace with an `appling.config.json` for that target, and then builds and tests the result with the real toolchain.
