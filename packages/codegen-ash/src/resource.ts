@@ -16,6 +16,13 @@ export function addToSection(text: string, name: string, lines: string[], inner?
     return text.replace(match[0], `\n  ${name} do\n${content}\n  end\n`);
 }
 
+/** Adds lines at the start of a `name do ... end` section, such as a bypass that must precede the policies. */
+export function prependToSection(text: string, name: string, lines: string[]): string {
+    const head = `\n  ${name} do\n`;
+    if (!text.includes(head)) return addToSection(text, name, lines);
+    return text.replace(head, `${head}${indent(lines, '    ')}\n${lines[0].endsWith(' do') ? '\n' : ''}`);
+}
+
 function addToInner(content: string, inner: string, lines: string[]): string {
     const section = new RegExp(`(^|\\n)    ${inner} do\\n([\\s\\S]*?)\\n    end(?=\\n|$)`);
     const match = section.exec(content);

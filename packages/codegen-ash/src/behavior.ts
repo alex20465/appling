@@ -1,7 +1,8 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
 import { ashExpr, constant, lastOf, parentOf, validation } from './elixir.js';
-import { addExtension, addToSection } from './resource.js';
+import { addAuthorizer, addExtension, addToSection, prependToSection } from './resource.js';
+import { enforced } from './roles.js';
 import { testSteps } from './tests.js';
 import { attributeType, children, fileOf, patch, snake, storedAttributes, task, typeModule } from './naming.js';
 
@@ -108,8 +109,11 @@ export function jobSteps(job: GraphNode, context: MapContext): Step[] {
         'end'
     ];
     const read = [`read :${name}_targets do`, '  pagination keyset?: true, required?: false', 'end'];
+    // Jobs run as the system, as in the model: AshOban's scheduler and worker pass the policies of the resource.
+    const bypass = ['bypass AshOban.Checks.AshObanInteraction do', '  authorize_if always()', 'end'];
+    const authorize = (text: string) => !enforced(context) || text.includes(bypass[0]) ? text : addAuthorizer(prependToSection(text, 'policies', bypass));
     return [
-        patch(fileOf(entity, context), existing => addToSection(addToSection(addExtension(existing, 'AshOban'), 'actions', read), 'oban', lines, 'triggers')),
+        patch(fileOf(entity, context), existing => authorize(addToSection(addToSection(addExtension(existing, 'AshOban'), 'actions', read), 'oban', lines, 'triggers'))),
         patch('config/config.exs', existing => existing.replace(/queues: \[([^\]]*)\]/, (all, list) => list.includes(`${queue}:`) ? all : `queues: [${list}, ${queue}: 10]`))
     ];
 }

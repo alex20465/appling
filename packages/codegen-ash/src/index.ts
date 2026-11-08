@@ -7,7 +7,7 @@ import { constant, elixirString, lastOf, parentOf, validation, withModuledoc } f
 import { migrationSteps } from './migrations.js';
 import { hasPages, navigationSteps, pageSteps } from './pages.js';
 import { actorAttributeSpecs, actorFieldSteps, actorSteps, constrainRoles, homeAt, homeFields } from './actors.js';
-import { actorCheckSteps, policySteps, roleCalculations, roleSteps } from './roles.js';
+import { actorCheckSteps, closeResource, policySteps, policyTask, roleCalculations, roleSteps } from './roles.js';
 import { tenantSteps } from './tenants.js';
 import { testSteps } from './tests.js';
 import { app, attributeType, calculation, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, storedAttributes, task, typeModule } from './naming.js';
@@ -51,7 +51,7 @@ const extension: CodegenExtension = {
                 ...testSteps(node, owner(node, context), `invariant ${node.data.label}`, ['holds for valid records', 'rejects violations'], context)
             ];
             case 'Policy': return [
-                ...(policySteps(node, context) ?? [task(`add an Ash policy to ${parentOf(node.qn)} for ${(node.data.operations as string[] | undefined)?.join(', ') ?? 'any action'}: ${node.props.condition}`)]),
+                ...(policySteps(node, context) ?? [policyTask(node)]),
                 ...(context.node(parentOf(node.qn))!.kind === 'Entity'
                     ? testSteps(node, owner(node, context), lastOf(node.qn), ['allows permitted actors', 'denies other actors'], context)
                     : [])
@@ -154,7 +154,7 @@ function patchResource(text: string, entity: GraphNode, context: MapContext): st
             return rule ? [`validate ${rule}, message: ${JSON.stringify(n.data.label)}`] : [];
         }))
     ].filter(Boolean).join('');
-    return blocks ? text.replace(/\nend\n?$/, `\n${blocks}end\n`) : text;
+    return closeResource(blocks ? text.replace(/\nend\n?$/, `\n${blocks}end\n`) : text, entity, context);
 }
 
 function block(name: string, lines: string[]): string {

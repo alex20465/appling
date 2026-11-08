@@ -111,9 +111,9 @@ A machine becomes an `AshStateMachine` section on the resource of its state fiel
 
 ### Jobs
 
-A scheduled job becomes an `AshOban` trigger on the resource of its action: the action, a read action `<job>_targets` with keyset pagination that the scheduler pages through, the filter as `where`, the cron as `scheduler_cron`, a queue `<resource>_<job>` that is added to the Oban `queues` in `config/config.exs`, and explicit worker and scheduler module names. `now - duration("720h")` becomes `ago(720, :hour)`.
+A scheduled job becomes an `AshOban` trigger on the resource of its action: the action, a read action `<job>_targets` with keyset pagination that the scheduler pages through, the filter as `where`, the cron as `scheduler_cron`, a queue `<resource>_<job>` that is added to the Oban `queues` in `config/config.exs`, and explicit worker and scheduler module names. `now - duration("720h")` becomes `ago(720, :hour)`. When the model has policies, the resource's policies start with a bypass for AshOban, so the job runs as the system (see [policies](#policies)).
 
-This is the `Order` resource of the [example](../../examples/sales.appling) after the patches (attributes and relationships omitted):
+This is the `Order` resource of the [example](../../examples/sales.appling) after the patches (attributes, relationships and policies omitted):
 
 ```elixir
 defmodule Shop.Sales.Order do
@@ -342,9 +342,35 @@ field_policies do
 end
 ```
 
-Ash forbids an action that no policy covers once a resource has policies, and requires every policy that applies to an action to pass. That matches the model: nothing is open by default, and the effective policy is the conjunction of the policies along the path, so an action needs both the entity's `update` policy and its own.
+Ash forbids an action that no policy applies to on a resource with the authorizer, and requires every policy that applies to an action to pass. The effective policy is the conjunction of the policies along the path, so an action needs both the entity's `update` policy and its own.
 
-Policies with more than one branch that has `&&`, conditions that do not translate, field policies that follow a relationship (Ash field policies cannot), field policies on other operations than `read`, policies of queries whose filter does not translate, of use cases and of actions without an entity stay tasks. Writing the policy test bodies is a task too.
+Once the model has any policy, nothing is open by default, as in [Django](django.md#access):
+
+- Every resource lists the authorizer, also resources without policies and the resources of human actors. A resource that no policy applies to gets one policy that forbids every action, so the default `read`, `create`, `update` and `destroy` actions that `ash.gen.resource` creates are closed:
+
+  ```elixir
+  policies do
+    policy always() do
+      forbid_if always()
+    end
+  end
+  ```
+
+- On a resource with policies, the default actions that no policy covers, such as `:destroy` when only `read` and `update` have policies, are forbidden by Ash.
+- A policy whose condition does not translate becomes its policy with `forbid_if always()` in place of the checks, and a task to write them, so it denies until the task is done.
+- A resource with a [job](#jobs) starts its policies with a bypass, so the AshOban scheduler and worker run as the system, as jobs do in the model:
+
+  ```elixir
+  bypass AshOban.Checks.AshObanInteraction do
+    authorize_if always()
+  end
+  ```
+
+A model without any policy generates no authorizer, and every action stays open.
+
+Callers pass the actor: the JSON:API takes it from the connection (`Ash.PlugHelpers.set_actor/2`), the generated LiveViews pass none, so their reads and actions on closed resources are forbidden until a signed in actor is passed with `actor:`.
+
+Ash field policies guard reads only: a field policy that also names `create`, `update` or `delete`, or names no operation, guards reads and leaves the writes a task. A field policy that follows a relationship (Ash field policies cannot) does not translate, so it forbids. Field policies on other operations only, policies of queries whose filter does not translate, of use cases and of actions without an entity stay tasks without a policy. Writing the policy test bodies is a task too.
 
 ## Descriptions
 
@@ -367,7 +393,7 @@ Whatever cannot be translated is listed in the [registry](registry.md):
 - invariants, preconditions and guards over calculations, relationships or other resources, and guards when an action has several transitions
 - effects that create rows or emit events, and actions with several target states
 - actions with `consistency eventual`, and actions without an entity
-- policies that do not translate (see [policies](#policies)), role conditions that do not translate, telling apart actors bound to the same entity, resources that reach the tenant only through relationships, events, externals and use cases
+- policies that do not translate, which deny until written, and writes of field policies (see [policies](#policies)), role conditions that do not translate, telling apart actors bound to the same entity, resources that reach the tenant only through relationships, events, externals and use cases
 - jobs on events, and jobs whose filter does not translate
 - authentication, rate limits and CORS of interfaces, and endpoints that do not fit the route patterns
 - flows, and interfaces with a protocol other than `rest`

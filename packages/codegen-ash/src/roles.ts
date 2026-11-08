@@ -58,29 +58,64 @@ export function roleCalculations(node: GraphNode, context: MapContext): string[]
 }
 
 /**
+ * Whether the generated project enforces policies. A model without any policy keeps its resources open; once one
+ * policy exists, nothing is open by default: every resource lists `Ash.Policy.Authorizer` (see `closeResource`).
+ */
+export function enforced(context: MapContext): boolean {
+    return context.graph.nodes.some(n => n.kind === 'Policy');
+}
+
+/**
  * A policy whose condition is a `||` of branches, each `actor.is(X)` checks and conditions joined by `&&`,
  * becomes an Ash policy: on its entity's resource for its operations, a field policy for `fields`, or on the
- * read or update action of a query or an action. Undefined when the condition or the target does not translate.
+ * read or update action of a query or an action. A condition that does not translate becomes a policy that
+ * forbids, plus a task, so nothing opens before the condition is written. Undefined when the target does not translate.
  */
 export function policySteps(policy: GraphNode, context: MapContext): Step[] | undefined {
     const owner = context.node(parentOf(policy.qn))!;
     const operations = (policy.data.operations ?? []) as string[];
     const fields = (policy.data.fields ?? []) as string[];
     const target = policyTarget(owner, operations, fields, context);
-    const checks = target && checkLines(policy.data.condition as ExprData, context, fields.length > 0);
-    if (!target || !checks) return undefined;
-    const lines = [`${target.header} do`, ...checks.map(c => `  ${c}`), 'end'];
-    return [patch(fileOf(target.entity, context), existing => {
-        const withPolicy = fields.length
-            ? addToSection(existing, 'field_policies', existing.includes('\n  field_policies do\n') ? lines : [...lines, '', 'field_policy :* do', '  authorize_if always()', 'end'])
-            : addToSection(existing, 'policies', lines);
-        return addAuthorizer(withPolicy);
-    })];
+    if (!target) return undefined;
+    const checks = checkLines(policy.data.condition as ExprData, context, fields.length > 0);
+    const lines = [`${target.header} do`, ...(checks ?? ['forbid_if always()']).map(c => `  ${c}`), 'end'];
+    const writes = fields.length > 0 && (!operations.length || operations.some(o => o !== 'read'));
+    return [
+        patch(fileOf(target.entity, context), existing => {
+            const withPolicy = fields.length
+                ? addToSection(existing, 'field_policies', existing.includes('\n  field_policies do\n') ? lines : [...lines, '', 'field_policy :* do', '  authorize_if always()', 'end'])
+                : addToSection(existing, 'policies', lines);
+            return addAuthorizer(withPolicy);
+        }),
+        ...(checks ? [] : [policyTask(policy)]),
+        ...(writes ? [task(`guard writes of ${fields.map(lastOf).join(', ')} on ${parentOf(policy.qn)} for ${operations.filter(o => o !== 'read').join(', ') || 'create, update'}, which Ash field policies do not cover: ${policy.props.condition}`)] : [])
+    ];
+}
+
+/** The task for a policy that is not translated. */
+export function policyTask(policy: GraphNode): Step {
+    return task(`add an Ash policy to ${parentOf(policy.qn)} for ${(policy.data.operations as string[] | undefined)?.join(', ') ?? 'any action'}: ${policy.props.condition}`);
+}
+
+/**
+ * Closes a resource once the model has a policy: it lists `Ash.Policy.Authorizer`, and when no policy of the model
+ * applies to it, such as a resource whose default actions no policy names, a policy that forbids every action.
+ * Ash already forbids an action that no policy applies to; the explicit policy states it.
+ */
+export function closeResource(text: string, node: GraphNode, context: MapContext): string {
+    if (!enforced(context)) return text;
+    const guarded = context.graph.nodes.some(p => {
+        if (p.kind !== 'Policy') return false;
+        const target = policyTarget(context.node(parentOf(p.qn))!, (p.data.operations ?? []) as string[], (p.data.fields ?? []) as string[], context);
+        return target?.entity.qn === node.qn && target.header.startsWith('policy ');
+    });
+    return addAuthorizer(guarded ? text : addToSection(text, 'policies', ['policy always() do', '  forbid_if always()', 'end']));
 }
 
 function policyTarget(owner: GraphNode, operations: string[], fields: string[], context: MapContext): { entity: GraphNode, header: string } | undefined {
     if (owner.kind === 'Entity' && fields.length) {
-        if (operations.some(o => o !== 'read')) return undefined;
+        // Ash field policies guard reads only; writes stay a task.
+        if (operations.length && !operations.includes('read')) return undefined;
         const names = fields.map(f => `:${lastOf(f)}`);
         return { entity: owner, header: `field_policy ${names.length === 1 ? names[0] : `[${names.join(', ')}]`}` };
     }
