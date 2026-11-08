@@ -1,0 +1,139 @@
+# Generates examples/ and the all-constructs fixture with each codegen extension and builds the generated projects
+# with the target's real toolchain. The steps live in scripts/ci/codegen-e2e.mjs, which runs the same on a laptop
+# (scripts/ci/codegen-e2e-docker.sh runs it in the official images).
+name: Codegen end to end
+
+on:
+  pull_request:
+    paths:
+      - "packages/codegen*/**"
+      - "packages/lang/**"
+      - "packages/model/**"
+      - "packages/cli/**"
+      - "examples/**"
+      - "scripts/ci/codegen-e2e*"
+      - ".github/workflows/codegen-e2e.yml"
+  schedule:
+    # Nightly, to catch new releases of Django, Ash, the Go and Rust toolchains and the generated dependencies
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codegen-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [django, ash, go, rust]
+
+    services:
+      # The generated Ash project uses AshPostgres; its test config connects to postgres:postgres@localhost.
+      # An empty image skips the service for the other targets.
+      postgres:
+        image: ${{ matrix.target == 'ash' && 'postgres:16-alpine' || '' }}
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+
+    steps:
+      - name: Cloning
+        uses: actions/checkout@v4
+
+      - name: Use pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build the CLI and the extension
+        run: pnpm --filter "@appling/cli..." --filter "@appling/codegen-${{ matrix.target }}..." build
+
+      # Django 6.1 needs Python 3.12 or later
+      - name: Use uv
+        if: matrix.target == 'django'
+        uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: packages/codegen-django/src/**
+
+      - name: Use Elixir
+        if: matrix.target == 'ash'
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18"
+          otp-version: "28"
+
+      - name: Cache Hex packages
+        if: matrix.target == 'ash'
+        uses: actions/cache@v4
+        with:
+          path: ~/.hex/packages
+          key: hex-${{ hashFiles('packages/codegen-ash/src/**') }}
+          restore-keys: hex-
+
+      - name: Use Go
+        if: matrix.target == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: false
+
+      - name: Cache Go modules
+        if: matrix.target == 'go'
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-${{ hashFiles('packages/codegen-go/src/**') }}
+          restore-keys: go-mod-
+
+      - name: Use Rust
+        if: matrix.target == 'rust'
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master, 2026-10-16
+        with:
+          toolchain: stable
+
+      - name: Cache the cargo registry
+        if: matrix.target == 'rust'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: cargo-registry-${{ hashFiles('packages/codegen-rust/src/**') }}
+          restore-keys: cargo-registry-
+
+      - name: Generate and build
+        run: node scripts/ci/codegen-e2e.mjs ${{ matrix.target }} --out "${{ runner.temp }}/codegen-e2e"
+
+      - name: Keep the generated projects
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codegen-e2e-${{ matrix.target }}
+          path: |
+            ${{ runner.temp }}/codegen-e2e
+            !${{ runner.temp }}/codegen-e2e/**/.venv
+            !${{ runner.temp }}/codegen-e2e/**/node_modules
+            !${{ runner.temp }}/codegen-e2e/**/deps
+            !${{ runner.temp }}/codegen-e2e/**/_build
+            !${{ runner.temp }}/codegen-e2e/**/target
+          retention-days: 7
