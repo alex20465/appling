@@ -149,6 +149,15 @@ export class PtyHostClient extends EventEmitter<{ close: [] }> {
         return this.request({ type: 'spawn', options: { env: process.env as Record<string, string>, ...options } }) as Promise<TerminalInfo>;
     }
 
+    /**
+     * Starts a terminal and attaches to it, with its output from the first byte on: what a program prints at once
+     * arrives as `data` too, not only in the scrollback.
+     */
+    async spawnAttached(options: SpawnOptions): Promise<AttachedTerminal> {
+        const info = await this.spawn({ ...options, attach: true });
+        return this.attach(info.id);
+    }
+
     /** The host's terminals, those of one group when given, also the ended ones until they are killed. */
     list(group?: string): Promise<TerminalInfo[]> {
         return this.request({ type: 'list', group }) as Promise<TerminalInfo[]>;

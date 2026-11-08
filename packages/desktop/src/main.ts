@@ -16,6 +16,7 @@ import { IDE_PANE, paneId, paneLabel, parsePane, registerPaneType } from './pane
 import { Repos } from './repos.js';
 import { readSession, restore, sessionOf, writeSession } from './session.js';
 import { switcherEntries } from './switcher.js';
+import { codeViewOpener, TERMINAL_PANE, TerminalPanel } from './terminal/panel.js';
 import { Updater } from './updater.js';
 import { currentDisplays, WindowHost } from './window-host.js';
 import { dropTarget, layoutFor, MAIN, rememberLayout, type SavedLayout } from './windows.js';
@@ -113,6 +114,19 @@ const host = new WindowHost({
     quitting: () => quitting
 });
 const windows = host.windows;
+/** The terminal panel of each repo (`terminal/`), a `terminal` pane under its canvas. */
+const terminals = new TerminalPanel({
+    userData: app.getPath('userData'),
+    activeRepo: () => workspaces.activeRepo(),
+    workspaceFiles: repo => workspaces.all().filter(w => w.folders.some(f => f.path === repo)).map(w => w.id),
+    runCommand: command => actions[command]?.(),
+    attach: (repo, view) => host.addPane(paneId(TERMINAL_PANE, repo), view),
+    detach: repo => host.removePane(paneId(TERMINAL_PANE, repo)),
+    setHidden: (repo, hidden) => host.setHidden(paneId(TERMINAL_PANE, repo), hidden),
+    refresh: () => refresh(),
+    focusRepoView: repo => host.panes.get(paneId(IDE_PANE, repo))?.webContents.focus(),
+    window: () => host.base()
+});
 /** The window layouts per monitor setup, as the session holds them. */
 let layouts: Record<string, SavedLayout> = {};
 /** The displays at the last change, to place windows whose display is gone where they were. */
@@ -140,6 +154,9 @@ function start(): void {
         onChange: () => refresh()
     });
     registerPaneType({ type: CODE_PANE, label: 'Code', region: 'side', share: code.settings.width });
+    terminals.start();
+    // file paths in terminals open in the repo's code view where there is one, else in the OS
+    if (CodeViews.supported()) terminals.fileOpener = codeViewOpener(code);
     /** Every message from a shell page acts in the window that sent it, which becomes the focused one. */
     const on = (channel: string, listener: (window: string, ...args: any[]) => void) =>
         ipcMain.on(channel, (event: IpcMainEvent, ...args: any[]) => {
@@ -263,6 +280,7 @@ function changed(): void {
         if (repos.add(repo).added) {
             watchBranch(repo);
             launch(repo);
+            terminals.openRepo(repo);
         }
     }
     for (const repo of repos.all()) {
@@ -336,6 +354,7 @@ function stop(id: string): void {
     processes.get(id)?.close();
     processes.delete(id);
     drop(id);
+    terminals.closeRepo(id);
 }
 
 /** A kept alive view of one repo's IDE: it may only show pages of its own server; links to the web open in the browser. */
@@ -773,7 +792,8 @@ const actions: Record<string, () => void> = {
         shell.openPath(file);
     },
     checkForUpdates: () => updater.check(),
-    quit: () => app.quit()
+    quit: () => app.quit(),
+    ...terminals.actions()
 };
 
 function keybindingsFile(): string {
@@ -789,6 +809,7 @@ function watchKeybindings(): void {
 
 function buildMenu(): void {
     const { bindings, problems } = loadKeybindings(keybindingsFile());
+    terminals.bindings = bindings;
     if (problems.length) console.error(`Appling Desktop keybindings:\n  ${problems.join('\n  ')}`);
     const item = (command: string): MenuItemConstructorOptions => ({
         label: COMMANDS[command], accelerator: bindings[command] ?? undefined, click: actions[command]
@@ -806,6 +827,7 @@ function buildMenu(): void {
         { label: 'View', submenu: [item('toggleRail'), item('toggleSource'), item('toggleCode'), item('reload'), item('devTools'), { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' }] },
         { label: 'Repo', submenu: [item('switcher'), { type: 'separator' }, item('openFileInVSCode'), item('openRepoInVSCode'), { type: 'separator' }, item('nextRepo'), item('previousRepo'), { type: 'separator' }, ...numbered('repo')] },
         { label: 'Workspace', submenu: [item('nextWorkspace'), item('previousWorkspace'), { type: 'separator' }, ...numbered('workspace')] },
+        { label: 'Terminal', submenu: terminals.menu(item) },
         { label: 'Window', submenu: [item('detachRepo'), item('detachWorkspace'), item('dockWindow'), { type: 'separator' }, { role: 'minimize' }] }
     ];
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));

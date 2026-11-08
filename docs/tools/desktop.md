@@ -42,7 +42,7 @@ Every window has the rail and the switcher. The first window is the main window:
 |---|---|
 | Put a workspace or a repo in a window of its own | Drag it out of the rail and drop it outside every window, or right click it and choose **Move to New Window** |
 | Move it into another window | Drop it on that window, or right click it and choose **Move to Window** |
-| Move the code view of a repo | Right click the repo, then **Move Code** |
+| Move the code view or the terminal panel of a repo | Right click the repo, then **Move Code** or **Move Terminal** |
 | Dock it back | Right click the moved pane and choose **Dock Back**, drag it back, or close its window |
 
 A moved workspace takes its repos along. A moved repo takes its canvas: the new window shows it as a column, and its button in the old rail turns dashed. Closing a window gives everything in it back to the main window, so nothing closes with it.
@@ -50,6 +50,15 @@ A moved workspace takes its repos along. A moved repo takes its canvas: the new 
 Moving never reloads anything: the canvas, its selection, the code view and agent sessions stay as they were.
 
 Appling saves which window holds what and where every window is, once per monitor setup, and restores it at the next start. A window whose monitor is gone opens on the primary display.
+
+## Terminals
+
+Every repo has its own terminals in a panel under its canvas. **Terminal › Toggle Terminal Panel** (`` Ctrl+` ``) opens and closes it, **New Terminal** (`` Ctrl+Shift+` ``) adds a tab and **Split Terminal** (`Ctrl+Shift+5`) puts a terminal next to the focused one. The terminal is the one VS Code uses (xterm.js): true colour, mouse, images, clipboard and hyperlinks work, and the shortcuts of the app menu stay out of its way, so `Ctrl+R` or `Ctrl+W` reach the shell, vim or tmux.
+
+- New terminals start the shell of `$SHELL`, or another profile from the ▾ menu. Profiles are the shells of the system and those in VS Code's `terminal.integrated.profiles.*` settings.
+- In bash, zsh and fish, Appling knows every command, its exit status and the folder it ran in: the tab shows the running command and a dot for how the last one ended, and `Ctrl+Up` and `Ctrl+Down` jump between commands.
+- Ctrl+click (Cmd+click on macOS) opens a URL in the browser and a file path in the code view.
+- Terminals keep running when the app closes or crashes. At the next start they come back in their tabs, with their screen and scrollback. To end them with the app instead, check **Terminal › End Terminals with the App**.
 
 ## Updates
 
