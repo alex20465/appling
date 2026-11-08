@@ -1,10 +1,13 @@
-import type { ChatEvent, Playbook, PlaybookPosition, ResponseKind } from '@appling/ai';
+import type { Playbook, PlaybookPosition, ResponseKind } from '@appling/ai';
 import type { EditOperation, EditResult } from '@appling/model';
 import type { FileDiff, Review, Revision } from '../shared/review.js';
 import type { Decision, LiveChanges } from '../shared/live.js';
 import type { GenerationSelection } from '@appling/codegen';
 import { DEFAULT_VIEW, type ClientReport, type GenerationRun, type IdeEvents, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
 import { monaco } from './monaco.js';
+
+/** In Appling Desktop the repo view opens with the canvas as its main area and the source folded behind **Source**. */
+export const SOURCE_OPEN = false;
 
 export async function loadSnapshot(): Promise<Snapshot> {
     return (await fetch('/api/snapshot')).json();
@@ -131,19 +134,6 @@ export async function loadRevisions(): Promise<Revision[]> {
 
 export async function loadFileDiff(rev: string, path: string, before = path): Promise<FileDiff | { error: string }> {
     return (await fetch(`/api/diff/file?rev=${encodeURIComponent(rev)}&path=${encodeURIComponent(path)}&before=${encodeURIComponent(before)}`)).json();
-}
-
-/** Streams the events of one chat turn: text, tool calls, a proposal, errors. */
-export async function* chatTurn(messages: { role: 'user' | 'assistant', content: string }[]): AsyncGenerator<ChatEvent> {
-    const response = await fetch('/api/chat', { method: 'POST', body: JSON.stringify({ messages }) });
-    const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader();
-    let buffer = '';
-    for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
-        buffer += chunk.value;
-        const lines = buffer.split('\n');
-        buffer = lines.pop()!;
-        for (const line of lines.filter(Boolean)) yield JSON.parse(line) as ChatEvent;
-    }
 }
 
 /** Connects Monaco's own LSP client to the language server; it keeps every open model in sync. */

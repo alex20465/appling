@@ -1,7 +1,7 @@
 {
   "name": "@appling/viz",
   "version": "0.1.1",
-  "description": "Appling visualization: the model views and canvases shared by the IDE and a floating window for AI sessions",
+  "description": "Appling visualization: the model views and SVG canvases of the Appling Desktop repo view, and the messages of the visual tools",
   "homepage": "https://www.appling.tools/docs/",
   "repository": {
     "type": "git",
@@ -29,17 +29,13 @@
     "./canvas.css": "./out/canvas/canvas.css"
   },
   "files": [
-    "out",
-    "dist"
+    "out"
   ],
   "scripts": {
-    "build": "tsc && tsc -p tsconfig.window.json && cp src/canvas/canvas.css out/canvas/ && vite build"
+    "build": "tsc && cp src/canvas/canvas.css out/canvas/"
   },
   "dependencies": {
-    "@appling/model": "workspace:*",
-    "electron": "44.9.1",
-    "launch-editor": "2.14.2",
-    "ws": "8.22.0"
+    "@appling/model": "workspace:*"
   },
   "peerDependencies": {
     "react": "19.3.1"
@@ -53,13 +49,8 @@
     "@appling/lang": "workspace:*",
     "@types/node": "^24.19.2",
     "@types/react": "19.3.0",
-    "@types/react-dom": "19.3.0",
-    "@types/ws": "8.18.2",
-    "@vitejs/plugin-react": "6.1.2",
     "react": "19.3.1",
-    "react-dom": "19.3.1",
-    "typescript": "7.0.2",
-    "vite": "8.3.5"
+    "typescript": "7.0.2"
   },
   "license": "MIT",
   "publishConfig": {

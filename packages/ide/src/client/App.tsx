@@ -7,7 +7,7 @@ import type { EditOperation } from '@appling/model';
 import { withRemoved } from '@appling/model/diff';
 import type { Review as ReviewData, Revision } from '../shared/review.js';
 import type { AgentView, LiveChanges, Proposal } from '../shared/live.js';
-import { acceptChanges, connectLanguageServer, decideProposal, loadCode, loadPlaybook, loadRelease, loadReview, loadRevisions, loadSnapshot, loadView, movePlaybook, onEvents, requestEdit, respondToStep, revertChange, saveFile, saveView, startGeneration } from './api.js';
+import { acceptChanges, connectLanguageServer, SOURCE_OPEN, decideProposal, loadCode, loadPlaybook, loadRelease, loadReview, loadRevisions, loadSnapshot, loadView, movePlaybook, onEvents, requestEdit, respondToStep, revertChange, saveFile, saveView, startGeneration } from './api.js';
 import { Implementation } from './Implementation.js';
 import type { OpenCode } from './CodeView.js';
 import { AgentCanvas, AgentStrip } from './AgentView.js';
@@ -17,26 +17,22 @@ import { unwatchedCounts } from '../shared/player.js';
 import { Editor, type Reveal } from './Editor.js';
 import { ModelCanvas } from '@appling/viz/canvas';
 import { elementAt, GraphIndex, type SessionMark } from '@appling/viz/views';
-import { Chat } from './Chat.js';
 import { Inspector } from './Inspector.js';
 import { Review } from './Review.js';
 import { Search } from './Search.js';
 import { applyTextEdits, modelTexts, monaco } from './monaco.js';
 
-/** Inside Appling Desktop (`?shell=desktop`) the canvas is the main area, the source is folded away and there is no chat. */
-const DESKTOP = new URLSearchParams(location.search).get('shell') === 'desktop';
-
 /** Appling Desktop's hooks (`hooks.ts`), from the repo view's preload; absent elsewhere. */
 const desktop = window.applingDesktop;
 
 export function App() {
-    const [source, setSource] = useState(!DESKTOP);
+    const [source, setSource] = useState(SOURCE_OPEN);
     const [snapshot, setSnapshot] = useState<Snapshot>();
     const [selected, setSelected] = useState<string>();
     const [active, setActive] = useState<string>();
     const [reveal, setReveal] = useState<Reveal>();
     const [release, setRelease] = useState<{ version: string } | null>(null);
-    const [side, setSide] = useState<'search' | 'inspector' | 'changes' | 'review' | 'playbook' | 'code' | 'ai'>('search');
+    const [side, setSide] = useState<'search' | 'inspector' | 'changes' | 'review' | 'playbook' | 'code'>('search');
     /** The generation running or last run, the code file shown in place of the model, and whether to offer generation. */
     const [run, setRun] = useState<GenerationRun>();
     const [code, setCode] = useState<OpenCode>();
@@ -255,9 +251,9 @@ export function App() {
                     </button>
                 )}
                 <span className={snapshot.errors.length ? 'errors' : 'ok'}>{snapshot.errors.length ? `${snapshot.errors.length} error(s)` : 'valid'}</span>
-                {DESKTOP && <button className="button" aria-pressed={source} onClick={() => setSource(!source)}>{source ? 'Hide source' : 'Source'}</button>}
+                <button className="button" aria-pressed={source} onClick={() => setSource(!source)}>{source ? 'Hide source' : 'Source'}</button>
             </header>
-            <main className={`panes${source ? '' : ' no-source'}${DESKTOP ? ' desktop' : ''}`}>
+            <main className={`panes${source ? '' : ' no-source'}`}>
                 <Editor
                     files={snapshot.files}
                     active={active}
@@ -302,7 +298,6 @@ export function App() {
                         <button className={side === 'playbook' ? 'active' : ''} onClick={() => setSide('playbook')}>Playbook{unwatchedCount > 0 && <span className="tab-count">{unwatchedCount}</span>}</button>
                         <button className={side === 'review' ? 'active' : ''} onClick={() => { setSide('review'); setReviewing(true); }}>Review</button>
                         <button className={side === 'code' ? 'active' : ''} onClick={() => setSide('code')}>Code{snapshot.tasks.length > 0 && <span className="tab-count">{snapshot.tasks.length}</span>}</button>
-                        {!DESKTOP && <button className={side === 'ai' ? 'active' : ''} onClick={() => setSide('ai')}>AI</button>}
                     </nav>
                     <div hidden={side !== 'search'} className="side-panel"><Search index={index} onSelect={select} /></div>
                     <div hidden={side !== 'inspector'} className="side-panel"><Inspector index={index} qn={selected} code={selected ? snapshot.code[selected] ?? [] : []} implementation={selected ? snapshot.implementation[selected] : undefined} canGenerate={snapshot.targets.length > 0 && !(run && !run.ended)} onSelect={select} onEdit={edit} onOpenCode={openCode} onGenerate={qn => generate({ mode: 'elements', elements: [qn] })} /></div>
@@ -319,7 +314,6 @@ export function App() {
                     <div hidden={side !== 'review'} className="side-panel">
                         {reviewing && <Review snapshot={snapshot} review={review} rev={rev} revisions={revisions} marked={marked} onRev={next => { setReview(undefined); setRev(next); }} onMarked={setMarked} onSelect={qn => select(qn, false)} />}
                     </div>
-                    {!DESKTOP && <div hidden={side !== 'ai'} className="side-panel"><Chat onEdit={edit} onSelect={qn => select(qn, false)} /></div>}
                 </div>
             </main>
         </div>

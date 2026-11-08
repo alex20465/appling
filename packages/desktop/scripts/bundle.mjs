@@ -42,10 +42,7 @@ const nodePty = (from) => ({
 async function bundle(entry, out, plugins = []) {
     await build({
         entryPoints: [entry], outfile: join(app, out), bundle: true, platform: 'node', format: 'esm', target: 'node24',
-        external: ['electron'], banner: { js: banner }, plugins, logLevel: 'warning', legalComments: 'none',
-        // the IDE server and the MCP server import the floating window host of @appling/viz, which resolves its
-        // optional editor launcher only when used
-        logOverride: { 'require-resolve-not-external': 'silent' }
+        external: ['electron'], banner: { js: banner }, plugins, logLevel: 'warning', legalComments: 'none'
     });
 }
 

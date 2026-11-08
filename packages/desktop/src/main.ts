@@ -564,7 +564,7 @@ function view(url: string): WebContentsView {
     view.webContents.on('will-navigate', (event, target) => {
         if (new URL(target).origin !== origin) event.preventDefault();
     });
-    view.webContents.loadURL(`${url}/?shell=desktop`);
+    view.webContents.loadURL(`${url}/`);
     view.setVisible(false);
     return view;
 }
