@@ -2,7 +2,7 @@ import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode } from '@appling/model';
 import { homeAt, homeFields, homeOf, homes, rolesOf, type ActorHome } from './actors.js';
 import { ashExpr, isActor, lastOf, parentOf } from './elixir.js';
-import { fileOf, moduleName, patch, snake, task } from './naming.js';
+import { calculation, fileOf, moduleName, patch, snake, storedAttributes, task } from './naming.js';
 import { addAuthorizer, addToSection } from './resource.js';
 
 const ACTION_TYPES: Record<string, string> = { read: ':read', create: ':create', update: ':update', delete: ':destroy' };
@@ -30,7 +30,8 @@ export function roleSteps(role: GraphNode, context: MapContext): Step[] {
     });
     const unknown = clauses.filter(c => c.clause === 'unknown').map(c => c.home.module);
     return [
-        { kind: 'template', file: checkFile(role, context), write: () => checkModuleCode(checkModule(role, context), `actor is ${name}`, lines) },
+        // Phase 2: the clauses match the actor resources' structs, which exist only once every resource is generated.
+        { kind: 'template', file: checkFile(role, context), write: () => checkModuleCode(checkModule(role, context), `actor is ${name}`, lines), phase: 2 },
         ...(unknown.length ? [task(`check the condition of ${name} for ${unknown.join(', ')} in ${checkModule(role, context)}: ${role.props.condition}`)] : [])
     ];
 }
@@ -43,7 +44,7 @@ export function actorCheckSteps(actor: GraphNode, context: MapContext): Step[] {
         return [task(`tell ${lastOf(actor.qn)} apart from ${home.actors.filter(a => a !== actor).map(a => lastOf(a.qn)).join(', ')} on ${home.module} for actor.is(${lastOf(actor.qn)})`)];
     }
     const lines = [`  def match?(%${home.module}{}, _context, _opts), do: true`, ''];
-    return [{ kind: 'template', file: checkFile(actor, context), write: () => checkModuleCode(checkModule(actor, context), `actor is ${lastOf(actor.qn)}`, lines) }];
+    return [{ kind: 'template', file: checkFile(actor, context), write: () => checkModuleCode(checkModule(actor, context), `actor is ${lastOf(actor.qn)}`, lines), phase: 2 }];
 }
 
 /** The calculations of an actor resource that hold the role conditions, such as `calculate :operator?, :boolean, expr(active)`. */
@@ -75,11 +76,24 @@ export function policySteps(policy: GraphNode, context: MapContext): Step[] | un
     const owner = context.node(parentOf(policy.qn))!;
     const operations = (policy.data.operations ?? []) as string[];
     const fields = (policy.data.fields ?? []) as string[];
-    const target = policyTarget(owner, operations, fields, context);
+    // Ash field policies name public attributes and calculations only. A derived field without a calculation is not
+    // on the resource yet; the field's own task carries this policy (see fieldSteps). A relationship becomes a task.
+    const fieldNodes = fields.map(f => context.node(f)).filter(f => f !== undefined);
+    const guarded = owner.kind === 'Entity'
+        ? fieldNodes.filter(f => storedAttributes(owner, context).has(f.qn) || calculation(f, context)).map(f => f.qn)
+        : fields;
+    const relations = fieldNodes.filter(f => !f.data.derived && !guarded.includes(f.qn)).map(f => lastOf(f.qn));
+    const writes = fields.length > 0 && (!operations.length || operations.some(o => o !== 'read'));
+    const extra = [
+        ...(relations.length ? [task(`guard reads of the relationship ${relations.join(', ')} on ${parentOf(policy.qn)}, which Ash field policies do not cover: ${policy.props.condition}`)] : []),
+        ...(writes ? [task(`guard writes of ${fields.map(lastOf).join(', ')} on ${parentOf(policy.qn)} for ${operations.filter(o => o !== 'read').join(', ') || 'create, update'}, which Ash field policies do not cover: ${policy.props.condition}`)] : [])
+    ];
+    // Ash field policies guard reads only; a policy on writes alone stays unsupported.
+    if (fields.length && !guarded.length) return operations.length && !operations.includes('read') ? undefined : extra;
+    const target = policyTarget(owner, operations, guarded, context);
     if (!target) return undefined;
     const checks = checkLines(policy.data.condition as ExprData, context, fields.length > 0);
     const lines = [`${target.header} do`, ...(checks ?? ['forbid_if always()']).map(c => `  ${c}`), 'end'];
-    const writes = fields.length > 0 && (!operations.length || operations.some(o => o !== 'read'));
     return [
         patch(fileOf(target.entity, context), existing => {
             const withPolicy = fields.length
@@ -88,7 +102,7 @@ export function policySteps(policy: GraphNode, context: MapContext): Step[] | un
             return addAuthorizer(withPolicy);
         }),
         ...(checks ? [] : [policyTask(policy)]),
-        ...(writes ? [task(`guard writes of ${fields.map(lastOf).join(', ')} on ${parentOf(policy.qn)} for ${operations.filter(o => o !== 'read').join(', ') || 'create, update'}, which Ash field policies do not cover: ${policy.props.condition}`)] : [])
+        ...extra
     ];
 }
 

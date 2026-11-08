@@ -11,7 +11,7 @@ import { actorCheckSteps, closeResource, policySteps, policyTask, roleCalculatio
 import { tenantSteps } from './tenants.js';
 import { testSteps } from './tests.js';
 import { externalKeySteps } from './vendors.js';
-import { app, attributeType, calculation, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, storedAttributes, task, typeModule } from './naming.js';
+import { app, attributeType, calculation, fieldPolicyOf, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, storedAttributes, task, typeModule } from './naming.js';
 
 const extension: CodegenExtension = {
     name: '@appling/codegen-ash',
@@ -132,7 +132,11 @@ function fieldSteps(field: GraphNode, context: MapContext): Step[] | undefined {
         return [{ ...mix(['ash.gen.resource', typeModule(owner, context), '--relationship', spec]), phase: 1 }];
     }
     const tasks: Step[] = [];
-    if (field.data.derived && !calculation(field, context)) tasks.push(task(`add the calculation ${lastOf(field.qn)} = ${field.props.derived}`));
+    if (field.data.derived && !calculation(field, context)) {
+        // Until the calculation exists, its field policy has nothing to name; the task carries the policy's condition.
+        const policy = fieldPolicyOf(field, context);
+        tasks.push(task(`add the calculation ${lastOf(field.qn)} = ${field.props.derived}${policy ? `, public?: true, and add it to the field policy of ${policy.qn}: ${policy.props.condition}` : ''}`));
+    }
     if (field.data.default && defaultValue(field, context) === undefined) tasks.push(task(`set the default of ${lastOf(field.qn)} to ${field.props.default}`));
     return tasks;
 }

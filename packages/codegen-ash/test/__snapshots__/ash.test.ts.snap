@@ -180,18 +180,6 @@ end
     end
   end
 
-  field_policies do
-    field_policy :total do
-      authorize_if Shop.Crm.Checks.Clerk
-      forbid_unless Shop.Sales.Checks.Customer
-      authorize_if expr(status != :draft)
-    end
-
-    field_policy :* do
-      authorize_if always()
-    end
-  end
-
   multitenancy do
     strategy :attribute
     attribute :customer_id
@@ -456,9 +444,7 @@ exports[`examples plan domains, enums, embedded resources, resources and relatio
   "sales.Order.policy[create,delete]: test/shop/sales/order_test.exs",
   "sales.Order.policy[update]: test/shop/sales/order_test.exs",
   "sales.Order.policy[read fields total]: test/shop/sales/order_test.exs",
-  "crm.Clerk: lib/shop/crm/checks/clerk.ex",
   "crm.Employee: mix ash.gen.resource Shop.Crm.Employee --domain Shop.Crm --default-actions read,create,update,destroy --uuid-primary-key id --attribute roles:atom:array --extend postgres --timestamps --yes",
-  "sales.Customer: lib/shop/sales/checks/customer.ex",
   "sales.Shopper: mix ash.gen.resource Shop.Sales.Shopper --domain Shop.Sales --default-actions read,create,update,destroy --uuid-primary-key id --attribute roles:atom:array --extend postgres --timestamps --yes",
   "sales.PlaceOrder: test/shop/sales/order_test.exs",
   "sales.OrderFlow.transition[draft->placed]: test/shop/sales/order_test.exs",
@@ -472,10 +458,11 @@ exports[`examples plan domains, enums, embedded resources, resources and relatio
   "sales.Order.policy[read]: lib/shop/sales/order.ex",
   "sales.Order.policy[create,delete]: lib/shop/sales/order.ex",
   "sales.Order.policy[update]: lib/shop/sales/order.ex",
-  "sales.Order.policy[read fields total]: lib/shop/sales/order.ex",
+  "crm.Clerk: lib/shop/crm/checks/clerk.ex",
   "crm.Employee: lib/shop/crm/employee.ex",
   "crm.Company: lib/shop/sales/order.ex",
   "crm.Company: lib/shop/sales/shopper.ex",
+  "sales.Customer: lib/shop/sales/checks/customer.ex",
   "sales.Shopper: lib/shop/sales/shopper.ex",
   "sales.PlaceOrder: lib/shop/sales/order.ex",
   "sales.PlaceOrder.policy[]: lib/shop/sales/order.ex",

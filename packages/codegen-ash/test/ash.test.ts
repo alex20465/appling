@@ -14,7 +14,9 @@ test('examples plan domains, enums, embedded resources, resources and relationsh
     const result = await planFor(examples());
     expect(result.steps.map(({ node, step }) => `${node}: ${step.kind === 'command' ? step.run.join(' ') : step.kind === 'template' ? step.file : ''}`)).toMatchSnapshot();
     const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
-    expect(entries['sales.Order.total'].missing[0].what).toBe('add the calculation total = sum(lines.map(l, l.amount))');
+    // total has no calculation, so its field policy has nothing to name yet; the field's task carries the policy.
+    expect(entries['sales.Order.total'].missing[0].what).toBe('add the calculation total = sum(lines.map(l, l.amount)), public?: true, and add it to the field policy of sales.Order.policy[read fields total]: actor.is(crm.Clerk) || (actor.is(Customer) && status != draft)');
+    expect(entries['sales.Order.policy[read fields total]'].files).not.toContain('lib/shop/sales/order.ex');
     expect(entries['sales.Order.customer'].status).toBe('generated');
 });
 
@@ -220,6 +222,35 @@ test('tenants partition resources, and policies compare records by id, read the 
     ]);
     // Field policies cannot follow relationships.
     expect(entries['org.Task.policy[read fields note]'].missing[0].what).toBe('add an Ash policy to org.Task for read: actor.is(Member) && project.company == tenant');
+});
+
+test('field policies name only fields on the resource, and calculations they name are public', async () => {
+    const result = await planFor({
+        'shop.appling': `module shop {
+            role Manager
+            actor human Staff roles Manager
+            entity Order {
+                discount: Int
+                big: Bool = discount > 10
+                total: Int = sum(lines.map(l, l.amount))
+                lines: Line[]
+                policy read fields discount, big, total { actor.is(Manager) }
+            }
+            value Line {
+                amount: Int
+            }
+        }`
+    });
+    const write = (file: string, text: string) => result.steps.reduce((current, { step }) => step.kind === 'template' && step.file === file ? step.write(current) : current, text);
+    const order = write('lib/shop/shop/order.ex', 'defmodule Shop.Shop.Order do\n  use Ash.Resource\nend\n');
+    // Ash rejects a field policy that names a private calculation or a field the resource does not have.
+    expect(order).toContain('    calculate :big, :boolean, expr(discount > 10), public?: true\n');
+    expect(order).toContain('    field_policy [:discount, :big] do\n      authorize_if Shop.Shop.Checks.Manager\n    end\n');
+    expect(order).not.toContain(':total');
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['shop.Order.total'].missing[0].what).toBe('add the calculation total = sum(lines.map(l, l.amount)), public?: true, and add it to the field policy of shop.Order.policy[read fields discount,big,total]: actor.is(Manager)');
+    // Checks match the actor resources' structs, so they are written once every resource exists.
+    expect(result.steps.find(({ step }) => step.kind === 'template' && step.file === 'lib/shop/shop/checks/manager.ex')?.step).toMatchObject({ phase: 2 });
 });
 
 test('once the model has a policy, every resource denies what no policy covers, and jobs bypass the policies', async () => {
