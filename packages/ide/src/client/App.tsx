@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AgentSession } from '@appling/ai';
+import type { AgentSession, Chapter, Playbook, PlaybookPosition } from '@appling/ai';
 import { DEFAULT_VIEW, type ClientReport, type SessionAct, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
 import type { EditOperation } from '@appling/model';
 import { withRemoved } from '@appling/model/diff';
 import type { Review as ReviewData, Revision } from '../shared/review.js';
 import type { AgentView, LiveChanges, Proposal } from '../shared/live.js';
-import { acceptChanges, connectLanguageServer, decideProposal, loadRelease, loadReview, loadRevisions, loadSnapshot, loadView, onEvents, requestEdit, revertChange, saveFile, saveView } from './api.js';
+import { acceptChanges, connectLanguageServer, decideProposal, loadPlaybook, loadRelease, loadReview, loadRevisions, loadSnapshot, loadView, movePlaybook, onEvents, requestEdit, respondToStep, revertChange, saveFile, saveView } from './api.js';
 import { AgentCanvas, AgentStrip } from './AgentView.js';
 import { Live } from './Live.js';
+import { PlaybookPanel, PlaybookPlayer } from './Playbook.js';
+import { unwatchedCounts } from '../shared/player.js';
 import { Editor, type Reveal } from './Editor.js';
 import { ModelCanvas } from '@appling/viz/canvas';
 import { elementAt, GraphIndex, type SessionMark } from '@appling/viz/views';
@@ -30,7 +32,7 @@ export function App() {
     const [active, setActive] = useState<string>();
     const [reveal, setReveal] = useState<Reveal>();
     const [release, setRelease] = useState<{ version: string } | null>(null);
-    const [side, setSide] = useState<'search' | 'inspector' | 'changes' | 'review' | 'ai'>('search');
+    const [side, setSide] = useState<'search' | 'inspector' | 'changes' | 'review' | 'playbook' | 'ai'>('search');
     const [view, setView] = useState<ViewSettings>(DEFAULT_VIEW);
     const [sessions, setSessions] = useState<AgentSession[]>([]);
     /** The elements each agent session highlighted with ide_act. */
@@ -59,6 +61,11 @@ export function App() {
     const [agentViews, setAgentViews] = useState<Record<string, AgentView>>({});
     const [watching, setWatching] = useState<string>();
     const [proposals, setProposals] = useState<Proposal[]>([]);
+    /** The workspace's playbook (#19); the canvas plays it only while `playing`, and moves only on the user's steps. */
+    const [playbook, setPlaybook] = useState<Playbook>();
+    const [playing, setPlaying] = useState(false);
+    /** The session whose changes the Changes tab shows alone, after a chapter jumped to its diff. */
+    const [changesOf, setChangesOf] = useState<string>();
 
     useEffect(() => {
         loadSnapshot().then(first => {
@@ -68,7 +75,13 @@ export function App() {
         });
         loadRelease().then(setRelease);
         loadView().then(setView);
+        loadPlaybook().then(setPlaybook);
+        // A repo view shared by several workspaces plays the playbook of the one shown; reload it when shown again.
+        const shown = () => { if (document.visibilityState === 'visible') loadPlaybook().then(setPlaybook); };
+        document.addEventListener('visibilitychange', shown);
+        addEventListener('focus', shown);
         const events = onEvents({
+            playbook: setPlaybook,
             snapshot: setSnapshot, sessions: setSessions, act: a => act.current(a), live: setLive, proposals: setProposals,
             agentView: (next, ended) => setAgentViews(current => {
                 const { [next.session]: _, ...rest } = current;
@@ -77,7 +90,11 @@ export function App() {
         });
         report.current = events.report;
         reportUnsaved.current = events.unsaved;
-        return events.close;
+        return () => {
+            events.close();
+            document.removeEventListener('visibilitychange', shown);
+            removeEventListener('focus', shown);
+        };
     }, []);
 
     // What the IDE shows, for the agent sessions' ide_context.
@@ -155,6 +172,28 @@ export function App() {
         return sessions.filter(s => s.repo === repo).flatMap(s => [...s.claims.elements, ...highlights[s.id] ?? []].map((element): SessionMark => ({ element, color: s.color, label: s.label ?? s.name, session: s.id })));
     }, [sessions, highlights, snapshot]);
 
+    /** The user steps in the playbook: shown at once, then stored, where the sessions read it. */
+    const movePlay = (position: PlaybookPosition) => {
+        if (!playbook) return;
+        setPlaybook({ ...playbook, position });
+        setPlaying(true);
+        movePlaybook(playbook.workspace, position).then(setPlaybook, error => alert((error as Error).message));
+    };
+    /** A chapter jumps to its session: its tab in Appling Desktop, else its view on the canvas. */
+    const toSession = (chapter: Chapter) => {
+        if (!chapter.session) return;
+        if (desktop?.focusSession) return desktop.focusSession(chapter.session);
+        if (agentViews[chapter.session]?.show) {
+            setPlaying(false);
+            setWatching(chapter.session);
+        }
+    };
+    const toDiff = (chapter: Chapter) => {
+        setChangesOf(chapter.session);
+        setSide('changes');
+    };
+    const unwatchedCount = unwatchedCounts(playbook).total;
+
     if (!snapshot || !index || !canvasIndex) return <div className="loading">Loading the model</div>;
     const block = release && `since_v${release.version.replaceAll('.', '_')}`;
     const pending = block ? snapshot.graph.nodes.filter(n => n.kind === 'Migration' && n.qn.endsWith(`.${block}`)) : [];
@@ -186,9 +225,16 @@ export function App() {
                     onDirty={uris => reportUnsaved.current(snapshot.files.filter(f => uris.includes(f.uri)).map(f => f.path))}
                 />
                 <div className="canvas-area">
-                    {watched?.show
+                    {playing && playbook?.position.chapter
+                        ? <PlaybookPlayer index={canvasIndex} playbook={playbook} settings={view} selected={selected} repo={decodeURIComponent(snapshot.root.replace('file://', ''))}
+                            onMove={movePlay} onRespond={async (chapter, step, kind, text) => { await respondToStep(chapter, step, kind, text).catch(error => alert((error as Error).message)); }}
+                            onSelect={qn => select(qn, false)} onClose={() => setPlaying(false)} onSession={toSession} onDiff={toDiff} />
+                        : watched?.show
                         ? <AgentCanvas key={watched.session} index={canvasIndex} view={watched} session={sessions.find(s => s.id === watched.session)} settings={view} selected={selected} changes={canvasChanges} onSelect={qn => select(qn, false)} onClose={() => setWatching(undefined)} onOpenFile={openFile} />
                         : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={selected} settings={view} sessions={marks} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
+                    {!playing && unwatchedCount > 0 && (
+                        <button className="playbook-chip" onClick={() => { setSide('playbook'); }}>{unwatchedCount} playbook chapter{unwatchedCount > 1 ? 's' : ''} to watch</button>
+                    )}
                     <AgentStrip views={Object.values(agentViews)} sessions={sessions} watching={watching} onWatch={setWatching} />
                     {proposals.length > 0 && side !== 'changes' && (
                         <button className="proposal-banner" onClick={() => setSide('changes')}>{proposals.length} proposed change{proposals.length > 1 ? 's' : ''} wait{proposals.length > 1 ? '' : 's'} for your decision</button>
@@ -199,6 +245,7 @@ export function App() {
                         <button className={side === 'search' ? 'active' : ''} onClick={() => setSide('search')}>Search</button>
                         <button className={side === 'inspector' ? 'active' : ''} onClick={() => setSide('inspector')}>Inspector</button>
                         <button className={side === 'changes' ? 'active' : ''} onClick={() => setSide('changes')}>Changes{unseenCount + proposals.length > 0 && <span className="tab-count">{unseenCount + proposals.length}</span>}</button>
+                        <button className={side === 'playbook' ? 'active' : ''} onClick={() => setSide('playbook')}>Playbook{unwatchedCount > 0 && <span className="tab-count">{unwatchedCount}</span>}</button>
                         <button className={side === 'review' ? 'active' : ''} onClick={() => { setSide('review'); setReviewing(true); }}>Review</button>
                         {!DESKTOP && <button className={side === 'ai' ? 'active' : ''} onClick={() => setSide('ai')}>AI</button>}
                     </nav>
@@ -208,7 +255,10 @@ export function App() {
                         <Live live={live} proposals={proposals} sessions={sessions}
                             onAccept={paths => acceptChanges(paths).then(setLive)} onRevert={path => revertChange(path).catch(error => alert((error as Error).message))}
                             onDecide={(id, decision) => decideProposal(id, decision).catch(error => alert((error as Error).message))}
-                            onSelect={qn => select(qn, false)} />
+                            onSelect={qn => select(qn, false)} session={changesOf} onAllSessions={() => setChangesOf(undefined)} />
+                    </div>
+                    <div hidden={side !== 'playbook'} className="side-panel">
+                        <PlaybookPanel playbook={playbook} sessions={sessions} playing={playing} onPlay={movePlay} onSession={toSession} onDiff={toDiff} />
                     </div>
                     <div hidden={side !== 'review'} className="side-panel">
                         {reviewing && <Review snapshot={snapshot} review={review} rev={rev} revisions={revisions} marked={marked} onRev={next => { setReview(undefined); setRev(next); }} onMarked={setMarked} onSelect={qn => select(qn, false)} />}

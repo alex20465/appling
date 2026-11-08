@@ -1,4 +1,4 @@
-import type { ChatEvent } from '@appling/ai';
+import type { ChatEvent, Playbook } from '@appling/ai';
 import { applyEdit, type EditOperation, type EditResult } from '@appling/model/edit';
 import { buildSnapshot } from '../shared/model.js';
 import type { FileDiff, Review, Revision } from '../shared/review.js';
@@ -48,6 +48,19 @@ export async function acceptChanges(): Promise<LiveChanges> {
 export async function revertChange(): Promise<void> {}
 
 export async function decideProposal(): Promise<void> {}
+
+/** The demo has no agent sessions, so its playbook stays empty. */
+export async function loadPlaybook(): Promise<Playbook> {
+    return { workspace: ROOT, chapters: [], position: { step: 0 } };
+}
+
+export async function movePlaybook(): Promise<Playbook> {
+    return loadPlaybook();
+}
+
+export async function respondToStep(): Promise<{ delivered: boolean }> {
+    return { delivered: false };
+}
 
 export function requestEdit(sources: Record<string, string>, operation: EditOperation): Promise<EditResult> {
     return applyEdit(sources, operation);

@@ -1,4 +1,4 @@
-import type { AgentSession, IdeAction } from '@appling/ai';
+import type { AgentSession, IdeAction, Playbook } from '@appling/ai';
 import type { AgentView, LiveChanges, Proposal } from './live.js';
 import type { Dependency, Graph, ResolvedReference } from '@appling/model';
 
@@ -48,6 +48,8 @@ export interface IdeEvents {
     agentView?(view: AgentView, ended: boolean): void;
     /** The proposals waiting for a decision, after each change. */
     proposals?(proposals: Proposal[]): void;
+    /** The playbook of the workspace the view shows (#19), after each change. */
+    playbook?(playbook: Playbook): void;
 }
 
 /** What the client reports it shows, for the sessions' IDE context. */

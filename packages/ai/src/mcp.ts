@@ -7,6 +7,7 @@ import { AUTHORING_TOOLS, diskContext, MODEL_TOOLS, REFERENCE_TOOLS, REGISTRY_TO
 import { visualInstructions, visualTools, type VisualHost } from './visual.js';
 import { conflictWarning, SESSION_INSTRUCTIONS, sessionTools, touchedBy, type SessionScope } from './session-tools.js';
 import { findConflicts } from './sessions.js';
+import { PLAYBOOK_INSTRUCTIONS, playbookTools } from './playbook-tools.js';
 
 export interface McpServerOptions {
     /** Where the visual tools draw: the floating window or the project's canvas. Without it there are no visual tools. */
@@ -26,7 +27,7 @@ export interface McpServerOptions {
 export function createMcpServer(root: string, options: McpServerOptions = {}): McpServer {
     const context = diskContext(new Project(root));
     const { visualizer, session, onToolCall } = options;
-    const instructions = [MCP_INSTRUCTIONS, visualizer && visualInstructions(visualizer), session && SESSION_INSTRUCTIONS].filter(Boolean).join('\n\n');
+    const instructions = [MCP_INSTRUCTIONS, visualizer && visualInstructions(visualizer), session && SESSION_INSTRUCTIONS, session?.playbook && PLAYBOOK_INSTRUCTIONS].filter(Boolean).join('\n\n');
     const server = new McpServer({ name: 'appling', version: '0.1.0' }, {
         capabilities: visualizer?.onAsk && { experimental: { 'claude/channel': {} } },
         instructions
@@ -36,7 +37,7 @@ export function createMcpServer(root: string, options: McpServerOptions = {}): M
         params: { content: ask.text, meta: { ask_id: ask.id, selected: ask.selected ?? '', view: ask.view ? `${ask.view.view} ${ask.view.focus.join(' ')}` : '' } }
     }).catch(error => console.error(error)));
     const visual = visualizer ? visualTools(visualizer) : {};
-    const sessions = session ? sessionTools(session) : {};
+    const sessions = session ? { ...sessionTools(session), ...session.playbook ? playbookTools(session.id, session.store, session.playbook) : {} } : {};
     for (const [name, tool] of Object.entries({ ...MODEL_TOOLS, ...AUTHORING_TOOLS, ...REGISTRY_TOOLS, ...REFERENCE_TOOLS, ...visual, ...sessions } as Tools)) {
         server.registerTool(name, { description: tool.description, inputSchema: tool.input }, async (input: Record<string, unknown>) => {
             const raw = await tool.run(context, input);

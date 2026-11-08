@@ -10,6 +10,7 @@ import { gitBranch, watchGit } from './git.js';
 import { agentSessions, desktopHost } from './agent-sessions.js';
 import { cloneIpc } from './clone-ipc.js';
 import { agentContributions, RailStatus, railBadge, railLines } from './rail-status.js';
+import { desktopPlaybooks, playbookRail } from './playbooks.js';
 import { startIdeProcess, type IdeProcess } from './ide-process.js';
 import { COMMANDS, loadKeybindings } from './keybindings.js';
 import { IDE_PANE, paneId, paneLabel, parsePane, registerPaneType } from './panes.js';
@@ -76,9 +77,12 @@ const processes = new Map<string, IdeProcess>();
 const sessions = agentSessions();
 /** What the rail shows per repo and per workspace; every feature reports into its own source (`rail-status.ts`). */
 const rail = new RailStatus();
-const railSources = { validation: rail.source('validation'), editor: rail.source('editor'), git: rail.source('git'), agents: rail.source('agents'), live: rail.source('live') };
+const railSources = { validation: rail.source('validation'), editor: rail.source('editor'), git: rail.source('git'), agents: rail.source('agents'), live: rail.source('live'), playbook: rail.source('playbook') };
 sessions.onChange(list => railSources.agents.replace(agentContributions(list)));
 rail.onChange(() => refresh());
+/** The playbook of every workspace (#19), kept in the app's data folder; unwatched chapters count on the rail. */
+const playbooks = desktopPlaybooks(join(app.getPath('userData'), 'playbooks'));
+const playbookCounts = playbookRail(playbooks, railSources.playbook, key => !!workspaces.get(key) || workspaces.live().has(key));
 /** Watchers of each repo's git `HEAD`, so the rail follows checkouts made anywhere. */
 const heads = new Map<string, () => void>();
 const updater = new Updater(() => host.base());
@@ -291,6 +295,7 @@ function changed(): void {
     const shown = shownKey();
     const revealed = shown !== lastShown ? reveal() : undefined;
     lastShown = shown;
+    playbookCounts.refresh();
     refresh();
     if (revealed) host.show(revealed);
     save();
@@ -304,6 +309,7 @@ async function launch(id: string): Promise<void> {
             node: process.execPath,
             env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
             sessions,
+            playbooks,
             host: desktopHost(workspaces),
             onStatus: ({ errors, unsaved, changes }) => {
                 if (processes.get(id) !== ide && processes.has(id)) return;

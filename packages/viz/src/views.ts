@@ -274,6 +274,8 @@ export interface MarkedChanges {
     changed: string[];
     /** Removed elements; they are marked only when the index has them, such as one built from `withRemoved`, and then drawn ghosted. */
     removed?: string[];
+    /** The changes are only planned, such as a playbook step not done yet: the canvas previews them, dashed. */
+    planned?: boolean;
 }
 
 /**

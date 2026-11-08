@@ -3,7 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { startIdeProcess, type IdeStatus } from '../src/ide-process.js';
+import { MemoryPlaybookStore } from '@appling/ai';
 import { agentContributions, emptyCounts, RailStatus, railBadge, railLines } from '../src/rail-status.js';
+import { playbookRail } from '../src/playbooks.js';
 
 test('each source owns its contributions; a repo sums them and a workspace sums its repos', () => {
     const rail = new RailStatus();
@@ -90,3 +92,20 @@ test('a repo server passes on the unsaved files its view reports', async () => {
         ide.close();
     }
 }, 30000);
+
+test('unwatched playbook chapters count for the repo they belong to, from the open workspaces only', async () => {
+    const store = new MemoryPlaybookStore();
+    const rail = new RailStatus();
+    const author = { workspace: 'team', label: 'Codex', color: '#000' };
+    const a = await store.open({ ...author, repo: '/work/shop', title: 'Invoices', plan: 'p', steps: [{ elements: [], change: 'show', note: 'n' }] });
+    await store.open({ ...author, repo: '/work/crm', title: 'Accounts', plan: 'p' });
+    await store.open({ ...author, workspace: 'closed', repo: '/work/shop', title: 'Old', plan: 'p' });
+    const counts = playbookRail(store, rail.source('playbook'), key => key === 'team');
+    expect(rail.repo('/work/shop').counts.unwatched).toBe(1);
+    expect(rail.sum(['/work/shop', '/work/crm']).unwatched).toBe(2);
+    await store.move('team', { chapter: a.id, step: 1 });
+    expect(rail.repo('/work/shop').counts.unwatched).toBe(0);
+    expect(railLines({ counts: rail.repo('/work/crm').counts })).toEqual(['1 playbook chapter not yet watched']);
+    expect(railBadge(rail.repo('/work/crm').counts)).toEqual({ kind: 'unwatched', count: 1 });
+    counts.stop();
+});

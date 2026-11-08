@@ -131,3 +131,12 @@ button.card-row:hover { background: var(--surface-hover); }
 .file-link { padding: 0; border: 0; background: none; color: var(--leaf); font: 11px var(--font-mono); text-align: left; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .file-link:hover { color: var(--sprout); }
 .cards .loose-bubbles { position: static; grid-column: 1 / -1; max-width: none; max-height: none; }
+
+/* The playbook player: planned changes preview dashed; each step plays its marks (two names so a new beat restarts it). */
+.tree-item.planned .ring { stroke-dasharray: 6 3; filter: none; }
+.tree-item.planned.removed { opacity: 0.7; }
+.tree-item.beat-0 .ring { animation: mark-beat-0 900ms ease-out 2; transform-box: fill-box; transform-origin: center; }
+.tree-item.beat-1 .ring { animation: mark-beat-1 900ms ease-out 2; transform-box: fill-box; transform-origin: center; }
+@keyframes mark-beat-0 { 0% { transform: scale(1); } 35% { transform: scale(1.35); stroke-width: 5; } 100% { transform: scale(1); } }
+@keyframes mark-beat-1 { 0% { transform: scale(1); } 35% { transform: scale(1.35); stroke-width: 5; } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .tree-item.beat-0 .ring, .tree-item.beat-1 .ring { animation: none; } }
