@@ -2,7 +2,7 @@ import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
 import { children, documented, importOnReady, pythonFile, task, template } from './files.js';
 import { actorFields, actorUserSteps, scope, storedFields, userModel } from './models.js';
-import { testSteps } from './tests.js';
+import { policyTests } from './policy-tests.js';
 import { appOf, lastOf, parentOf, python, rolePredicate, snake, tenantGetter, wrap, type PythonScope } from './python.js';
 
 const OPERATIONS = ['read', 'create', 'update', 'delete'] as const;
@@ -144,7 +144,7 @@ export function policySteps(policy: GraphNode, context: MapContext): Step[] {
     else if (fields.length && operations.some(o => o !== 'read') || fields.length && !operations.length) {
         tasks.push(task(`enforce the ${label} policy of ${parentOf(policy.qn)} on writes: ${policy.props.condition}`));
     }
-    return [...tasks, ...testSteps(policy, String(policy.props.condition), ['allows_permitted_actors', 'denies_other_actors'], context)];
+    return [...tasks, ...policyTests(policy, context)];
 }
 
 /** The variable holding the guarded record in the code that checks a policy of this element. */

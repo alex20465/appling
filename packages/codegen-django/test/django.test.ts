@@ -259,6 +259,49 @@ test('actors, tenants and policies are generated and enforced', async () => {
     }
 });
 
+test('an entity policy over actor kinds gets active tests for an allowed and a denied actor', async () => {
+    const { files, entries } = await generate({
+        'shop.appling': `module shop {
+            role Clerk
+            actor human Employee roles Clerk
+            actor human Guest
+            entity Order {
+                total: Money
+                policy read { actor.is(Clerk) }
+                policy update, delete { actor.is(Employee) && total > 0 }
+                policy create { actor.is(Clerk) && total < 0 }
+            }
+        }`
+    });
+    const tests = files['shop/tests.py'];
+    expect(tests).toContain('from django.contrib.auth import get_user_model');
+    expect(tests).toContain('from django.contrib.auth.models import Group');
+    expect(tests).toContain('from shop.policies import can_create_order, can_delete_order, can_read_order, can_update_order');
+    expect(tests).toContain([
+        'class OrderReadPolicyTest(TestCase):',
+        '    """shop.Order.policy[read]: actor.is(Clerk)"""',
+        '',
+        '    def test_allows_permitted_actors(self):',
+        '        user = get_user_model().objects.create(username="tester")',
+        '        user.groups.add(Group.objects.get_or_create(name="Employee")[0])',
+        '        order = make_order()',
+        '        self.assertTrue(can_read_order(user, order))',
+        '',
+        '    def test_denies_other_actors(self):',
+        '        user = get_user_model().objects.create(username="tester")',
+        '        user.groups.add(Group.objects.get_or_create(name="Guest")[0])',
+        '        order = make_order()',
+        '        self.assertFalse(can_read_order(user, order))'
+    ].join('\n'));
+    expect(tests).toContain('        self.assertTrue(can_update_order(user, order))\n        self.assertTrue(can_delete_order(user, order))');
+    const policies = Object.values(entries).filter(e => e.kind === 'Policy');
+    expect(policies.map(p => p.missing.map(m => m.what))).toEqual([
+        [],
+        [],
+        ['write the test bodies of OrderCreatePolicyTest in shop/tests.py (test_allows_permitted_actors)']
+    ]);
+});
+
 test('a model without policies keeps open queries and actions', async () => {
     const { files } = await generate({ 'shop.appling': 'module shop {\n role Clerk\n entity Order {\n note: String?\n }\n action Touch on Order {\n effect { set note = "seen" }\n }\n query All from Order {\n }\n}' });
     expect(files['shop/policies.py']).toBeUndefined();
