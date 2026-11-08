@@ -22,6 +22,11 @@ import { Updater } from './updater.js';
 import { currentDisplays, WindowHost } from './window-host.js';
 import { dropTarget, layoutFor, MAIN, rememberLayout, type SavedLayout } from './windows.js';
 import { Workspaces } from './workspaces.js';
+import { RemoteRepos } from './remote/desktop.js';
+import { findDevcontainer } from './remote/devcontainer.js';
+import { serverBundle } from './remote/install.js';
+import { isRemoteId } from './remote/location.js';
+import { remoteIpc } from './remote/remote-ipc.js';
 
 /** The width of the rail on the left (none while it is collapsed); every repo view fills the rest of the window. */
 const RAIL = 48;
@@ -38,7 +43,7 @@ const CODE_PANE = 'code';
 function pathsOf(argv: string[]): string[] {
     const at = argv.indexOf('--');
     if (at >= 0) return argv.slice(at + 1);
-    return app.isPackaged ? argv.slice(1).filter(arg => !arg.startsWith('-')).map(arg => resolve(arg)) : [];
+    return app.isPackaged ? argv.slice(1).filter(arg => !arg.startsWith('-')).map(arg => isRemoteId(arg) ? arg : resolve(arg)) : [];
 }
 
 const initial = pathsOf(process.argv);
@@ -67,6 +72,7 @@ if (process.argv.slice(0, process.argv.includes('--') ? process.argv.indexOf('--
         for (const unwatch of heads.values()) unwatch();
         keybindingsWatcher?.close();
         code?.close();
+        remotes.killAll();
     });
 }
 
@@ -77,7 +83,9 @@ const processes = new Map<string, IdeProcess>();
 const sessions = agentSessions();
 /** What the rail shows per repo and per workspace; every feature reports into its own source (`rail-status.ts`). */
 const rail = new RailStatus();
-const railSources = { validation: rail.source('validation'), editor: rail.source('editor'), git: rail.source('git'), agents: rail.source('agents'), live: rail.source('live'), playbook: rail.source('playbook') };
+const railSources = { validation: rail.source('validation'), editor: rail.source('editor'), git: rail.source('git'), agents: rail.source('agents'), live: rail.source('live'), playbook: rail.source('playbook'), connection: rail.source('connection') };
+/** Repos on SSH hosts, in dev containers and in WSL (`remote/`): their servers run there, reached over the transport. */
+const remotes = new RemoteRepos({ userData: app.getPath('userData'), app: () => serverBundle(), rail: { connection: railSources.connection, git: railSources.git } });
 sessions.onChange(list => railSources.agents.replace(agentContributions(list)));
 rail.onChange(() => refresh());
 /** The playbook of every workspace (#19), kept in the app's data folder; unwatched chapters count on the rail. */
@@ -102,6 +110,19 @@ const openClone = cloneIpc({
         if (!open) activeView()?.webContents.focus();
     },
     add: folder => openPaths([folder])
+});
+/** The window whose shell page draws the remote repo form. */
+let remoteWindow: string | undefined;
+const remoteForm = remoteIpc({
+    window: () => host.base(remoteWindow),
+    shell: () => remoteWindow ? host.native(remoteWindow)?.shell.webContents : undefined,
+    shown: open => {
+        if (open) remoteWindow = windows.focused().id;
+        if (remoteWindow) host.cover(remoteWindow, 'remote', open);
+        refresh();
+        if (!open) activeView()?.webContents.focus();
+    },
+    add: id => openPaths([id])
 });
 /**
  * The windows (issue #14). Every window has the rail and the switcher; the panes (each repo's view first) move
@@ -155,7 +176,11 @@ function start(): void {
         attach: (repo, view) => host.addPane(paneId(CODE_PANE, repo), view),
         detach: repo => host.removePane(paneId(CODE_PANE, repo)),
         ideView: repo => host.panes.get(paneId(IDE_PANE, repo)),
-        onChange: () => refresh()
+        onChange: () => refresh(),
+        remote: repo => {
+            const remote = remotes.get(repo);
+            return remote?.root ? { folder: remote.root, start: key => remote.startCode(key) } : undefined;
+        }
     });
     registerPaneType({ type: CODE_PANE, label: 'Code', region: 'side', share: code.settings.width });
     terminals.start();
@@ -177,6 +202,7 @@ function start(): void {
     on('open', () => addFolderDialog());
     on('addMenu', window => addMenu(window));
     on('openClone', () => openClone());
+    on('openRemote', () => remoteForm.open());
     on('move', (_window, repo: string, from: string, to: string) => moveRepo(repo, from, to));
     on('newWorkspace', () => newWorkspaceDialog());
     on('retry', (_window, id: string) => retry(id));
@@ -302,6 +328,7 @@ function changed(): void {
 }
 
 async function launch(id: string): Promise<void> {
+    if (isRemoteId(id)) return launchRemote(id);
     repos.update(id, { status: 'starting', error: undefined });
     refresh();
     try {
@@ -338,6 +365,47 @@ async function launch(id: string): Promise<void> {
     refresh();
 }
 
+/** A repo on another machine: connects, installs and starts its server there; the view keeps its URL across reconnects. */
+async function launchRemote(id: string): Promise<void> {
+    repos.update(id, { status: 'starting', error: undefined });
+    refresh();
+    try {
+        await remotes.launch(id, {
+            ide: {
+                sessions,
+                playbooks,
+                host: desktopHost(workspaces),
+                onStatus: ({ errors, unsaved, changes }) => {
+                    if (errors !== undefined) railSources.validation.set(id, { counts: { errors } });
+                    if (changes !== undefined) railSources.live.set(id, { counts: { unseen: changes } });
+                    if (unsaved) railSources.editor.set(id, { counts: { unsaved: unsaved.length }, notes: unsaved.map(f => `Unsaved: ${f}`) });
+                }
+            },
+            onConnected: (url, ide, again) => {
+                if (!repos.get(id)) return;
+                processes.set(id, ide);
+                repos.update(id, { status: 'ready', url, error: undefined });
+                const existing = host.panes.get(paneId(IDE_PANE, id));
+                if (!existing) host.addPane(paneId(IDE_PANE, id), view(url));
+                else if (again) existing.webContents.reload();
+                refresh();
+            },
+            onFailed: error => {
+                processes.delete(id);
+                drop(id);
+                railSources.validation.clear(id);
+                railSources.editor.clear(id);
+                railSources.live.clear(id);
+                repos.update(id, { status: 'failed', url: undefined, error });
+                refresh();
+            }
+        });
+    } catch (error) {
+        repos.update(id, { status: 'failed', error: (error as Error).message });
+    }
+    refresh();
+}
+
 function retry(id: string): void {
     const repo = repos.get(id);
     if (repo?.status === 'failed') launch(repo.id);
@@ -345,6 +413,8 @@ function retry(id: string): void {
 
 /** Follows a repo's branch, ahead and behind counts and dirty state for the rail (see `watchGit`). */
 function watchBranch(id: string): void {
+    // remote repos: `RemoteRepos` reads the git state over the transport
+    if (isRemoteId(id)) return;
     railSources.git.set(id, { branch: gitBranch(id) });
     heads.set(id, watchGit(id, state => {
         if (!repos.get(id)) return;
@@ -359,6 +429,7 @@ function stop(id: string): void {
     heads.delete(id);
     processes.get(id)?.close();
     processes.delete(id);
+    if (isRemoteId(id)) void remotes.stop(id);
     drop(id);
     terminals.closeRepo(id);
 }
@@ -437,7 +508,8 @@ function repoMenu(window: string, repo: string): void {
         ...moveItems('repo', repo, window),
         ...(away ? [{ label: `Dock Back from ${windowName(away.id)}`, click: () => windows.dockPane(paneId(IDE_PANE, repo)) && changed() }] : []),
         ...paneItems(repo, window),
-        { label: 'Reveal in File Manager', click: () => shell.showItemInFolder(repo) },
+        { label: 'Reveal in File Manager', enabled: !isRemoteId(repo), click: () => shell.showItemInFolder(repo) },
+        ...!isRemoteId(repo) && findDevcontainer(repo) ? [{ label: 'Reopen in Dev Container', click: () => remoteForm.openContainer(repo) }] : [],
         { label: 'Open in VS Code', click: () => code?.openInVSCode(repo, false) },
         { type: 'separator' },
         { label: 'Close Repo', click: () => closeRepo(repo) }
@@ -456,7 +528,9 @@ function addMenu(window: string): void {
     if (!base) return;
     Menu.buildFromTemplate([
         { label: 'Add Folder…', click: () => addFolderDialog() },
-        { label: 'Clone Repository…', click: () => openClone() }
+        { label: 'Clone Repository…', click: () => openClone() },
+        { label: 'Add Remote Repository…', click: () => remoteForm.open() },
+        { label: 'Open Folder in Dev Container…', click: () => remoteForm.openContainer() }
     ]).popup({ window: base });
 }
 
@@ -561,7 +635,7 @@ function state(window: string) {
 
 /** A rail button's status for the shell: the counts, the badge (the most urgent count) and the tooltip lines. */
 function railView(status: Parameters<typeof railLines>[0]) {
-    return { counts: status.counts, branch: status.branch, git: status.git, badge: railBadge(status.counts), lines: railLines(status) };
+    return { counts: status.counts, branch: status.branch, git: status.git, connection: (status as { connection?: string }).connection, badge: railBadge(status.counts), lines: railLines(status) };
 }
 
 function toggleRail(): void {
@@ -771,6 +845,8 @@ function save(): void {
 const actions: Record<string, () => void> = {
     open: () => addFolderDialog(),
     clone: () => openClone(),
+    addRemote: () => remoteForm.open(),
+    openInContainer: () => remoteForm.openContainer(),
     closeRepo: () => { const repo = workspaces.activeRepo(); if (repo) closeRepo(repo); },
     switcher: () => host.covered(windows.focused().id, 'switcher') ? closeSwitcher() : openSwitcher(),
     nextRepo: () => workspaces.stepRecent(1, Date.now()) && changed(),
@@ -825,7 +901,7 @@ function buildMenu(): void {
         ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
         {
             label: 'File', submenu: [
-                item('newWorkspace'), item('openWorkspace'), item('open'), item('clone'), { type: 'separator' },
+                item('newWorkspace'), item('openWorkspace'), item('open'), item('clone'), item('addRemote'), item('openInContainer'), { type: 'separator' },
                 item('closeRepo'), item('closeWorkspace'), { type: 'separator' }, item('keybindings'), item('checkForUpdates'), { type: 'separator' }, item('quit')
             ]
         },

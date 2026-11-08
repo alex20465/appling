@@ -1,19 +1,23 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { fromVscodeUri, isRemoteId, locationId, parseLocation, toVscodeUri, type RemoteLocation } from './remote/location.js';
 
 /** The extension of VS Code's multi root workspace files. */
 export const EXTENSION = '.code-workspace';
 
-/** A folder of a workspace file; `name` is the optional display name VS Code shows instead of the folder's. */
+/**
+ * A folder of a workspace file; `name` is the optional display name VS Code shows instead of the folder's. `path` is
+ * the repo's id: an absolute path, or for a remote folder (a `uri` entry) its URI (`ssh://host/path`, see `remote/location.ts`).
+ */
 export interface WorkspaceFolder {
     path: string;
     name?: string;
 }
 
 export interface CodeWorkspace {
-    /** The local folders as absolute paths, in file order. */
+    /** The local folders as absolute paths and the remote ones as repo URIs, in file order. */
     folders: WorkspaceFolder[];
-    /** Every other key of the file (settings, extensions, launch, ...), and `folders` entries with a `uri` (remote folders), kept as they are. */
+    /** Every other key of the file (settings, extensions, launch, ...), and `folders` entries Desktop cannot open (other `uri` kinds), kept as they are. */
     data: Record<string, unknown>;
     remote: unknown[];
 }
@@ -62,12 +66,21 @@ export function parseCodeWorkspace(text: string, file: string): CodeWorkspace {
     const local: WorkspaceFolder[] = [];
     const remote: unknown[] = [];
     for (const entry of folders) {
-        const { path, name } = (entry ?? {}) as { path?: unknown, name?: unknown };
-        if (typeof path !== 'string') {
-            remote.push(entry);
-            continue;
+        const { path, name, uri } = (entry ?? {}) as { path?: unknown, name?: unknown, uri?: unknown };
+        let folder: string;
+        if (typeof path === 'string') folder = resolve(dirname(file), path);
+        else {
+            // VS Code's remote folders: vscode-remote://ssh-remote+host/path, wsl+distro, dev-container+<hex>
+            try {
+                folder = typeof uri === 'string' ? locationId(fromVscodeUri(uri)) : '';
+            } catch {
+                folder = '';
+            }
+            if (!folder) {
+                remote.push(entry);
+                continue;
+            }
         }
-        const folder = resolve(dirname(file), path);
         if (local.some(f => f.path === folder)) continue;
         local.push(typeof name === 'string' && name ? { path: folder, name } : { path: folder });
     }
@@ -80,6 +93,10 @@ export function parseCodeWorkspace(text: string, file: string): CodeWorkspace {
  */
 export function printCodeWorkspace(file: string, folders: WorkspaceFolder[], previous?: CodeWorkspace): string {
     const entries = folders.map(folder => {
+        if (isRemoteId(folder.path)) {
+            const uri = toVscodeUri(parseLocation(folder.path) as RemoteLocation);
+            return folder.name ? { name: folder.name, uri } : { uri };
+        }
         const rel = relative(dirname(file), folder.path);
         const path = !rel ? '.' : isAbsolute(rel) ? folder.path : rel.split(sep).join('/');
         return folder.name ? { name: folder.name, path } : { path };

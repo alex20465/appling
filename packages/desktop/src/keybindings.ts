@@ -4,6 +4,8 @@ import { existsSync, readFileSync } from 'node:fs';
 export const COMMANDS = {
     open: 'Add Folder to Workspace…',
     clone: 'Clone Repository…',
+    addRemote: 'Add Remote Repository…',
+    openInContainer: 'Open Folder in Dev Container…',
     closeRepo: 'Close Repo',
     switcher: 'Go to Repo…',
     nextRepo: 'Recent Repo',
@@ -45,6 +47,8 @@ export type Keybindings = Record<string, string | null>;
 export const DEFAULT_KEYBINDINGS: Keybindings = {
     open: 'CmdOrCtrl+O',
     clone: null,
+    addRemote: null,
+    openInContainer: null,
     closeRepo: 'CmdOrCtrl+W',
     switcher: 'CmdOrCtrl+P',
     nextRepo: 'Ctrl+Tab',

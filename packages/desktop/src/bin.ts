@@ -4,16 +4,29 @@ import { existsSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isRemoteId, locationId, parseLocation } from './remote/location.js';
 
 /**
- * `appling-desktop [folders or .code-workspace files...]`: opens the workspace files and adds the folders (default:
- * the current one) to the active workspace of the running app, or starts it. Electron's single instance lock hands
+ * `appling-desktop [folders, remote repos or .code-workspace files...]`: opens the workspace files and adds the folders
+ * (default: the current one) and remote repos (`ssh://host/path`, `wsl://distro/path`, `devcontainer:///folder`, see
+ * `remote/location.ts`) to the active workspace of the running app, or starts it. Electron's single instance lock hands
  * the paths of a second start to the first one, which then quits the second.
  */
-const paths = (process.argv.length > 2 ? process.argv.slice(2) : ['.']).map(path => resolve(path));
-const missing = paths.filter(path => !existsSync(path) || (path.endsWith('.code-workspace') ? !statSync(path).isFile() : !statSync(path).isDirectory()));
+/** A remote repo's canonical id, undefined when it does not parse. */
+const remote = (path: string) => {
+    try {
+        return locationId(parseLocation(path));
+    } catch {
+        return undefined;
+    }
+};
+const args = process.argv.length > 2 ? process.argv.slice(2) : ['.'];
+const missing = args.filter(path => isRemoteId(path)
+    ? !remote(path)
+    : !existsSync(path) || (path.endsWith('.code-workspace') ? !statSync(path).isFile() : !statSync(path).isDirectory()));
+const paths = args.map(path => isRemoteId(path) ? remote(path)! : resolve(path));
 if (missing.length) {
-    console.error(`Not a folder or a .code-workspace file: ${missing.join(', ')}`);
+    console.error(`Not a folder, a remote repo or a .code-workspace file: ${missing.join(', ')}`);
     process.exit(2);
 }
 

@@ -1,4 +1,5 @@
-import { resolve } from 'node:path';
+import type { ConnectionState } from './remote/connection.js';
+import { repoId } from './remote/location.js';
 
 /**
  * What the rail counts per repo; a workspace shows the sum over its repos. New features add a key here and feed it
@@ -47,6 +48,8 @@ export interface RailContribution {
     /** The checked out branch (from the git source). */
     branch?: string;
     git?: RailGit;
+    /** A remote repo's connection (from the connection source, `remote/rail.ts`). */
+    connection?: ConnectionState;
     /** More lines for the repo's tooltip, such as `2 ahead, 1 behind`. */
     notes?: string[];
 }
@@ -56,6 +59,7 @@ export interface RepoRailStatus {
     counts: RailCounts;
     branch?: string;
     git?: RailGit;
+    connection?: ConnectionState;
     notes: string[];
 }
 
@@ -65,7 +69,7 @@ export function emptyCounts(): RailCounts {
 
 /**
  * The rail's status model. Each feature registers as a source (`source(name)`) and reports per repo what it knows;
- * a source owns its own contributions, so features never overwrite each other. Repos are keyed by absolute path.
+ * a source owns its own contributions, so features never overwrite each other. Repos are keyed by their id (absolute path, or URI when remote).
  */
 export class RailStatus {
     /** source -> repo -> contribution */
@@ -84,7 +88,7 @@ export class RailStatus {
     set(source: string, repo: string, contribution: RailContribution): void {
         let repos = this.sources.get(source);
         if (!repos) this.sources.set(source, repos = new Map());
-        const id = resolve(repo);
+        const id = repoId(repo);
         if (same(repos.get(id), contribution)) return;
         repos.set(id, contribution);
         this.emit();
@@ -92,7 +96,7 @@ export class RailStatus {
 
     /** Sets a source's contributions for every repo; repos it does not name lose theirs. */
     replace(source: string, all: Map<string, RailContribution> | Record<string, RailContribution>): void {
-        const next = new Map([...(all instanceof Map ? all : Object.entries(all))].map(([repo, c]) => [resolve(repo), c] as const));
+        const next = new Map([...(all instanceof Map ? all : Object.entries(all))].map(([repo, c]) => [repoId(repo), c] as const));
         const current = this.sources.get(source) ?? new Map<string, RailContribution>();
         const unchanged = current.size === next.size && [...next].every(([repo, c]) => same(current.get(repo), c));
         this.sources.set(source, next);
@@ -101,7 +105,7 @@ export class RailStatus {
 
     /** Drops a source's contribution for one repo, or for every repo; with no source, everything known of the repo. */
     clear(source: string | undefined, repo?: string): void {
-        const id = repo === undefined ? undefined : resolve(repo);
+        const id = repo === undefined ? undefined : repoId(repo);
         let changed = false;
         for (const [name, repos] of this.sources) {
             if (source !== undefined && name !== source) continue;
@@ -114,7 +118,7 @@ export class RailStatus {
     }
 
     repo(repo: string): RepoRailStatus {
-        const id = resolve(repo);
+        const id = repoId(repo);
         const status: RepoRailStatus = { counts: emptyCounts(), notes: [] };
         for (const repos of this.sources.values()) {
             const contribution = repos.get(id);
@@ -122,6 +126,7 @@ export class RailStatus {
             for (const key of RAIL_COUNTS) status.counts[key] += contribution.counts?.[key] ?? 0;
             if (contribution.branch !== undefined) status.branch = contribution.branch;
             if (contribution.git) status.git = contribution.git;
+            if (contribution.connection) status.connection = contribution.connection;
             status.notes.push(...contribution.notes ?? []);
         }
         return status;
@@ -130,7 +135,7 @@ export class RailStatus {
     /** The counts summed over the given repos (a workspace's folders). */
     sum(repos: Iterable<string>): RailCounts {
         const total = emptyCounts();
-        for (const repo of new Set([...repos].map(r => resolve(r)))) {
+        for (const repo of new Set([...repos].map(r => repoId(r)))) {
             const { counts } = this.repo(repo);
             for (const key of RAIL_COUNTS) total[key] += counts[key];
         }
@@ -204,7 +209,7 @@ export function agentContributions(sessions: readonly { repo: string, status: st
             : session.status === 'needs-input' || session.status === 'blocked' ? 'agentsWaiting'
             : session.status === 'failed' ? 'agentsFailed' : undefined;
         if (!key) continue;
-        const id = resolve(session.repo);
+        const id = repoId(session.repo);
         const counts = result.get(id)?.counts ?? {};
         counts[key] = (counts[key] ?? 0) + 1;
         result.set(id, { counts });
@@ -221,7 +226,7 @@ export function playbookContributions(playbooks: Iterable<{ chapters: readonly {
     for (const book of playbooks) {
         for (const chapter of book.chapters) {
             if (chapter.seen !== undefined && chapter.seen >= chapter.steps.length) continue;
-            const id = resolve(chapter.repo);
+            const id = repoId(chapter.repo);
             const counts = result.get(id)?.counts ?? {};
             counts.unwatched = (counts.unwatched ?? 0) + 1;
             result.set(id, { counts });

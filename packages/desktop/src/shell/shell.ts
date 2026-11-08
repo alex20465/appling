@@ -1,6 +1,6 @@
 /**
  * The shell page: the rail on the left (workspaces, then the repos of the active one), behind the active repo's view
- * the empty and error states, and the switcher and the clone form (shown while the main process hides the repo views).
+ * the empty and error states, and the switcher, the clone form and the remote repo form (shown while the main process hides the repo views).
  */
 import type { CloneProgress } from '../clone.js';
 import type { RailCount, RailCounts } from '../rail-status.js';
@@ -15,6 +15,8 @@ interface RailView {
     git?: { upstream?: string, ahead: number, behind: number, dirty: number };
     /** The tooltip lines: branch and git state, counts, notes. */
     lines: string[];
+    /** A remote repo's connection. */
+    connection?: 'connecting' | 'connected' | 'reconnecting' | 'failed' | 'closed';
 }
 
 interface RepoState extends RailView {
@@ -96,6 +98,9 @@ interface Bridge {
     paneMenu(pane: string): void;
     focusPane(pane: string): void;
     dockPane(pane: string): void;
+    onRemote(callback: (form: { suggestions: string[] }) => void): void;
+    addRemote(text: string): Promise<{ id?: string, error?: string }>;
+    closeRemote(): void;
 }
 
 type DragKind = 'workspace' | 'repo' | 'pane';
@@ -151,7 +156,7 @@ function render(state: ShellState): void {
         unseenMark(button, shown.counts.unseen, shown.id === state.active);
     }
     repoRail.replaceChildren(...(workspace?.repos ?? []).map(repo => {
-        const flags = `${repo.pinned ? ' pinned' : ''}${repo.hidden ? ' hidden' : ''}${repo.id === state.repo ? ' active' : ''}`;
+        const flags = `${repo.pinned ? ' pinned' : ''}${repo.hidden ? ' hidden' : ''}${repo.id === state.repo ? ' active' : ''}${repo.connection ? ` conn-${repo.connection}` : ''}`;
         const note = repo.pinned ? 'Pinned. ' : repo.hidden ? 'Hidden from the rail. ' : '';
         const away = repo.away ? `Its canvas is in ${repo.away.window}.\n` : '';
         const button = railButton(`repo ${repo.status}${flags}${repo.away ? ' away' : ''}`, repo.name, `${repo.name}\n${repo.id}\n${away}${note}Drag to reorder, onto a workspace or out of the window, middle click closes, right click for more`);
@@ -205,7 +210,8 @@ function render(state: ShellState): void {
         stage.append(heading(active.name), paragraph(`Its canvas is in ${away.window}.`),
             action('Go There', () => bridge.focusPane(away.pane)), action('Dock Here', () => bridge.dockPane(away.pane)));
     } else if (active.status === 'starting') {
-        stage.append(heading(active.name), paragraph('Starting the IDE server…'));
+        // a remote repo's connection line says how far it got (connecting, installing, starting)
+        stage.append(heading(active.name), paragraph(active.connection ? active.lines.find(l => l.startsWith('Connecting')) ?? 'Connecting…' : 'Starting the IDE server…'));
     } else if (active.status === 'failed') {
         const details = document.createElement('pre');
         details.textContent = active.error ?? '';
@@ -467,4 +473,35 @@ cloneForm.onkeydown = event => {
     if (event.key !== 'Escape') return;
     event.preventDefault();
     closeClone();
+};
+
+/** The remote repo form: one field (`ssh://host/path`, `wsl://distro/path`) with the ssh config's hosts to pick. */
+const remoteForm = document.querySelector<HTMLFormElement>('#remote')!;
+const remoteInput = remoteForm.querySelector<HTMLInputElement>('[name=location]')!;
+const remoteStatus = remoteForm.querySelector<HTMLElement>('.status')!;
+function closeRemote(): void {
+    if (remoteForm.hidden) return;
+    remoteForm.hidden = true;
+    bridge.closeRemote();
+}
+bridge.onRemote(({ suggestions }) => {
+    remoteForm.hidden = false;
+    remoteInput.value = '';
+    remoteStatus.textContent = '';
+    document.querySelector('#remote-hosts')!.replaceChildren(...suggestions.map(value => Object.assign(document.createElement('option'), { value })));
+    remoteInput.focus();
+});
+remoteForm.querySelector<HTMLButtonElement>('.cancel')!.onclick = () => closeRemote();
+remoteForm.onsubmit = async event => {
+    event.preventDefault();
+    const result = await bridge.addRemote(remoteInput.value);
+    if (result.error) {
+        remoteStatus.textContent = result.error;
+        remoteStatus.classList.add('error');
+    } else remoteForm.hidden = true;
+};
+remoteForm.onkeydown = event => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    closeRemote();
 };

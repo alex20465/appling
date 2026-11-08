@@ -36,6 +36,17 @@ export interface CodeViewsOptions {
     ideView(repo: string): WebContentsView | undefined;
     /** Something the menu or the title depends on changed. */
     onChange(): void;
+    /**
+     * For a remote repo: how its Code OSS starts on the other side (`RemoteRepo.startCode`) and its folder there.
+     * Undefined for local repos.
+     */
+    remote?(repo: string): RemoteCode | undefined;
+}
+
+/** Code OSS on a remote repo's machine, forwarded to a local port. */
+export interface RemoteCode {
+    folder: string;
+    start(key: string): Promise<{ port: number, token: string, close(): Promise<void>, onExit(listener: (output: string) => void): void }>;
 }
 
 /** The Appling extension's package: bundled in the packaged app, else built by `appling-vscode`; `APPLING_VSIX` overrides it. */
@@ -203,6 +214,24 @@ export class CodeViews {
     }
 
     private async launch(repo: string): Promise<Instance> {
+        const remote = this.options.remote?.(repo);
+        if (remote) {
+            // on the other machine: no selection sync yet (its extension cannot reach the local bridge)
+            this.status(repo, 'Starting Code OSS on the remote side…');
+            const key = repoKey(repo);
+            const started = await remote.start(key);
+            let instance: Instance | undefined = undefined;
+            started.onExit(output => instance && this.instances.exited(repo, instance, `Code OSS ended.\n${output.trim().split('\n').slice(-20).join('\n')}`));
+            this.proxy.route(key, { port: started.port, token: started.token });
+            instance = {
+                server: { port: started.port, token: started.token, close: started.close } as CodeServer,
+                close: async () => {
+                    this.proxy.route(key, undefined);
+                    await started.close();
+                }
+            };
+            return instance;
+        }
         const binary = process.env.APPLING_CODE_SERVER ?? await ensureCodeServer(join(this.root, 'server'), {
             onProgress: (received, total) => this.status(repo, `Downloading Code OSS (openvscode-server) once… ${total ? `${Math.round(received / total * 100)}%` : `${Math.round(received / 1e6)} MB`}`)
         });
@@ -247,7 +276,7 @@ export class CodeViews {
     private instanceChanged(repo: string, state: InstanceState<Instance>): void {
         if (state.status === 'running') {
             const view = this.views.get(repo);
-            if (view) view.webContents.loadURL(this.proxy.url(repoKey(repo), repo));
+            if (view) view.webContents.loadURL(this.proxy.url(repoKey(repo), this.options.remote?.(repo)?.folder ?? repo));
         } else if (state.status === 'suspended' || state.status === 'stopped') this.drop(repo);
         else if (state.status === 'failed' && state.error) this.status(repo, state.error);
         this.options.onChange();
@@ -284,7 +313,7 @@ export class CodeViews {
         this.views.set(repo, view);
         this.options.attach(repo, view);
         const state = this.instances.get(repo);
-        if (state?.status === 'running') view.webContents.loadURL(this.proxy.url(repoKey(repo), repo));
+        if (state?.status === 'running') view.webContents.loadURL(this.proxy.url(repoKey(repo), this.options.remote?.(repo)?.folder ?? repo));
         else this.status(repo, 'Starting Code OSS…');
         return view;
     }

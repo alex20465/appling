@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import { workspaceName, type WorkspaceFolder } from './code-workspace.js';
+import { repoId } from './remote/location.js';
 
 /** An open workspace; its id is the absolute path of its `.code-workspace` file. */
 export interface Workspace {
@@ -93,7 +94,7 @@ export class Workspaces {
     addRepo(workspaceId: string, folder: string): boolean {
         const workspace = this.get(workspaceId);
         if (!workspace) return false;
-        const path = resolve(folder);
+        const path = repoId(folder);
         const added = !workspace.folders.some(f => f.path === path);
         if (added) workspace.folders.push({ path });
         this.select(path, workspace.id);
@@ -103,7 +104,7 @@ export class Workspaces {
     /** Removes a repo from a workspace; the workspace's active repo passes to the neighbour. */
     removeRepo(workspaceId: string, repo: string): boolean {
         const workspace = this.get(workspaceId);
-        const path = resolve(repo);
+        const path = repoId(repo);
         const at = workspace ? workspace.folders.findIndex(f => f.path === path) : -1;
         if (!workspace || at < 0) return false;
         workspace.folders.splice(at, 1);
@@ -121,7 +122,7 @@ export class Workspaces {
     moveRepo(repo: string, from: string, to: string): boolean {
         const source = this.get(from);
         const target = this.get(to);
-        const path = resolve(repo);
+        const path = repoId(repo);
         const folder = source?.folders.find(f => f.path === path);
         if (!source || !target || !folder || source === target) return false;
         this.removeRepo(source.id, path);
@@ -132,7 +133,7 @@ export class Workspaces {
 
     /** Shows a repo: in the given workspace, else the active one when it holds the repo, else the first that does. */
     select(repo: string, workspaceId?: string): boolean {
-        const path = resolve(repo);
+        const path = repoId(repo);
         const holds = (w?: Workspace) => w?.folders.some(f => f.path === path) ? w : undefined;
         const workspace = holds(workspaceId ? this.get(workspaceId) : undefined) ?? holds(this.current()) ?? this.list.find(w => holds(w));
         if (!workspace) return false;
@@ -161,7 +162,7 @@ export class Workspaces {
     /** Pins a repo to the top of its workspace's rail, or unpins it (false). Pinning shows a hidden repo again. */
     pin(workspaceId: string, repo: string, pinned: boolean): boolean {
         const workspace = this.get(workspaceId);
-        const path = resolve(repo);
+        const path = repoId(repo);
         if (!workspace?.folders.some(f => f.path === path) || workspace.pinned.includes(path) === pinned) return false;
         workspace.pinned = pinned ? [...workspace.pinned, path] : workspace.pinned.filter(r => r !== path);
         if (pinned) workspace.hidden = workspace.hidden.filter(r => r !== path);
@@ -174,7 +175,7 @@ export class Workspaces {
      */
     hide(workspaceId: string, repo: string, hidden: boolean): boolean {
         const workspace = this.get(workspaceId);
-        const path = resolve(repo);
+        const path = repoId(repo);
         if (!workspace?.folders.some(f => f.path === path) || workspace.hidden.includes(path) === hidden) return false;
         if (!hidden) {
             workspace.hidden = workspace.hidden.filter(r => r !== path);
@@ -200,8 +201,8 @@ export class Workspaces {
      */
     reorder(workspaceId: string, repo: string, before?: string): boolean {
         const workspace = this.get(workspaceId);
-        const path = resolve(repo);
-        const target = before === undefined ? undefined : resolve(before);
+        const path = repoId(repo);
+        const target = before === undefined ? undefined : repoId(before);
         const from = workspace ? workspace.folders.findIndex(f => f.path === path) : -1;
         if (!workspace || from < 0 || target === path) return false;
         if (target !== undefined && !workspace.folders.some(f => f.path === target)) return false;
@@ -261,13 +262,13 @@ export class Workspaces {
     }): void {
         for (const [id, repo] of Object.entries(shown)) {
             const workspace = this.get(id);
-            if (workspace?.folders.some(f => f.path === resolve(repo))) workspace.active = resolve(repo);
+            if (workspace?.folders.some(f => f.path === repoId(repo))) workspace.active = repoId(repo);
         }
         for (const [id, layout] of Object.entries(rail)) {
             const workspace = this.get(id);
             if (!workspace) continue;
             const known = (repos: unknown) => Array.isArray(repos)
-                ? [...new Set(repos.filter((r): r is string => typeof r === 'string').map(r => resolve(r)))].filter(r => workspace.folders.some(f => f.path === r))
+                ? [...new Set(repos.filter((r): r is string => typeof r === 'string').map(r => repoId(r)))].filter(r => workspace.folders.some(f => f.path === r))
                 : [];
             workspace.hidden = known(layout.hidden);
             workspace.pinned = known(layout.pinned).filter(r => !workspace.hidden.includes(r))
@@ -275,7 +276,7 @@ export class Workspaces {
         }
         if (collapsed !== undefined) this.collapsed = collapsed;
         if (active && this.get(active)) this.active = resolve(active);
-        this.recent = recent.map(r => resolve(r));
+        this.recent = recent.map(r => repoId(r));
         this.forget();
     }
 
@@ -297,5 +298,5 @@ export class Workspaces {
 
 function dedupe(folders: WorkspaceFolder[]): WorkspaceFolder[] {
     const seen = new Set<string>();
-    return folders.map(f => ({ ...f, path: resolve(f.path) })).filter(f => !seen.has(f.path) && seen.add(f.path));
+    return folders.map(f => ({ ...f, path: repoId(f.path) })).filter(f => !seen.has(f.path) && seen.add(f.path));
 }

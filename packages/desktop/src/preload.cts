@@ -31,5 +31,8 @@ contextBridge.exposeInMainWorld('appling', {
     drop: (kind: string, id: string) => ipcRenderer.send('drop', kind, id),
     paneMenu: (pane: string) => ipcRenderer.send('paneMenu', pane),
     focusPane: (pane: string) => ipcRenderer.send('focusPane', pane),
-    dockPane: (pane: string) => ipcRenderer.send('dockPane', pane)
+    dockPane: (pane: string) => ipcRenderer.send('dockPane', pane),
+    onRemote: (callback: (form: unknown) => void) => ipcRenderer.on('remote', (_event, form) => callback(form)),
+    addRemote: (text: string) => ipcRenderer.invoke('addRemote', text),
+    closeRemote: () => ipcRenderer.send('closeRemote')
 });

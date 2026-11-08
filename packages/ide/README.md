@@ -6,7 +6,7 @@ A local, browser based IDE for Appling models: the canonical text next to a map 
 npx @appling/ide [folder] [--port 4410]
 ```
 
-It serves the folder's `.appling` files on `http://127.0.0.1:4410` and only answers pages it served itself.
+It serves the folder's `.appling` files on `http://127.0.0.1:4410` and only answers pages it served itself. `--origin <url>` (repeatable) trusts another origin too, such as the local end of a port forwarded to the server from another machine (Appling Desktop does this for remote repos).
 
 To try it without installing anything, open the demo at https://appling.tools/ide/: the same IDE on the sample sales and CRM model, with the language server running in the browser. Edits stay in the page until you reload, and the AI tab needs a local IDE with an API key.
 
