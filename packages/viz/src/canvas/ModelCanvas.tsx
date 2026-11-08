@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { layoutTree, type Placed } from '../layout.js';
 import { relevanceLevel } from '@appling/model/relevance';
 import type { Bubble } from '../protocol.js';
-import { anchorOf, changeMarks, growTree, sessionMarks, kindLabel, LENSES, revealPath, trailOf, type GraphIndex, type Lens, type MarkedChanges, type SessionMark, type TreeNode, type ViewSettings } from '../views.js';
+import type { ImplementationState } from '@appling/model/implementation';
+import { anchorOf, changeMarks, growTree, IMPLEMENTATION_LABELS, implementationMarks, sessionMarks, kindLabel, LENSES, revealPath, trailOf, type GraphIndex, type Lens, type MarkedChanges, type SessionMark, type TreeNode, type ViewSettings } from '../views.js';
 import { BubbleView, LooseBubbles, memberOf, type BubbleStep } from './Bubble.js';
 
 interface CanvasProps {
@@ -18,6 +19,8 @@ interface CanvasProps {
     changes?: MarkedChanges;
     /** Elements agent sessions claimed or highlighted: their declarations get a ring in the session's colour. */
     sessions?: SessionMark[];
+    /** How far each element is implemented (`@appling/model/implementation`): declarations and modules get a dot in the colour of their rolled up state. */
+    implementation?: Record<string, { state: ImplementationState }>;
     /** The place of the shown bubble among all, for its back and next buttons. */
     step?: BubbleStep;
     /** Changing it plays the marks of `changes` once more, such as on every step of the playbook player. */
@@ -51,7 +54,7 @@ const LABEL: Record<TreeNode['type'], number> = { seed: 0, module: 210, group: 1
  * The model as a tree that grows from a seed: modules first, then the declarations of the lens, then on every
  * unfold what uses the unfolded declaration. Only what you unfold is drawn.
  */
-export function ModelCanvas({ index, name, focus, selected, settings, bubbles = [], changes, sessions, onSelect, onSettings, onOpenFile, step, beat }: CanvasProps) {
+export function ModelCanvas({ index, name, focus, selected, settings, bubbles = [], changes, sessions, implementation, onSelect, onSettings, onOpenFile, step, beat }: CanvasProps) {
     const box = useRef<HTMLDivElement>(null);
     const drag = useRef<{ x: number, y: number, moved: boolean }>(undefined);
     const [camera, setCamera] = useState<Camera>({ x: 0, y: 0, k: 1 });
@@ -74,6 +77,7 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
     const chosen = selected && index.declaration(selected);
     const marks = useMemo(() => changes ? changeMarks(index, changes, true) : new Map<string, string>(), [index, changes]);
     const claimed = useMemo(() => sessions?.length ? sessionMarks(index, sessions) : new Map<string, SessionMark>(), [index, sessions]);
+    const implemented = useMemo(() => implementation ? implementationMarks(index, implementation) : new Map<string, ImplementationState>(), [index, implementation]);
 
     const replant = () => {
         const next = initial(index, settings, focus);
@@ -234,7 +238,7 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
                         <path key={`branch ${p.node.id}`} className={`branch${lit.has(p.node.id) ? ' lit' : ''}`} pathLength={1} style={{ d: `path("${branch(p)}")` } as React.CSSProperties} />
                     ))}
                     {placed.map(p => (
-                        <TreeItem key={p.node.id} placed={p} current={p.node.id === current} chosen={!!chosen && p.node.qn === chosen} unfolded={!!p.node.children} mark={p.node.qn && marks.get(p.node.qn) && [marks.get(p.node.qn), changes?.planned && 'planned', beat !== undefined && `beat-${beat % 2}`].filter(Boolean).join(' ')} session={p.node.qn ? claimed.get(p.node.qn) : undefined} onPress={press} />
+                        <TreeItem key={p.node.id} placed={p} current={p.node.id === current} chosen={!!chosen && p.node.qn === chosen} unfolded={!!p.node.children} mark={p.node.qn && marks.get(p.node.qn) && [marks.get(p.node.qn), changes?.planned && 'planned', beat !== undefined && `beat-${beat % 2}`].filter(Boolean).join(' ')} session={p.node.qn ? claimed.get(p.node.qn) : undefined} implementation={p.node.qn && p.node.type !== 'group' ? implemented.get(p.node.qn) : undefined} onPress={press} />
                     ))}
                 </g>
             </svg>
@@ -272,7 +276,7 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
     );
 }
 
-function TreeItem({ placed, current, chosen, unfolded, mark, session, onPress }: { placed: Placed, current: boolean, chosen: boolean, unfolded: boolean, mark?: string, session?: SessionMark, onPress(node: TreeNode): void }) {
+function TreeItem({ placed, current, chosen, unfolded, mark, session, implementation, onPress }: { placed: Placed, current: boolean, chosen: boolean, unfolded: boolean, mark?: string, session?: SessionMark, implementation?: ImplementationState, onPress(node: TreeNode): void }) {
     const { node, x, y } = placed;
     const r = radius(node);
     const bud = node.count > 0 && !node.cycle && !unfolded;
@@ -289,7 +293,7 @@ function TreeItem({ placed, current, chosen, unfolded, mark, session, onPress }:
             onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onPress(node); } }}
         >
             <g className="grow">
-                <title>{node.qn ?? node.label}{node.type === 'element' ? `\n${kindLabel(node.kind!)}, ${relevanceLevel(node.relevance)}` : ''}{node.fact ? `\n${node.fact}` : ''}{session ? `\nClaimed by ${session.label}` : ''}</title>
+                <title>{node.qn ?? node.label}{node.type === 'element' ? `\n${kindLabel(node.kind!)}, ${relevanceLevel(node.relevance)}` : ''}{node.fact ? `\n${node.fact}` : ''}{session ? `\nClaimed by ${session.label}` : ''}{implementation ? `\nCode: ${IMPLEMENTATION_LABELS[implementation]}` : ''}</title>
                 {session && <circle className="session-ring" r={r + 5} style={{ stroke: session.color }} />}
                 {node.type !== 'seed' && <rect className="hit" x={-r - 4} y={-r - 4} width={r + LABEL[node.type]} height={2 * r + 8} rx={r} />}
                 <circle className="ring" r={r} />
@@ -316,6 +320,7 @@ function TreeItem({ placed, current, chosen, unfolded, mark, session, onPress }:
                     </>
                 )}
                 {bud && <circle className="bud" cy={-r} r={4} />}
+                {implementation && <circle className={`impl impl-${implementation}`} cx={r * 0.72} cy={r * 0.72} r={4.5} />}
             </g>
         </g>
     );

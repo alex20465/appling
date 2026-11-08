@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Simulator, type Access, type Verdict } from '@appling/model/simulator';
 import type { EditOperation } from '@appling/model';
+import type { ElementImplementation } from '@appling/model/implementation';
 import type { CodeLocation } from '../shared/snapshot.js';
-import { abilities, actionSummary, entityActions, kindLabel, LAYER_LABELS, memberText, policyText, relations, type Ability, type GraphIndex } from '@appling/viz/views';
+import { abilities, actionSummary, entityActions, IMPLEMENTATION_LABELS, kindLabel, LAYER_LABELS, memberText, policyText, relations, type Ability, type GraphIndex } from '@appling/viz/views';
 
 interface InspectorProps {
     index: GraphIndex;
@@ -12,11 +13,17 @@ interface InspectorProps {
     onSelect(qn: string): void;
     /** Applies an edit operation; resolves to the reasons it was rejected, or an empty list. */
     onEdit(operation: EditOperation): Promise<string[]>;
+    /** How far the element is implemented. */
+    implementation?: ElementImplementation;
+    /** Whether generation can start now: there are targets and no run. */
+    canGenerate?: boolean;
+    onOpenCode?(qn: string): void;
+    onGenerate?(qn: string): void;
 }
 
 const TYPED = new Set(['Field', 'Param']);
 
-export function Inspector({ index, qn, code, onSelect, onEdit }: InspectorProps) {
+export function Inspector({ index, qn, code, implementation, canGenerate, onSelect, onEdit, onOpenCode, onGenerate }: InspectorProps) {
     const node = qn ? index.nodes.get(qn) : undefined;
     const [errors, setErrors] = useState<string[]>([]);
     const [removing, setRemoving] = useState(false);
@@ -38,6 +45,15 @@ export function Inspector({ index, qn, code, onSelect, onEdit }: InspectorProps)
             <div className="eyebrow">{node.props.link ? 'link ' : ''}{kindLabel(node.kind)} · {LAYER_LABELS[node.layer]}</div>
             <h2>{node.qn}</h2>
             {errors.length > 0 && <ul className="errors" role="alert">{errors.map(e => <li key={e}>{e}</li>)}</ul>}
+            {implementation && (
+                <p className="impl-line">
+                    <span className={`impl-dot impl-${implementation.state}`} /> {IMPLEMENTATION_LABELS[implementation.state]}
+                    {implementation.tasks > 0 && <span className="muted"> · {implementation.tasks} open task{implementation.tasks > 1 ? 's' : ''}</span>}
+                    {implementation.outstanding && <span className="muted"> · changed since the last generation</span>}
+                    {code.length > 0 && <button className="button" onClick={() => onOpenCode?.(node.qn)}>Open code</button>}
+                    {canGenerate && <button className="button" onClick={() => onGenerate?.(node.qn)}>Generate</button>}
+                </p>
+            )}
             <Section title="Code" items={code.map(c => (
                 <li key={`${c.file}:${c.recorded?.start ?? c.start}`}>
                     <details>

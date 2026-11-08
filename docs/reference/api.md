@@ -109,6 +109,11 @@ console.log(result.ok ? result.edits : result.errors);
 | `recordReferences(root, qn, ranges)` | Replaces the [code references](../tools/references.md) of one element in `<root>/.appling/references.json` and returns them; throws for a missing file, a range outside it or one that starts on an empty line |
 | `readReferences(root)`, `resolveReferences(root, graph?)` | The stored references by qualified name, and every reference with its status and where it is now; with a graph, references to elements it lacks are `orphaned` |
 | `REFERENCES`, `CodeReference`, `References`, `ResolvedReference`, `ReferenceStatus` | `.appling/references.json` and the reference types |
+| `replaceReferencesIn(root, folder, updates)` | Replaces the references of these elements that point into `folder` (such as a generated project) with the given ranges, relative to the folder, and keeps their references elsewhere |
+| `implementationStates(graph, { references, tasks, outstanding })` | The [implementation state](../tools/implementation.md#implementation-states) of every element (`ElementImplementation`: `state`, current `references`, open `tasks`, `outstanding`) |
+| `fingerprint(node)`, `fingerprints(graph)`, `outstandingElements(graph, records)` | The hash generation records per element, and the elements new or changed since the given `GenerationRecord`s (every element for a missing record) |
+| `rollupState(states)`, `lineMarks(locations, texts, states)` | One state for several, and the mark of each model line that declares an element, by file URI (`LineMark`) |
+| `ImplementationState`, `IMPLEMENTATION_STATES`, `TaskEntry`, `GenerationRecord` | The implementation types |
 | `relevance(graph)` | The [relevance](../language/relevance.md) of every module and top level declaration, from 0 to 1, by qualified name |
 | `relevanceLevel(score)`, `RELEVANCE_LEVELS`, `RelevanceLevel` | The level a score falls in, and the score range of each level |
 | `diffGraphs(before, after)` | The model diff of two graphs as a `GraphDiff`: every `ElementChange` (`added`, `changed` or `removed`, by qualified name, with the properties and outgoing edges that differ), the lists of added, changed and removed names and `renamed`. Elements match by qualified name; the migration steps only the graph after has map old names to new ones, so a recorded rename is one change |
@@ -117,7 +122,7 @@ console.log(result.ok ? result.edits : result.errors);
 | `GraphDiff`, `ElementChange`, `ChangeStatus` | The diff types |
 | `findApplingFiles(path)` | The `.appling` files at a path, searching folders recursively and skipping hidden folders and `node_modules` |
 
-`@appling/model/graph`, `@appling/model/edit`, `@appling/model/simulator`, `@appling/model/relevance` and `@appling/model/diff` export the graph, the edit operations, the simulator, the relevance functions and the model diff without the file system functions of the rest of the package, so a browser bundle can import them.
+`@appling/model/graph`, `@appling/model/edit`, `@appling/model/simulator`, `@appling/model/relevance`, `@appling/model/diff` and `@appling/model/implementation` export the graph, the edit operations, the simulator, the relevance functions, the model diff and the implementation states without the file system functions of the rest of the package, so a browser bundle can import them.
 
 ## Code generation: @appling/codegen
 
@@ -154,8 +159,10 @@ Planning and running:
 | `coverageTable(coverage)` | That coverage as the Markdown table `--plan` prints, the total with the generated share |
 | `mapContext(graph, name, options)` | The `MapContext` passed to extensions |
 | `checkPrerequisites(prerequisites)` | One message per missing tool |
-| `runPlan(plan, out, log)` | Runs the steps into `out` and writes the registry |
-| `runSteps(steps, out, log)` | Runs steps without writing a registry |
+| `runPlan(plan, out, log, written?)` | Runs the steps into `out` and writes the registry; with `written`, collects what each step wrote |
+| `runSteps(steps, out, log, written?)` | Runs steps without writing a registry |
+| `locateWritten(out, written, only?)` | Where the collected code is in the final files, by node (`WrittenRange[]`) |
+| `addedRuns(before, after)`, `mainRun(runs)`, `Written`, `WrittenRange` | The runs of lines a template step added, and the one that holds its code |
 | `PROJECT` | The node name of setup steps, `(project)` |
 | `PlannedStep`, `Plan` | A step with its node, and the result of `plan` |
 
@@ -176,6 +183,16 @@ Migrations:
 | `runMigrations(out, plan, changes, log)` | Runs them, adds the tasks to the registry and records the changes as applied |
 | `readApplied(out)` | The ids in `<out>/.appling/migrations.json` |
 | `MigrationChange`, `ProjectFiles`, `APPLIED` | The change type, read access to the project for extensions, and the applied file path |
+
+Generation with code references and the implementation state, as the IDE does it:
+
+| Export | Purpose |
+|---|---|
+| `generateElements({ root, graph, selection, targets?, load?, onEvent? })` | Generates the selection (`{ mode: 'outstanding' }`, `{ mode: 'all' }` or `{ mode: 'elements', elements }`) into every target: creates a target without a registry, merges the selected elements' files into an existing one, records references and fingerprints, and calls back with every `GenerationEvent` |
+| `recordWritten(root, out, graph, written, elements)` | Records the references of collected code and the fingerprints of the elements for one target |
+| `readGenerations(root)`, `recordGeneration(root, out, graph, elements)`, `GENERATIONS` | `<root>/.appling/generation.json`: the fingerprints of each target's last generation |
+| `workspaceImplementation(root, graph)` | The implementation state of every element of a workspace, its targets (`TargetState`) and the open tasks of their registries (`TargetTask`) |
+| `GenerationSelection`, `GenerationEvent`, `GenerationOptions`, `MergeScope` | The generation types; `mergeGeneration(out, next, exclude, scope?)` merges only a scope's files and registry entries |
 
 How to write an extension is described in [Writing extensions](../codegen/extensions.md).
 

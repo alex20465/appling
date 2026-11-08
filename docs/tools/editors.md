@@ -53,6 +53,16 @@ When the workspace folder is reached through a symlink and the editor opens a fi
 > [!NOTE]
 > Rename in the language server changes the declaration and its references. Export lists are references too, so it covers them. It does not follow names inside expressions (`total` in `{ total >= 0 }`), transitions over enum values, `@Name` in `does` texts or message keys. The `rename` [edit operation](../reference/edit-operations.md#rename), used by the IDE inspector and the [AI tools](ai.md), follows all of them.
 
+## Appling Desktop
+
+Inside the code view of [Appling Desktop](desktop.md), the extension connects to the app and also shows the [implementation state](implementation.md):
+
+- a gutter mark on each model line that declares an element: implemented, partial, unimplemented, shifted or broken, with the element in its hover,
+- a CodeLens **Appling: sales.Order** above each code range that implements an element; it selects the element on the canvas,
+- a CodeLens **Open code** on model lines whose element has code, and the command **Appling: Open the code of this element** for the element at the cursor.
+
+The app sends the marks after every model or reference change. Outside Appling Desktop the extension shows none of them.
+
 ## Connect an editor
 
 Every LSP client needs the same four facts:

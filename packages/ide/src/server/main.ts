@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { resolve } from 'node:path';
 import { ipcChannel, remoteAppHost, RemotePlaybookStore, RemoteSessionStore } from '@appling/ai';
-import { startIde } from './server.js';
+import { startIde, type Implementation } from './server.js';
 import { snapshot } from './workspace.js';
 
 const args = process.argv.slice(2);
@@ -20,7 +20,9 @@ const shared = process.send && args.includes('--shared-sessions')
     ? { sessions: new RemoteSessionStore(ipcChannel(process)), playbooks: new RemotePlaybookStore(ipcChannel(process)), host: remoteAppHost(ipcChannel(process)) } : {};
 const unsaved = (files: string[]) => process.send?.({ type: 'status', unsaved: files });
 const unseen = (changes: number) => process.send?.({ type: 'status', changes });
-const ide = await startIde(root, port, { origins, ...process.send ? { onSnapshot: s => status(s.errors), onUnsaved: unsaved, onUnseen: unseen, ...shared } : {} });
+// the implementation marks and code links for the code view
+const implementation = (state: Implementation) => process.send?.({ type: 'implementation', ...state });
+const ide = await startIde(root, port, { origins, ...process.send ? { onSnapshot: s => status(s.errors), onUnsaved: unsaved, onUnseen: unseen, onImplementation: implementation, ...shared } : {} });
 console.log(`Appling IDE for ${root} at ${ide.url}`);
 
 // Started by Appling Desktop with an IPC channel: report the URL and end with the app.

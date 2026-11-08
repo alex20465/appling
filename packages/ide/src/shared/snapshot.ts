@@ -1,6 +1,7 @@
 import type { AgentSession, IdeAction, Playbook } from '@appling/ai';
 import type { AgentView, LiveChanges, Proposal } from './live.js';
-import type { Dependency, Graph, ResolvedReference } from '@appling/model';
+import type { Dependency, ElementImplementation, Graph, ResolvedReference } from '@appling/model';
+import type { GenerationEvent, GenerationSelection, TargetState, TargetTask } from '@appling/codegen';
 
 export interface SourceFile {
     uri: string;
@@ -28,7 +29,23 @@ export interface Snapshot {
     locations: Record<string, Location>;
     /** Where elements are implemented, by qualified name. */
     code: Record<string, CodeLocation[]>;
+    /** How far each element is implemented, by qualified name; empty without a server. */
+    implementation: Record<string, ElementImplementation>;
+    /** The generate targets of `appling.config.json`. */
+    targets: TargetState[];
+    /** The open registry tasks of every target. */
+    tasks: TargetTask[];
     errors: string[];
+}
+
+/** A generation run the IDE started, with its events so far. */
+export interface GenerationRun {
+    id: string;
+    title: string;
+    selection: GenerationSelection;
+    started: string;
+    ended?: string;
+    events: GenerationEvent[];
 }
 
 export { DEFAULT_VIEW, type ViewSettings } from '@appling/viz/views';
@@ -50,6 +67,10 @@ export interface IdeEvents {
     proposals?(proposals: Proposal[]): void;
     /** The playbook of the workspace the view shows (#19), after each change. */
     playbook?(playbook: Playbook): void;
+    /** A generation run started or ended; also the current one on connect. */
+    generation?(run: GenerationRun): void;
+    /** One event of the running generation. */
+    generationEvent?(id: string, event: GenerationEvent): void;
 }
 
 /** What the client reports it shows, for the sessions' IDE context. */

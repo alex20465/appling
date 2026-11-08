@@ -22,11 +22,12 @@ The server instructions tell the assistant that the model is the source of truth
 | `language_reference` | The complete language documentation: the list of pages, or one page as Markdown |
 | `write_model_file` | Creates or replaces one `.appling` file, only when the workspace still validates with it |
 | `edit` | One edit operation (`add`, `rename`, `retype`, `remove`, `set`), validated, written to the files; `dryRun` only checks it |
-| `registry_next` | The next open task of a generated project, with its model context |
+| `registry_next` | The next open task of a generated project, with its model context; in an agent session it skips tasks other sessions claimed and claims it |
 | `registry_update` | Marks a task `done`, or `partial` with a note |
 | `run_tests` | Runs the generated project's tests |
 | `code_references` | Where an element and its members are implemented, by file and line range, with their status; without a name, every reference that is not current |
 | `record_code_references` | Records the line ranges that implement an element in `.appling/references.json`, each with its first line as the anchor |
+| `implementation_status` | How far the model is implemented: counts per state and the elements that are not implemented or changed since the last generation |
 
 The prompt `implement_next_task` carries the registry workflow.
 

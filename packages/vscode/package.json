@@ -32,6 +32,13 @@
         "configuration": "./language-configuration.json"
       }
     ],
+    "commands": [
+      {
+        "command": "appling.openCode",
+        "title": "Appling: Open the code of this element",
+        "enablement": "appling.desktop"
+      }
+    ],
     "grammars": [
       {
         "language": "appling",

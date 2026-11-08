@@ -34,6 +34,10 @@ Each `.code-workspace` file opens as a workspace, and each folder joins the acti
 
 From a clone of the repository, `node packages/desktop/out/bin.js [paths...]` does the same after `pnpm build`.
 
+## Model and code
+
+The code view of a repo (Code OSS with the Appling extension) marks every model line with how far its element is implemented and puts a CodeLens on implementing code that selects its element on the canvas. **Open code** in the IDE, or a click on a gutter mark, opens the element's code in the code view. See [Seed to code](implementation.md).
+
 ## Windows and monitors
 
 Every window has the rail and the switcher. The first window is the main window: it holds every workspace no other window holds, and closing it quits the app.

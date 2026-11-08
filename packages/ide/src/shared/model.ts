@@ -12,5 +12,5 @@ export async function buildSnapshot(root: string, files: SourceFile[]): Promise<
     for (const [node, qn] of qualifiedNames(models)) {
         locations[qn] = { uri: AstUtils.getDocument(node).uri.toString(), start: node.$cstNode!.offset, end: node.$cstNode!.end };
     }
-    return { root, files, graph, dependencies: dependencies(graph), locations, code: {}, errors: errorsOf(workspace) };
+    return { root, files, graph, dependencies: dependencies(graph), locations, code: {}, implementation: {}, targets: [], tasks: [], errors: errorsOf(workspace) };
 }

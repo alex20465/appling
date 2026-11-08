@@ -12,7 +12,7 @@ All `.appling` files in the workspace are loaded together, so references between
 
 ## Appling Desktop
 
-In the code view of Appling Desktop (an embedded Code OSS) the extension is preinstalled and syncs the selection with the model canvas both ways: the cursor in a `.appling` file selects the element on the canvas, and an element selected on the canvas opens its source. `src/desktop-bridge.ts` holds that channel, a websocket to the Desktop main process given in `APPLING_DESKTOP_BRIDGE` with the token in `APPLING_DESKTOP_TOKEN`; without them it stays off.
+In the code view of Appling Desktop (an embedded Code OSS) the extension is preinstalled and syncs the selection with the model canvas both ways: the cursor in a `.appling` file selects the element on the canvas, and an element selected on the canvas opens its source. It also shows how far each model line is implemented (a gutter mark per element: implemented, partial, unimplemented, shifted or broken), puts a CodeLens **Appling: sales.Order** on code that implements an element (it selects the element on the canvas) and an **Open code** CodeLens on model lines with code; the command **Appling: Open the code of this element** opens it for the element at the cursor (`src/implementation.ts`, `src/implementation-view.ts`). `src/desktop-bridge.ts` holds that channel, a websocket to the Desktop main process given in `APPLING_DESKTOP_BRIDGE` with the token in `APPLING_DESKTOP_TOKEN`; without them it stays off.
 
 ## Development
 

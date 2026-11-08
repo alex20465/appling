@@ -172,6 +172,11 @@ export const REFERENCE_TOOLS = {
             }))
         },
         run: async (context, input) => context.project.recordReferences(input.qn, input.ranges)
+    }),
+    implementation_status: define({
+        description: 'How far the model is implemented: per element implemented (a current code reference, or generated code it has not changed since), partial (an open registry task), unimplemented (no code), shifted or broken (a code reference to fix). Returns the counts and every element that is not implemented or changed since the last generation, optionally within one module or element.',
+        input: { module: z.string().optional().describe('Qualified name of a module or element to narrow to') },
+        run: async (context, input) => context.project.implementation(input.module)
     })
 };
 

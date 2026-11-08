@@ -45,7 +45,7 @@ test('the MCP server exposes model and registry tools and the registry prompt', 
     const client = new Client({ name: 'test', version: '1' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await Promise.all([createMcpServer(root).connect(serverTransport), client.connect(clientTransport)]);
-    expect((await client.listTools()).tools.map(t => t.name).sort()).toEqual(['check', 'code_references', 'edit', 'graph_query', 'language_reference', 'read_source', 'record_code_references', 'registry_next', 'registry_update', 'run_tests', 'simulate', 'write_model_file']);
+    expect((await client.listTools()).tools.map(t => t.name).sort()).toEqual(['check', 'code_references', 'edit', 'graph_query', 'implementation_status', 'language_reference', 'read_source', 'record_code_references', 'registry_next', 'registry_update', 'run_tests', 'simulate', 'write_model_file']);
     const text = async (name: string, args: Record<string, unknown>) => JSON.parse(((await client.callTool({ name, arguments: args })).content as { text: string }[])[0].text);
     expect((await text('language_reference', {})).pages).toContainEqual({ page: 'overview', title: 'Language overview', description: expect.any(String) });
     expect((await text('language_reference', { page: 'domain' })).markdown).toContain('entity');

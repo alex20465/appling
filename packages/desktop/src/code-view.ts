@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { dialog, session, shell, WebContentsView, type Session } from 'electron';
-import { BRIDGE_ENV, CodeBridge, diffMessage, TOKEN_ENV, type TextDiffRequest } from './code-bridge.js';
+import { BRIDGE_ENV, CodeBridge, diffMessage, openMessage, TOKEN_ENV, type TextDiffRequest } from './code-bridge.js';
+import type { CodeMarks } from './ide-process.js';
 import { codeServerAsset, ensureCodeServer } from './code-download.js';
 import { CodeInstances, type InstanceState } from './code-instances.js';
 import { CodeProxy, PROXY_COOKIE } from './code-proxy.js';
@@ -84,7 +85,11 @@ export class CodeViews {
         const { settings, problems } = loadCodeViewSettings(join(options.userData, 'settings.json'));
         if (problems.length) console.error(`Appling Desktop settings:\n  ${problems.join('\n  ')}`);
         this.settings = settings;
-        this.bridge = new CodeBridge({ onCursor: (repo, uri, offset) => this.cursor(repo, uri, offset) });
+        this.bridge = new CodeBridge({
+            onCursor: (repo, uri, offset) => this.cursor(repo, uri, offset),
+            // the extension's CodeLens on code: the canvas shows the element it implements
+            onElement: (repo, qn) => this.options.ideView(repo)?.webContents.send('codeElement', qn)
+        });
         this.proxy = new CodeProxy({ bridge: (request, socket, head) => this.bridge.upgrade(request, socket, head) });
         this.session = session.fromPartition('persist:appling-code');
         this.instances = new CodeInstances<Instance>({
@@ -170,6 +175,19 @@ export class CodeViews {
     /** The IDE's Review tab asks for a text diff: the code view opens (starting when needed) on Code OSS's diff editor. */
     textDiff(repo: string, request: TextDiffRequest): void {
         const message = diffMessage(repo, request);
+        if (!message) return;
+        this.bridge.send(repo, message);
+        if (!this.shown.has(repo)) this.toggle(repo);
+    }
+
+    /** The repo's implementation marks and code links, for the extension's gutter marks and CodeLenses (#20). */
+    implementation(repo: string, state: CodeMarks): void {
+        this.bridge.implementation(repo, state);
+    }
+
+    /** The jump from an element to its code: the code view opens (starting when needed) on the file at its lines. */
+    openCode(repo: string, request: { path: string, start: number, end?: number }): void {
+        const message = openMessage(repo, request);
         if (!message) return;
         this.bridge.send(repo, message);
         if (!this.shown.has(repo)) this.toggle(repo);

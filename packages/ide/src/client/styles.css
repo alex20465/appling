@@ -184,3 +184,31 @@ button:focus-visible { outline: 2px solid var(--leaf); outline-offset: 2px; }
 .step-change.remove { color: var(--ink-muted); }
 .player-queue { font-size: 11.5px; }
 .playbook-chip { position: absolute; top: 60px; right: 12px; z-index: 2; padding: 4px 10px; border: 1px solid var(--leaf); border-radius: 14px; background: var(--surface-raised); color: var(--ink); font-size: 12px; }
+
+/* implementation: gutter marks, dots, the code view, the Code tab and the generation offer */
+.gutter-impl { border-radius: 50%; margin-left: 5px; width: 8px !important; height: 8px !important; margin-top: 6px; cursor: pointer; }
+.impl-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: middle; }
+.gutter-impl.impl-implemented, .impl-dot.impl-implemented { background: var(--leaf); }
+.gutter-impl.impl-partial, .impl-dot.impl-partial { background: var(--amber); }
+.gutter-impl.impl-unimplemented, .impl-dot.impl-unimplemented { border: 1.5px dashed var(--ink-muted); box-sizing: border-box; }
+.gutter-impl.impl-shifted, .impl-dot.impl-shifted { background: #4c9fe0; }
+.gutter-impl.impl-broken, .impl-dot.impl-broken { background: #e5534b; }
+.gutter-impl.outstanding { box-shadow: 0 0 0 2px var(--rust); }
+.impl-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 10px; }
+.impl-counts { list-style: none; padding: 0; display: grid; gap: 2px; }
+.generate-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.implementation .outstanding, .implementation .tasks { list-style: none; padding: 0; }
+.implementation .tasks > li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.implementation .missing, .implementation .notes { margin: 4px 0 0 14px; padding: 0; font-size: 12px; }
+.implementation .claim { margin-left: 6px; padding: 0 6px; border: 1.5px solid; border-radius: 10px; font-size: 11.5px; }
+.task-status { margin-left: 6px; font: 600 10.5px/16px var(--font-mono); color: var(--amber); }
+.run pre.log { max-height: 240px; overflow: auto; font: 11.5px/1.5 var(--font-mono); white-space: pre-wrap; }
+.run pre.errors { white-space: pre-wrap; }
+.generate-offer { position: absolute; left: 50%; bottom: 84px; z-index: 2; translate: -50% 0; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border: 1px solid var(--leaf); border-radius: 16px; background: var(--surface-raised); font-size: 12.5px; }
+.code-view { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+.code-view header { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line); font: 12px var(--font-mono); }
+.code-view header .button { margin-left: auto; }
+.code-body { overflow: auto; font: 13px/21px var(--font-mono); padding: 8px 0; }
+.code-line { display: flex; white-space: pre; }
+.code-line.marked { background: var(--leaf-soft); }
+.code-number { flex: none; width: 48px; padding-right: 12px; text-align: right; color: var(--line-strong); user-select: none; }

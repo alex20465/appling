@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -138,4 +138,32 @@ test('MCP tool calls are attributed to the session and edits on claimed elements
     expect((await first.call('session_release')).claims).toEqual({ elements: [], files: [] });
     await store.end(a.id);
     expect((await first.call('session_set_label', { label: 'x' })).error).toMatch(/has ended/);
+});
+
+test('agent sessions pick registry tasks other sessions have not claimed, claim them and release them when done', async () => {
+    const root = workspace();
+    writeFileSync(join(root, 'appling.config.json'), JSON.stringify({ generate: [{ extension: 'x', out: 'out' }] }));
+    const entry = (qn: string) => ({ qn, kind: 'Entity', layer: 'domain', status: 'todo', steps: [], files: [], missing: [{ what: `write ${qn}`, context: { props: {}, related: [] } }] });
+    mkdirSync(join(root, 'out/.appling'), { recursive: true });
+    writeFileSync(join(root, 'out/.appling/tasks.json'), JSON.stringify({ extension: 'x', entries: { 'sales.Order': entry('sales.Order'), 'crm.Account': entry('crm.Account') } }));
+    const store = new MemorySessionStore();
+    const a = (await store.open({ name: 'Claude Code', repo: root })).session;
+    const b = (await store.open({ name: 'Codex', repo: root })).session;
+    const first = await connect(root, store, a.id);
+    const second = await connect(root, store, b.id);
+
+    expect(await first.call('registry_next')).toMatchObject({ claimed: 'sales.Order', entry: { qn: 'sales.Order' } });
+    expect((await store.get(a.id))!.claims.elements).toEqual(['sales.Order']);
+    expect(await second.call('registry_next')).toMatchObject({ claimed: 'crm.Account' });
+    await store.release(b.id);
+    expect((await second.call('registry_next')).claimed).toBe('crm.Account');
+
+    expect(await first.call('registry_update', { qn: 'sales.Order', status: 'done' })).toMatchObject({ status: 'done', attempts: 1 });
+    expect((await store.get(a.id))!.claims.elements).toEqual([]);
+    expect(await first.call('registry_next')).toEqual({ done: 'No open tasks that other sessions have not claimed.' });
+    expect(await first.call('registry_update', { qn: 'nope', status: 'done' })).toEqual({ error: 'No registry entry nope.' });
+
+    const status = await first.call('implementation_status', { module: 'sales' });
+    expect(status.counts.unimplemented).toBeGreaterThan(0);
+    expect(status.elements[0]).toMatchObject({ state: expect.any(String), outstanding: true });
 });

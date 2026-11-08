@@ -31,6 +31,12 @@
 .tree-item.current .ring { stroke-width: 3; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--layer, var(--leaf)) 70%, transparent)); }
 .tree-item.chosen .ring { stroke: var(--ink); stroke-width: 3; }
 .tree-item.added .ring { stroke: var(--leaf); stroke-width: 3; stroke-dasharray: none; filter: drop-shadow(0 0 6px var(--leaf)); }
+.tree-item .impl { stroke: var(--surface, #fff); stroke-width: 1.5; pointer-events: none; }
+.impl-implemented { fill: var(--leaf, #5cbf63); }
+.impl-partial { fill: var(--amber, #d98a1c); }
+.impl-unimplemented { fill: transparent; stroke: var(--ink-muted, #888) !important; stroke-dasharray: 2 1.5; }
+.impl-shifted { fill: #4c9fe0; }
+.impl-broken { fill: #e5534b; }
 .tree-item .session-ring { fill: none; stroke-width: 2.5; stroke-dasharray: 5 3; pointer-events: none; }
 .tree-item.changed .ring { stroke: var(--rust); stroke-width: 3; stroke-dasharray: none; filter: drop-shadow(0 0 6px var(--rust)); }
 .tree-item.removed { opacity: 0.5; }

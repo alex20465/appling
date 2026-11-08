@@ -22,6 +22,8 @@ export interface IdeProcessOptions {
     onExit?(code: number | null, stderr: string): void;
     /** Called with what the server reports for the rail: the errors at start and after every model change, the unsaved files after each change. */
     onStatus?(status: IdeStatus): void;
+    /** Called with the implementation marks of the model files and the code links back to elements after every model or reference change, for the code view. */
+    onImplementation?(implementation: CodeMarks): void;
     /** The agent sessions shared by every repo server, served to this one over its IPC channel. */
     sessions?: SessionStore;
     /** The workspace playbooks (#19), shared like the sessions; give them together with `sessions`. */
@@ -43,6 +45,12 @@ export interface IdeStatus {
     unsaved?: string[];
     /** Unseen model changes: files changed since the user last accepted them in the repo's view. */
     changes?: number;
+}
+
+/** What the code view shows of the implementation (`Implementation` of `@appling/ide`): by absolute file path. */
+export interface CodeMarks {
+    marks: Record<string, { line: number, qn: string, state: string, outstanding: boolean }[]>;
+    links: Record<string, { qn: string, start: number, end: number }[]>;
 }
 
 /** The IDE server's entry, `appling-ide`: bundled in the packaged app, else the workspace package's. */
@@ -77,7 +85,8 @@ export function startIdeProcess(root: string, options: IdeProcessOptions = {}): 
             reject(error);
         };
         child.once('error', fail);
-        child.on('message', (message: { type?: string, url?: string, errors?: unknown, unsaved?: unknown, changes?: unknown }) => {
+        child.on('message', (message: { type?: string, url?: string, errors?: unknown, unsaved?: unknown, changes?: unknown, marks?: unknown, links?: unknown }) => {
+            if (message.type === 'implementation' && message.marks && message.links) return options.onImplementation?.({ marks: message.marks, links: message.links } as CodeMarks);
             if (message.type === 'status' && typeof message.changes === 'number') return options.onStatus?.({ changes: message.changes });
             if (message.type === 'status' && typeof message.errors === 'number') return options.onStatus?.({ errors: message.errors });
             if (message.type === 'status' && Array.isArray(message.unsaved)) return options.onStatus?.({ unsaved: message.unsaved.filter(f => typeof f === 'string') });

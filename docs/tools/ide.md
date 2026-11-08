@@ -101,6 +101,7 @@ The Inspector tab shows the selected element: its kind and layer, its qualified 
 - **What it does**, for an action: the entity it works on, its inputs, what it requires (with the error raised otherwise), what it changes (its own effects, then each machine transition it drives with that transition's effects), its errors and its consistency,
 - **Actions**, for an entity: the actions declared on it, each with the machine transitions it drives, such as `draft, placed -> cancelled`, followed by the actions elsewhere that create its records, marked `creates`,
 - **What they can do**, for an actor: what this person may do, by the [simulator](simulator.md#how-it-decides), in five groups: Actions, Pages, Use cases, Queries and Data (each entity operation, and fields that a policy guards separately). Only what the actor may do is listed: each entry says `may` or `depends on the data` and lists the policies that decide it with their conditions. What the actor is refused is left out, and so is a group with nothing allowed. A page also lists the actions it offers that the actor may use, because seeing a page does not mean being allowed to use its buttons,
+- its [implementation state](implementation.md#implementation-states), with its open registry tasks, **Open code** (the element's code, see [From the model to the code and back](implementation.md#from-the-model-to-the-code-and-back)) and **Generate** (the element with its members, when `appling.config.json` has targets),
 - **Code**: where the element is implemented, one `file:start-end` line per [code reference](references.md), with its status when it is not `current`. Expand one to read its lines,
 - **Members**: the elements inside it, one line each, such as `status: OrderStatus state` for a field,
 - **Used by**: every declaration that references the element or one of its members, grouped by layer. For an entity this is the overview of its behavior and use: the events, actions, machines and jobs in Behavior, the queries, projections and use cases in Application, the endpoints in Interfaces and the pages in Experience,
@@ -231,6 +232,12 @@ The **Playbook** tab lists the chapters of the workspace's [playbook](ai.md#the-
 
 The canvas moves only when you step. A chapter that arrives while you watch another one joins the queue. Past the last step of a chapter, **→** goes on to the next chapter. **Approve**, **Reject** and **Comment** answer the current step: the response is kept with the step and reaches the session that wrote it as a message. Your position is kept with the playbook, so every repo view of the workspace and every session knows where you are.
 
+## The Code tab
+
+The **Code** tab shows how far the model is implemented and generates from the IDE: the count of elements per [implementation state](implementation.md#implementation-states), the targets of `appling.config.json`, buttons to generate the outstanding elements, the selected element, the checked ones or everything, the running generation with its log, and the open registry tasks with their status, attempts, notes and the agent session that claimed each. The tab counts the open tasks. See [Seed to code](implementation.md).
+
+The editor marks each model line with the state of the element it declares, and the canvas marks each declaration; after a model change adds outstanding elements, the canvas offers to generate them.
+
 ## Releases and migration steps
 
 Once the workspace has a release (`appling release 1.0.0`, see [CLI](cli.md#release)), the header shows a button such as `release 1.0.0 · 2 migration step(s) since`. It counts the steps in the `since_v1_0_0` blocks of all modules; click it to select the first such block.
@@ -239,7 +246,7 @@ Renaming, retyping or removing a released domain element from the inspector or a
 
 ## Live updates
 
-The server watches the workspace folder for changes to `.appling` files (ignoring hidden folders and `node_modules`) and to `.appling/references.json`, and pushes a new snapshot to the page about 100 ms after the last change. Edits from another editor, `appling fmt` or an AI agent through the [MCP server](ai.md#mcp-server) appear in the views without a reload.
+The server watches the workspace folder for changes to `.appling` files (ignoring hidden folders and `node_modules`), to `.appling/references.json`, `.appling/generation.json` and the registries of the generate targets inside the folder, and pushes a new snapshot to the page about 100 ms after the last change. Edits from another editor, `appling fmt` or an AI agent through the [MCP server](ai.md#mcp-server) appear in the views without a reload.
 
 The canvas also marks what [agent sessions](ai.md#agent-sessions) of the repo claimed or highlighted: a dashed ring in the session's colour around the declaration, with the session's label in its tooltip.
 

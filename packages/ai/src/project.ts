@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { AstUtils, URI } from 'langium';
 import { buildSources, type Model, type Workspace } from '@appling/lang';
-import { readConfig, readRegistry, writeRegistry, type Registry, type RegistryEntry, type Status } from '@appling/codegen';
+import { readConfig, readRegistry, workspaceImplementation, writeRegistry, type Registry, type RegistryEntry, type Status } from '@appling/codegen';
 import {
     applyEdit, buildGraph, findApplingFiles, latestRelease, qualifiedNames, readReleases, recordReferences, resolveReferences,
     type CodeReference, type EditOperation, type EditResult, type Graph, type ResolvedReference
@@ -93,10 +93,20 @@ export class Project {
         });
     }
 
-    /** The first open registry entry in dependency order that has attempts left. */
-    nextTask(target?: string): { out: string, entry: RegistryEntry } | undefined {
+    /** How far every element is implemented: counts per state and the elements that are not implemented, with their state. */
+    async implementation(module?: string): Promise<{ counts: Record<string, number>, outstanding: number, elements: { qn: string, state: string, tasks: number, outstanding: boolean }[] }> {
+        const { states } = workspaceImplementation(this.root, await this.graph());
+        const all = Object.entries(states).filter(([qn]) => !module || qn === module || qn.startsWith(`${module}.`));
+        const counts: Record<string, number> = {};
+        for (const [, s] of all) counts[s.state] = (counts[s.state] ?? 0) + 1;
+        const open = all.filter(([, s]) => s.state !== 'implemented' || s.outstanding);
+        return { counts, outstanding: all.filter(([, s]) => s.outstanding).length, elements: open.slice(0, 200).map(([qn, s]) => ({ qn, state: s.state, tasks: s.tasks, outstanding: s.outstanding })) };
+    }
+
+    /** The first open registry entry in dependency order that has attempts left and that `skip` does not pass over. */
+    nextTask(target?: string, skip?: (entry: RegistryEntry) => boolean): { out: string, entry: RegistryEntry } | undefined {
         for (const { out, registry } of this.select(target)) {
-            const entry = Object.values(registry.entries).find(e => (e.status === 'todo' || e.status === 'partial') && e.missing.length && (e.attempts ?? 0) < MAX_ATTEMPTS);
+            const entry = Object.values(registry.entries).find(e => (e.status === 'todo' || e.status === 'partial') && e.missing.length && (e.attempts ?? 0) < MAX_ATTEMPTS && !skip?.(e));
             if (entry) return { out, entry };
         }
         return undefined;

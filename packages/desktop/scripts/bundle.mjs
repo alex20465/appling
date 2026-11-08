@@ -64,6 +64,8 @@ aiFiles('.');
 
 // The programs, at the paths of BUNDLED in src/resources.ts, each with the files its package reads next to its code.
 await bundle(join(packages, 'ide/out/server/main.js'), 'ide/out/server/main.js');
+// generation runs in a worker thread from a file next to the server (`generation.ts`)
+await bundle(join(packages, 'ide/out/server/generation-worker.js'), 'ide/out/server/generation-worker.js');
 cpSync(join(packages, 'ide/dist/client'), join(app, 'ide/dist/client'), { recursive: true });
 aiFiles('ide/out');
 await bundle(join(packages, 'ai/out/main.js'), 'ai/out/main.js');
