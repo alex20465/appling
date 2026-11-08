@@ -46,7 +46,7 @@ Agent sessions also get tools that draw on the repo's canvas in Appling Desktop.
 | `visualize` | Shows a `node` in the model tree, adding to the tree on screen so the agent can guide one node at a time, a flowchart of a `machine` or a `usecase`, or a card of an `action` or an `event` |
 | `visual_bubble` | Places a note on an element or member of the view, or a code example with its file and line |
 | `visual_selection` | The element the person selected and the view on screen |
-| `visual_reply` | Answers the person next to the session's view |
+| `visual_reply` | Answers the person next to the session's view; their questions typed there reach the session's inbox as messages from User |
 | `visual_status` | Shows the step the agent works on, with its progress; every model change is marked on the canvas by itself |
 | `propose_edits` | Shows edit operations as a proposal in the app and writes them only when accepted |
 

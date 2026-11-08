@@ -16,5 +16,8 @@ contextBridge.exposeInMainWorld('applingDesktop', {
     // the playbook (#19) and the claim rings on the canvas jump to an agent session's tab (#10)
     focusSession: (session: string) => ipcRenderer.send('ideFocusSession', session),
     selected: (location: { uri: string, start: number, end: number }) => ipcRenderer.send('ideSelected', location),
-    onCodeCursor: (callback: (uri: string, offset: number) => void) => ipcRenderer.on('codeCursor', (_event, uri: string, offset: number) => callback(uri, offset))
+    onCodeCursor: (callback: (uri: string, offset: number) => void) => ipcRenderer.on('codeCursor', (_event, uri: string, offset: number) => callback(uri, offset)),
+    // the workspace of the window the view is in (a repo may sit in several): its playbook plays here (#19)
+    workspace: () => ipcRenderer.sendSync('ideWorkspace') as string | undefined,
+    onWorkspace: (callback: (workspace: string | undefined) => void) => ipcRenderer.on('ideWorkspace', (_event, workspace?: string) => callback(workspace))
 });

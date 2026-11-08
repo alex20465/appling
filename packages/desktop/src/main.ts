@@ -28,6 +28,7 @@ import { startTray } from './tray.js';
 import { Updater } from './updater.js';
 import { currentDisplays, WindowHost } from './window-host.js';
 import { dropTarget, layoutFor, MAIN, rememberLayout, type SavedLayout } from './windows.js';
+import { viewWorkspace } from './view-workspace.js';
 import { Workspaces } from './workspaces.js';
 import { systemNotifier } from '@appling/pty-host';
 import { RemoteRepos } from './remote/desktop.js';
@@ -265,7 +266,11 @@ function start(): void {
         attach: (repo, view) => host.addPane(paneId(CODE_PANE, repo), view),
         detach: repo => host.removePane(paneId(CODE_PANE, repo)),
         ideView: repo => host.panes.get(paneId(IDE_PANE, repo)),
-        onChange: () => refresh(),
+        onChange: () => {
+            refresh();
+            // which code views are open is part of the session (#8)
+            saveSoon();
+        },
         remote: repo => {
             const remote = remotes.get(repo);
             return remote?.root ? {
@@ -324,6 +329,10 @@ function start(): void {
         const pane = [...host.panes].find(([id, view]) => view.webContents === sender && parsePane(id)?.type === IDE_PANE)?.[0];
         return pane ? parsePane(pane)?.repo : undefined;
     };
+    ipcMain.on('ideWorkspace', event => {
+        const repo = repoOf(event.sender);
+        event.returnValue = repo ? workspaceOfView(repo) : undefined;
+    });
     ipcMain.on('ideSelected', (event, location: SourceLocation) => {
         const repo = repoOf(event.sender);
         if (repo && typeof location?.uri === 'string' && Number.isInteger(location.start)) code?.selected(repo, location);
@@ -342,6 +351,7 @@ function start(): void {
     buildMenu();
     const session = readSession(userFile('session.json'));
     const problems = session ? restore(session, workspaces) : [];
+    code.restoreOpen(session?.code ?? []);
     layouts = session?.layouts ?? {};
     displays = currentDisplays();
     const layout = layoutFor(layouts, displays);
@@ -702,6 +712,7 @@ function refresh(): void {
         if (ref?.type === CODE_PANE) host.setHidden(pane, !code?.isShown(ref.repo));
     }
     host.arrange();
+    tellViewWorkspaces();
     code?.visible(new Set(windows.all().flatMap(w => {
         const repo = workspaces.get(windows.activeOf(w.id, openIds()) ?? '')?.active;
         return [...(repo ? [repo] : []), ...w.panes.flatMap(p => parsePane(p)?.type === CODE_PANE ? [parsePane(p)!.repo] : [])];
@@ -803,6 +814,27 @@ function activeView(): WebContentsView | undefined {
 // ---- windows (issue #14) ----
 
 /** The open workspace ids in rail order. */
+/** The workspace a repo's view belongs to now: the one of the window it is in (`viewWorkspace`). */
+function workspaceOfView(repo: string): string | undefined {
+    return viewWorkspace(repo, host.paneWindow(paneId(IDE_PANE, repo)), windows, workspaces.all());
+}
+
+/** What each repo view was last told it belongs to. */
+const toldWorkspace = new Map<string, string | undefined>();
+
+/** Tells each repo view whose workspace changed (it moved to a window of another workspace), for its playbook. */
+function tellViewWorkspaces(): void {
+    for (const [pane, view] of host.panes) {
+        const ref = parsePane(pane);
+        if (ref?.type !== IDE_PANE || view.webContents.isDestroyed()) continue;
+        const now = workspaceOfView(ref.repo);
+        if (toldWorkspace.has(pane) && toldWorkspace.get(pane) === now) continue;
+        toldWorkspace.set(pane, now);
+        view.webContents.send('ideWorkspace', now);
+    }
+    for (const pane of toldWorkspace.keys()) if (!host.panes.has(pane)) toldWorkspace.delete(pane);
+}
+
 function openIds(): string[] {
     return workspaces.all().map(w => w.id);
 }
@@ -970,7 +1002,7 @@ function save(): void {
     clearTimeout(saveTimer);
     if (!app.isReady() || quitting) return;
     layouts = rememberLayout(layouts, windows.save(currentDisplays(), Date.now()));
-    writeSession(userFile('session.json'), sessionOf(workspaces, layouts));
+    writeSession(userFile('session.json'), sessionOf(workspaces, layouts, code?.openRepos()));
 }
 
 // ---- menu ----

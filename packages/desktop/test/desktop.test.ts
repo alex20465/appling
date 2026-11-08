@@ -224,7 +224,7 @@ test('a session restores workspaces, the shown repos, the active workspace and t
     before.hide(one, '/a', true);
     before.collapsed = true;
     const file = join(dir, 'session.json');
-    writeSession(file, sessionOf(before));
+    writeSession(file, sessionOf(before, {}, ['/b']));
     // a workspace file changed outside the app, and one is gone
     writeCodeWorkspace(two, folders('/c', '/d'));
     const session = readSession(file)!;
@@ -240,6 +240,10 @@ test('a session restores workspaces, the shown repos, the active workspace and t
     expect(after.get(one)).toMatchObject({ pinned: ['/b'], hidden: ['/a'] });
     expect(after.get(two)).toMatchObject({ pinned: [], hidden: [] });
     expect(after.collapsed).toBe(true);
+    // the open code views (#8)
+    expect(session.code).toEqual(['/b']);
+    writeFileSync(file, JSON.stringify({ workspaces: [], code: ['/x', 3] }));
+    expect(readSession(file)?.code).toEqual(['/x']);
     expect(readSession(join(dir, 'missing.json'))).toBeUndefined();
 });
 

@@ -26,8 +26,8 @@ async function agent(token: string) {
     return async (name: string, args: Record<string, unknown> = {}) => JSON.parse(((await client.callTool({ name, arguments: args })).content as { text: string }[])[0].text);
 }
 
-async function playbookEvents() {
-    const socket = new WebSocket(ide.url.replace('http', 'ws') + '/events', { origin: ide.url });
+async function playbookEvents(workspace?: string) {
+    const socket = new WebSocket(ide.url.replace('http', 'ws') + '/events' + (workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''), { origin: ide.url });
     const books: Playbook[] = [];
     const waiters: (() => void)[] = [];
     socket.on('message', data => {
@@ -43,7 +43,7 @@ async function playbookEvents() {
             await new Promise<void>(done => waiters.push(done));
         }
     };
-    return { socket, next };
+    return { socket, next, books };
 }
 
 const post = (path: string, body: unknown) => fetch(`${ide.url}${path}`, { method: 'POST', body: JSON.stringify(body) });
@@ -74,4 +74,24 @@ test('a session\'s chapter reaches the client, the user steps and responds, and 
     const read = await (await fetch(`${ide.url}/api/playbook`)).json() as Playbook;
     expect(read.chapters[0].steps[0].responses).toMatchObject([{ kind: 'comment', text: 'Use a percentage' }]);
     events.socket.close();
+});
+
+test('a repo view in a window of another workspace plays that workspace\'s playbook, and follows it when it moves', async () => {
+    const OTHER = '/work/other.code-workspace';
+    const shown = await playbookEvents();
+    const other = await playbookEvents(OTHER);
+    await other.next(book => book.workspace === OTHER);
+    expect(await (await fetch(`${ide.url}/api/playbook?workspace=${encodeURIComponent(OTHER)}`)).json()).toMatchObject({ workspace: OTHER, chapters: [] });
+    // a chapter of the other workspace reaches only the view that belongs to it
+    await openChapter(ide.playbooks, { workspace: OTHER, repo: root, label: 'Docs', color: '#1971c2' }, { title: 'Other work', plan: 'Docs' });
+    await other.next(book => book.workspace === OTHER && book.chapters.length === 1);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(shown.books.some(book => book.workspace === OTHER)).toBe(false);
+    // the first view moves to a window of the other workspace: it gets that playbook at once
+    shown.socket.send(JSON.stringify({ type: 'context', workspace: OTHER }));
+    await shown.next(book => book.workspace === OTHER && book.chapters.length === 1);
+    // a relative path is no workspace: the view falls back to the one the app shows
+    expect(await (await fetch(`${ide.url}/api/playbook?workspace=relative`)).json()).toMatchObject({ workspace: WORKSPACE });
+    shown.socket.close();
+    other.socket.close();
 });

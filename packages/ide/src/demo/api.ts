@@ -61,6 +61,9 @@ export async function loadCode(): Promise<never> {
 
 export async function decideProposal(): Promise<void> {}
 
+/** The demo has no agent sessions to ask. */
+export async function askSession(): Promise<void> {}
+
 /** The demo has no agent sessions, so its playbook stays empty. */
 export async function loadPlaybook(): Promise<Playbook> {
     return { workspace: ROOT, chapters: [], position: { step: 0 } };

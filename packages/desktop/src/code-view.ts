@@ -12,6 +12,7 @@ import { CodeProxy, PROXY_COOKIE } from './code-proxy.js';
 import { codeDirs, installExtension, repoKey, startCodeServer, type CodeServer } from './code-server.js';
 import { loadCodeViewSettings, type CodeViewSettings } from './code-settings.js';
 import { programPath } from './resources.js';
+import { isRemoteId } from './remote/location.js';
 import { findCode, lineColumn, vscodeArgs, vscodeRemoteArgs } from './vscode-cli.js';
 
 /** A source location as the IDE client knows it. */
@@ -138,10 +139,26 @@ export class CodeViews {
             this.drop(repo);
             this.instances.remove(repo);
         }
+        // a restored code view of a repo that is no longer open
+        for (const repo of this.shown) if (!live.has(repo)) this.shown.delete(repo);
     }
 
     isShown(repo: string | undefined): boolean {
         return !!repo && this.shown.has(repo);
+    }
+
+    /** The repos whose code view is open, for the session. */
+    openRepos(): string[] {
+        return [...this.shown];
+    }
+
+    /**
+     * Reopens the code views of a restored session: each starts once its repo is in sight (`visible`), as a code view
+     * whose instance was suspended does. Repos that are no longer open drop out on the next `sync`.
+     */
+    restoreOpen(repos: readonly string[]): void {
+        if (!CodeViews.supported()) return;
+        for (const repo of repos) this.shown.add(repo);
     }
 
     /** Opens or hides a repo's code view; hidden, the canvas fills the repo again. */
@@ -161,6 +178,8 @@ export class CodeViews {
     visible(inSight: ReadonlySet<string>): void {
         for (const repo of inSight) {
             if (!this.shown.has(repo) || this.views.has(repo)) continue;
+            // a restored code view of a remote repo opens once the repo is connected, never as a local instance
+            if (isRemoteId(repo) && !this.options.remote?.(repo)) continue;
             this.ensureView(repo);
             this.open(repo);
         }

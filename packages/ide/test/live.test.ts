@@ -182,4 +182,27 @@ describe('the IDE server', () => {
         await watch.next(m => m.type === 'agent-view' && m.ended === true);
         watch.socket.close();
     }, 30000);
+
+    test("a question typed in a session's view reaches its inbox, and its answer shows in the view", async () => {
+        const watch = await events();
+        const { session, token } = await ide.sessions.open({ name: 'Claude Code', repo: root });
+        const a = await agent(token);
+        await a.call('visualize', { view: 'node', focus: ['sales.Order'] });
+        const ask = (text: unknown, id = session.id) => fetch(`${ide.url}/api/sessions/${encodeURIComponent(id)}/ask`, { method: 'POST', body: JSON.stringify({ text }) });
+        expect((await ask('  ')).status).toBe(400);
+        expect((await ask('Why?', 'nope')).status).toBe(404);
+        expect(await (await ask('Why does an order need a customer?')).json()).toEqual({ delivered: true });
+        const asked = (await watch.next(m => m.type === 'agent-view' && !!(m.view as AgentView).questions?.length)).view as AgentView;
+        expect(asked.questions).toEqual(['Why does an order need a customer?']);
+
+        // the next tool result says a message waits; the inbox holds it, from User
+        expect((await a.call('visual_selection')).messages).toContain('1 unread message');
+        const { messages } = await a.call('session_inbox');
+        expect(messages).toMatchObject([{ from: 'user', fromLabel: 'User', text: expect.stringContaining('Why does an order need a customer?') }]);
+        expect(await a.call('visual_reply', { text: 'Every order is billed to one.' })).toEqual({ sent: true });
+        const answered = (await watch.next(m => m.type === 'agent-view' && (m.view as AgentView).replies.length > 0)).view as AgentView;
+        expect(answered.replies).toEqual(['Every order is billed to one.']);
+        await ide.sessions.end(session.id);
+        watch.socket.close();
+    }, 30000);
 });

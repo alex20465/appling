@@ -32,8 +32,8 @@ export async function saveFile(path: string, text: string): Promise<void> {
  * their actions. `report` tells the server what the client shows, `unsaved` which files have unsaved edits (Appling
  * Desktop shows them on the rail).
  */
-export function onEvents(handlers: IdeEvents): { close(): void, report(report: ClientReport): void, unsaved(files: string[]): void } {
-    const socket = new WebSocket(`ws://${location.host}/events`);
+export function onEvents(handlers: IdeEvents, workspace?: string): { close(): void, report(report: ClientReport): void, unsaved(files: string[]): void } {
+    const socket = new WebSocket(`ws://${location.host}/events${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`);
     let pending: ClientReport | undefined;
     let unsaved: string[] | undefined;
     socket.onopen = () => {
@@ -66,8 +66,8 @@ export function onEvents(handlers: IdeEvents): { close(): void, report(report: C
 }
 
 /** Starts a generation run through the targets of `appling.config.json`; the run then streams over the events. */
-export async function startGeneration(selection: GenerationSelection): Promise<GenerationRun> {
-    const response = await fetch('/api/generate', { method: 'POST', body: JSON.stringify({ selection }) });
+export async function startGeneration(selection: GenerationSelection, workspace?: string): Promise<GenerationRun> {
+    const response = await fetch('/api/generate', { method: 'POST', body: JSON.stringify({ selection, workspace }) });
     if (!response.ok) throw new Error(await response.text());
     return response.json();
 }
@@ -96,9 +96,15 @@ export async function decideProposal(id: string, decision: Decision): Promise<vo
     if (!response.ok) throw new Error(await response.text());
 }
 
-/** The playbook of the workspace the view shows. */
-export async function loadPlaybook(): Promise<Playbook> {
-    return (await fetch('/api/playbook')).json();
+/** Sends an agent session a question typed in its view; it reaches the session's inbox as a message from User. */
+export async function askSession(session: string, text: string): Promise<void> {
+    const response = await fetch(`/api/sessions/${encodeURIComponent(session)}/ask`, { method: 'POST', body: JSON.stringify({ text }) });
+    if (!response.ok) throw new Error(await response.text());
+}
+
+/** The playbook of the workspace the view belongs to (Appling Desktop names it), else of the one the app shows. */
+export async function loadPlaybook(workspace?: string): Promise<Playbook> {
+    return (await fetch(`/api/playbook${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`)).json();
 }
 
 /** Moves the user in the playbook; the chapter counts as watched up to there. */

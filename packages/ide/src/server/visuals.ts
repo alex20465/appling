@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { VisualHost } from '@appling/ai';
 import { nextShow, type Decision } from '@appling/viz/protocol';
+import type { SessionStore } from '@appling/ai';
 import type { AgentView, Proposal } from '../shared/live.js';
 import type { ClientContext } from './sessions.js';
 
@@ -47,6 +48,15 @@ export class AgentViews {
                 this.sendProposals();
             })
         };
+    }
+
+    /**
+     * A question the user typed to a session in its view: it reaches the session's inbox as a message from User (the
+     * MCP results tell the agent that messages wait), and the view keeps it next to the answers.
+     */
+    async ask(sessions: SessionStore, session: string, text: string): Promise<void> {
+        await sessions.post(session, { fromLabel: 'User', text: `${text}\n\n(Asked in your view on the repo's canvas in Appling; answer there with visual_reply.)` });
+        this.change(session, view => { (view.questions ??= []).push(text); });
     }
 
     /** Resolves a waiting proposal with the user's decision; false when it is no longer waiting. */

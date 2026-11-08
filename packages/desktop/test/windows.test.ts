@@ -6,6 +6,7 @@ import { clampInto, displayFingerprint, displayOf, placeWindow, type DisplayInfo
 import { IDE_PANE, layoutPanes, paneId, paneLabel, parsePane, registerPaneType } from '../src/panes.js';
 import { readSession, sessionOf, writeSession } from '../src/session.js';
 import { dropTarget, LAYOUTS, layoutFor, MAIN, rememberLayout, Windows } from '../src/windows.js';
+import { viewWorkspace } from '../src/view-workspace.js';
 import { Workspaces } from '../src/workspaces.js';
 
 const display = (id: number, x: number, y: number, width = 1920, height = 1080): DisplayInfo =>
@@ -233,4 +234,24 @@ test('the session saves the window layouts and reads old sessions without them',
     expect(readSession(file)?.layouts).toEqual({});
     writeFileSync(file, JSON.stringify({ workspaces: [], layouts: [] }));
     expect(readSession(file)?.layouts).toEqual({});
+});
+
+test('a repo view belongs to the workspace of the window it is in, so a folder in two workspaces plays the right playbook', () => {
+    const windows = new Windows();
+    const workspace = (id: string, folders: string[]) => ({ id, name: id, folders: folders.map(path => ({ path })), pinned: [], hidden: [] });
+    const list = [workspace(A, ['/shop', '/crm']), workspace(B, ['/shop']), workspace(C, ['/docs'])];
+    // both in the main window: the one it shows
+    windows.get(MAIN)!.active = B;
+    expect(viewWorkspace('/shop', MAIN, windows, list)).toBe(B);
+    // the main window shows a workspace without the repo: the first one there with it
+    windows.get(MAIN)!.active = C;
+    expect(viewWorkspace('/shop', MAIN, windows, list)).toBe(A);
+    // B in a window of its own: the view there belongs to B, back in the main window to A
+    windows.open({ workspaces: [B] });
+    expect(viewWorkspace('/shop', 'w2', windows, list)).toBe(B);
+    expect(viewWorkspace('/shop', MAIN, windows, list)).toBe(A);
+    // a pane moved into a window none of whose workspaces holds the repo, or a view not placed yet: the first open one
+    expect(viewWorkspace('/crm', 'w2', windows, list)).toBe(A);
+    expect(viewWorkspace('/shop', undefined, windows, list)).toBe(A);
+    expect(viewWorkspace('/gone', MAIN, windows, list)).toBeUndefined();
 });

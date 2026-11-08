@@ -80,4 +80,6 @@ export interface ClientReport {
     file?: string;
     /** The agent session whose view the canvas shows. */
     watching?: string;
+    /** The workspace the view belongs to (Appling Desktop names it): its playbook goes to this view. */
+    workspace?: string;
 }
