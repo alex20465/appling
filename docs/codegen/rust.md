@@ -37,7 +37,8 @@ The crate name is the project name in snake case. The module `sales` is `src/sal
 | `errors` | variants of the module's `Error` enum, next to `InvalidTransition` and `Forbidden` |
 | `role`, `actor`, `tenant` | the module `src/access.rs`, see [Access](#access) |
 | `policy` | a function per policy and the `can_...` checks, see [Policies](#policies) |
-| invariants, policies, transitions, preconditions | `#[ignore]`d tests in the module's `tests` |
+| invariants | a test in the module's `tests` per invariant that `validate()` checks: `valid_<entity>()` (`<Entity>::new` with a sample for every argument, records through their own `new`, value types field by field) passes `validate()`, and the same record with one field set to a value the simulator proves to break the invariant fails with its label. Without such a value the violation case is a registry task; without a sample for every argument the test stays `#[ignore]`d |
+| policies, transitions, preconditions | `#[ignore]`d tests in the module's `tests` |
 
 This is the generated `place_order` of the [example](../../examples/sales.appling):
 

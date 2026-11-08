@@ -416,9 +416,17 @@ pub fn can_open_orders(actor: &crate::access::Actor, order: &Order) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    /// An Order with the defaults of the model and a sample for every other required field.
+    fn valid_order() -> Order {
+        Order::new("reference-1".to_string(), Box::new(crate::crm::Account::new("name-1".to_string(), "email-1".to_string())), chrono::Utc::now())
+    }
+
     #[test]
-    #[ignore = "registry task: sales.Order.invariant[\\"total never negative\\"]"]
-    fn order_total_never_negative() {}
+    fn order_total_never_negative() {
+        assert_eq!(valid_order().validate(), Ok(()), "a valid Order");
+    }
     #[test]
     #[ignore = "registry task: sales.Order.policy[read]"]
     fn order_policy_read() {}
