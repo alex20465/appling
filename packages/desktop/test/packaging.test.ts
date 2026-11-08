@@ -1,11 +1,11 @@
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { afterAll, expect, test } from 'vitest';
 import { startIdeProcess } from '../src/ide-process.js';
-import { BUNDLED, programPath, type Program } from '../src/resources.js';
+import { BUNDLED, programPath, UNPACKED, type Program } from '../src/resources.js';
 import { releaseUrl, updateMode } from '../src/update-policy.js';
 
 const run = promisify(execFile);
@@ -26,6 +26,7 @@ test('from the workspace every program resolves to its built package entry', () 
     expect(programPath('pty-host', base)).toMatch(/packages[\\/]pty-host[\\/]out[\\/]main\.js$/);
     expect(programPath('language-server', base)).toMatch(/packages[\\/]lang[\\/]out[\\/]language-server\.js$/);
     expect(programPath('mcp', base)).toMatch(/packages[\\/]ai[\\/]out[\\/]main\.js$/);
+    expect(programPath('vsix', base)).toMatch(/packages[\\/]vscode[\\/]out[\\/]appling\.vsix$/);
     expect(programPath('ide')).toBe(programPath('ide', base));
 });
 
@@ -37,6 +38,28 @@ test('packaged, the bundled copy next to the main file wins', () => {
     expect(programPath('ide', base)).toBe(bundled);
     expect(programPath('mcp', base)).not.toContain(base);
 });
+
+test('files that programs outside Electron read are handed out from the unpacked folder of the asar', () => {
+    const asar = join(tempDir(), 'resources', 'app.asar');
+    for (const program of UNPACKED) {
+        const bundled = join(asar, BUNDLED[program]);
+        mkdirSync(dirname(bundled), { recursive: true });
+        writeFileSync(bundled, '');
+        expect(programPath(program, asar)).toBe(join(`${asar}.unpacked`, BUNDLED[program]));
+    }
+    const ide = join(asar, BUNDLED.ide);
+    mkdirSync(dirname(ide), { recursive: true });
+    writeFileSync(ide, '');
+    expect(programPath('ide', asar)).toBe(ide);
+    expect(programPath('ide', asar)).toContain(`${sep}app.asar${sep}`);
+});
+
+/** Every file Desktop's own code finds next to itself (`new URL('./…', import.meta.url)`), such as the preloads and the shell page. */
+function siblingFiles(): string[] {
+    const src = join(import.meta.dirname, '../src');
+    const files = readdirSync(src).filter(file => /\.c?ts$/.test(file)).map(file => readFileSync(join(src, file), 'utf8'));
+    return [...new Set(files.flatMap(text => [...text.matchAll(/new URL\('\.\/([^']+)', import\.meta\.url\)/g)].map(m => m[1])))];
+}
 
 test('the update mode follows how the app runs and whether macOS can install the update', () => {
     const packaged = { packaged: true, signed: false };
@@ -61,7 +84,9 @@ test('the bundle holds every program where Desktop looks, and the bundled IDE se
     const manifest = JSON.parse(readFileSync(join(app, 'package.json'), 'utf8'));
     expect(manifest).toMatchObject({ name: 'appling-desktop', version: '9.8.7', main: 'out/main.js', type: 'module' });
     expect(manifest.dependencies).toBeUndefined();
-    for (const file of ['out/main.js', 'out/preload.cjs', 'out/shell/index.html', 'skills/appling-registry/SKILL.md', 'ide/dist/client/index.html', 'ide/out/skills', 'ai/language', 'pty-host/package.json', 'native/node-pty/lib/index.js']) {
+    expect(siblingFiles()).toEqual(expect.arrayContaining(['shell/index.html', 'preload.cjs', 'repo-preload.cjs']));
+    for (const file of siblingFiles()) expect(existsSync(join(app, 'out', file)), `out/${file}`).toBe(true);
+    for (const file of ['out/main.js', 'skills/appling-registry/SKILL.md', 'ide/dist/client/index.html', 'ide/out/skills', 'ai/language', 'pty-host/package.json', 'native/node-pty/lib/index.js']) {
         expect(existsSync(join(app, file)), file).toBe(true);
     }
 

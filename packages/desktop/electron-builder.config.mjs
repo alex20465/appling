@@ -28,8 +28,9 @@ export default {
     beforeBuild: async () => false,
     icon: '../landing/public/icon-512.png',
     asar: true,
-    // node-pty's native files and its macOS spawn helper must lie outside the archive
-    asarUnpack: ['native/**'],
+    // outside the archive: node-pty's native files and its macOS spawn helper, and the vsix that openvscode-server
+    // (not Electron, so it cannot read the asar) installs (UNPACKED in src/resources.ts)
+    asarUnpack: ['native/**', 'vscode/**'],
     // signed: read by src/updater.ts, an unsigned macOS build can only point to the release page.
     // desktopName: the window's WM_CLASS, so desktops link the running window to the launcher entry
     extraMetadata: { desktopName: 'appling.desktop', signed: process.platform === 'darwin' ? macSigned : process.platform === 'win32' && winSigned },

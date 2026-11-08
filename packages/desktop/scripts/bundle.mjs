@@ -54,7 +54,7 @@ const aiFiles = (to) => ['skills', 'language'].forEach(dir => cpSync(join(packag
 
 // Desktop: main process, preload and the shell page in `out/`, as in this package.
 await bundle(join(root, 'out/main.js'), 'out/main.js');
-cpSync(join(root, 'out/preload.cjs'), join(app, 'out/preload.cjs'));
+for (const preload of ['preload.cjs', 'repo-preload.cjs']) cpSync(join(root, 'out', preload), join(app, 'out', preload));
 cpSync(join(root, 'out/shell'), join(app, 'out/shell'), { recursive: true });
 aiFiles('.');
 
@@ -66,6 +66,10 @@ await bundle(join(packages, 'ai/out/main.js'), 'ai/out/main.js');
 aiFiles('ai');
 await bundle(join(packages, 'lang/out/language-server.js'), 'lang/out/language-server.js');
 await bundle(join(packages, 'pty-host/out/main.js'), 'pty-host/out/main.js', [nodePty('../../native/node-pty/lib/index.js')]);
+// The Appling extension that Desktop installs into the code view, built by appling-vscode.
+const vsix = join(packages, 'vscode/out/appling.vsix');
+if (!existsSync(vsix)) throw new Error(`${vsix} is missing; build appling-vscode first.`);
+cpSync(vsix, join(app, 'vscode/appling.vsix'));
 const ptyHost = JSON.parse(readFileSync(join(packages, 'pty-host/package.json'), 'utf8'));
 writeFileSync(join(app, 'pty-host/package.json'), JSON.stringify({ name: ptyHost.name, version: ptyHost.version, type: 'module' }, null, 2));
 
