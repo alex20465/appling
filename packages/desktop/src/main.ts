@@ -29,6 +29,7 @@ import { Updater } from './updater.js';
 import { currentDisplays, WindowHost } from './window-host.js';
 import { dropTarget, layoutFor, MAIN, rememberLayout, type SavedLayout } from './windows.js';
 import { viewWorkspace } from './view-workspace.js';
+import { chapterRepo } from './chapter-repo.js';
 import { Workspaces } from './workspaces.js';
 import { systemNotifier } from '@appling/pty-host';
 import { RemoteRepos } from './remote/desktop.js';
@@ -266,6 +267,7 @@ function start(): void {
         attach: (repo, view) => host.addPane(paneId(CODE_PANE, repo), view),
         detach: repo => host.removePane(paneId(CODE_PANE, repo)),
         ideView: repo => host.panes.get(paneId(IDE_PANE, repo)),
+        runCommand: command => actions[command]?.(),
         onChange: () => {
             refresh();
             // which code views are open is part of the session (#8)
@@ -336,6 +338,22 @@ function start(): void {
     ipcMain.on('ideSelected', (event, location: SourceLocation) => {
         const repo = repoOf(event.sender);
         if (repo && typeof location?.uri === 'string' && Number.isInteger(location.start)) code?.selected(repo, location);
+    });
+    ipcMain.on('ideShowChanges', (event, repo: string, session?: string) => {
+        const from = repoOf(event.sender);
+        if (!from || typeof repo !== 'string') return;
+        const workspace = workspaceOfView(from);
+        const folders = workspaces.all().find(w => w.id === workspace)?.folders.map(f => f.path) ?? [];
+        const target = chapterRepo(repo, folders, id => remotes.get(id)?.root);
+        if (!target) return;
+        if (workspaces.select(target, workspace)) changed();
+        // the view may only now come up; the repo preload holds the message until its client listens
+        const tell = (tries: number) => {
+            const view = host.panes.get(paneId(IDE_PANE, target));
+            if (view && !view.webContents.isDestroyed()) view.webContents.send('ideShowChanges', typeof session === 'string' ? session : undefined);
+            else if (tries > 0) setTimeout(() => tell(tries - 1), 300);
+        };
+        tell(20);
     });
     ipcMain.on('ideFocusSession', (event, session: string) => repoOf(event.sender) && typeof session === 'string' && agents.jump(session));
     ipcMain.on('ideTextDiff', (event, request: TextDiffRequest) => {
@@ -1060,6 +1078,7 @@ function watchKeybindings(): void {
 function buildMenu(): void {
     const { bindings, problems } = loadKeybindings(keybindingsFile());
     terminals.bindings = bindings;
+    if (code) code.bindings = bindings;
     if (problems.length) console.error(`Appling Desktop keybindings:\n  ${problems.join('\n  ')}`);
     const item = (command: string): MenuItemConstructorOptions => ({
         label: COMMANDS[command], accelerator: bindings[command] ?? undefined, click: actions[command]

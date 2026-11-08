@@ -14,6 +14,8 @@ import { loadCodeViewSettings, type CodeViewSettings } from './code-settings.js'
 import { programPath } from './resources.js';
 import { isRemoteId } from './remote/location.js';
 import { findCode, lineColumn, vscodeArgs, vscodeRemoteArgs } from './vscode-cli.js';
+import type { Keybindings } from './keybindings.js';
+import { commandFor, SKIP_CODE } from './terminal/keys.js';
 
 /** A source location as the IDE client knows it. */
 export interface SourceLocation {
@@ -43,6 +45,8 @@ export interface CodeViewsOptions {
      * Undefined for local repos.
      */
     remote?(repo: string): RemoteCode | undefined;
+    /** Runs an app menu command; a code view lets only the `SKIP_CODE` ones through (`terminal/keys.ts`). */
+    runCommand?(command: string): void;
 }
 
 /** Code OSS on a remote repo's machine, forwarded to a local port. */
@@ -79,6 +83,8 @@ export class CodeViews {
     private readonly proxy: CodeProxy;
     private readonly instances: CodeInstances<Instance>;
     private readonly views = new Map<string, WebContentsView>();
+    /** The app menu's current keybindings, for the commands that pass through a focused code view. */
+    bindings: Keybindings = {};
     /** Repos whose code view is open (it shows while the repo is shown). */
     private readonly shown = new Set<string>();
     /** The file each repo had last in focus, in the code view or on the canvas, for Open in VS Code. */
@@ -365,6 +371,14 @@ export class CodeViews {
         if (existing) return existing;
         const view = new WebContentsView({ webPreferences: { session: this.session, contextIsolation: true, sandbox: true, nodeIntegration: false } });
         view.setBackgroundColor('#0c0a08');
+        // keys belong to Code OSS: the menu's shortcuts are off here, only the SKIP_CODE commands pass
+        view.webContents.setIgnoreMenuShortcuts(true);
+        view.webContents.on('before-input-event', (event, input) => {
+            const command = commandFor(input, this.bindings, process.platform === 'darwin', SKIP_CODE);
+            if (!command || !this.options.runCommand) return;
+            event.preventDefault();
+            this.options.runCommand(command);
+        });
         view.webContents.setWindowOpenHandler(({ url }) => {
             if (/^https?:\/\//.test(url) && !url.startsWith(this.proxy.origin)) shell.openExternal(url);
             return { action: 'deny' };

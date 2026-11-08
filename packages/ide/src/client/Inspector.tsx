@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Simulator, type Access, type Verdict } from '@appling/model/simulator';
 import type { EditOperation } from '@appling/model';
 import type { ElementImplementation } from '@appling/model/implementation';
+import type { ElementChange } from '@appling/model/diff';
 import type { CodeLocation } from '../shared/snapshot.js';
+import { TextDiff } from './Review.js';
 import { abilities, actionSummary, entityActions, IMPLEMENTATION_LABELS, kindLabel, LAYER_LABELS, memberText, policyText, relations, type Ability, type GraphIndex } from '@appling/viz/views';
 
 interface InspectorProps {
@@ -19,11 +21,17 @@ interface InspectorProps {
     canGenerate?: boolean;
     onOpenCode?(qn: string): void;
     onGenerate?(qn: string): void;
+    /** How the element changed, while the canvas marks the review's or the live changes. */
+    change?: ElementChange;
+    /** Opens the changed element's text diff: in Desktop's code view, else here (`diff`) or in the Changes tab. */
+    onTextDiff?(qn: string): void;
+    /** The text diff shown here when there is no code view to open it in. */
+    diff?: { qn: string, before: string, after: string };
 }
 
 const TYPED = new Set(['Field', 'Param']);
 
-export function Inspector({ index, qn, code, implementation, canGenerate, onSelect, onEdit, onOpenCode, onGenerate }: InspectorProps) {
+export function Inspector({ index, qn, code, implementation, canGenerate, onSelect, onEdit, onOpenCode, onGenerate, change, onTextDiff, diff }: InspectorProps) {
     const node = qn ? index.nodes.get(qn) : undefined;
     const [errors, setErrors] = useState<string[]>([]);
     const [removing, setRemoving] = useState(false);
@@ -44,6 +52,13 @@ export function Inspector({ index, qn, code, implementation, canGenerate, onSele
         <div className="inspector">
             <div className="eyebrow">{node.props.link ? 'link ' : ''}{kindLabel(node.kind)} · {LAYER_LABELS[node.layer]}</div>
             <h2>{node.qn}</h2>
+            {change && (
+                <p className={`review-item ${change.status}`}>
+                    <span>{change.status}{change.was && ` from ${change.was}`}{change.status === 'changed' && change.props.length > 0 && ` · ${change.props.join(', ')}`}</span>
+                    {onTextDiff && <button className="link" onClick={() => onTextDiff(node.qn)}>text diff</button>}
+                </p>
+            )}
+            {change && diff?.qn === node.qn && <TextDiff before={diff.before} after={diff.after} />}
             {errors.length > 0 && <ul className="errors" role="alert">{errors.map(e => <li key={e}>{e}</li>)}</ul>}
             {implementation && (
                 <p className="impl-line">

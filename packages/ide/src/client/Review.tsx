@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ElementChange } from '@appling/model/diff';
 import { kindLabel } from '@appling/viz/views';
-import { lineDiff, type ChangedFile, type Review as ReviewData, type Revision, type TextDiffRequest } from '../shared/review.js';
+import { elementTextDiff, lineDiff, type ChangedFile, type Review as ReviewData, type Revision, type TextDiffRequest } from '../shared/review.js';
 import type { Snapshot } from '../shared/snapshot.js';
 import { loadFileDiff } from './api.js';
 import { openTextDiff } from './hooks.js';
@@ -36,23 +36,9 @@ export function Review({ snapshot, review, rev, revisions, marked, onRev, onMark
     if (!review) return <div className="review">{picker}<p className="muted">Reading git…</p></div>;
     if (!review.ok) return <div className="review"><p className="muted">{review.error}</p></div>;
 
-    const { diff, files, before } = review;
-    const fileText = (files: { uri: string, text: string }[], uri: string) => files.find(f => f.uri === uri)?.text ?? '';
-    const pathOf = (uri: string) => snapshot.files.find(f => f.uri === uri)?.path ?? before.files.find(f => f.uri === uri)?.path;
-    const slice = (text: string, location?: { start: number, end: number }) => location ? text.slice(location.start, location.end) : '';
-
+    const { diff, files } = review;
     /** The element's text before and now, and where its diff opens. */
-    const texts = (change: ElementChange) => {
-        const [old, now] = [before.locations[change.was ?? change.qn], change.status === 'removed' ? undefined : snapshot.locations[change.qn]];
-        const location = now ?? old!;
-        const text = fileText(now ? snapshot.files : before.files, location.uri);
-        const request: TextDiffRequest = {
-            path: pathOf(location.uri)!, rev: review.commit, qn: change.qn,
-            line: text.slice(0, location.start).split('\n').length,
-            ...(old && pathOf(old.uri) !== pathOf(location.uri) && { before: pathOf(old.uri) })
-        };
-        return { before: old ? slice(fileText(before.files, old.uri), old) : '', after: now ? slice(fileText(snapshot.files, now.uri), now) : '', request };
-    };
+    const texts = (change: ElementChange) => elementTextDiff(change, review, snapshot);
 
     const toggle = (key: string, request: TextDiffRequest, load: () => Promise<{ before: string, after: string } | undefined>) => {
         if (open?.key === key) return setOpen(undefined);
