@@ -219,8 +219,10 @@ Each `setting` and `secret` of an external becomes a `config` line in `config/ru
 ```elixir
 config :shop, Shop.Sales.Clerk, max_sessions: System.get_env("CLERK_MAX_SESSIONS") |> then(&(&1 && String.to_integer(&1)))
 config :shop, Shop.Sales.Clerk, test_mode: System.get_env("CLERK_TEST_MODE") in ~w(1 true yes)
-config :shop, Shop.Sales.Clerk, secret_key: System.get_env("CLERK_SECRET_KEY")
+config :shop, Shop.Sales.Clerk, secret_key: System.fetch_env!("CLERK_SECRET_KEY")
 ```
+
+A missing setting is `nil` (`false` for a `Bool`). A `secret` is required: `System.fetch_env!` stops the app at startup with `could not fetch environment variable "CLERK_SECRET_KEY" because it is not set`. `runtime.exs` runs on every start, `mix test` included, so fill `.env` from `.env.example` and load it into the environment. While generating, Appling runs its own `mix ash.codegen` with a placeholder for each secret.
 
 `.env.example` lists every key with an empty value, under a comment with its kind, its external and its `does` text. The setup on the vendor's side becomes [registry](registry.md) tasks: for every endpoint of an `interface webhook ... from <External>` one to register it at the vendor and one to receive it and verify its signature, and for `auth <scheme> from <External>` one to let the vendor issue the tokens, naming the model's roles for the role claim.
 

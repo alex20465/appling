@@ -27,8 +27,9 @@ test('external keys are read from the environment in runtime.exs and listed in .
         'import Config', '',
         'config :shop, Shop.Shop.Clerk, max_sessions: System.get_env("CLERK_MAX_SESSIONS") |> then(&(&1 && String.to_integer(&1)))', '',
         'config :shop, Shop.Shop.Clerk, test_mode: System.get_env("CLERK_TEST_MODE") in ~w(1 true yes)', '',
-        'config :shop, Shop.Shop.Clerk, secret_key: System.get_env("CLERK_SECRET_KEY")', ''
+        'config :shop, Shop.Shop.Clerk, secret_key: System.fetch_env!("CLERK_SECRET_KEY")', ''
     ].join('\n'));
+    expect(result.steps.map(s => s.step).find(s => s.kind === 'command' && s.run.includes('ash.codegen'))).toMatchObject({ env: { CLERK_SECRET_KEY: 'placeholder' } });
     expect(files.get('.env.example')).toContain('# secret of Clerk: API keys page of the Clerk dashboard\nCLERK_SECRET_KEY=\n');
     const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
     expect(entries['shop.Clerk.max_sessions'].status).toBe('generated');

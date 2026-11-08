@@ -46,7 +46,7 @@ export function runSteps(steps: PlannedStep[], out: string, log: (line: string) 
         if (step.kind === 'command') {
             const cwd = resolve(root, step.cwd ?? '.');
             mkdirSync(cwd, { recursive: true });
-            const result = spawnSync(step.run[0], step.run.slice(1), { cwd, encoding: 'utf8', input: step.input });
+            const result = spawnSync(step.run[0], step.run.slice(1), { cwd, encoding: 'utf8', input: step.input, env: step.env && { ...process.env, ...step.env } });
             if (result.error || result.status !== 0) throw new Error(commandFailure(step.run, result));
             for (const file of step.creates ?? []) written?.push({ node, file });
         } else if (step.kind === 'template') {

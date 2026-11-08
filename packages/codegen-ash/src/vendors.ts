@@ -15,10 +15,11 @@ function externalOf(key: GraphNode): string {
 /**
  * A setting or secret is read from the environment in `config/runtime.exs`, under the external's
  * module (`Application.get_env(:shop, Shop.Sales.Clerk)[:secret_key]`), and listed in `.env.example`.
+ * A missing setting is `nil` (`false` for a `Bool`); a missing secret stops the app at startup (`System.fetch_env!`).
  */
 export function externalKeySteps(key: GraphNode, context: MapContext): Step[] {
     const name = envName(key);
-    const line = `config :${app(context)}, ${moduleName(key.module, context)}.${externalOf(key)}, ${lastOf(key.qn)}: ${elixirRead(name, key.data.type as TypeData)}`;
+    const line = `config :${app(context)}, ${moduleName(key.module, context)}.${externalOf(key)}, ${lastOf(key.qn)}: ${elixirRead(name, key.data.type as TypeData, key.data.kind === 'secret')}`;
     return [
         {
             kind: 'template', phase: 2, file: 'config/runtime.exs', write: existing => {
@@ -37,13 +38,31 @@ export function externalKeySteps(key: GraphNode, context: MapContext): Step[] {
     ];
 }
 
-function elixirRead(name: string, type: TypeData): string {
+function elixirRead(name: string, type: TypeData, required: boolean): string {
+    if (required) {
+        const fetch = `System.fetch_env!(${JSON.stringify(name)})`;
+        switch (type.primitive) {
+            case 'Int': return `${fetch} |> String.to_integer()`;
+            case 'Bool': return `${fetch} in ~w(1 true yes)`;
+            default: return fetch;
+        }
+    }
     const get = `System.get_env(${JSON.stringify(name)})`;
     switch (type.primitive) {
         case 'Int': return `${get} |> then(&(&1 && String.to_integer(&1)))`;
         case 'Bool': return `${get} in ~w(1 true yes)`;
         default: return get;
     }
+}
+
+/**
+ * Placeholder values for every secret, for the generator's own commands that load the settings
+ * (which stop without them). Empty when the model has no secrets.
+ */
+export function secretPlaceholders(context: MapContext): { env?: Record<string, string> } {
+    const secrets = context.graph.nodes.filter(n => n.kind === 'ExternalKey' && n.data.kind === 'secret');
+    if (!secrets.length) return {};
+    return { env: Object.fromEntries(secrets.map(key => [envName(key), (key.data.type as TypeData).primitive === 'Int' ? '0' : 'placeholder'])) };
 }
 
 /** The vendor side of an interface: the webhook endpoints to register, the tokens to issue for `auth ... from`. */

@@ -9,15 +9,34 @@ export function envName(key: GraphNode): string {
     return `${snake(external)}_${snake(lastOf(key.qn))}`.toUpperCase();
 }
 
-/** A setting or secret is read from the environment in `config/settings.py` and listed in `.env.example`. */
+const IMPROPERLY_CONFIGURED = 'from django.core.exceptions import ImproperlyConfigured';
+
+/** Defined once in `config/settings.py` before the first secret: reads a variable or stops the app naming it. */
+const REQUIRED_ENV = `def required_env(name):
+    try:
+        return os.environ[name]
+    except KeyError:
+        raise ImproperlyConfigured(f"Set the environment variable {name} (see .env.example)") from None`;
+
+/**
+ * A setting or secret is read from the environment in `config/settings.py` and listed in `.env.example`.
+ * A missing setting is `None` (`False` for a `Bool`); a missing secret stops the app at startup.
+ */
 export function externalKeySteps(key: GraphNode): Step[] {
     const name = envName(key);
+    const secret = key.data.kind === 'secret';
     return [
         template('config/settings.py', existing => {
             let text = existing!;
             if (text.includes(`\n${name} = `)) return text;
             if (!/^import os$/m.test(text)) text = /^from pathlib import Path$/m.test(text) ? text.replace(/^from pathlib import Path$/m, 'import os\nfrom pathlib import Path') : `import os\n${text}`;
-            return `${text.trimEnd()}\n\n${name} = ${pythonRead(name, key.data.type as TypeData)}\n`;
+            if (secret && !text.includes('\ndef required_env(')) {
+                if (!text.includes(IMPROPERLY_CONFIGURED)) text = text.replace(/^from pathlib import Path\n/m, `from pathlib import Path\n\n${IMPROPERLY_CONFIGURED}\n`);
+                if (!text.includes(IMPROPERLY_CONFIGURED)) text = `${IMPROPERLY_CONFIGURED}\n${text}`;
+                text = `${text.trimEnd()}\n\n\n${REQUIRED_ENV}\n`;
+            }
+            const read = secret ? requiredRead(name, key.data.type as TypeData) : pythonRead(name, key.data.type as TypeData);
+            return `${text.trimEnd()}\n\n${name} = ${read}\n`;
         }),
         envExample(key, name)
     ];
@@ -32,6 +51,15 @@ export function envExample(key: GraphNode, name: string): Step {
     });
 }
 
+function requiredRead(name: string, type: TypeData): string {
+    const read = `required_env(${JSON.stringify(name)})`;
+    switch (type.primitive) {
+        case 'Int': return `int(${read})`;
+        case 'Bool': return `${read}.lower() in ("1", "true", "yes")`;
+        default: return read;
+    }
+}
+
 function pythonRead(name: string, type: TypeData): string {
     const quoted = JSON.stringify(name);
     switch (type.primitive) {
@@ -39,6 +67,16 @@ function pythonRead(name: string, type: TypeData): string {
         case 'Bool': return `os.environ.get(${quoted}, "").lower() in ("1", "true", "yes")`;
         default: return `os.environ.get(${quoted})`;
     }
+}
+
+/**
+ * Placeholder values for every secret, for the generator's own commands that load the settings
+ * (which stop without them). Empty when the model has no secrets.
+ */
+export function secretPlaceholders(context: MapContext): { env?: Record<string, string> } {
+    const secrets = context.graph.nodes.filter(n => n.kind === 'ExternalKey' && n.data.kind === 'secret');
+    if (!secrets.length) return {};
+    return { env: Object.fromEntries(secrets.map(key => [envName(key), (key.data.type as TypeData).primitive === 'Int' ? '0' : 'placeholder'])) };
 }
 
 /** The vendor side of an interface: the webhook endpoints to register, the tokens to issue for `auth ... from`. */
