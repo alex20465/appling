@@ -29,6 +29,33 @@ export interface TaskRunnerOptions {
     reveal?(repo: string, terminal: string): void;
     /** How long a stopped task gets after SIGTERM before SIGKILL. */
     killAfter?: number;
+    /**
+     * The other machine of a remote repo (`remote/`), whose files, environment and `appling` the tasks use; undefined
+     * for a local repo. Throws while a remote repo is not connected.
+     */
+    remote?(repo: string): RemoteTasks | undefined;
+}
+
+/** What the tasks of a remote repo need from its machine, over the transport. */
+export interface RemoteTasks {
+    /** The repo's folder there, `${workspaceFolder}`. */
+    root: string;
+    home: string;
+    platform: Platform;
+    /** A file of the repo there, by its path relative to the root; undefined when there is none. */
+    read(path: string): Promise<string | undefined>;
+    exists(path: string): Promise<boolean>;
+    /** The environment there, for `${env:NAME}` and the shell of shell tasks. */
+    env(): Promise<Record<string, string>>;
+    /** The `appling` that ships with the server bundle there. */
+    cli?: ApplingCli;
+}
+
+/** What was read from a remote repo's machine at its last refresh. */
+interface RemoteCache {
+    tasksJson?: string;
+    ownCli: boolean;
+    env: Record<string, string>;
 }
 
 export interface RunOptions {
@@ -74,6 +101,7 @@ export class TaskRunner extends EventEmitter<Events> {
     private readonly routes = new Map<string, Route>();
     private readonly opened = new Set<string>();
     private readonly platform: Platform;
+    private readonly remoteCache = new Map<string, RemoteCache>();
 
     constructor(private readonly service: TerminalService, private readonly options: TaskRunnerOptions = {}) {
         super();
@@ -92,12 +120,44 @@ export class TaskRunner extends EventEmitter<Events> {
         service.on('attached', (id, scrollback) => this.reattached(id, scrollback));
     }
 
-    /** The tasks the repo offers, with the problems of reading them. Read from disk every time, so edits apply at once. */
+    /** The other machine of a remote repo; `error` while it is not connected. */
+    private remoteOf(repo: string): { side?: RemoteTasks, error?: string } {
+        try {
+            return { side: this.options.remote?.(repo) };
+        } catch (error) {
+            return { error: (error as Error).message };
+        }
+    }
+
+    /**
+     * Reads again what the tasks of a remote repo need from its machine (`tasks.json`, the environment, whether the
+     * repo has its own `appling`) and tells the listeners. Nothing to do for a local repo, which is read from disk.
+     */
+    async refresh(repo: string): Promise<void> {
+        const { side } = this.remoteOf(repo);
+        if (!side) return;
+        const [tasksJson, ownCli, env] = await Promise.all([
+            side.read('.vscode/tasks.json').catch(() => undefined),
+            side.exists('node_modules/.bin/appling').catch(() => false),
+            side.env().catch(() => ({}))
+        ]);
+        this.remoteCache.set(repo, { ...tasksJson !== undefined ? { tasksJson } : {}, ownCli, env });
+        this.emit('changed', repo);
+    }
+
+    /**
+     * The tasks the repo offers, with the problems of reading them. A local repo's are read from disk every time, so
+     * edits apply at once; a remote repo's as `refresh` last read them.
+     */
     tasks(repo: string): TaskFile {
         const files: TaskFile[] = [];
-        const own = join(repo, '.vscode', 'tasks.json');
-        if (existsSync(own)) {
-            const file = parseTasksJson(readFileSync(own, 'utf8'), this.platform, 'folder');
+        const { side, error } = this.remoteOf(repo);
+        if (error) return { tasks: [], inputs: [], problems: [error] };
+        const cache = side ? this.remoteCache.get(repo) : undefined;
+        const own = side ? `${side.root}/.vscode/tasks.json` : join(repo, '.vscode', 'tasks.json');
+        const text = side ? cache?.tasksJson : existsSync(own) ? readFileSync(own, 'utf8') : undefined;
+        if (text !== undefined) {
+            const file = parseTasksJson(text, side?.platform ?? this.platform, 'folder');
             files.push({ ...file, problems: file.problems.map(p => `${own}: ${p}`) });
         }
         for (const workspace of this.options.workspaceFiles?.(repo) ?? []) {
@@ -110,7 +170,7 @@ export class TaskRunner extends EventEmitter<Events> {
                 // a workspace file that does not parse has no tasks
             }
         }
-        const cli = this.options.cli?.(repo);
+        const cli = side ? cache?.ownCli ? { command: `${side.root}/node_modules/.bin/appling`, args: [], env: {} } : side.cli : this.options.cli?.(repo);
         if (cli) files.push(builtinTasks(cli));
         return combineTasks(...files);
     }
@@ -174,7 +234,14 @@ export class TaskRunner extends EventEmitter<Events> {
     async openRepo(repo: string): Promise<void> {
         if (this.opened.has(repo)) return;
         this.opened.add(repo);
-        await this.service.openRepo(repo);
+        try {
+            await this.service.openRepo(repo);
+            await this.refresh(repo);
+        } catch (error) {
+            // a remote repo that is not connected yet opens again once it is
+            this.opened.delete(repo);
+            throw error;
+        }
         const file = this.tasks(repo);
         for (const [label, state] of Object.entries(this.entry(repo).tasks)) {
             if (!state.terminal) {
@@ -226,6 +293,7 @@ export class TaskRunner extends EventEmitter<Events> {
     /** The repo left every workspace: its terminals end with it (the terminal panel kills them), the states go. */
     closeRepo(repo: string): void {
         this.opened.delete(repo);
+        this.remoteCache.delete(repo);
         const entry = this.store.repos[repo];
         if (!entry) return;
         for (const state of Object.values(entry.tasks)) if (state.terminal) this.routes.delete(state.terminal);
@@ -270,10 +338,10 @@ export class TaskRunner extends EventEmitter<Events> {
             return { ok: true };
         }
         const problems: string[] = [];
-        const context: VariableContext = {
-            workspaceFolder: repo, folders: this.options.folders?.(repo), env: this.options.env ?? process.env,
-            userHome: this.options.userHome ?? homedir(), platform: this.platform, inputs: options.inputs
-        };
+        const { side } = this.remoteOf(repo);
+        const context: VariableContext = side
+            ? { workspaceFolder: side.root, folders: this.options.folders?.(repo), env: this.remoteCache.get(repo)?.env ?? {}, userHome: side.home, platform: side.platform, inputs: options.inputs }
+            : { workspaceFolder: repo, folders: this.options.folders?.(repo), env: this.options.env ?? process.env, userHome: this.options.userHome ?? homedir(), platform: this.platform, inputs: options.inputs };
         const launch = taskLaunch(task, context, problems);
         if (problems.length) console.error(`Task "${label}" of ${repo}: no value for ${problems.join(', ')}`);
         // a new run replaces the terminal of the last one

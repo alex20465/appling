@@ -122,6 +122,7 @@ Appling runs the tasks of VS Code's `.vscode/tasks.json`, so a repo set up for V
 - Tasks with `"runOptions": { "runOn": "folderOpen" }` start when the repo opens. The first time, Appling asks whether automatic tasks may run in that folder and keeps the answer.
 - Tasks keep running when you switch repos or close the app. At the next start Appling finds them again and knows their state.
 - The built in tasks **appling: check**, **appling: generate** and **appling: release** run the [CLI](cli.md) over the repo; release asks for the version.
+- In a [remote repo](#remote-repos) the tasks of its `tasks.json` run on that machine, in the repo's folder there.
 - The rail shows the running and failed tasks of each repo, and the sums per workspace.
 
 ## Updates

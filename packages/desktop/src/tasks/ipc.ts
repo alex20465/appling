@@ -1,11 +1,12 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { dialog, ipcMain, shell, type BaseWindow, type MenuItemConstructorOptions, type WebContents } from 'electron';
+import { isRemoteId } from '../remote/location.js';
 import { programPath } from '../resources.js';
 import type { TerminalService } from '../terminal/service.js';
 import { applingCli } from './builtin.js';
 import type { Platform } from './definitions.js';
-import { TaskRunner, type TaskItem } from './runner.js';
+import { TaskRunner, type RemoteTasks, type TaskItem } from './runner.js';
 import { isActive, type TaskState } from './state.js';
 
 export interface TaskHost {
@@ -23,6 +24,8 @@ export interface TaskHost {
     shown(open: boolean): void;
     /** Shows a terminal in the repo's terminal panel. */
     reveal(repo: string, terminal: string): void;
+    /** The machine of a remote repo (`tasks/remote.ts`). */
+    remote?(repo: string): RemoteTasks | undefined;
 }
 
 /** What the shell page's task list shows. */
@@ -56,7 +59,8 @@ export class TaskController {
                 }
             },
             askAutomatic: (repo, labels) => this.askAutomatic(repo, labels),
-            reveal: (repo, terminal) => host.reveal(repo, terminal)
+            reveal: (repo, terminal) => host.reveal(repo, terminal),
+            remote: repo => host.remote?.(repo)
         });
         this.runner.on('changed', repo => {
             if (this.open && repo === this.host.activeRepo()) this.push();
@@ -80,7 +84,7 @@ export class TaskController {
             title: 'Automatic Tasks',
             message: `${basename(repo)} has tasks that start when it opens: ${labels.join(', ')}.`,
             detail: 'Do you allow automatic tasks to run in this folder? The answer is kept; the Tasks menu changes it.',
-            buttons: ['Allow', 'Disallow', 'Open tasks.json'],
+            buttons: isRemoteId(repo) ? ['Allow', 'Disallow'] : ['Allow', 'Disallow', 'Open tasks.json'],
             defaultId: 0, cancelId: 1, noLink: true
         };
         const { response } = window ? await dialog.showMessageBox(window, options) : await dialog.showMessageBox(options);
@@ -110,6 +114,9 @@ export class TaskController {
         this.host.shown(true);
         shell.focus();
         shell.send('tasks:open', this.view());
+        // a remote repo's tasks.json is read again over the transport; the list follows when it arrives
+        const repo = this.host.activeRepo();
+        if (repo) void this.runner.refresh(repo).catch(() => undefined);
     }
 
     private hide(): void {
@@ -172,7 +179,7 @@ export class TaskController {
                 label: 'Allow Automatic Tasks in Folder', type: 'checkbox', enabled: !!repo, checked: decision === 'allow',
                 click: menuItem => repo && this.runner.setAutomatic(repo, menuItem.checked ? 'allow' : 'deny')
             },
-            { label: 'Configure Tasks…', enabled: !!repo, click: () => repo && this.configure(repo) }
+            { label: 'Configure Tasks…', enabled: !!repo && !isRemoteId(repo), click: () => repo && this.configure(repo) }
         ];
     }
 

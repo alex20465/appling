@@ -164,9 +164,9 @@ export class PtyHostClient extends EventEmitter<ClientEvents> {
         return this.socket.destroyed;
     }
 
-    /** Starts a terminal; the environment defaults to this process's. */
+    /** Starts a terminal; the environment defaults to this process's (the host's own plus `addEnv` with `addEnv`). */
     spawn(options: SpawnOptions): Promise<TerminalInfo> {
-        return this.request({ type: 'spawn', options: { env: process.env as Record<string, string>, ...options } }) as Promise<TerminalInfo>;
+        return this.request({ type: 'spawn', options: { ...options.addEnv ? {} : { env: process.env as Record<string, string> }, ...options } }) as Promise<TerminalInfo>;
     }
 
     /**

@@ -33,8 +33,13 @@ export interface SpawnOptions {
     shell?: string;
     args?: string[];
     cwd: string;
-    /** The whole environment of the shell; the client library defaults it to its own. */
+    /** The whole environment of the shell; the client library defaults it to its own unless `addEnv` is given. */
     env?: Record<string, string>;
+    /**
+     * Variables added to the host's own environment (`null` removes one), for a client on another machine that does
+     * not know the environment there (a remote repo's terminals).
+     */
+    addEnv?: Record<string, string | null>;
     cols?: number;
     rows?: number;
     group?: string;

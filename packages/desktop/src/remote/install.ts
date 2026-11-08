@@ -15,7 +15,7 @@ export const SERVER_ROOT = '.appling-server';
  * the pty host with node-pty, the agent and the Appling extension for Code OSS. The Node binary and Code OSS come
  * separately, per platform of the other machine.
  */
-export const BUNDLE_PARTS = ['package.json', 'ide', 'pty-host', 'native', 'remote', 'vscode'];
+export const BUNDLE_PARTS = ['package.json', 'ide', 'pty-host', 'native', 'remote', 'vscode', 'cli'];
 
 /** The app folder that holds the server bundle: the packaged app's root, else `packages/desktop/app` after `pnpm --filter @appling/desktop bundle`. */
 export function serverBundle(base: string = dirname(dirname(dirname(fileURLToPath(import.meta.url))))): string {

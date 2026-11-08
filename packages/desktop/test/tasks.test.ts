@@ -7,6 +7,7 @@ import { RailStatus } from '../src/rail-status.js';
 import { applingCli, builtinTasks, RELEASE_INPUT } from '../src/tasks/builtin.js';
 import { combineTasks, parseTasksJson, KNOWN_BACKGROUND } from '../src/tasks/definitions.js';
 import { dependencyPlan, executePlan, planLabels } from '../src/tasks/plan.js';
+import { parseEnv } from '../src/tasks/remote.js';
 import { TaskRunner } from '../src/tasks/runner.js';
 import { BackgroundMatcher, IDLE, readTaskStore, settled, stripEscapes, taskContributions, transition, type TaskState } from '../src/tasks/state.js';
 import { inputsUsed, quote, resolveVariables, taskLaunch, type VariableContext } from '../src/tasks/variables.js';
@@ -276,6 +277,10 @@ describe('task states', () => {
         });
         expect(readTaskStore(undefined)).toEqual({ repos: {} });
     });
+});
+
+test('the environment of a remote machine, from env', () => {
+    expect(parseEnv('HOME=/home/me\nPS1=a=b\nMULTI=one\ntwo\n_=x\n')).toEqual({ HOME: '/home/me', PS1: 'a=b', MULTI: 'one\ntwo', _: 'x' });
 });
 
 test('the built in tasks use the repo\'s own appling, else the one of Desktop', () => {

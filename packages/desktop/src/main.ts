@@ -19,6 +19,7 @@ import { Repos } from './repos.js';
 import { readSession, restore, sessionOf, writeSession } from './session.js';
 import { switcherEntries } from './switcher.js';
 import { TaskController } from './tasks/ipc.js';
+import { remoteTasks, remoteTerminals } from './tasks/remote.js';
 import { taskContributions } from './tasks/state.js';
 import { appLaunch, codeViewOpener, TERMINAL_PANE, TerminalPanel } from './terminal/panel.js';
 import { startTray } from './tray.js';
@@ -175,7 +176,8 @@ const terminals = new TerminalPanel({
     setHidden: (repo, hidden) => host.setHidden(paneId(TERMINAL_PANE, repo), hidden),
     refresh: () => refresh(),
     focusRepoView: repo => host.panes.get(paneId(IDE_PANE, repo))?.webContents.focus(),
-    window: () => host.base()
+    window: () => host.base(),
+    remote: repo => isRemoteId(repo) ? remoteTerminals(remotes.get(repo), repo, remotes.ptyDir(repo)) : undefined
 });
 /** The tasks of each repo (`tasks/`, issue #13), each in its own terminal; their states feed the rail and the Tasks menu. */
 let tasksWindow: string | undefined;
@@ -195,7 +197,8 @@ const tasks = new TaskController({
         refresh();
         if (!open) activeView()?.webContents.focus();
     },
-    reveal: (repo, terminal) => terminals.reveal(repo, terminal)
+    reveal: (repo, terminal) => terminals.reveal(repo, terminal),
+    remote: repo => isRemoteId(repo) ? remoteTasks(remotes.get(repo), repo) : undefined
 });
 tasks.runner.on('changed', () => {
     railSources.tasks.replace(taskContributions(tasks.runner.states()));
@@ -382,8 +385,11 @@ function changed(): void {
         if (repos.add(repo).added) {
             watchBranch(repo);
             launch(repo);
-            terminals.openRepo(repo);
-            tasks.openRepo(repo);
+            // a remote repo's terminals and tasks open once it is connected (`launchRemote`)
+            if (!isRemoteId(repo)) {
+                terminals.openRepo(repo);
+                tasks.openRepo(repo);
+            }
         }
     }
     for (const repo of repos.all()) {
@@ -464,6 +470,8 @@ async function launchRemote(id: string): Promise<void> {
                 const existing = host.panes.get(paneId(IDE_PANE, id));
                 if (!existing) host.addPane(paneId(IDE_PANE, id), view(url));
                 else if (again) existing.webContents.reload();
+                // the terminals and tasks in the pty host there
+                void terminals.openRepo(id).then(() => tasks.openRepo(id));
                 refresh();
             },
             onFailed: error => {

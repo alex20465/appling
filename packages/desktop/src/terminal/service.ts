@@ -26,6 +26,17 @@ export interface TerminalServiceOptions {
     scripts?: string;
     /** The app's version, for `TERM_PROGRAM_VERSION`. */
     version?: string;
+    /**
+     * Where a remote repo's terminals run (`remote/`): its pty host, reached through a forwarded socket, and the
+     * repo's folder there. Undefined for a local repo; throws while a remote repo is not connected.
+     */
+    remote?(repo: string): RemoteTerminals | undefined;
+}
+
+/** The pty host of a remote repo and its folder on that machine. */
+export interface RemoteTerminals {
+    host: ConnectOptions;
+    cwd: string;
 }
 
 export interface CreateOptions {
@@ -75,6 +86,8 @@ export interface TerminalState {
 interface Live {
     info: TerminalInfo;
     attached?: AttachedTerminal;
+    /** The connection it is attached through. */
+    client?: PtyHostClient;
     integration: ShellIntegration;
     command: boolean;
     unsubscribe: (() => void)[];
@@ -102,8 +115,9 @@ type Events = {
  * against a real host; `panel.ts` wires it to the views.
  */
 export class TerminalService extends EventEmitter<Events> {
-    private client?: PtyHostClient;
-    private connecting?: Promise<PtyHostClient>;
+    /** One connection per pty host: '' is the local one, a remote repo's is keyed by its forwarded folder. */
+    private readonly clients = new Map<string, PtyHostClient>();
+    private readonly connecting = new Map<string, Promise<PtyHostClient>>();
     readonly registry: TerminalRegistry;
     private readonly live = new Map<string, Live>();
     private readonly opened = new Set<string>();
@@ -125,23 +139,33 @@ export class TerminalService extends EventEmitter<Events> {
         return this.options.settings?.() ?? DEFAULT_TERMINAL_SETTINGS;
     }
 
-    /** The connection to the pty host, made (and the host started) on first use and again after it was lost. */
-    async connection(): Promise<PtyHostClient> {
-        if (this.client && !this.client.closed) return this.client;
-        this.connecting ??= connectPtyHost(this.options.host).then(client => {
-            this.client = client;
-            this.connecting = undefined;
-            client.on('close', () => {
-                if (this.client !== client) return;
-                this.client = undefined;
-                for (const live of this.live.values()) live.attached = undefined;
+    /**
+     * The connection to the pty host of a repo (the local one without a repo), made (and the local host started) on
+     * first use and again after it was lost.
+     */
+    async connection(repo?: string): Promise<PtyHostClient> {
+        const remote = repo === undefined ? undefined : this.options.remote?.(repo);
+        const key = remote ? remote.host.dir ?? repo! : '';
+        const known = this.clients.get(key);
+        if (known && !known.closed) return known;
+        let connecting = this.connecting.get(key);
+        if (!connecting) {
+            connecting = connectPtyHost(remote ? remote.host : this.options.host).then(client => {
+                this.clients.set(key, client);
+                this.connecting.delete(key);
+                client.on('close', () => {
+                    if (this.clients.get(key) !== client) return;
+                    this.clients.delete(key);
+                    for (const live of this.live.values()) if (live.client === client) live.attached = undefined;
+                });
+                return client;
+            }, error => {
+                this.connecting.delete(key);
+                throw error;
             });
-            return client;
-        }, error => {
-            this.connecting = undefined;
-            throw error;
-        });
-        return this.connecting;
+            this.connecting.set(key, connecting);
+        }
+        return connecting;
     }
 
     /**
@@ -154,14 +178,17 @@ export class TerminalService extends EventEmitter<Events> {
         if (opening) return opening;
         if (this.opened.has(repo)) return Promise.resolve();
         this.opened.add(repo);
-        // a second caller (the panel and the tasks) waits for the same reattach
-        const done = this.reattach(repo).finally(() => this.opening.delete(repo));
+        // a second caller (the panel and the tasks) waits for the same reattach; a failed one is tried again next time
+        const done = this.reattach(repo).catch(error => {
+            this.opened.delete(repo);
+            throw error;
+        }).finally(() => this.opening.delete(repo));
         this.opening.set(repo, done);
         return done;
     }
 
     private async reattach(repo: string): Promise<void> {
-        const client = await this.connection();
+        const client = await this.connection(repo);
         const infos = await client.list(repo);
         if (this.settings().endWithApp) {
             for (const info of infos.filter(i => !this.live.has(i.id))) await client.kill(info.id).catch(() => undefined);
@@ -182,6 +209,8 @@ export class TerminalService extends EventEmitter<Events> {
 
     /** Starts a terminal in the repo with a profile (a shell) or a command, and shows it. */
     async create(repo: string, options: CreateOptions = {}, spawned?: (id: string) => void): Promise<TerminalState> {
+        const remote = this.options.remote?.(repo);
+        if (remote) return this.createRemote(repo, remote, options, spawned);
         const client = await this.connection();
         const settings = this.settings();
         const profiles = this.options.profiles?.(repo);
@@ -198,6 +227,27 @@ export class TerminalService extends EventEmitter<Events> {
             cols: options.cols, rows: options.rows, group: repo, title: name, scrollback: settings.scrollback,
             ...options.meta ? { meta: options.meta } : {}
         });
+        return this.started(repo, attached, options, name, spawned);
+    }
+
+    /**
+     * A terminal of a remote repo, in the pty host there: the shell of `$SHELL` there (or the command), in the repo's
+     * folder there, with the environment of that machine plus the given variables. Local profiles and the shell
+     * integration scripts are files of this machine, so they do not apply.
+     */
+    private async createRemote(repo: string, remote: RemoteTerminals, options: CreateOptions, spawned?: (id: string) => void): Promise<TerminalState> {
+        const client = await this.connection(repo);
+        const settings = this.settings();
+        const addEnv: Record<string, string | null> = { ...options.env, TERM_PROGRAM: 'Appling', COLORTERM: 'truecolor', TERM_PROGRAM_VERSION: this.options.version ?? null };
+        const name = options.name ?? (options.command ? basename(options.command) : 'shell');
+        const attached = await client.spawnAttached({
+            ...options.command ? { shell: options.command, args: options.args ?? [] } : {}, addEnv, cwd: options.cwd ?? remote.cwd,
+            cols: options.cols, rows: options.rows, group: repo, title: name, scrollback: settings.scrollback
+        });
+        return this.started(repo, attached, options, name, spawned);
+    }
+
+    private async started(repo: string, attached: AttachedTerminal, options: CreateOptions, name: string, spawned?: (id: string) => void): Promise<TerminalState> {
         const info = attached.info;
         this.opened.add(repo);
         this.registry.add(repo, info.id, { split: options.split, name: options.name ?? (options.command ? name : undefined) });
@@ -214,7 +264,9 @@ export class TerminalService extends EventEmitter<Events> {
         this.live.set(info.id, live);
         if (live.attached) return;
         const fresh = !!attached;
-        attached ??= await (await this.connection()).attach(info.id);
+        const client = await this.connection(info.group);
+        attached ??= await client.attach(info.id);
+        live.client = client;
         live.info = attached.info;
         if (!fresh) this.emit('attached', info.id, attached.scrollback);
         this.listen(live, attached);
@@ -260,12 +312,13 @@ export class TerminalService extends EventEmitter<Events> {
     async snapshot(id: string, size?: { cols: number, rows: number }): Promise<{ scrollback: string, resume(): void }> {
         const live = this.live.get(id);
         if (!live) throw new Error(`No terminal ${id}.`);
-        const client = await this.connection();
+        const client = await this.connection(live.info.group);
         live.paused = true;
         try {
             if (live.attached) await live.attached.detach().catch(() => undefined);
             live.attached = undefined;
             const attached = await client.attach(id, size);
+            live.client = client;
             live.info = { ...attached.info, ...live.info.exit && !attached.info.exit ? { exit: live.info.exit } : {} };
             this.listen(live, attached);
             this.emit('attached', id, attached.scrollback);
@@ -300,15 +353,16 @@ export class TerminalService extends EventEmitter<Events> {
             for (const stop of live.unsubscribe) stop();
             this.live.delete(id);
         }
+        const group = this.registry.repoOf(id) ?? live?.info.group;
         const repo = this.registry.remove(id);
         if (repo) this.persist(repo);
-        const client = await this.connection().catch(() => undefined);
+        const client = await this.connection(group).catch(() => undefined);
         await client?.kill(id).catch(() => undefined);
     }
 
     /** Sends a signal (`SIGINT`, ...) without closing the pane. */
     async signal(id: string, signal: string): Promise<void> {
-        await (await this.connection()).kill(id, signal);
+        await (await this.connection(this.registry.repoOf(id) ?? this.live.get(id)?.info.group)).kill(id, signal);
     }
 
     /** Ends every terminal of a repo and forgets its tabs (the repo was closed). */
@@ -327,8 +381,8 @@ export class TerminalService extends EventEmitter<Events> {
 
     /** Closes the connection; the terminals keep running in the host. */
     dispose(): void {
-        this.client?.close();
-        this.client = undefined;
+        for (const client of this.clients.values()) client.close();
+        this.clients.clear();
     }
 
     state(id: string): TerminalState | undefined {
