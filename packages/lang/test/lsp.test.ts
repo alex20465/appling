@@ -18,7 +18,7 @@ async function open(text: string) {
     shared.workspace.LangiumDocuments.addDocument(document);
     await shared.workspace.DocumentBuilder.build([document], { validation: true });
     const at = (needle: string) => ({ textDocument: { uri: document.uri.toString() }, position: document.textDocument.positionAt(text.indexOf(needle) + 1) });
-    return { Appling, document, at };
+    return { shared, Appling, document, at };
 }
 
 test('formatting returns the canonical text', async () => {
@@ -54,4 +54,13 @@ test('export names lead to their member and find its references', async () => {
     expect(document.textDocument.offsetAt(link.targetSelectionRange.start)).toBe(TEXT.indexOf('Item {'));
     const references = await Appling.lsp.ReferencesProvider!.findReferences(document, { ...at('Status {'), context: { includeDeclaration: false } });
     expect(references.map(r => document.textDocument.offsetAt(r.range.start)).sort((a, b) => a - b)).toEqual([TEXT.indexOf('Status, Item'), TEXT.indexOf('Status state')]);
+});
+
+test('workspace symbols list every named element by qualified name, exported or not', async () => {
+    const { shared } = await open(TEXT);
+    const symbols = await shared.lsp.WorkspaceSymbolProvider!.getSymbols({ query: '' });
+    expect(symbols.map(s => s.name)).toEqual(expect.arrayContaining(['shop', 'shop.Status', 'shop.Status.open', 'shop.Item', 'shop.Item.status']));
+    const found = await shared.lsp.WorkspaceSymbolProvider!.getSymbols({ query: 'itemstat' });
+    expect(found.map(s => s.name)).toEqual(['shop.Item.status']);
+    expect(found[0].location).toMatchObject({ uri: URI.file('/shop.appling').toString() });
 });

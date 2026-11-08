@@ -1,7 +1,8 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { connectDesktop } from '../../vscode/src/desktop-bridge.js';
 import type { ImplementationState } from '../../vscode/src/implementation.js';
-import { CodeBridge, openMessage, parseExtensionMessage } from '../src/code-bridge.js';
+import { openMessage } from '@appling/ide/host-requests';
+import { CodeBridge, parseExtensionMessage } from '../src/code-bridge.js';
 import { CodeProxy } from '../src/code-proxy.js';
 
 const cleanup: (() => unknown)[] = [];

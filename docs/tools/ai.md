@@ -276,7 +276,7 @@ Every file a session's tool call writes is attributed to the session in the IDE'
 
 ### Where sessions live
 
-The sessions sit in a session store that the IDE servers of a workspace share. Appling Desktop holds one store in its main process and serves it to every repo's IDE server child over the child's IPC channel (`--shared-sessions`), so sessions of different repos see each other and keep their claims while a server restarts. A session belongs to a workspace and works in one repo; it sees the sessions of its workspace, or of its repo when it has none. An IDE server started on its own keeps a store of its own.
+The sessions sit in a session store that the IDE servers of a workspace share. Appling Desktop holds one store in its main process and serves it to every repo's IDE server child over the child's IPC channel (`--shared-sessions`), so sessions of different repos see each other and keep their claims while a server restarts. The [VS Code extension](vscode.md#agent-sessions) does the same for the projects of a VS Code workspace and starts the agents in VS Code terminals, with the same presets and wiring (`@appling/ai/agents`). A session belongs to a workspace and works in one repo; it sees the sessions of its workspace, or of its repo when it has none. An IDE server started on its own keeps a store of its own.
 
 In Desktop, agents reach the MCP server through one local endpoint of the app (`http://127.0.0.1:<port>/mcp`, which forwards to the session's repo server) and report hook events to it (`/hooks/<event>`), both with the session's token. Its port stays the same between starts and the store takes the sessions back with their tokens (`MemorySessionStore.adopt`), so an agent that kept running while the app restarted goes on with the same session. How Desktop starts and wires each agent is in [Appling Desktop](desktop.md#agent-sessions).
 
@@ -286,7 +286,7 @@ The IDE server pushes every change of the sessions over its `/events` websocket 
 
 Sessions work in parallel, but the person follows one story at a time. Every workspace has one playbook: the chapters the sessions of all its repos write about what they plan and do, which the person plays on the canvas of the [IDE](ide.md#the-playbook) step by step. A session opens a chapter when it starts a piece of work, with its plan as ordered steps. Each step names the elements it adds, changes or removes, with a note. The person previews the planned steps and responds before the work is done. As the session works, it marks the steps done in the same chapter and closes the chapter with the result.
 
-The playbook moves only when the person steps forward. A chapter opened while the person watches another one queues after it and never moves the canvas. The server instructions tell sessions to read the playbook first, to never interrupt, to append after the chapter being watched, and to name the earlier chapters they build on in `refs`.
+The playbook moves only when the person steps or plays a chapter. A chapter opened while the person watches another one queues after it and never moves the canvas. The server instructions tell sessions to read the playbook first, to never interrupt, to append after the chapter being watched, and to name the earlier chapters they build on in `refs`.
 
 ### Playbook tools
 

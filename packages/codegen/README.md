@@ -81,6 +81,7 @@ Generation collects what each step writes (`runPlan(plan, out, log, written)`) a
 | `runPlan(plan, out, log)` | Runs the steps and writes the registry |
 | `checkPrerequisites(prerequisites)` | Messages for missing tools |
 | `readConfig(root)`, `loadExtension(name, root)` | Configuration and extension loading |
+| `STACKS`, `STACK_LABELS`, `STACK_LOCAL`, `addTarget(root, stack, name)`, `ignore(root, lines)` | The stacks and their packages (also `@appling/codegen/stacks`, browser safe), and adding a stack's target to `appling.config.json` |
 | `describe(step)` | A one line description of a step |
 | `coverage(entries)`, `coverageTable(coverage)` | Registry entries and tasks per node kind and status, and that count as the Markdown table `--plan` prints |
 | `coverageReport(plans)`, `completion(row)`, `coverageMarkdown(report, base?)`, `formatChange(now, before)`, `coverageBadge(report)` | The coverage of several extensions over several inputs, its completion `(generated + partial / 2) / elements`, as Markdown with the change against a base report (`appling generate --coverage`, the CI report), and as a shields.io endpoint badge |

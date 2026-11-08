@@ -135,7 +135,15 @@
   .legend.on { background: var(--color-surface-raised); transform: translateX(6px); }
 
   .flowline { stroke-dasharray: 4 6; animation: flow 1s linear infinite; }
-  .dot { animation: travel 1.8s ease-in-out infinite; }
+  /* How it works: one 10s cycle, every step offset by its --d, every part inside it by its --o */
+  .stage { --off-line: var(--color-line); --off-bg: var(--color-surface-raised); border-color: var(--off-line); background-color: var(--off-bg); animation: stagelit 10s ease infinite backwards; animation-delay: var(--d); }
+  .tline { animation: typeline 10s steps(14) infinite backwards; animation-delay: calc(var(--d) + var(--o)); }
+  .popin { transform-box: fill-box; transform-origin: center; animation: popin 10s cubic-bezier(.3,1.5,.5,1) infinite backwards; animation-delay: calc(var(--d) + var(--o)); }
+  .drawloop { stroke-dasharray: 1; animation: drawloop 10s ease-out infinite backwards; animation-delay: calc(var(--d) + var(--o)); }
+  .hop { animation: hop 10s ease-in-out infinite backwards; }
+  .backloop { animation: backloop 10s ease infinite; }
+  .writeback { opacity: 0; translate: -50% -50%; animation: writeback 10s linear infinite; }
+  .backlabel { animation: backlabel 10s ease infinite; }
   .step { transition: transform .2s cubic-bezier(.23,1,.32,1); }
   .step:hover { transform: translateY(-2px); }
   .edge { marker-end: url(#ah); }
@@ -211,7 +219,24 @@
 @keyframes rise { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: .9; } 100% { transform: translateY(-120px); opacity: 0; } }
 @keyframes floaty { from { transform: translateY(0); } to { transform: translateY(-8px); } }
 @keyframes drop { 0% { transform: translateY(-90px); opacity: 0; } 60% { opacity: 1; } 100% { transform: translateY(0); opacity: 1; } }
-@keyframes travel { 0% { transform: translateX(0); opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { transform: translateX(46px); opacity: 0; } }
+@keyframes stagelit {
+  0%, 24%, 100% { border-color: var(--off-line); background-color: var(--off-bg); translate: 0 0; box-shadow: none; }
+  3%, 19% { border-color: var(--color-leaf); background-color: var(--color-leaf-soft); translate: 0 -4px; box-shadow: 0 14px 36px -16px #5cbf6380; }
+}
+@keyframes typeline { 0% { clip-path: inset(0 100% 0 0); } 6%, 97% { clip-path: inset(0); } 100% { clip-path: inset(0 100% 0 0); } }
+@keyframes popin { 0% { scale: 0; opacity: 0; } 4%, 97% { scale: 1; opacity: 1; } 100% { scale: 0; opacity: 0; } }
+@keyframes drawloop { 0% { stroke-dashoffset: 1; } 6%, 97% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 1; } }
+@keyframes hop { 0% { translate: 0 0; opacity: 0; } 1% { opacity: 1; } 6% { translate: 46px 0; opacity: 1; } 7%, 100% { translate: 46px 0; opacity: 0; } }
+@keyframes backloop { 0%, 80%, 100% { border-color: var(--color-line-strong); } 84%, 96% { border-color: var(--color-leaf); } }
+@keyframes writeback {
+  0%, 80% { left: 100%; top: 0; opacity: 0; }
+  81%, 99% { opacity: 1; }
+  84% { left: 100%; top: 100%; }
+  96% { left: 0; top: 100%; }
+  99% { left: 0; top: 0; }
+  100% { left: 0; top: 0; opacity: 0; }
+}
+@keyframes backlabel { 0%, 82%, 100% { color: var(--color-ink-muted); } 86%, 96% { color: var(--color-leaf); } }
 @keyframes typing { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 @keyframes blink { 50% { opacity: 0; } }
 @keyframes drift { from { transform: translateY(0) rotate(-3deg); } to { transform: translateY(-26px) rotate(3deg); } }

@@ -399,6 +399,18 @@ importers:
       '@appling/codegen':
         specifier: workspace:*
         version: link:../codegen
+      '@appling/codegen-ash':
+        specifier: workspace:*
+        version: link:../codegen-ash
+      '@appling/codegen-django':
+        specifier: workspace:*
+        version: link:../codegen-django
+      '@appling/codegen-go':
+        specifier: workspace:*
+        version: link:../codegen-go
+      '@appling/codegen-rust':
+        specifier: workspace:*
+        version: link:../codegen-rust
       '@appling/lang':
         specifier: workspace:*
         version: link:../lang
@@ -576,9 +588,30 @@ importers:
 
   packages/vscode:
     devDependencies:
+      '@appling/ai':
+        specifier: workspace:*
+        version: link:../ai
+      '@appling/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@appling/codegen':
+        specifier: workspace:*
+        version: link:../codegen
+      '@appling/ide':
+        specifier: workspace:*
+        version: link:../ide
       '@appling/lang':
         specifier: workspace:*
         version: link:../lang
+      '@appling/model':
+        specifier: workspace:*
+        version: link:../model
+      '@appling/pty-host':
+        specifier: workspace:*
+        version: link:../pty-host
+      '@appling/viz':
+        specifier: workspace:*
+        version: link:../viz
       '@types/node':
         specifier: ^24.19.2
         version: 24.19.2

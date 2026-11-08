@@ -54,7 +54,7 @@ module sales {
 
 A module or declaration may state its relevance to the business before its opening brace: `core`, `supporting` or `peripheral` (`entity Quote core { ... }`, `module observability peripheral { ... }`). A module's level applies to its members unless they state their own.
 
-Every named element may describe in plain text what it is or does with `does`, after its head and before its body, or at the end without one: `action Ban on Account does "Marks the @Account as banned" { ... }`, `op BanUser (id: String) does "..."`. A text block `"""..."""` spans lines; its common indentation is stripped and `fmt` re indents it with its block. `@Name` inside the text names an element like a qualified name.
+Where the structure leaves something unclear, an element may add a plain text note with the optional `does` clause, like a doc block in code, after its head and before its body, or at the end without one: `action Ban on Account does "Marks the @Account as banned" { ... }`, `op BanUser (id: String) does "..."`. A text block `"""..."""` spans lines; its common indentation is stripped and `fmt` re indents it with its block. `@Name` inside the text names an element like a qualified name.
 
 Expressions inside `{ ... }` use a subset of [CEL](https://cel.dev): `&&`, `||`, `!`, comparisons, `in`, arithmetic, member access, calls and list literals.
 
@@ -129,7 +129,7 @@ When you use the API directly, also install `langium` for `URI` and `NodeFileSys
 
 ## Language server
 
-`appling-language-server --stdio` starts a language server for any LSP client: diagnostics, completion, go to definition, references, rename, document symbols, hover (kind, qualified name, layer and doc comment) and formatting into the canonical form.
+`appling-language-server --stdio` starts a language server for any LSP client: diagnostics, completion, go to definition, references, rename, document symbols, workspace symbols (every element by qualified name), hover (kind, qualified name, layer and doc comment) and formatting into the canonical form.
 
 To embed it, for example over a websocket:
 
@@ -144,7 +144,7 @@ startLanguageServer(createApplingLspServices({ connection, ...NodeFileSystem }).
 | Export of `@appling/lang/lsp` | Purpose |
 |---|---|
 | `createApplingLspServices(context)` | The Appling services with Langium's LSP services; `realPath` in the context keeps one document per file across symlinked paths |
-| `ApplingFormatter`, `ApplingHoverProvider`, `ApplingLspModule`, `ApplingDocumentUpdateHandler` | The Appling specific LSP services |
+| `ApplingFormatter`, `ApplingHoverProvider`, `ApplingWorkspaceSymbolProvider`, `ApplingLspModule`, `ApplingDocumentUpdateHandler` | The Appling specific LSP services |
 
 ## License
 

@@ -7,9 +7,7 @@ import { isRemoteId, repoId } from '../remote/location.js';
 import type { TerminalService } from '../terminal/service.js';
 import type { Notification } from '../terminal/shell-integration.js';
 import { railSessions, sessionTitle, type RailSession, type SessionView } from './board.js';
-import { Gateway } from './gateway.js';
-import { answerKeys, launch, type AgentPreset, type Answer, type AnswerKeys, type Wiring } from './presets.js';
-import { answers, hookSignal, notificationSignal, reduce, STATUS_COLORS, waiting, type AgentStatus, type Signal, type StatusState } from './status.js';
+import { answerKeys, answers, Gateway, hookSignal, launch, notificationSignal, reduce, STATUS_COLORS, waiting, type AgentPreset, type AgentStatus, type Answer, type AnswerKeys, type Signal, type StatusState, type Wiring } from '@appling/ai/agents';
 
 /** The hook client for command hooks, next to this module (`out/agents/hook.cjs`, also in the packaged app). */
 export const HOOK_SCRIPT = (() => {

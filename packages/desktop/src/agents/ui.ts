@@ -6,7 +6,7 @@ import { stripJsonc } from '../code-workspace.js';
 import type { TerminalPanel } from '../terminal/panel.js';
 import { readSettingsFile } from '../terminal/settings.js';
 import { boardEntries, sessionTitle, shouldNotify, type Attention, type BoardEntry } from './board.js';
-import { agentPresets, isAnswer, PRESETS_KEY, type AgentPreset, type Answer } from './presets.js';
+import { agentPresets, geminiSystemSettingsFile, isAnswer, PRESETS_KEY, type AgentPreset, type Answer } from '@appling/ai/agents';
 import { AgentSessions, type AgentRecord, type RemoteAgentHost } from './sessions.js';
 
 export interface AgentUiOptions {
@@ -38,14 +38,6 @@ export interface AgentUiOptions {
     /** Redraws every rail. */
     refresh(): void;
     window(): BaseWindow | undefined;
-}
-
-/** Gemini CLI's own system settings file, merged under a session's; see its configuration reference. */
-function geminiSystemSettingsFile(): string {
-    if (process.env.GEMINI_CLI_SYSTEM_SETTINGS_PATH) return process.env.GEMINI_CLI_SYSTEM_SETTINGS_PATH;
-    if (process.platform === 'darwin') return '/Library/Application Support/GeminiCli/settings.json';
-    if (process.platform === 'win32') return 'C:\\ProgramData\\gemini-cli\\settings.json';
-    return '/etc/gemini-cli/settings.json';
 }
 
 /**

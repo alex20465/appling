@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentSession, Chapter, Playbook, PlaybookPosition, ResponseKind } from '@appling/ai';
 import { ModelCanvas } from '@appling/viz/canvas';
 import { lensOf, trailOf, type GraphIndex, type ViewSettings } from '@appling/viz/views';
-import { back, canForward, forward, isUnwatched, queued, stepView } from '../shared/player.js';
+import { back, canForward, forward, isUnwatched, queued, stepDuration, stepView } from '../shared/player.js';
 
 const CHANGE: Record<string, string> = { add: 'adds', change: 'changes', remove: 'removes', show: 'shows' };
 
@@ -74,8 +74,9 @@ interface PlayerProps {
 
 /**
  * The playbook on the canvas: the watched chapter's trail up to the current step, its added, changed and removed
- * elements marked (dashed while planned) and played once more on every step. Only the user's back and forward move
- * it; chapters that arrive meanwhile wait in the queue.
+ * elements marked (dashed while planned) and played once more on every step. The user's back and forward move it, and
+ * playing (from Play or Replay, until the chapter's end or Pause) moves it one `stepDuration` per step; chapters that
+ * arrive meanwhile wait in the queue.
  */
 export function PlaybookPlayer({ index, playbook, settings: base, selected, repo, onMove, onRespond, onSelect, onClose, onSession, onDiff }: PlayerProps) {
     const position = playbook.position;
@@ -84,6 +85,38 @@ export function PlaybookPlayer({ index, playbook, settings: base, selected, repo
     const [comment, setComment] = useState('');
     const [sent, setSent] = useState<string>();
     const waiting = queued(playbook, position);
+    /**
+     * Playing steps forward on its own, one `stepDuration` per step once the canvas has grown the step's elements, to
+     * the chapter's end; typing a comment holds it.
+     */
+    const [auto, setAuto] = useState(true);
+    const [grown, setGrown] = useState<string>();
+    const at = `${position.chapter} ${position.step}`;
+    const [left, setLeft] = useState<number>();
+    const latest = useRef({ playbook, onMove });
+    latest.current = { playbook, onMove };
+    const duration = view ? stepDuration(view) : 0;
+    const end = !view || position.step >= view.chapter.steps.length;
+    const advancing = auto && !end && !comment && grown === at;
+    useEffect(() => {
+        setLeft(undefined);
+        if (!advancing) return;
+        const due = Date.now() + duration;
+        setLeft(duration);
+        const tick = setInterval(() => {
+            const rest = due - Date.now();
+            if (rest > 0) return setLeft(rest);
+            clearInterval(tick);
+            latest.current.onMove(forward(latest.current.playbook, position));
+        }, 100);
+        return () => clearInterval(tick);
+    }, [advancing, position.chapter, position.step, duration]);
+    useEffect(() => { if (end) setAuto(false); }, [end]);
+    const toggle = () => {
+        if (auto) return setAuto(false);
+        if (end && view) onMove({ chapter: view.chapter.id, step: 0 });
+        setAuto(true);
+    };
     const elsewhere = view && view.chapter.repo !== repo;
     // Elements this canvas does not have (another repo's, or removed and gone) are left out of the trail.
     // Keyed by its text, so a playbook change elsewhere (a chapter queued, a step marked done) never replants the tree.
@@ -120,18 +153,23 @@ export function PlaybookPlayer({ index, playbook, settings: base, selected, repo
         setSent(kind === 'approve' ? 'Approved' : kind === 'reject' ? 'Rejected' : 'Comment sent');
     };
     return (
-        <div className="agent-canvas player">
+        <div className="agent-canvas player" style={{ '--session': chapter.color } as React.CSSProperties}>
             <div className="agent-bar" style={{ '--session': chapter.color } as React.CSSProperties}>
                 <span className="session-dot" style={{ background: chapter.color }} />
                 <strong>{chapter.title}</strong>
                 <span className="muted agent-note">{chapter.label}{elsewhere ? ` · in ${chapter.repo.split('/').pop()}` : ''}</span>
                 <span className="agent-step" role="status">{view.at ? `step ${view.at} of ${chapter.steps.length}` : 'plan'}</span>
+                <button className="button" onClick={toggle} aria-pressed={auto}>{auto ? 'Pause' : 'Play'}</button>
                 <button className="button" onClick={() => onMove(back(playbook, position))} aria-label="Step back">←</button>
                 <button className="button" onClick={() => onMove(forward(playbook, position))} disabled={!canForward(playbook, position)} aria-label="Step forward">→</button>
-                <button className="button" onClick={() => onMove({ chapter: chapter.id, step: 0 })}>Replay</button>
+                <button className="button" onClick={() => { onMove({ chapter: chapter.id, step: 0 }); setAuto(true); }}>Replay</button>
                 {chapter.session && <button className="button" onClick={() => onSession(chapter)}>Session</button>}
                 {chapter.session && <button className="button" onClick={() => onDiff(chapter)}>Diff</button>}
                 <button className="button" onClick={onClose}>Back to the model</button>
+            </div>
+            <div className="player-progress" role="timer">
+                <div style={{ width: left === undefined ? 0 : `${100 - (left / duration) * 100}%` }} />
+                <span>{left !== undefined ? `next step in ${Math.ceil(left / 1000)}s` : end ? 'end of the chapter' : comment ? 'held while you write' : !auto ? 'paused' : 'showing the step'}</span>
             </div>
             <div className="player-step">
                 {step ? (
@@ -160,7 +198,7 @@ export function PlaybookPlayer({ index, playbook, settings: base, selected, repo
                 {waiting.length > 0 && <p className="muted player-queue">Queued next: {waiting.map(c => `${c.title} (${c.label})`).join(', ')}</p>}
             </div>
             <ModelCanvas key={chapter.id} index={index} focus={focus} selected={selected} settings={settings}
-                changes={view.changes} beat={view.at} onSelect={onSelect} onSettings={setSettings} />
+                changes={view.changes} beat={view.at} grow onGrown={() => setGrown(at)} onSelect={onSelect} onSettings={setSettings} />
         </div>
     );
 }

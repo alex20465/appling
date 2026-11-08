@@ -23,6 +23,15 @@ describe('scaffold', () => {
         scaffold(dir, { name: 'todo-app', agents: [], stack: 'ash' });
         expect(read(dir, 'models/todo_app.appling')).toBe('module todo_app {\n}\n');
         expect(json(dir, 'appling.config.json')).toEqual({ generate: [{ extension: '@appling/codegen-ash', out: 'build/todo_app' }] });
+        expect(read(dir, '.gitignore')).toBe('build/todo_app/_build/\nbuild/todo_app/deps/\nnode_modules/\n.appling/view.json\n');
+    });
+
+    test('without a stack it still writes the config, so the project counts as set up', () => {
+        const dir = project();
+        writeFileSync(join(dir, '.gitignore'), 'dist');
+        scaffold(dir, { name: 'todo', agents: [] });
+        expect(json(dir, 'appling.config.json')).toEqual({});
+        expect(read(dir, '.gitignore')).toBe('dist\nnode_modules/\n.appling/view.json\n');
     });
 
     test('wires every agent to the MCP server, the rules and the skills in node_modules', () => {
@@ -54,7 +63,7 @@ describe('scaffold', () => {
         mkdirSync(join(dir, 'src'));
         writeFileSync(join(dir, 'src/shop.appling'), 'module shop {\n}\n');
         const options: InitOptions = { name: 'shop', agents: ['claude', 'codex'], stack: 'django' };
-        const files = () => ['.mcp.json', 'CLAUDE.md', '.codex/config.toml', 'AGENTS.md', 'appling.config.json'].map(f => read(dir, f));
+        const files = () => ['.mcp.json', 'CLAUDE.md', '.codex/config.toml', 'AGENTS.md', 'appling.config.json', '.gitignore'].map(f => read(dir, f));
         scaffold(dir, options);
         const first = files();
         scaffold(dir, options);

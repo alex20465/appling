@@ -1,7 +1,13 @@
 **
-!out/extension.js
+!out/extension/**
+!out/skills/**
+!out/language/**
 !out/server.js
+!out/hook.cjs
+!out/appling-icon.svg
 !out/appling.tmLanguage.json
+!out/ide/**
+!out/cli/**
 !package.json
 !language-configuration.json
 !icon.png

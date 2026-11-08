@@ -1,5 +1,6 @@
 ---
 const commands = [
+  { name: "init", text: "sets up a project, connects Claude Code, Codex, OpenCode, Gemini CLI or Antigravity CLI and picks the stack." },
   { name: "check", text: "validates every .appling file and exits with 1 when it finds errors." },
   { name: "fmt", text: "rewrites files into canonical form. A second run changes nothing." },
   { name: "graph", text: "prints the semantic graph as JSON, the same graph Appling Desktop and the AI read." },
@@ -7,10 +8,11 @@ const commands = [
 ];
 
 const lines = [
-  { comment: "add the CLI to your project", command: "npm i -D @appling/cli" },
-  { comment: "validate every model", command: "npx appling check models" },
-  { comment: "print the semantic graph", command: "npx appling graph models" },
-  { comment: "preview the generated project", command: "npx appling generate --plan models" },
+  { comment: "start a project, it asks for the name, the agents and the stack", command: "npx @appling/cli init todo" },
+  { comment: "or answer up front: Claude Code and Codex on Django", command: "npx @appling/cli init todo --name todo --agents claude,codex --stack django" },
+  { comment: "OpenCode on Ash, the stack can also wait (--stack none)", command: "npx @appling/cli init shop --name shop --agents opencode --stack ash" },
+  { comment: "inside the project folder, validate the model", command: "npx appling check models" },
+  { comment: "preview the generated project", command: "npx appling generate --plan" },
 ];
 ---
 
@@ -18,8 +20,8 @@ const lines = [
   <div id="start" class="mx-auto flex max-w-[1200px] flex-wrap items-start gap-12">
     <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-3">
       <span class="eyebrow">Get started</span>
-      <h2 class="text-h1">Install, check, open, generate</h2>
-      <p class="text-ink-soft">Point the tools at a folder; files that reference each other load as one workspace.</p>
+      <h2 class="text-h1">Init, model, generate</h2>
+      <p class="text-ink-soft">One command sets up the project and wires your coding agent to the model. Then describe what you want; the agent writes the model first and the code from it.</p>
       <div class="flex flex-col gap-2 pt-2">
         {commands.map((command) => (
           <p class="text-sm leading-[22px] text-ink-muted">
@@ -27,7 +29,10 @@ const lines = [
           </p>
         ))}
       </div>
-      <a href="/docs/getting-started/first-model/" class="pt-2 font-mono text-[13px] leading-5 font-semibold">Write your first model →</a>
+      <div class="flex flex-wrap gap-x-6 gap-y-2 pt-2 font-mono text-[13px] leading-5 font-semibold">
+        <a href="/docs/getting-started/new-project/">Start a new project →</a>
+        <a href="/docs/getting-started/first-model/">Write your first model →</a>
+      </div>
     </div>
     <div class="min-w-0 flex-[1_1_520px] overflow-hidden rounded-sm border border-line bg-surface-raised">
       <div class="border-b border-line px-4 py-2 font-mono text-xs leading-5 text-ink-muted">terminal</div>

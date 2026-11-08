@@ -37,7 +37,7 @@ All files are loaded as one workspace, so references between modules resolve acr
 
 ### init
 
-Sets up a new project: writes `package.json` if missing, installs `@appling/cli`, `@appling/ai` and the stack's extension, writes a starter module and the generate target, and connects the chosen coding agents (`claude`, `codex`, `opencode`, `gemini`, `antigravity`) to the Appling MCP server, the `appling` skill and its rules, all referenced from `node_modules`. It asks for what the flags leave open; `--stack` takes `django`, `ash`, `go`, `rust` or `none`.
+Sets up a new project: writes `package.json` if missing, installs `@appling/cli`, `@appling/ai` and the stack's extension, writes a starter module, the generate target (an empty `appling.config.json` with `--stack none`) and the missing `.gitignore` lines (`node_modules/`, `.appling/view.json`, the stack's local files), and connects the chosen coding agents (`claude`, `codex`, `opencode`, `gemini`, `antigravity`) to the Appling MCP server, the `appling` skill and its rules, all referenced from `node_modules`. It asks for what the flags leave open; `--stack` takes `django`, `ash`, `go`, `rust` or `none`.
 
 ```sh
 npx @appling/cli init todo --name todo --agents claude,codex --stack django

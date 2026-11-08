@@ -125,6 +125,25 @@ export function trailOf(index: GraphIndex, settings: ViewSettings, focus: string
     return { unfolded, trail, ids };
 }
 
+/**
+ * How a focus grows from what the tree shows now (`trailOf` of the earlier focus) to the next: the nodes it adds, one
+ * after another along the focus, each element's path from the seed down before the element (node ids are paths).
+ */
+export function growOrder(now: { unfolded: Set<string>, trail: Set<string> }, next: { unfolded: Set<string>, trail: Set<string> }): string[] {
+    const seen = new Set([...now.trail].filter(id => next.trail.has(id)).concat([...now.unfolded]));
+    const order: string[] = [];
+    for (const id of next.unfolded) {
+        if (now.unfolded.has(id)) continue;
+        const parts = id.split('/');
+        for (const node of [...parts.slice(1).map((_, i) => parts.slice(0, i + 1).join('/')), id]) {
+            if (seen.has(node) || (node !== id && !next.trail.has(node))) continue;
+            seen.add(node);
+            order.push(node);
+        }
+    }
+    return order;
+}
+
 /** The lens whose tree starts from declarations of this kind. */
 export function lensOf(kind: string): Lens | undefined {
     return (Object.keys(LENSES) as Lens[]).find(lens => LENSES[lens].kinds.includes(kind));

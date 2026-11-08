@@ -1,10 +1,10 @@
-import { inject, URI, type AstNode, type LangiumDocument, type Module } from 'langium';
+import { AstUtils, inject, URI, type AstNode, type LangiumDocument, type Module } from 'langium';
 import {
     createDefaultModule, createDefaultSharedModule, DefaultDocumentUpdateHandler, MultilineCommentHoverProvider,
     type DefaultSharedModuleContext, type Formatter, type LangiumServices, type LangiumSharedServices, type PartialLangiumServices,
-    type PartialLangiumSharedServices
+    type PartialLangiumSharedServices, type WorkspaceSymbolProvider
 } from 'langium/lsp';
-import { TextEdit } from 'vscode-languageserver';
+import { TextEdit, type WorkspaceSymbol, type WorkspaceSymbolParams } from 'vscode-languageserver';
 import { ApplingGeneratedModule, ApplingGeneratedSharedModule } from './generated/module.js';
 import { isModule } from './generated/ast.js';
 import { ApplingModule } from './appling-module.js';
@@ -70,6 +70,31 @@ export class ApplingDocumentUpdateHandler extends DefaultDocumentUpdateHandler {
     }
 }
 
+/**
+ * Every named element by its qualified name (`sales.Order.status`), for the editor's Go to Symbol in Workspace; the
+ * default provider lists only the index, which holds just the exported elements.
+ */
+export class ApplingWorkspaceSymbolProvider implements WorkspaceSymbolProvider {
+    constructor(private readonly shared: LangiumSharedServices) {}
+
+    getSymbols(params: WorkspaceSymbolParams): WorkspaceSymbol[] {
+        const { NodeKindProvider } = this.shared.lsp;
+        const query = params.query.toLowerCase();
+        // the query's letters in order; the editor ranks the matches itself
+        const matches = (name: string) => {
+            let at = 0;
+            for (const char of name.toLowerCase()) if (char === query[at]) at++;
+            return at === query.length;
+        };
+        return this.shared.workspace.LangiumDocuments.all.flatMap(document => AstUtils.streamAst(document.parseResult.value).flatMap(node => {
+            const name = qualifiedName(node);
+            const segment = name ? this.shared.ServiceRegistry.getServices(document.uri).references.NameProvider.getNameNode(node) : undefined;
+            if (!name || !segment || !matches(name)) return [];
+            return [{ name, kind: NodeKindProvider.getSymbolKind(node), location: { uri: document.uri.toString(), range: segment.range } }];
+        })).toArray();
+    }
+}
+
 export const ApplingLspModule: Module<LangiumServices, PartialLangiumServices> = {
     lsp: {
         Formatter: () => new ApplingFormatter(),
@@ -83,9 +108,12 @@ export function createApplingLspServices(context: DefaultSharedModuleContext & {
     Appling: LangiumServices
 } {
     const { realPath } = context;
-    const documents: Module<LangiumSharedServices, PartialLangiumSharedServices> = realPath
-        ? { lsp: { DocumentUpdateHandler: services => new ApplingDocumentUpdateHandler(services, realPath) } }
-        : {};
+    const documents: Module<LangiumSharedServices, PartialLangiumSharedServices> = {
+        lsp: {
+            WorkspaceSymbolProvider: services => new ApplingWorkspaceSymbolProvider(services),
+            ...realPath ? { DocumentUpdateHandler: (services: LangiumSharedServices) => new ApplingDocumentUpdateHandler(services, realPath) } : {}
+        }
+    };
     const shared = inject(createDefaultSharedModule(context), ApplingGeneratedSharedModule, documents);
     const Appling = inject(createDefaultModule({ shared }), ApplingGeneratedModule, ApplingModule, ApplingLspModule);
     shared.ServiceRegistry.register(Appling);

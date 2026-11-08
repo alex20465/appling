@@ -71,6 +71,16 @@ test('requests from other origins are refused', async () => {
     expect((await fetch(`${ide.url}/api/snapshot`, { headers: { origin: 'https://evil.example' } })).status).toBe(403);
 });
 
+test('a trusted origin is accepted from then on, and only VS Code webviews may embed the client', async () => {
+    const forwarded = { origin: 'http://localhost:49999' };
+    expect((await fetch(`${ide.url}/api/release`, { headers: forwarded })).status).toBe(403);
+    ide.trust(forwarded.origin);
+    ide.trust('javascript:alert(1)');
+    expect((await fetch(`${ide.url}/api/release`, { headers: forwarded })).status).toBe(200);
+    const page = await fetch(`${ide.url}/`);
+    expect(page.headers.get('content-security-policy')).toBe("frame-ancestors 'self' vscode-webview: vscode-file: https://*.vscode-cdn.net");
+});
+
 test('view settings are stored outside the model', async () => {
     expect(await (await fetch(`${ide.url}/api/view`)).json()).toEqual({});
     const view = { linkEntities: true, direction: 'DOWN' };

@@ -72,6 +72,12 @@ export async function startGeneration(selection: GenerationSelection, workspace?
     return response.json();
 }
 
+/** Adds the stack's target to appling.config.json. */
+export async function addTarget(stack: string): Promise<void> {
+    const response = await fetch('/api/targets', { method: 'POST', body: JSON.stringify({ stack }) });
+    if (!response.ok) throw new Error(await response.text());
+}
+
 /** The text of a code file of the workspace or a generate target, read only. */
 export async function loadCode(path: string): Promise<{ path: string, text: string }> {
     const response = await fetch(`/api/code?path=${encodeURIComponent(path)}`);

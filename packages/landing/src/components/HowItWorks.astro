@@ -1,27 +1,47 @@
 ---
 const steps = [
   {
+    key: "text",
     title: "Text",
     text: "Write the model in plain .appling files. The text is the canonical source.",
     icon: '<path class="sr" d="M6 3h8l4 4v14H6z M14 3v4h4 M9 12h6 M9 16h6" stroke="#5cbf63" stroke-width="1.5"></path>',
   },
   {
+    key: "graph",
     title: "Graph",
     text: "Parsed and linked across files and modules, every element by its qualified name.",
     icon: '<path class="sr" d="M6 6 L18 8 L12 18 Z" stroke="#5cbf63" stroke-width="1.5"></path><circle cx="6" cy="6" r="2.6" fill="#5cbf63"></circle><circle cx="18" cy="8" r="2.6" fill="#5cbf63"></circle><circle cx="12" cy="18" r="2.6" fill="#a6dc5a"></circle>',
   },
   {
+    key: "validated",
     title: "Validated",
     text: "Layer rules, exports and migrations are checked on every build.",
     icon: '<path class="sr" d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z M9 12l2 2 4-4" stroke="#5cbf63" stroke-width="1.5"></path>',
   },
   {
+    key: "generate",
     title: "Visualize and generate",
     text: "Explore and edit the model in Appling Desktop, review AI proposals, and generate a Django, Ash, Go or Rust project, all from the same source.",
     icon: '<path class="sr" d="M20 20l-4.5-4.5 M11 8v6 M8 11h6" stroke="#5cbf63" stroke-width="1.5"></path><circle class="sr" cx="11" cy="11" r="6" stroke="#5cbf63" stroke-width="1.5"></circle>',
     highlight: true,
   },
 ];
+
+// The section plays one 10s cycle (see .stage in global.css): step i lights at i * 2s, then the edit runs back to the text
+const SLOT = 2;
+
+const graphNodes = [
+  [20, 46, 0.2],
+  [80, 14, 0.5],
+  [140, 46, 0.8],
+];
+const graphEdges = [
+  ["M20 46 L80 14", 0.4],
+  ["M80 14 L140 46", 0.7],
+  ["M20 46 L140 46", 1],
+];
+const checks = ["layer rules", "exports", "migrations"];
+const outputs = ["canvas", "django", "ash", "go", "rust"];
 ---
 
 <section id="how" class="border-t border-line px-4 py-16 sm:px-8">
@@ -39,28 +59,70 @@ const steps = [
                 <svg viewBox="0 0 64 24" class="h-6 w-16 overflow-visible">
                   <path class="sr flowline" d="M4 12 H52" stroke="#7a6e5e" stroke-width="2"></path>
                   <path class="sr" d="M48 5 L59 12 L48 19" stroke="#7a6e5e" stroke-width="2.5"></path>
-                  <circle class="dot" cx="6" cy="12" r="4" fill="#5cbf63" style={`animation-delay: ${(i - 1) * 0.6}s`}></circle>
+                  <circle class="hop" cx="6" cy="12" r="4" fill="#5cbf63" style={`animation-delay: ${i * SLOT - 0.6}s`}></circle>
                 </svg>
               </div>
             )}
-            <article class:list={["step flex min-w-0 flex-[1_1_0] flex-col gap-3 rounded-sm border p-6", step.highlight ? "border-leaf-line bg-leaf-soft" : "border-line bg-surface-raised"]}>
+            <article
+              class:list={["stage step flex min-w-0 flex-[1_1_0] flex-col gap-3 rounded-sm border p-6", step.highlight && "[--off-bg:var(--color-leaf-soft)] [--off-line:var(--color-leaf-line)]"]}
+              style={`--d: ${i * SLOT}s`}
+            >
               <div class="flex items-center justify-between gap-4">
                 <span class="inline-flex size-11 items-center justify-center rounded-md border border-line bg-surface-elevated">
                   <svg viewBox="0 0 24 24" aria-hidden="true" class="size-5" set:html={step.icon}></svg>
                 </span>
                 <span class="eyebrow">{String(i + 1).padStart(2, "0")}</span>
               </div>
+
+              <div aria-hidden="true" class="flex h-[76px] items-center rounded-sm border border-line bg-surface px-3">
+                {step.key === "text" && (
+                  <div class="font-mono text-[12px] leading-[18px]">
+                    <span class="tline block w-fit" style="--o: .2s"><span class="kw">entity</span> <span class="ty">Order</span> <span class="pu">{"{"}</span></span>
+                    <span class="tline block w-fit pl-4" style="--o: .6s">status<span class="pu">:</span> <span class="ty">Status</span></span>
+                    <span class="tline block w-fit" style="--o: 1s"><span class="pu">{"}"}</span></span>
+                  </div>
+                )}
+                {step.key === "graph" && (
+                  <svg viewBox="0 0 160 60" class="h-[60px] w-full">
+                    {graphEdges.map(([d, o]) => (
+                      <path class="sr drawloop" pathLength="1" d={d as string} stroke="#7a6e5e" stroke-width="1.5" style={`--o: ${o}s`}></path>
+                    ))}
+                    {graphNodes.map(([x, y, o], n) => (
+                      <circle class="popin" cx={x} cy={y} r="6" fill={n === 1 ? "#a6dc5a" : "#5cbf63"} style={`--o: ${o}s`}></circle>
+                    ))}
+                  </svg>
+                )}
+                {step.key === "validated" && (
+                  <ul class="flex flex-col gap-0.5 font-mono text-[12px] leading-[18px] text-ink-muted">
+                    {checks.map((check, n) => (
+                      <li class="flex items-center gap-2">
+                        <svg viewBox="0 0 12 12" class="popin size-3" style={`--o: ${0.2 + n * 0.3}s`}><path class="sr" d="M2 6.5 L5 9 L10 3" stroke="#5cbf63" stroke-width="2"></path></svg>
+                        {check}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {step.key === "generate" && (
+                  <div class="flex flex-wrap gap-1.5">
+                    {outputs.map((output, n) => (
+                      <span class="popin rounded-full border border-leaf-line bg-surface-elevated px-2 font-mono text-[11px] leading-[20px] text-ink" style={`--o: ${0.2 + n * 0.2}s`}>{output}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <h3 class="text-[17px] leading-6 font-semibold">{step.title}</h3>
               <p class="text-sm leading-[22px] text-ink-muted">{step.text}</p>
             </article>
           </>
         ))}
       </div>
-      <div aria-hidden="true" class="relative mx-[11%] h-10 rounded-b-3xl border-2 border-t-0 border-dashed border-line-strong max-[960px]:hidden">
+      <div aria-hidden="true" class="backloop relative mx-[11%] h-10 rounded-b-3xl border-2 border-t-0 border-dashed border-line-strong max-[960px]:hidden">
         <svg viewBox="0 0 16 12" class="absolute -top-1.5 -left-[9px] h-3 w-4">
           <path class="sr" d="M2 10 L8 2 L14 10" stroke="#7a6e5e" stroke-width="2.5"></path>
         </svg>
-        <span class="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-surface px-3 font-mono text-xs leading-[22px] whitespace-nowrap text-ink-muted">edits write back to text</span>
+        <span class="writeback absolute size-2.5 rounded-full bg-leaf"></span>
+        <span class="backlabel absolute -bottom-3 left-1/2 -translate-x-1/2 bg-surface px-3 font-mono text-xs leading-[22px] whitespace-nowrap text-ink-muted">edits write back to text</span>
       </div>
     </div>
   </div>

@@ -1,22 +1,33 @@
 ---
 title: Descriptions
-description: The does clause says in plain text what a declaration is or does, for what the structured constructs cannot express.
+description: The optional does clause adds a plain text note where the structured constructs leave something unclear, like a doc block in code.
 ---
 
-The structured constructs (`set`, `create`, `emit`, typed operations) say a lot, but not everything. How an external operation maps to a vendor's HTTP API, or what an action does beyond its effects, has no construct. The `does` clause writes it down next to the element, in plain text. Code generation turns it into a docstring and a [registry task](../codegen/registry.md), so the intent reaches whoever implements the element.
+The model describes itself: names, types, `requires`, `set`, `emit` and typed operations already say what an element is and does. Most declarations need nothing more. The `does` clause is an optional note in plain text for the few places where the structure cannot say it: how an external operation maps to a vendor's HTTP API, the format of a value, where a key comes from, why a rule exists. Treat it like a doc block in code: write one only when a reader would otherwise be confused.
+
+Code generation turns each description into documentation and a [registry task](../codegen/registry.md), so the note reaches whoever implements the element. A description that only repeats the structure adds a task that says nothing new.
+
+## When to write one
+
+| Write `does` | Leave it out |
+|---|---|
+| The vendor call behind an operation: `POST /users/{id}/ban`, what a 404 means | An action whose `effect` already shows what it changes |
+| A format or source the type cannot carry: "the id Clerk assigns, user_ followed by letters" | A field whose name and type say it all: `email: String` |
+| A relation between elements that no reference states | A use case whose steps read as its description |
+| Where to find a setting or secret | A module, entity or enum whose name is enough |
 
 ## Writing a description
 
-Write `does` and a string after the head of a declaration (name, signature, `relevance`) and before its body, or at the end of a declaration without a body:
+Write `does` and a string after the head of a declaration (name, signature, `relevance`) and before its body, or at the end of a declaration without a body. In this module only three places need a note; the action and the use case explain themselves:
 
 ```appling check
-module accounts does "Who signs in and what they may do" {
-  external Clerk does "The identity provider that owns sign in" {
+module accounts {
+  external Clerk {
     op BanUser (id: String) does "POST /users/{id}/ban on the Clerk backend API; 404 means the user is gone"
   }
 
   entity Account does """
-    Someone who signs in. The row mirrors the Clerk user;
+    Mirrors the Clerk user;
     @Account.clerk_id is the link between both.
   """ {
     clerk_id: String unique does "The id Clerk assigns, user_ followed by letters"
@@ -24,20 +35,20 @@ module accounts does "Who signs in and what they may do" {
     banned: Bool default false
   }
 
-  action Ban on Account does "Marks the @Account as banned so it can no longer sign in" {
+  action Ban on Account {
     effect {
       set banned = true
     }
   }
 
-  usecase BanAccount (account: Account) does "Bans the user at @Clerk first, then locally with @Ban" {
+  usecase BanAccount (account: Account) {
     step Clerk.BanUser(account.clerk_id)
     step Ban(account)
   }
 }
 ```
 
-Every named element takes one: `module`, `role`, `actor`, `tenant`, `enum` and its values, `value`, `entity`, fields, `event`, `action`, its inputs and errors, `machine`, `job`, `query`, `projection` and its fields, `external` and its operations, `usecase` and its parameters, `interface`, `page`, `navigation`, `flow`, `messages` and `migration`. Fields, parameters, errors, enum values, operations, `role`, `tenant` and `job` put it at the end.
+Every named element can take one: `module`, `role`, `actor`, `tenant`, `enum` and its values, `value`, `entity`, fields, `event`, `action`, its inputs and errors, `machine`, `job`, `query`, `projection` and its fields, `external` and its operations, `usecase` and its parameters, `interface`, `page`, `navigation`, `flow`, `messages` and `migration`. Fields, parameters, errors, enum values, operations, `role`, `tenant` and `job` put it at the end.
 
 `does` stays valid as a name, so a field may be called `does`.
 

@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, expect, test } from 'vitest';
@@ -123,4 +123,20 @@ test('a generation run becomes a playbook chapter: the planned parts, done when 
         { n: 2, state: 'done', change: 'show', elements: ['sales.PlaceOrder'] }
     ]);
     expect(written.steps[1].note).toContain('sales.PlaceOrder: implement what PlaceOrder does');
+});
+
+test('a stack chosen in the IDE becomes a target of appling.config.json', async () => {
+    const fresh = mkdtempSync(join(tmpdir(), 'appling-ide-stack-'));
+    cpSync(join(import.meta.dirname, '../../../examples'), fresh, { recursive: true });
+    const other = await startIde(fresh, 0);
+    try {
+        expect((await fetch(`${other.url}/api/targets`, { method: 'POST', body: JSON.stringify({ stack: 'cobol' }) })).status).toBe(400);
+        const targets = await (await fetch(`${other.url}/api/targets`, { method: 'POST', body: JSON.stringify({ stack: 'django' }) })).json();
+        expect(targets).toEqual([{ extension: '@appling/codegen-django', out: expect.stringMatching(/^build\/appling_ide_stack_/) }]);
+        const snapshot = await (await fetch(`${other.url}/api/snapshot`)).json() as Snapshot;
+        expect(snapshot.targets).toEqual([expect.objectContaining({ extension: '@appling/codegen-django', generated: false })]);
+        expect(readFileSync(join(fresh, '.gitignore'), 'utf8')).toMatch(/^build\/appling_ide_stack_\w+\/\.venv\/$/m);
+    } finally {
+        other.close();
+    }
 });

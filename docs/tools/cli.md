@@ -68,7 +68,7 @@ appling init [folder] [--name <name>] [--agents <agents>] [--stack <stack>]
 | `--agents` | asked | A comma separated list of `claude`, `codex`, `opencode`, `gemini` and `antigravity` |
 | `--stack` | asked | `django`, `ash`, `go`, `rust`, or `none` to decide later |
 
-`init` asks for what the flags leave open. Without a terminal it asks nothing and exits with 2 unless all three flags are given. The package manager is the one of the project's lockfile, else the one that ran `init` (`pnpm dlx`, `yarn dlx`, `bunx`), else npm. Running `init` again keeps existing settings and changes nothing.
+`init` asks for what the flags leave open. Without a terminal it asks nothing and exits with 2 unless all three flags are given. The package manager is the one of the project's lockfile, else the one that ran `init` (`pnpm dlx`, `yarn dlx`, `bunx`), else npm. Running `init` again keeps existing settings and changes nothing. Besides the agents' files it writes `appling.config.json` (empty with `--stack none`) and adds the missing lines to `.gitignore`: `node_modules/`, `.appling/view.json` and the stack's local files in its output folder (see [What it writes](../getting-started/new-project.md#what-it-writes)).
 
 ```sh
 npx @appling/cli init todo --name todo --agents claude,codex --stack none

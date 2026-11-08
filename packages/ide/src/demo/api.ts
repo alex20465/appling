@@ -55,6 +55,8 @@ export async function startGeneration(): Promise<never> {
     throw new Error('Generation needs Appling Desktop on your machine: https://appling.tools/docs/tools/desktop/');
 }
 
+export const addTarget = startGeneration;
+
 export async function loadCode(): Promise<never> {
     throw new Error('The demo has no code.');
 }

@@ -33,7 +33,8 @@ npx @appling/cli init todo --name todo --agents claude,codex --stack django
 |---|---|
 | `package.json` | Created with the project name when the folder has none |
 | `node_modules` | `@appling/cli`, `@appling/ai` and the stack's extension, installed as development dependencies with the project's package manager |
-| `appling.config.json` | A `generate` target for the stack, with the output folder `build/<name>` |
+| `appling.config.json` | A `generate` target for the stack, with the output folder `build/<name>`; with `--stack none` an empty configuration, which marks the folder as set up |
+| `.gitignore` | `node_modules/`, `.appling/view.json` (your own canvas view) and the stack's local files in the output folder: `.venv/`, `**/__pycache__/` and `db.sqlite3` for Django, `_build/` and `deps/` for Ash, `target/` for Rust. Lines already there stay; only missing ones are added |
 | `models/<name>.appling` | An empty module named after the project, when the folder has no `.appling` file yet |
 
 A `-` in the name becomes `_` in the module and the output folder, so `todo-app` gets the module `todo_app`.

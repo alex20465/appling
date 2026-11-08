@@ -10,7 +10,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { createApplingLspServices } from '@appling/lang/lsp';
 import { createMcpServer, handleMcpRequest, MemoryPlaybookStore, MemorySessionStore, touchedBy, type AppHost, type PlaybookStore, type SessionStore } from '@appling/ai';
 import { applyEdit, latestRelease, readReleases, REFERENCES, type EditOperation, type LineMark } from '@appling/model';
-import { GENERATIONS, readConfig, REGISTRY } from '@appling/codegen';
+import { addTarget, CONFIG, GENERATIONS, readConfig, REGISTRY, STACKS, type Stack } from '@appling/codegen';
 import type { Snapshot } from '../shared/snapshot.js';
 import { fileDiff, review, revisions } from './git.js';
 import { codeLinks, fileMarks, readView, snapshot, writeView } from './workspace.js';
@@ -24,6 +24,8 @@ import { unseen, type LiveChanges } from '../shared/live.js';
 import type { Decision } from '@appling/viz/protocol';
 
 const CLIENT = fileURLToPath(new URL('../../dist/client/', import.meta.url));
+// every ancestor counts: the webview's own frames (vscode-webview:) and the desktop workbench (vscode-file://vscode-app)
+const FRAME_ANCESTORS = "frame-ancestors 'self' vscode-webview: vscode-file: https://*.vscode-cdn.net";
 const TYPES: Record<string, string> = {
     '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
     '.woff2': 'font/woff2', '.json': 'application/json', '.ttf': 'font/ttf'
@@ -36,6 +38,8 @@ export interface Ide {
     sessions: SessionStore;
     /** The workspace playbooks the sessions write and the client plays; also for the app's own chapters (`openChapter`). */
     playbooks: PlaybookStore;
+    /** Trusts one more origin from now on, such as where VS Code forwarded this server's port (`asExternalUri`). */
+    trust(origin: string): void;
     close(): Promise<void>;
 }
 
@@ -126,7 +130,7 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
             : request.url?.startsWith('/api/playbook') ? servePlaybook(request, response, playbooks, sessions, workspace, () => body(request))
             : request.url?.startsWith('/api/sessions') ? serveSessions(request, response, root, sessions, views)
             : request.url?.startsWith('/api/live/') || request.url?.startsWith('/api/proposals/') ? serveLive(request, response, live, views)
-            : request.url?.startsWith('/api/generat') || request.url?.startsWith('/api/code?') ? serveGeneration(request, response, root, generation, view => generationWorkspace = view)
+            : request.url?.startsWith('/api/generat') || request.url?.startsWith('/api/code?') || request.url === '/api/targets' ? serveGeneration(request, response, root, generation, view => generationWorkspace = view)
             : handle(request, response, root, live);
         work.catch(error => response.headersSent ? response.end() : send(response, 500, String(error)));
     });
@@ -178,8 +182,8 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
     });
 
     let timer: NodeJS.Timeout | undefined;
-    /** Besides the model files: the code references, the generation records and the targets' registries. */
-    const state = () => [REFERENCES, GENERATIONS, ...(readConfig(root).generate ?? []).map(t => relative(root, resolve(root, t.out, REGISTRY)))];
+    /** Besides the model files: the config, the code references, the generation records and the targets' registries. */
+    const state = () => [CONFIG, REFERENCES, GENERATIONS, ...(readConfig(root).generate ?? []).map(t => relative(root, resolve(root, t.out, REGISTRY)))];
     const report = (current: Snapshot) => options.onImplementation?.({ marks: fileMarks(current), links: codeLinks(root, current) });
     refresh = () => {
         clearTimeout(timer);
@@ -207,6 +211,9 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
         mcp: `${origins[0]}/mcp`,
         sessions,
         playbooks,
+        trust: origin => {
+            if (/^https?:\/\/[\w.-]+(:\d+)?$/.test(origin) && !origins.includes(origin)) origins.push(origin);
+        },
         close: () => new Promise(done => {
             stopSessions();
             stopPlaybooks();
@@ -251,7 +258,8 @@ async function serveMcp(request: IncomingMessage, response: ServerResponse, root
 /**
  * Generation and the code it wrote: `POST /api/generate` (`{ selection }`, see `parseSelection`) starts a run and
  * answers 202 with it, 409 while one runs; `GET /api/generation` the current or last run; `GET /api/code?path=` the
- * text of a code file (read only) inside the workspace or a generate target, for the jump from an element to its code.
+ * text of a code file (read only) inside the workspace or a generate target, for the jump from an element to its code;
+ * `POST /api/targets` (`{ stack }`, a key of `STACKS`) adds that stack's target to `appling.config.json`.
  */
 async function serveGeneration(request: IncomingMessage, response: ServerResponse, root: string, runner: GenerationRunner, startedIn: (workspace?: string) => void): Promise<void> {
     const url = new URL(request.url!, 'http://localhost');
@@ -267,6 +275,12 @@ async function serveGeneration(request: IncomingMessage, response: ServerRespons
         response.writeHead(202, { 'content-type': 'application/json' });
         response.end(JSON.stringify(run));
         return;
+    }
+    if (url.pathname === '/api/targets' && request.method === 'POST') {
+        const { stack } = JSON.parse(await body(request) || '{}') as { stack?: unknown };
+        if (typeof stack !== 'string' || !Object.hasOwn(STACKS, stack)) return send(response, 400, `A stack is required: ${Object.keys(STACKS).join(', ')}.`);
+        addTarget(root, stack as Stack, basename(root).replace(/\W/g, '_'));
+        return json(response, readConfig(root).generate);
     }
     if (url.pathname === '/api/code' && request.method === 'GET') {
         const file = resolve(root, url.searchParams.get('path') ?? '');
@@ -370,7 +384,8 @@ async function handle(request: IncomingMessage, response: ServerResponse, root: 
     if (request.method !== 'GET') return send(response, 405, 'Method not allowed');
     const file = resolve(CLIENT, `.${url.pathname === '/' ? '/index.html' : url.pathname}`);
     if (!file.startsWith(CLIENT) || !existsSync(file)) return send(response, 404, 'Not found');
-    response.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' });
+    // only Appling's own apps may embed the IDE: the VS Code extension's webview, locally or in the browser
+    response.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream', 'content-security-policy': FRAME_ANCESTORS });
     response.end(readFileSync(file));
 }
 

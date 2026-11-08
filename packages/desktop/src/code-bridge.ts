@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import * as nativePath from 'node:path';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
+import type { DiffMessage, OpenMessage } from '@appling/ide/host-requests';
 import type { CodeMarks } from './ide-process.js';
 
 /**
@@ -23,18 +23,15 @@ export type DesktopMessage =
     | { type: 'welcome' }
     /** Open a file and put the cursor on an element's source, from `start` to `end` (offsets in the text). */
     | { type: 'reveal', uri: string, start: number, end: number }
-    /**
-     * Open the diff editor of a file between a git revision and the working tree: `before` is the file's absolute path
-     * at `rev` (it differs after a rename), `path` its absolute path now; `line` (from 1) is revealed.
-     */
-    | { type: 'diff', path: string, before: string, rev: string, line?: number }
+    /** Open the diff editor of a file between a git revision and the working tree (`diffMessage`). */
+    | DiffMessage
     /**
      * The implementation state for the editor (#20): gutter marks of the model files' lines and links from code back to
      * the elements it implements, both by absolute path. Each replaces the last; a new connection gets the last one.
      */
     | { type: 'implementation', marks: CodeMarks['marks'], links: CodeMarks['links'] }
-    /** Open a code file at a line range (from 1): the jump from an element to its code. */
-    | { type: 'open', path: string, start: number, end: number };
+    /** Open a code file at a line range (from 1): the jump from an element to its code (`openMessage`). */
+    | OpenMessage;
 
 export const BRIDGE_ENV = 'APPLING_DESKTOP_BRIDGE';
 export const TOKEN_ENV = 'APPLING_DESKTOP_TOKEN';
@@ -55,56 +52,6 @@ export function parseExtensionMessage(data: string): ExtensionMessage | undefine
     }
     if (m.type === 'element' && typeof m.qn === 'string' && /^[\w.]+$/.test(m.qn)) return { type: 'element', qn: m.qn };
     return undefined;
-}
-
-/** The IDE's request for a text diff (`TextDiffRequest` of `@appling/ide`): paths relative to the repo. */
-export interface TextDiffRequest {
-    path: string;
-    before?: string;
-    rev: string;
-    line?: number;
-}
-
-/** The path functions of the machine a repo's files are on: this one's, or POSIX ones for a remote repo. */
-export type PathFunctions = Pick<typeof nativePath, 'dirname' | 'isAbsolute' | 'relative' | 'resolve'>;
-
-/**
- * The diff message for a repo's extension; undefined unless both paths stay inside the repo and the revision is plain.
- * `repo` is the repo's folder where its code view runs: for a remote repo its folder on that machine, with
- * `path.posix` as `path`, so the extension there gets that machine's absolute paths.
- */
-export function diffMessage(repo: string, request: TextDiffRequest, path: PathFunctions = nativePath): DesktopMessage | undefined {
-    const { isAbsolute, relative, resolve } = path;
-    if (!request || typeof request.path !== 'string' || typeof request.rev !== 'string') return undefined;
-    // a revision, never an option for git
-    if (!/^[\w./~^@{}:-]+$/.test(request.rev) || request.rev.startsWith('-')) return undefined;
-    const inside = (file: string) => {
-        const absolute = resolve(repo, file);
-        const rel = relative(repo, absolute);
-        return rel && !rel.startsWith('..') && !isAbsolute(rel) ? absolute : undefined;
-    };
-    const now = inside(request.path);
-    const before = inside(typeof request.before === 'string' ? request.before : request.path);
-    if (!now || !before) return undefined;
-    const line = Number.isInteger(request.line) && request.line! > 0 ? request.line : undefined;
-    return { type: 'diff', path: now, before, rev: request.rev, ...(line ? { line } : {}) };
-}
-
-/**
- * The open message for a repo's extension; undefined unless the file stays inside the repo and the lines are plain.
- * The IDE names the file relative to the repo, or by the absolute path its server sees; `repo` and `path` as for
- * `diffMessage`.
- */
-export function openMessage(repo: string, request: { path: string, start: number, end?: number }, path: PathFunctions = nativePath): DesktopMessage | undefined {
-    if (!request || typeof request.path !== 'string' || !Number.isInteger(request.start) || request.start < 1) return undefined;
-    const { dirname, isAbsolute, relative, resolve } = path;
-    const file = resolve(repo, request.path);
-    const rel = relative(repo, file);
-    // generated projects may live next to the repo (`"out": "../app"`), so only the parent of the repo is allowed besides it
-    const parent = relative(dirname(repo), file);
-    if (!rel || isAbsolute(rel) || parent.startsWith('..') || isAbsolute(parent)) return undefined;
-    const end = Number.isInteger(request.end) && request.end! >= request.start ? request.end! : request.start;
-    return { type: 'open', path: file, start: request.start, end };
 }
 
 export interface CodeBridgeOptions {

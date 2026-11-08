@@ -4,6 +4,7 @@ import type { GenerationEvent, GenerationSelection } from '@appling/codegen';
 import { IMPLEMENTATION_STATES } from '@appling/model/implementation';
 import { IMPLEMENTATION_LABELS } from '@appling/viz/views';
 import type { GenerationRun, Snapshot } from '../shared/snapshot.js';
+import { claimOf } from '../shared/panels.js';
 
 interface ImplementationProps {
     snapshot: Snapshot;
@@ -15,10 +16,6 @@ interface ImplementationProps {
     onGenerate(selection: GenerationSelection): void;
 }
 
-/** The session that claimed an element or one of its parents, as `overlaps` of `@appling/ai` decides. */
-export function claimOf(sessions: AgentSession[], qn: string): AgentSession | undefined {
-    return sessions.find(s => s.claims.elements.some(c => c === qn || qn.startsWith(`${c}.`) || c.startsWith(`${qn}.`)));
-}
 
 /**
  * The code side of the model: how much is implemented, generation through the targets of `appling.config.json`
@@ -52,16 +49,21 @@ export function Implementation({ snapshot, run, sessions, selected, onSelect, on
             <section>
                 <h3>Generate</h3>
                 {none
-                    ? <p className="muted">No targets: add <code>"generate": [{'{'} "extension": "@appling/codegen-django", "out": "app" {'}'}]</code> to appling.config.json.</p>
+                    ? <p className="muted">No stack yet: generating asks for one and adds it to appling.config.json.</p>
                     : <ul>{snapshot.targets.map(t => (
                         <li key={t.out}>{t.extension} → {t.out} <span className="muted">{t.generated ? (t.at ? `generated ${new Date(t.at).toLocaleString()}` : 'generated') : 'not generated yet'}</span></li>
                     ))}</ul>}
-                <div className="generate-actions">
-                    <button className="button" disabled={none || running || !outstanding.length} onClick={() => onGenerate({ mode: 'outstanding' })}>Generate {outstanding.length} outstanding</button>
-                    <button className="button" disabled={none || running || !selected} onClick={() => selected && onGenerate({ mode: 'elements', elements: [selected] })}>Generate {selected ?? 'the selection'}</button>
-                    <button className="button" disabled={none || running || !checked.size} onClick={() => onGenerate({ mode: 'elements', elements: [...checked] })}>Generate {checked.size} checked</button>
-                    <button className="button" disabled={none || running} onClick={() => onGenerate({ mode: 'all' })}>Generate everything</button>
-                </div>
+                {!snapshot.targets.some(t => t.generated) ? (
+                    <div className="generate-actions">
+                        <button className="button" disabled={running} onClick={() => onGenerate({ mode: 'all' })}>Generate the application</button>
+                        <p className="muted">The first generation creates the application from the whole model; then elements generate one by one.</p>
+                    </div>
+                ) : <div className="generate-actions">
+                    <button className="button" disabled={running || !outstanding.length} onClick={() => onGenerate({ mode: 'outstanding' })}>Generate {outstanding.length} outstanding</button>
+                    <button className="button" disabled={running || !selected} onClick={() => selected && onGenerate({ mode: 'elements', elements: [selected] })}>Generate {selected ?? 'the selection'}</button>
+                    <button className="button" disabled={running || !checked.size} onClick={() => onGenerate({ mode: 'elements', elements: [...checked] })}>Generate {checked.size} checked</button>
+                    <button className="button" disabled={running} onClick={() => onGenerate({ mode: 'all' })}>Generate everything</button>
+                </div>}
                 {tops.length > 0 && (
                     <details>
                         <summary>{tops.length} element{tops.length === 1 ? '' : 's'} new or changed since the last generation</summary>

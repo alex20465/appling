@@ -14,6 +14,10 @@
     ".": {
       "types": "./out/index.d.ts",
       "default": "./out/index.js"
+    },
+    "./status": {
+      "types": "./out/status.d.ts",
+      "default": "./out/status.js"
     }
   },
   "bin": {

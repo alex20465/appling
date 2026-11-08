@@ -146,6 +146,9 @@ Configuration and extensions:
 | `readConfig(root)` | `<root>/appling.config.json` as `Config`, or `{}` |
 | `loadExtension(name, root)` | Imports an extension package, resolved from `root`, and returns its default export |
 | `Config`, `Target`, `CONFIG` | The configuration types and the file name |
+| `STACKS`, `STACK_LABELS`, `Stack` | The stacks by extension package (`django: '@appling/codegen-django'`, `ash`, `go`, `rust`) and their names; also from the browser safe `@appling/codegen/stacks` |
+| `addTarget(root, stack, name)` | Adds the stack's target (`build/<name>`) to `appling.config.json` unless it has one, and its `STACK_LOCAL` files to `.gitignore` |
+| `STACK_LOCAL`, `ignore(root, lines)` | Each stack's local files in a generated project; appends the lines `.gitignore` lacks |
 | `CodegenExtension` | The extension contract: `name`, `prerequisites`, `test`, `setup`, `steps`, `migrate` |
 | `Step`, `CommandStep`, `TemplateStep`, `TaskStep` | The three step kinds |
 | `MapContext`, `Prerequisite` | What an extension gets per node, and a tool it needs |
@@ -252,6 +255,16 @@ Tools and MCP:
 | `serveHttp(root, port)` | The MCP server over Streamable HTTP on `127.0.0.1`; returns `{ url, close() }` |
 | `REGISTRY_PROMPT`, `MCP_INSTRUCTIONS` | The registry skill text and the MCP server instructions that make the model the source of truth for business logic |
 
+Agent sessions in an app's terminals, `@appling/ai/agents` (what Appling Desktop and the VS Code extension start):
+
+| Export | Purpose |
+|---|---|
+| `BUILTIN_PRESETS`, `agentPresets(settings)`, `PRESETS_KEY`, `AgentPreset`, `Wiring`, `WIRINGS`, `AnswerKeys` | The agents a session can run: the built in ones plus the custom ones of `agents.presets`, with the problems found in them |
+| `launch(preset, context)`, `LaunchContext`, `Launch`, `SERVER`, `CLAUDE_HOOKS`, `GEMINI_HOOKS`, `OPENCODE_EVENTS`, `OPENCODE_PLUGIN`, `geminiSystemSettingsFile()` | The command, arguments, environment and files that start a preset's agent wired to its session's MCP server and hooks |
+| `Gateway`, `GatewayOptions` | The one local endpoint the agents reach: `/mcp` forwarded to the session's IDE server, `/hooks/<event>`, both with the session's bearer token |
+| `reduce(state, signal)`, `hookSignal(wiring, event, body)`, `notificationSignal(wiring, notification)`, `answers(state, data)`, `waiting(status)`, `AgentStatus`, `StatusState`, `Signal`, `AgentPrompt`, `TerminalNotification`, `STATUS_COLORS`, `STATUS_LABELS` | A session's status from its hooks, its terminal notifications and its exit |
+| `answerKeys(keys, answer)`, `isAnswer(value)`, `Answer` | The keys that answer a waiting agent in its terminal |
+
 Proposals:
 
 | Export | Purpose |
@@ -278,6 +291,7 @@ The root export (also `@appling/viz/protocol`) has the types the [visual tools](
 | `GraphIndex` | The graph with children, parents and lineage by qualified name, and `relevanceOf(qn)`, the relevance of the declaration an element belongs to |
 | `growTree(index, settings, unfolded, name?, trail?)` | The dependency tree of `settings.lens` as a `TreeNode`: the seed holds the modules, a module the declarations of the lens, a declaration the declarations that use it, grouped by kind when there is more than one; only the node ids in `unfolded` have children, the most relevant first; a node id in `trail` shows only its children in `unfolded` or `trail` |
 | `trailOf(index, settings, focus)`, `lensOf(kind)` | The `unfolded` and `trail` sets that draw the focused elements one after another, each unfolded in place, with the node id of each; the lens that starts from a kind |
+| `growOrder(now, next)` | The nodes a focus adds from one `trailOf` state to the next, each element after its path from the seed, in focus order |
 | `changeMarks(index, changes, modules?)`, `MarkedChanges`, `ChangeMark` | The declarations that added, changed and removed elements belong to, each `added` or `removed` when the declaration itself is new or gone, else `changed`; removed elements count only when the index has them (see `withRemoved`); with `modules`, the modules that hold a marked declaration are `changed` too |
 | `sessionMarks(index, marks)`, `SessionMark` | The declarations that the elements claimed or highlighted by agent sessions belong to, each with the first session's mark |
 | `revealPath(index, settings, qn)` | The node ids to unfold so that an element's declaration shows in its module |
@@ -289,4 +303,4 @@ The root export (also `@appling/viz/protocol`) has the types the [visual tools](
 | `search`, `relations`, `entityActions`, `actionSummary`, `memberText`, `kindLabel`, `elementAt` | The search, relations and summaries the IDE side panel shows |
 | `ViewSettings`, `DEFAULT_VIEW` | The canvas options, the lens included |
 
-`@appling/viz/canvas` exports the SVG tree `ModelCanvas` (one lens at a time, unfolded node by node, circles sized by relevance, only trails when given a `focus`), the SVG flowchart `FlowCanvas` and the card grid `CardCanvas`, each with optional `bubbles`; `ModelCanvas` also marks the declarations and modules of optional `changes` (any `MarkedChanges`, such as a `GraphDiff`), draws removed ones ghosted (dashed while `changes.planned`, and played once more each time the optional `beat` changes) and rings those of optional `sessions` (`SessionMark[]`) in the session's colour; import `@appling/viz/canvas.css` with them. They need `react` as a peer dependency.
+`@appling/viz/canvas` exports the SVG tree `ModelCanvas` (one lens at a time, unfolded node by node, circles sized by relevance, only trails when given a `focus`), the SVG flowchart `FlowCanvas` and the card grid `CardCanvas`, each with optional `bubbles`; `ModelCanvas` also marks the declarations and modules of optional `changes` (any `MarkedChanges`, such as a `GraphDiff`), draws removed ones ghosted (dashed while `changes.planned`, and played once more each time the optional `beat` changes) and rings those of optional `sessions` (`SessionMark[]`) in the session's colour; with `grow` a changed `focus` unfolds node by node (`growOrder` of `@appling/viz/views`) with a slow camera and calls `onGrown` when done; import `@appling/viz/canvas.css` with them; it takes its colours from the `--appling-*` theme tokens. They need `react` as a peer dependency.

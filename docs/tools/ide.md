@@ -3,7 +3,7 @@ title: Repo view
 description: The view of each repo in Appling Desktop, with the model canvas as its main area, a search over every element, an inspector that edits through validated operations and the source one click away.
 ---
 
-Every repo you open in [Appling Desktop](desktop.md) gets its own view, served by an IDE server that Desktop runs for that repo. The model canvas is the main area. Next to it a side panel holds the search, the inspector, the live changes, the playbook, the review and the code tab, and the **Source** button in the header (**View › Toggle Source**) unfolds the text editor with the language server. All of them show the same model: the text is the source, the views are computed from it, and every change from the inspector goes back into the text.
+Every repo you open in [Appling Desktop](desktop.md) gets its own view, served by an IDE server that Desktop runs for that repo. In VS Code the [Appling extension](vscode.md) shows the same view in a tab per project, with the text in VS Code's own editors. The model canvas is the main area. Next to it a side panel holds the search, the inspector, the live changes, the playbook, the review and the code tab, and the **Source** button in the header (**View › Toggle Source**) unfolds the text editor with the language server. All of them show the same model: the text is the source, the views are computed from it, and every change from the inspector goes back into the text.
 
 > [!TIP]
 > To try the repo view without installing anything, open the [demo](https://appling.tools/ide/). It runs the same view on the sample sales and CRM model entirely in your browser, language server included, with the source shown next to the canvas. Edits stay in the page until you reload; generation and the review of commits need Desktop.
@@ -45,7 +45,9 @@ Each circle has the color of its layer and the number of nodes it unfolds into. 
 
 The [relevance](../language/relevance.md) of a declaration decides how it is drawn: the more relevant, the larger its circle and the closer to the middle of its row, while the least relevant sit small at the edges. `core` declarations have a stronger ring and a bolder name, `peripheral` ones are faded until you point at them.
 
-Clicking a circle unfolds it and selects it: the inspector shows what it does, who may run it and where it is used, and every link there selects the next element. Clicking the selected declaration again folds it. The canvas moves to keep what you unfolded in view.
+Clicking a circle unfolds it and selects it: the inspector shows what it does, who may run it and where it is used, and every link there selects the next element. Clicking the selected declaration again folds it: what it held shrinks back into it. The canvas moves to keep what you unfolded in view.
+
+With a server, the canvas also shows how far the code is: each declaration and module has a dot in the colour of its [implementation state](implementation.md#implementation-states), and one that has no code yet is drawn hollow with a dashed ring. The application comes first: until it was generated, the button under the path at the top left of the canvas reads **Generate the application**, which creates it from the whole model (asking for a stack first when there is none, see [Choosing a stack](#choosing-a-stack)). After that, the button offers **Generate** for the selected node while it has no code: the element with its members. A field lands in its entity's code, so generating it regenerates the entity's files.
 
 - The path at the top left leads from the seed to the current node; click a step to go back to it.
 - The line at the top right describes the current node, such as `quotes.Quote · entity · core · 29 fields · 26 actions on it · used by 84`.
@@ -73,7 +75,7 @@ Selection is shared between text, canvas and inspector:
 
 ## The inspector
 
-The Inspector tab shows the selected element: its kind and layer, its qualified name, and
+The Inspector tab shows the selected element: its kind and layer, its qualified name (in VS Code with **Open source**, which opens its declaration in VS Code's editor), and
 
 - **What it does**, for an action: the entity it works on, its inputs, what it requires (with the error raised otherwise), what it changes (its own effects, then each machine transition it drives with that transition's effects), its errors and its consistency,
 - **Actions**, for an entity: the actions declared on it, each with the machine transitions it drives, such as `draft, placed -> cancelled`, followed by the actions elsewhere that create its records, marked `creates`,
@@ -157,7 +159,7 @@ The tab follows every change on disk. The server reads git with the git CLI: `gi
 
 ## Live changes
 
-Every change to the model is marked on the canvas the moment it lands on disk, whoever wrote it: an [agent session](ai.md#agent-sessions) through the MCP tools, an agent or editor that writes the files directly, `appling fmt` or a `git checkout`. Added declarations glow green, changed ones and the modules that hold them glow yellow, and removed declarations stay drawn ghosted where they were. Marking never moves the camera and never unfolds the tree: what you look at stays where it is.
+Every change to the model is marked on the canvas the moment it lands on disk, whoever wrote it: an [agent session](ai.md#agent-sessions) through the MCP tools, an agent or editor that writes the files directly, `appling fmt` or a `git checkout`. Each changed node gets a pulsing halo, a letter on its circle as Source Control marks files (A added, M changed, D removed) and its name in the change's colour: added declarations green, changed ones and the modules that hold them blue, removed declarations red and dashed, drawn ghosted where they were. Marking never moves the camera and never unfolds the tree: what you look at stays where it is.
 
 The changes are compared with a baseline: the text of each model file when you last accepted it. When the IDE server starts, the baseline is the files on disk, so only what changes while you work is marked; what differs from the last commit is what the [Review](#reviewing-changes) tab shows. Your own saves from the editor and the inspector move the baseline with them, unless the file already has an unseen change, which then stays marked. The baseline lives in the server's memory: a restart of the server accepts every change.
 
@@ -181,15 +183,19 @@ A change a session proposes with `propose_edits` shows at the top of the Changes
 
 The **Playbook** tab lists the chapters of the workspace's [playbook](ai.md#the-playbook) in order, with the count of unwatched chapters on its tab. A chapter is unwatched until you step to its last step. Each chapter shows its session's colour and label, its title, its steps done of planned, and the chapters it builds on. **replay** plays it from its plan, **session** jumps to its session (its tab in Desktop, else its agent view), and **diff** opens the Changes tab with only the files that session wrote. A chapter written in another repo of the workspace opens that repo's Changes tab, in its own view, in Desktop (`window.applingDesktop.showChanges`). While chapters wait unwatched, a chip at the top right of the canvas counts them.
 
-**Play** (or **Resume**) puts the player on the canvas. The bar shows the chapter, its session and the step, with **←** and **→** to step back and forward (the arrow keys too), **Replay**, **Session**, **Diff** and **Back to the model**. The canvas draws the trail of the chapter so far, starting with the elements of the chapters it builds on, and marks the current step's elements: added ones green, changed ones yellow, removed ones ghosted. The marks pulse once on every step. A planned step previews its change with dashed rings; a done step is drawn solid. Under the bar, the step's note, its responses and the queue of chapters that come next.
+**Play** (or **Resume**) puts the player on the canvas. The bar shows the chapter, its session and the step, with **Pause** (or **Play**), **←** and **→** to step back and forward (the arrow keys too), **Replay**, **Session**, **Diff** and **Back to the model**. The canvas draws the trail of the chapter so far, starting with the elements of the chapters it builds on, and marks the current step's elements: added ones green, changed ones yellow, removed ones ghosted. The marks pulse once on every step. A planned step previews its change with dashed rings; a done step is drawn solid. Under the bar, the step's note, its responses and the queue of chapters that come next.
 
-The canvas moves only when you step. A chapter that arrives while you watch another one joins the queue. Past the last step of a chapter, **→** goes on to the next chapter. **Approve**, **Reject** and **Comment** answer the current step: the response is kept with the step and reaches the session that wrote it as a message. Your position is kept with the playbook, so every repo view of the workspace and every session knows where you are.
+Each step grows on the canvas: what it adds unfolds one node after another along the tree, the path from the seed down to each element first, about a second apart, and the camera glides slowly to each, so the eye can follow. The player plays the chapter: it steps forward on its own, and the bar under the player's bar fills up and counts the seconds to the next step. The time starts once the step has grown, and each step stays for as long as its note takes to read, about 240 words a minute plus two seconds for the canvas, at least 3 and at most 20 seconds; the plan takes as long as its text. Playing stops at the chapter's last step, holds while you write a comment, and **Pause** stops it; **Play** goes on from where you are, or from the plan at the chapter's end, and **Replay** plays it again from the plan. **←** and **→** step at any time and the next step's time starts over. A chapter that arrives while you watch another one joins the queue and never moves the canvas. Past the last step of a chapter, **→** goes on to the next chapter. **Approve**, **Reject** and **Comment** answer the current step: the response is kept with the step and reaches the session that wrote it as a message. Your position is kept with the playbook, so every repo view of the workspace and every session knows where you are.
 
 ## The Code tab
 
 The **Code** tab shows how far the model is implemented and generates from the repo view: the count of elements per [implementation state](implementation.md#implementation-states), the targets of `appling.config.json`, buttons to generate the outstanding elements, the selected element, the checked ones or everything, the running generation with its log, and the open registry tasks with their status, attempts, notes and the agent session that claimed each. The tab counts the open tasks. See [Seed to code](implementation.md).
 
 The editor marks each model line with the state of the element it declares, and the canvas marks each declaration; after a model change adds outstanding elements, the canvas offers to generate them.
+
+### Choosing a stack
+
+Generating needs a target in `appling.config.json`. Without one, every Generate button asks for the stack first: Django, Ash, Go or Rust. The choice adds its target (`build/<folder name>`) to `appling.config.json` and the stack's local files to `.gitignore`, as `appling init --stack` does, and the generation runs; its first run creates the whole application. Appling Desktop and the VS Code extension come with the four generators, so nothing needs installing; a generator the project installed itself (`npm install --save-dev @appling/codegen-django`) wins, which pins its version. The server takes the choice at `POST /api/targets` with `{ "stack": "django" }`.
 
 ## Releases and migration steps
 
@@ -199,9 +205,15 @@ Renaming, retyping or removing a released domain element from the inspector or a
 
 ## Live updates
 
-The server watches the workspace folder for changes to `.appling` files (ignoring hidden folders and `node_modules`), to `.appling/references.json`, `.appling/generation.json` and the registries of the generate targets inside the folder, and pushes a new snapshot to the view about 100 ms after the last change. Edits from another editor, `appling fmt` or an AI agent through the [MCP server](ai.md#mcp-server) appear in the views without a reload.
+The server watches the workspace folder for changes to `.appling` files (ignoring hidden folders and `node_modules`), to `appling.config.json`, `.appling/references.json`, `.appling/generation.json` and the registries of the generate targets inside the folder, and pushes a new snapshot to the view about 100 ms after the last change. Edits from another editor, `appling fmt` or an AI agent through the [MCP server](ai.md#mcp-server) appear in the views without a reload.
 
 The canvas also marks what [agent sessions](ai.md#agent-sessions) of the repo claimed or highlighted: a dashed ring in the session's colour around the declaration, with the session's label in its tooltip. In [Appling Desktop](desktop.md#agent-sessions) a click on the ring goes to the session's terminal tab.
+
+## Theme
+
+The IDE's colours and fonts are CSS variables on the page's root, so a host can replace any of them: `--appling-surface`, `--appling-surface-raised`, `--appling-surface-elevated` and `--appling-surface-hover` (backgrounds), `--appling-line` and `--appling-line-strong` (borders), `--appling-ink`, `--appling-ink-soft` and `--appling-ink-muted` (text), the accents `--appling-leaf`, `--appling-sprout`, `--appling-rust`, `--appling-amber` and `--appling-copper`, `--appling-info`, `--appling-danger` and `--appling-shadow`, the canvas's `--appling-canvas-glow`, `--appling-root`, `--appling-branch` and `--appling-seed`, the change colours `--appling-change-added`, `-changed` and `-removed`, the layer colours `--appling-layer-domain`, `-behavior`, `-application`, `-interface`, `-experience` and `-cross`, and `--appling-font-sans` and `--appling-font-mono`. The editor takes its colours from them too.
+
+The IDE is dark. `data-theme="light"` on the root picks its light palette. A host that embeds the IDE with `?host=frame` sends `{ type: 'theme', kind: 'light' | 'dark', tokens }` to the frame: the kind sets `data-theme` and the tokens replace the IDE's own, until the next theme message. The [VS Code extension](vscode.md#theme) sends VS Code's theme this way, at first and on every change.
 
 ## Security
 
@@ -210,6 +222,7 @@ Each repo's IDE server is meant for your machine only:
 - It listens on `127.0.0.1` only, never on other interfaces.
 - Every request and websocket must carry a `Host` header of `127.0.0.1:<port>` or `localhost:<port>`, and an `Origin` header, when present, must be one of `http://127.0.0.1:<port>` and `http://localhost:<port>`. Anything else gets `403 Forbidden`. This blocks other websites and DNS rebinding.
 - The file endpoint writes only `.appling` files inside the workspace folder.
+- Its page may be embedded only by itself and by VS Code's webviews and the VS Code window that holds them (`Content-Security-Policy: frame-ancestors 'self' vscode-webview: vscode-file: https://*.vscode-cdn.net`). An app that started the server over IPC may add one trusted origin at a time with `{ type: "trust", origin }`, such as the VS Code extension for a port forwarded from a remote window.
 
 The server endpoints, for reference:
 

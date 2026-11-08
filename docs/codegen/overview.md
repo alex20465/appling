@@ -48,7 +48,7 @@ Targets live in `appling.config.json` in the folder where you run the CLI, under
 
 | Key | Meaning |
 |---|---|
-| `extension` | The extension package, resolved from the folder of `appling.config.json`. Install it there with your package manager. |
+| `extension` | The extension package, resolved from the folder of `appling.config.json`. Install it there with your package manager. Appling Desktop and the VS Code extension come with the four stacks' packages and use theirs when the project has none. |
 | `out` | The output folder, relative to that folder. It must be empty or missing. |
 | `options` | Options for the extension. `name` sets the project name; without it, the project is named after the output folder. |
 

@@ -1,7 +1,7 @@
 {
   "name": "appling-vscode",
   "displayName": "Appling",
-  "description": "Appling language support: diagnostics, completion, navigation, rename, hover and canonical formatting",
+  "description": "Appling for VS Code: language support, the model IDE in a tab per project, implementation marks and agent sessions",
   "version": "0.1.0",
   "publisher": "techthos",
   "private": true,
@@ -12,11 +12,13 @@
   },
   "categories": [
     "Programming Languages",
-    "Formatters"
+    "Formatters",
+    "Visualization"
   ],
-  "main": "./out/extension.js",
+  "main": "./out/extension/extension.js",
   "activationEvents": [
     "workspaceContains:**/*.appling",
+    "workspaceContains:**/appling.config.json",
     "onLanguage:appling"
   ],
   "contributes": {
@@ -36,7 +38,166 @@
       {
         "command": "appling.openCode",
         "title": "Appling: Open the code of this element",
-        "enablement": "appling.desktop"
+        "enablement": "appling.desktop || appling.projects > 0"
+      },
+      {
+        "command": "appling.openIde",
+        "title": "Appling: Open the IDE",
+        "icon": "$(type-hierarchy)",
+        "enablement": "!appling.desktop"
+      },
+      {
+        "command": "appling.openInIde",
+        "title": "Appling: Show in the IDE",
+        "icon": {
+          "light": "out/appling-icon.svg",
+          "dark": "out/appling-icon.svg"
+        },
+        "enablement": "!appling.desktop"
+      },
+      {
+        "command": "appling.init",
+        "title": "Appling: Initialize Appling in this project",
+        "enablement": "!appling.desktop",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "appling.refresh",
+        "title": "Appling: Find the projects again",
+        "icon": "$(refresh)",
+        "enablement": "!appling.desktop"
+      },
+      {
+        "command": "appling.agents.new",
+        "title": "Appling: New agent session",
+        "icon": "$(add)",
+        "enablement": "!appling.desktop"
+      },
+      {
+        "command": "appling.agents.focus",
+        "title": "Show the terminal",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "appling.agents.answer",
+        "title": "Answer",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "appling.agents.end",
+        "title": "End the session",
+        "icon": "$(close)"
+      },
+      {
+        "command": "appling.panel.run",
+        "title": "Appling: Open"
+      },
+      {
+        "command": "appling.panel.accept",
+        "title": "Accept",
+        "icon": "$(check)"
+      },
+      {
+        "command": "appling.panel.revert",
+        "title": "Revert",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "appling.panel.reject",
+        "title": "Reject",
+        "icon": "$(close)"
+      },
+      {
+        "command": "appling.panel.diff",
+        "title": "Text diff",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "appling.panel.generate",
+        "title": "Generate",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "appling.panel.replay",
+        "title": "Replay",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "appling.panel.session",
+        "title": "Show the session",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "appling.panel.edit",
+        "title": "Edit",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "appling.panel.add",
+        "title": "Add a line",
+        "icon": "$(add)"
+      },
+      {
+        "command": "appling.panel.remove",
+        "title": "Remove the line",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "appling.inspector.openSource",
+        "title": "Appling: Open source",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "appling.inspector.openCode",
+        "title": "Appling: Open code",
+        "icon": "$(code)"
+      },
+      {
+        "command": "appling.inspector.rename",
+        "title": "Appling: Rename…"
+      },
+      {
+        "command": "appling.inspector.retype",
+        "title": "Appling: Change the type…"
+      },
+      {
+        "command": "appling.inspector.add",
+        "title": "Appling: Add a member…",
+        "icon": "$(add)"
+      },
+      {
+        "command": "appling.inspector.remove",
+        "title": "Appling: Remove…"
+      },
+      {
+        "command": "appling.changes.acceptAll",
+        "title": "Appling: Accept all",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "appling.playbook.play",
+        "title": "Appling: Play",
+        "icon": "$(play)"
+      },
+      {
+        "command": "appling.review.compare",
+        "title": "Appling: Compare with…",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "appling.review.mark",
+        "title": "Appling: Mark on the canvas",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "appling.review.unmark",
+        "title": "Appling: Stop marking on the canvas",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "appling.code.generate",
+        "title": "Appling: Generate…",
+        "icon": "$(run-all)"
       }
     ],
     "grammars": [
@@ -45,14 +206,418 @@
         "scopeName": "source.appling",
         "path": "./out/appling.tmLanguage.json"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "appling",
+          "title": "Appling",
+          "icon": "out/appling-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "appling": [
+        {
+          "id": "appling.projects",
+          "name": "Projects",
+          "when": "!appling.desktop"
+        },
+        {
+          "id": "appling.agents",
+          "name": "Agent Sessions",
+          "when": "!appling.desktop && appling.projects > 0"
+        },
+        {
+          "id": "appling.inspector",
+          "name": "Inspector",
+          "when": "appling.ide && !appling.desktop"
+        },
+        {
+          "id": "appling.changes",
+          "name": "Changes",
+          "when": "appling.ide && !appling.desktop"
+        },
+        {
+          "id": "appling.playbook",
+          "name": "Playbook",
+          "when": "appling.ide && !appling.desktop"
+        },
+        {
+          "id": "appling.review",
+          "name": "Review",
+          "when": "appling.ide && !appling.desktop"
+        },
+        {
+          "id": "appling.code",
+          "name": "Code",
+          "when": "appling.ide && !appling.desktop"
+        },
+        {
+          "when": "appling.ide && !appling.desktop",
+          "id": "appling.tasks",
+          "name": "Tasks"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "appling.projects",
+        "contents": "There is no Appling model in this workspace yet.\n[Initialize Appling](command:appling.init)\nIt runs appling init in a terminal: a starter module, appling.config.json with the stack you pick, and the coding agents you connect.",
+        "when": "workspaceFolderCount > 0"
+      },
+      {
+        "view": "appling.projects",
+        "contents": "Open a folder to model an application with Appling.\n[Open Folder](command:workbench.action.files.openFolder)",
+        "when": "workspaceFolderCount == 0"
+      },
+      {
+        "view": "appling.agents",
+        "contents": "Agent sessions you start from the command palette (Appling: New agent session) show here, with their status and questions. Agents you start yourself connect through the Appling MCP server that appling init sets up.\n[Initialize Appling](command:appling.init)"
+      },
+      {
+        "view": "appling.changes",
+        "contents": "No unseen changes. Every change to the model, by an agent session or anything else that writes the files, is listed here and marked on the canvas until you accept it."
+      },
+      {
+        "view": "appling.playbook",
+        "contents": "No chapters yet. Agent sessions open a chapter with their plan when they start a piece of work; you play it on the canvas and respond to each step."
+      },
+      {
+        "view": "appling.inspector",
+        "contents": "Select an element on the canvas to inspect it. Go to Symbol in Workspace (Ctrl+T) finds any element of the model."
+      },
+      {
+        "view": "appling.tasks",
+        "contents": "No open registry tasks. The registry lists what generated code still misses, once a stack generated the application.\n[Generate…](command:appling.code.generate)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "appling.openInIde",
+          "when": "resourceLangId == appling && !appling.desktop",
+          "group": "navigation"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "appling.refresh",
+          "when": "view == appling.projects",
+          "group": "navigation"
+        },
+        {
+          "command": "appling.inspector.openSource",
+          "when": "view == appling.inspector && appling.inspector.element",
+          "group": "navigation@1"
+        },
+        {
+          "command": "appling.inspector.openCode",
+          "when": "view == appling.inspector && appling.inspector.code",
+          "group": "navigation@2"
+        },
+        {
+          "command": "appling.inspector.rename",
+          "when": "view == appling.inspector && appling.inspector.named",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "appling.inspector.retype",
+          "when": "view == appling.inspector && appling.inspector.typed",
+          "group": "1_edit@2"
+        },
+        {
+          "command": "appling.inspector.add",
+          "when": "view == appling.inspector && appling.inspector.element",
+          "group": "1_edit@3"
+        },
+        {
+          "command": "appling.inspector.remove",
+          "when": "view == appling.inspector && appling.inspector.removable",
+          "group": "2_remove"
+        },
+        {
+          "command": "appling.changes.acceptAll",
+          "when": "view == appling.changes",
+          "group": "navigation"
+        },
+        {
+          "command": "appling.playbook.play",
+          "when": "view == appling.playbook",
+          "group": "navigation"
+        },
+        {
+          "command": "appling.review.compare",
+          "when": "view == appling.review",
+          "group": "navigation@1"
+        },
+        {
+          "command": "appling.review.mark",
+          "when": "view == appling.review && !appling.review.marked",
+          "group": "navigation@2"
+        },
+        {
+          "command": "appling.review.unmark",
+          "when": "view == appling.review && appling.review.marked",
+          "group": "navigation@2"
+        },
+        {
+          "command": "appling.code.generate",
+          "when": "view == appling.code",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "appling.agents.answer",
+          "when": "view == appling.agents && viewItem == agent-waiting",
+          "group": "inline"
+        },
+        {
+          "command": "appling.agents.end",
+          "when": "view == appling.agents && viewItem =~ /^agent/",
+          "group": "inline"
+        },
+        {
+          "command": "appling.panel.accept",
+          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\baccept\\b/",
+          "group": "inline"
+        },
+        {
+          "command": "appling.panel.revert",
+          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\brevert\\b/",
+          "group": "inline"
+        },
+        {
+          "command": "appling.panel.reject",
+          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\breject\\b/",
+          "group": "inline"
+        },
+        {
+          "command": "appling.panel.diff",
+          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\bdiff\\b/",
+          "group": "inline"
+        },
+        {
+          "command": "appling.panel.generate",
+          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\bgenerate\\b/",
+          "group": "inline"
+        },
+        {
+          "command": "appling.panel.replay",
+          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\breplay\\b/",
+          "group": "inline"
+        },
+        {
+          "command": "appling.panel.session",
+          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\bsession\\b/",
+          "group": "inline"
+        },
+        {
+          "command": "appling.panel.edit",
+          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\bedit\\b/",
+          "group": "inline"
+        },
+        {
+          "command": "appling.panel.add",
+          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\badd\\b/",
+          "group": "inline"
+        },
+        {
+          "command": "appling.panel.remove",
+          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\bremove\\b/",
+          "group": "inline"
+        },
+        {
+          "command": "appling.init",
+          "when": "view == appling.projects && viewItem =~ /\\bnew\\b/",
+          "group": "inline"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "appling.agents.focus",
+          "when": "false"
+        },
+        {
+          "command": "appling.agents.answer",
+          "when": "false"
+        },
+        {
+          "command": "appling.agents.end",
+          "when": "false"
+        },
+        {
+          "command": "appling.panel.run",
+          "when": "false"
+        },
+        {
+          "command": "appling.panel.accept",
+          "when": "false"
+        },
+        {
+          "command": "appling.panel.revert",
+          "when": "false"
+        },
+        {
+          "command": "appling.panel.reject",
+          "when": "false"
+        },
+        {
+          "command": "appling.panel.diff",
+          "when": "false"
+        },
+        {
+          "command": "appling.panel.generate",
+          "when": "false"
+        },
+        {
+          "command": "appling.panel.replay",
+          "when": "false"
+        },
+        {
+          "command": "appling.panel.session",
+          "when": "false"
+        },
+        {
+          "command": "appling.panel.edit",
+          "when": "false"
+        },
+        {
+          "command": "appling.panel.add",
+          "when": "false"
+        },
+        {
+          "command": "appling.panel.remove",
+          "when": "false"
+        },
+        {
+          "command": "appling.inspector.openSource",
+          "when": "false"
+        },
+        {
+          "command": "appling.inspector.openCode",
+          "when": "false"
+        },
+        {
+          "command": "appling.inspector.rename",
+          "when": "false"
+        },
+        {
+          "command": "appling.inspector.retype",
+          "when": "false"
+        },
+        {
+          "command": "appling.inspector.add",
+          "when": "false"
+        },
+        {
+          "command": "appling.inspector.remove",
+          "when": "false"
+        },
+        {
+          "command": "appling.review.compare",
+          "when": "false"
+        },
+        {
+          "command": "appling.review.mark",
+          "when": "false"
+        },
+        {
+          "command": "appling.review.unmark",
+          "when": "false"
+        },
+        {
+          "command": "appling.changes.acceptAll",
+          "when": "appling.ide"
+        },
+        {
+          "command": "appling.playbook.play",
+          "when": "appling.ide"
+        },
+        {
+          "command": "appling.code.generate",
+          "when": "appling.ide"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Appling",
+      "properties": {
+        "appling.agents.presets": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "More agents for **New agent session**, as in Appling Desktop's `agents.presets`: each needs `name` and `command`; `args`, `env`, `wiring` (`claude`, `codex`, `gemini`, `opencode` or `env`, the default) and `answers` are optional. A preset with a built in one's name replaces it.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "command"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "command": {
+                "type": "string"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "wiring": {
+                "enum": [
+                  "claude",
+                  "codex",
+                  "gemini",
+                  "opencode",
+                  "env"
+                ]
+              },
+              "answers": {
+                "type": "object",
+                "properties": {
+                  "allow": {
+                    "type": "string"
+                  },
+                  "deny": {
+                    "type": "string"
+                  },
+                  "option": {
+                    "type": "string"
+                  },
+                  "submit": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   },
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=out/extension.js && esbuild ../lang/out/language-server.js --bundle --platform=node --format=cjs --outfile=out/server.js && cp ../lang/src/syntaxes/appling.tmLanguage.json out/ && vsce package --no-dependencies --out out/appling.vsix",
+    "build": "node scripts/bundle.mjs && vsce package --no-dependencies --out out/appling.vsix",
     "package": "vsce package --no-dependencies --out out/appling.vsix"
   },
   "devDependencies": {
+    "@appling/ai": "workspace:*",
+    "@appling/cli": "workspace:*",
+    "@appling/codegen": "workspace:*",
+    "@appling/ide": "workspace:*",
     "@appling/lang": "workspace:*",
+    "@appling/model": "workspace:*",
+    "@appling/pty-host": "workspace:*",
+    "@appling/viz": "workspace:*",
     "@types/node": "^24.19.2",
     "@types/vscode": "1.100.0",
     "@vscode/vsce": "4.0.0",

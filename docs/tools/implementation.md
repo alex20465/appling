@@ -21,7 +21,7 @@ An element is **outstanding** when it is new or changed since the last generatio
 
 ## Marks
 
-- **Model lines.** The editor marks the line each element starts on in the gutter; where several start on one line, the innermost wins. Hover a mark for the element and its state, click it to open the element's code. In Appling Desktop the Code OSS code view shows the same marks through the [Appling extension](editors.md#appling-desktop).
+- **Model lines.** The editor marks the line each element starts on in the gutter; where several start on one line, the innermost wins. Hover a mark for the element and its state, click it to open the element's code. The [Appling extension](editors.md#implementation-marks) shows the same marks in VS Code and in Appling Desktop's Code OSS code view.
 - **Canvas.** Each declaration on the [model canvas](ide.md#the-model-canvas) gets a dot in the colour of its state rolled up with its members' (broken or shifted when any is, implemented or unimplemented when all are, partial otherwise); a module gets the roll up of its declarations.
 - **Inspector.** The inspector shows the state of the selected element with its open tasks, **Open code** and **Generate**.
 

@@ -1,6 +1,12 @@
-import type { SessionStatus } from '@appling/ai';
-import type { Notification } from '../terminal/shell-integration.js';
+import type { SessionStatus } from '../sessions.js';
 import type { Wiring } from './presets.js';
+
+/** A notification an agent sent through its terminal: OSC 9 (only a body) or OSC 777 (`notify;title;body`). */
+export interface TerminalNotification {
+    title?: string;
+    body: string;
+    source: 'osc9' | 'osc777';
+}
 
 /**
  * The status of an agent session (#10). Label and status come from the agent itself through MCP (#16); what a
@@ -142,7 +148,7 @@ export function hookSignal(wiring: Wiring, event: string, body: unknown): Signal
  * the reply's preview when a turn finishes. Claude Code reports through its hooks, so its notifications are left
  * out. Every other agent's notification means it waits for the user.
  */
-export function notificationSignal(wiring: Wiring, notification: Notification): Signal | undefined {
+export function notificationSignal(wiring: Wiring, notification: TerminalNotification): Signal | undefined {
     const body = notification.body.trim();
     if (wiring === 'claude') return undefined;
     if (wiring === 'codex') {

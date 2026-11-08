@@ -22,7 +22,7 @@ Before you answer or change anything, find out where the project stands:
 
 ## 2. Learn the language
 
-Appling is a new language, so never write it from memory. Call `language_reference` without a page for the list, read `overview` first, then the page of each layer before you write it (`domain`, `behavior`, `application`, `interfaces`, `experience`, `access`, `expressions`, `modules`, `relevance`).
+Appling is a new language, so never write it from memory. Call `language_reference` without a page for the list, read `overview` first, then the page of each layer before you write it (`domain`, `behavior`, `application`, `interfaces`, `experience`, `access`, `expressions`, `modules`, `relevance`, `descriptions`).
 
 ## 3. Design a new application
 
@@ -31,7 +31,7 @@ A request such as "I want to design a todo app" is a modeling task. The draft is
 1. When the visual tools are there (an agent session of Appling Desktop), report the start with `visual_status`, such as "Designing the todo app", and each following step the same way, with done and total when you know them.
 2. Ask the person only what the business decides: who uses the application, what they need to do, which rules must always hold. Decide the modeling yourself.
 3. Split the application into modules by bounded context, such as `tasks` and `accounts`.
-4. Write each module with `write_model_file`, in layer order: enums, value types and entities; then actions, state machines, events and jobs; then queries, projections and use cases; then interfaces and pages. Add roles, actors and policies for every action and query someone runs.
+4. Write each module with `write_model_file`, in layer order: enums, value types and entities; then actions, state machines, events and jobs; then queries, projections and use cases; then interfaces and pages. Add roles, actors and policies for every action and query someone runs. Add a `does` text only where the structure leaves something unclear, such as the vendor call behind an external operation or the format of a value; never restate what names, types and effects already say.
 5. Call `check` after each file and fix every error before you go on.
 6. Show each module as you finish it. The canvas already marks every declaration you add; draw a machine with the `machine` view of `visualize` and explain the decisions with `visual_bubble`.
 7. Verify the behavior with `simulate`: every state reachable (`reach`), the right actors allowed (`actors`), no invariant at risk (`risks`), and an action on a sample record (`run`).

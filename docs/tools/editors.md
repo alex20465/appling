@@ -31,6 +31,7 @@ The server talks over stdin and stdout with `--stdio`. It is built on `vscode-la
 | Rename | The declaration and its references |
 | Document highlight | Other occurrences of the element under the cursor |
 | Document symbols | The outline of a file |
+| Workspace symbols | Every element of the workspace by its qualified name (`sales.Order.status`), exported or not; VS Code's Go to Symbol in Workspace |
 | Folding | Blocks such as modules, entities and actions |
 | Hover | The element's kind, qualified name and layer, such as ``Field `sales.Order.status`, domain layer``, followed by its doc comment |
 | Formatting | Rewrites the whole document into canonical form, the same as `appling fmt`; skipped while the file has syntax errors |
@@ -53,15 +54,15 @@ When the workspace folder is reached through a symlink and the editor opens a fi
 > [!NOTE]
 > Rename in the language server changes the declaration and its references. Export lists are references too, so it covers them. It does not follow names inside expressions (`total` in `{ total >= 0 }`), transitions over enum values, `@Name` in `does` texts or message keys. The `rename` [edit operation](../reference/edit-operations.md#rename), used by the IDE inspector and the [AI tools](ai.md), follows all of them.
 
-## Appling Desktop
+## Implementation marks
 
-Inside the code view of [Appling Desktop](desktop.md), the extension connects to the app and also shows the [implementation state](implementation.md):
+In VS Code (see [VS Code](vscode.md)) and inside the code view of [Appling Desktop](desktop.md), the extension also shows the [implementation state](implementation.md):
 
 - a gutter mark on each model line that declares an element: implemented, partial, unimplemented, shifted or broken, with the element in its hover,
-- a CodeLens **Appling: sales.Order** above each code range that implements an element; it selects the element on the canvas,
+- a CodeLens **Appling: sales.Order** above each code range that implements an element; it selects the element on the canvas (Desktop's, or the project's IDE tab in VS Code),
 - a CodeLens **Open code** on model lines whose element has code, and the command **Appling: Open the code of this element** for the element at the cursor.
 
-The app sends the marks after every model or reference change. Outside Appling Desktop the extension shows none of them.
+The IDE server of each project sends the marks after every model or reference change; in Desktop the app passes them on.
 
 ## Connect an editor
 
@@ -95,17 +96,16 @@ Format with `vim.lsp.buf.format()`, rename with `vim.lsp.buf.rename()`, and hove
 
 ### VS Code
 
-The Appling extension for VS Code bundles the language server and a TextMate grammar generated from the Appling grammar, so it needs no global install. It starts when the workspace contains a `.appling` file or an `.appling` file is opened, and loads every model file in the workspace folders. Build and install it from the repository (the build also writes `out/appling.vsix`):
+The Appling extension for VS Code bundles the language server and a TextMate grammar generated from the Appling grammar, so it needs no global install. It starts when the workspace contains a `.appling` file or an `appling.config.json` or an `.appling` file is opened, and loads every model file in the workspace folders. It also brings the repo view into a tab per project, with agent sessions in VS Code terminals: see [VS Code](vscode.md). Build and install it from the repository (the build also writes `out/appling.vsix`):
 
 ```sh
-pnpm --filter @appling/lang build
-pnpm --filter appling-vscode build
+pnpm --filter "appling-vscode..." build
 code --install-extension packages/vscode/out/appling.vsix
 ```
 
 Turn on `editor.formatOnSave` for `[appling]` to keep files canonical.
 
-Inside the code view of Appling Desktop (Code OSS, started by the app) the extension comes preinstalled and also syncs the selection with the model canvas: moving the cursor in a `.appling` file selects the element there on the canvas, and selecting an element on the canvas opens its source. Desktop hands the extension a local channel in the `APPLING_DESKTOP_BRIDGE` and `APPLING_DESKTOP_TOKEN` environment variables; in a plain VS Code they are not set and the extension only runs the language server.
+Inside the code view of Appling Desktop (Code OSS, started by the app) the extension comes preinstalled and also syncs the selection with the model canvas: moving the cursor in a `.appling` file selects the element there on the canvas, and selecting an element on the canvas opens its source. Desktop hands the extension a local channel in the `APPLING_DESKTOP_BRIDGE` and `APPLING_DESKTOP_TOKEN` environment variables. In a plain VS Code they are not set, and the extension runs its own [projects, IDE tabs and agent sessions](vscode.md) instead.
 
 ## Embed the language server
 
@@ -135,6 +135,7 @@ startLanguageServer(createApplingLspServices({ connection, ...NodeFileSystem, re
 | `ApplingDocumentUpdateHandler` | The document update handler that `realPath` turns on |
 | `ApplingFormatter` | Formats a document into canonical form |
 | `ApplingHoverProvider` | Hover with kind, qualified name, layer and doc comment |
+| `ApplingWorkspaceSymbolProvider` | Every named element by qualified name; a shared service (`shared.lsp.WorkspaceSymbolProvider`) |
 
 Without a `connection` in the context, `createApplingLspServices` marks its configuration as initialized, so you can use the LSP services directly in tests or tools.
 

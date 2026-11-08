@@ -18,7 +18,7 @@
     "out"
   ],
   "scripts": {
-    "build": "tsc && cp src/shell/index.html src/shell/shell.css src/shell/agents.css out/shell/ && cp ../landing/public/icon-192.png out/tray-icon.png && node build-terminal.mjs",
+    "build": "tsc && cp src/shell/index.html src/shell/shell.css src/shell/agents.css out/shell/ && cp ../landing/public/icon-192.png out/tray-icon.png && node build-terminal.mjs && cp ../ai/out/agents/hook.cjs out/agents/hook.cjs",
     "bundle": "node scripts/bundle.mjs",
     "package": "node scripts/bundle.mjs && electron-builder --config electron-builder.config.mjs --publish never"
   },

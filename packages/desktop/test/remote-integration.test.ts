@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 import { MemorySessionStore } from '@appling/ai';
 import { connectPtyHost } from '@appling/pty-host';
-import { agentPresets } from '../src/agents/presets.js';
+import { agentPresets } from '@appling/ai/agents';
 import { AgentSessions } from '../src/agents/sessions.js';
 import { remoteAgentHost } from '../src/remote/agents.js';
 import type { ConnectionState } from '../src/remote/connection.js';

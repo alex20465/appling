@@ -1,4 +1,4 @@
-import { STATUS_COLORS, STATUS_LABELS, waiting, type AgentPrompt, type AgentStatus } from './status.js';
+import { STATUS_COLORS, STATUS_LABELS, waiting, type AgentPrompt, type AgentStatus } from '@appling/ai/agents';
 
 /**
  * The session board (#10): every agent session of every workspace and repo with its label, status colour, repo and

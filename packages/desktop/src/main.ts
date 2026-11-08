@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, watch, writeFileSync, type FSWatcher } from 'nod
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BaseWindow, dialog, ipcMain, Menu, screen, shell, WebContentsView, type IpcMainEvent, type MenuItemConstructorOptions, type WebContents } from 'electron';
-import type { TextDiffRequest } from './code-bridge.js';
+import type { TextDiffRequest } from '@appling/ide/host-requests';
 import { CodeViews, type SourceLocation } from './code-view.js';
 import { EXTENSION, readCodeWorkspace, writeCodeWorkspace } from './code-workspace.js';
 import { displayFingerprint, displayOf, placeWindow, type DisplayInfo } from './displays.js';

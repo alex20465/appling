@@ -2,7 +2,8 @@ import type { Chapter, Playbook, PlaybookPosition, PlaybookStep } from '@appling
 
 /**
  * The playbook player's pure logic (#19): where stepping forward and back leads, what the canvas draws for a position
- * and what is queued. The canvas moves only through these, on the user's steps; chapters that arrive meanwhile queue.
+ * and what is queued. The canvas moves only through these, on the user's steps or while the user plays a chapter
+ * (`stepDuration` per step); chapters that arrive meanwhile queue.
  */
 
 /** What the canvas draws at a position: the trail of elements so far and the marks of the current step. */
@@ -58,6 +59,16 @@ export function back(playbook: Playbook, position: PlaybookPosition): PlaybookPo
     if (position.step > 0) return { chapter: position.chapter, step: position.step - 1 };
     const previous = playbook.chapters[index - 1];
     return previous ? { chapter: previous.id, step: previous.steps.length } : position;
+}
+
+/**
+ * How long playing shows a step before the next: a look at the canvas plus reading the step's note (the plan for a
+ * chapter's start) at about 240 words a minute, 3 to 20 seconds.
+ */
+export function stepDuration(view: StepView): number {
+    const text = view.step ? [view.step.note, view.step.doneNote].filter(Boolean).join(' ') : view.chapter.plan;
+    const words = text.split(/\s+/).filter(Boolean).length;
+    return Math.min(20_000, Math.max(3_000, 2_000 + words * 250));
 }
 
 /** Whether there is anywhere to step forward to. */

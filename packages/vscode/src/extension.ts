@@ -1,14 +1,21 @@
-import { basename, join } from 'node:path';
-import { commands, Range, Selection, TextEditorRevealType, Uri, window, workspace, type ExtensionContext } from 'vscode';
+import { join } from 'node:path';
+import { commands, Uri, window, type ExtensionContext } from 'vscode';
 import { LanguageClient, TransportKind, type LanguageClientOptions, type ServerOptions } from 'vscode-languageclient/node';
+import { AgentsView } from './agents-view.js';
 import { connectDesktop } from './desktop-bridge.js';
+import { openDiff, revealOffsets } from './editor.js';
 import { ImplementationView } from './implementation-view.js';
+import { Workbench } from './workbench.js';
 
 let client: LanguageClient | undefined;
 
-/** Starts the bundled Appling language server for every `.appling` file in the workspace. */
+/**
+ * Starts the bundled Appling language server for every `.appling` file in the workspace. Inside Appling Desktop's code
+ * view the bridge to Desktop's canvas starts too; in any other window the Appling workbench with its IDE tabs and
+ * agent sessions.
+ */
 export async function activate(context: ExtensionContext): Promise<void> {
-    startDesktopBridge(context);
+    const bridged = startDesktopBridge(context);
     const module = context.asAbsolutePath(join('out', 'server.js'));
     const server: ServerOptions = {
         run: { module, transport: TransportKind.ipc },
@@ -17,16 +24,17 @@ export async function activate(context: ExtensionContext): Promise<void> {
     const options: LanguageClientOptions = { documentSelector: [{ scheme: 'file', language: 'appling' }] };
     client = new LanguageClient('appling', 'Appling', server, options);
     await client.start();
+    if (!bridged) await startWorkbench(context);
 }
 
 /**
  * Inside Appling Desktop's code view: syncs the selection with the canvas, marks how far each model line is implemented
  * and links code and elements both ways (see `desktop-bridge.ts`, `implementation-view.ts`).
  */
-function startDesktopBridge(context: ExtensionContext): void {
+function startDesktopBridge(context: ExtensionContext): boolean {
     const url = process.env.APPLING_DESKTOP_BRIDGE;
     const token = process.env.APPLING_DESKTOP_TOKEN;
-    if (!url || !token) return;
+    if (!url || !token) return false;
     commands.executeCommand('setContext', 'appling.desktop', true);
     const view = new ImplementationView(qn => bridge.showElement(qn));
     context.subscriptions.push(view);
@@ -38,30 +46,23 @@ function startDesktopBridge(context: ExtensionContext): void {
                 const document = event.textEditor.document;
                 if (document.languageId === 'appling') listener(document.uri.toString(), document.offsetAt(event.selections[0].active));
             }),
-            reveal: async (uri, start, end) => {
-                const document = await workspace.openTextDocument(Uri.parse(uri));
-                const editor = await window.showTextDocument(document, { preview: true });
-                const from = document.positionAt(start);
-                editor.selection = new Selection(from, from);
-                editor.revealRange(new Range(from, document.positionAt(end)), TextEditorRevealType.InCenterIfOutsideViewport);
-            },
-            diff: async (path, before, rev, line) => {
-                // the built in git extension serves `git:` URIs: the file's text at a revision
-                const old = Uri.file(before).with({ scheme: 'git', query: JSON.stringify({ path: before, ref: rev }) });
-                const now = Uri.file(path);
-                const exists = await workspace.fs.stat(now).then(() => true, () => false);
-                const at = line ? new Range(line - 1, 0, line - 1, 0) : undefined;
-                if (!exists) {
-                    await window.showTextDocument(old, { preview: true, selection: at });
-                    return;
-                }
-                await commands.executeCommand('vscode.diff', old, now, `${basename(path)} (${rev.slice(0, 12)} ↔ Working Tree)`, { preview: true, selection: at });
-            },
+            reveal: (uri, start, end) => revealOffsets(Uri.parse(uri), start, end),
+            diff: (path, before, rev, line) => openDiff(path, before, rev, line),
             implementation: state => view.update(state),
             open: (path, start, end) => view.open(path, start, end)
         }
     });
     context.subscriptions.push(bridge);
+    return true;
+}
+
+/** Appling in a plain VS Code window: the Projects and Agent Sessions views, the IDE tabs, `Initialize Appling`. */
+async function startWorkbench(context: ExtensionContext): Promise<void> {
+    const workbench = new Workbench(context);
+    const agents = new AgentsView(context, workbench);
+    context.subscriptions.push(workbench, agents);
+    await agents.start();
+    await workbench.refresh();
 }
 
 export async function deactivate(): Promise<void> {

@@ -4,7 +4,7 @@ import { buildGraph, diffGraphs, Simulator, withRemoved } from '@appling/model';
 import { buildWorkspace, examples } from '../../lang/test/workspace.js';
 import { layoutFlow } from '../src/layout.js';
 import {
-    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, implementationMarks, sessionMarks, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, policyText, relations, revealPath, search, trailOf, viewFor,
+    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, implementationMarks, sessionMarks, entityActions, factOf, flowView, GraphIndex, growOrder, growTree, lensOf, policyText, relations, revealPath, search, trailOf, viewFor,
     type Card, type Flow, type TreeNode
 } from '../src/views.js';
 
@@ -295,4 +295,17 @@ test('a use case is a flowchart of its steps with its error handlers and timeout
     ]);
     expect([viewFor('Machine'), viewFor('Module'), viewFor('Entity'), viewFor('Field')]).toEqual(['machine', 'node', 'node', undefined]);
     expect(anchorOf(index, 'sales.Order.status', new Set(['sales', 'sales.Order']))).toBe('sales.Order');
+});
+
+test('a growing focus adds each element after its path from the seed, along the focus', () => {
+    const now = { unfolded: new Set(['~/sales/#Entity/sales.Order']), trail: new Set(['~', '~/sales', '~/sales/#Entity']) };
+    const next = {
+        unfolded: new Set(['~/sales/#Entity/sales.Order', '~/sales/#Entity/sales.Order/#Action/sales.PlaceOrder', '~/crm/#Entity/crm.Customer']),
+        trail: new Set(['~', '~/sales', '~/sales/#Entity', '~/sales/#Entity/sales.Order', '~/sales/#Entity/sales.Order/#Action', '~/crm', '~/crm/#Entity'])
+    };
+    expect(growOrder(now, next)).toEqual([
+        '~/sales/#Entity/sales.Order/#Action', '~/sales/#Entity/sales.Order/#Action/sales.PlaceOrder',
+        '~/crm', '~/crm/#Entity', '~/crm/#Entity/crm.Customer'
+    ]);
+    expect(growOrder(next, next)).toEqual([]);
 });

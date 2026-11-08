@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import type { Chapter, Playbook, PlaybookStep } from '@appling/ai';
-import { back, canForward, forward, queued, stepView, unwatchedCounts } from '../src/shared/player.js';
+import { back, canForward, forward, queued, stepDuration, stepView, unwatchedCounts } from '../src/shared/player.js';
 
 function step(n: number, change: PlaybookStep['change'], elements: string[], state: PlaybookStep['state'] = 'planned'): PlaybookStep {
     return { n, change, elements, note: `step ${n}`, state, responses: [] };
@@ -45,4 +45,12 @@ test('a step draws the trail so far, the chapters it builds on first, and marks 
     expect(stepView(book, { chapter: 'b', step: 1 })).toMatchObject({ focus: ['sales.Invoice', 'sales.Order', 'sales.Legacy'], changes: { removed: ['sales.Legacy'] } });
     expect(stepView(book, { chapter: 'b', step: 2 })!.focus).toEqual(['sales.Order', 'sales.Legacy', 'sales.Invoice', 'sales.pay']);
     expect(stepView(book, { step: 0 })).toBeUndefined();
+});
+
+test('playing shows a step for as long as its text takes to read, 3 to 20 seconds', () => {
+    const chapter = { plan: 'one two three', steps: [] } as unknown as Chapter;
+    const step = (note: string) => ({ chapter, at: 1, step: { note } as PlaybookStep, focus: [], changes: { added: [], changed: [], removed: [], planned: false } });
+    expect(stepDuration({ ...step(''), at: 0, step: undefined })).toBe(3_000);
+    expect(stepDuration(step(Array(20).fill('word').join(' ')))).toBe(7_000);
+    expect(stepDuration(step(Array(500).fill('word').join(' ')))).toBe(20_000);
 });

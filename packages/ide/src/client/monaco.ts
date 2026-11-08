@@ -11,24 +11,32 @@ monaco.languages.setLanguageConfiguration('appling', {
     brackets: [['{', '}'], ['[', ']'], ['(', ')']],
     autoClosingPairs: [{ open: '{', close: '}' }, { open: '[', close: ']' }, { open: '(', close: ')' }, { open: '"', close: '"' }]
 });
-monaco.editor.defineTheme('appling', {
-    base: 'vs-dark',
-    inherit: true,
-    rules: [
-        { token: 'keyword', foreground: 'a6dc5a' },
-        { token: 'string', foreground: 'd9d0c3' },
-        { token: 'number', foreground: '5cbf63' },
-        { token: 'comment', foreground: '7a6e5e', fontStyle: 'italic' },
-        { token: 'operator', foreground: 'aaa092' }
-    ],
-    colors: {
-        'editor.background': '#0c0a08',
-        'editor.foreground': '#f7f2ea',
-        'editorLineNumber.foreground': '#7a6e5e',
-        'editor.selectionBackground': '#5cbf6340',
-        'editor.lineHighlightBackground': '#14110d'
-    }
-});
+/**
+ * The editor's theme from the theme tokens of `styles.css` as they are now (a host may override them and pick the light
+ * theme), redefined whenever the theme changes (`appling-theme` on window).
+ */
+function editorTheme(): void {
+    const style = getComputedStyle(document.documentElement);
+    const token = (name: string) => style.getPropertyValue(`--appling-${name}`).trim();
+    const hex = (name: string) => /^#[0-9a-f]{3,8}$/i.test(token(name)) ? token(name) : undefined;
+    const colors: Record<string, string | undefined> = {
+        'editor.background': hex('surface'),
+        'editor.foreground': hex('ink'),
+        'editorLineNumber.foreground': hex('line-strong'),
+        'editor.lineHighlightBackground': hex('surface-raised'),
+        'editor.selectionBackground': hex('leaf') && `${hex('leaf')!.slice(0, 7)}40`
+    };
+    const rule = (token: string, name: string, fontStyle?: string) => ({ token, foreground: hex(name)?.slice(1, 7), fontStyle });
+    monaco.editor.defineTheme('appling', {
+        base: document.documentElement.dataset.theme === 'light' ? 'vs' : 'vs-dark',
+        inherit: true,
+        rules: [rule('keyword', 'sprout'), rule('string', 'ink-soft'), rule('number', 'leaf'), rule('comment', 'line-strong', 'italic'), rule('operator', 'ink-muted')],
+        colors: Object.fromEntries(Object.entries(colors).filter((entry): entry is [string, string] => !!entry[1]))
+    });
+    monaco.editor.setTheme('appling');
+}
+editorTheme();
+addEventListener('appling-theme', editorTheme);
 
 /** The current text of every open Appling file, saved or not. */
 export function modelTexts(): Record<string, string> {

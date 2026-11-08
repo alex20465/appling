@@ -3,6 +3,7 @@ import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, symlinkSyn
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { cancel, intro, isCancel, multiselect, outro, select, text } from '@clack/prompts';
+import { addTarget, CONFIG, ignore, STACKS, type Stack } from '@appling/codegen';
 import { findApplingFiles } from '@appling/model';
 
 /** Referenced from node_modules, never copied, so updating @appling/ai updates what every agent reads. */
@@ -48,15 +49,9 @@ export const AGENTS = {
     }
 };
 
-export const STACKS = {
-    django: '@appling/codegen-django',
-    ash: '@appling/codegen-ash',
-    go: '@appling/codegen-go',
-    rust: '@appling/codegen-rust'
-};
+export { STACKS, type Stack };
 
 export type Agent = keyof typeof AGENTS;
-export type Stack = keyof typeof STACKS;
 export interface InitOptions { name: string; agents: Agent[]; stack?: Stack }
 
 const NAME = /^[a-z][a-z0-9_-]*$/;
@@ -114,12 +109,9 @@ export async function init(args: string[]): Promise<number> {
 /** Writes the model, the generate target and each agent's wiring. Safe to run again: existing settings are kept. */
 export function scaffold(dir: string, { name, agents, stack }: InitOptions): void {
     const module = name.replace(/-/g, '_');
-    if (stack) {
-        updateJson(join(dir, 'appling.config.json'), c => {
-            c.generate ??= [];
-            if (!c.generate.some((t: { extension: string }) => t.extension === STACKS[stack])) c.generate.push({ extension: STACKS[stack], out: `build/${module}` });
-        });
-    }
+    if (stack) addTarget(dir, stack, module);
+    else if (!existsSync(join(dir, CONFIG))) writeFileSync(join(dir, CONFIG), '{}\n');
+    ignore(dir, ['node_modules/', '.appling/view.json']);
     if (!findApplingFiles(dir).length) {
         mkdirSync(join(dir, 'models'), { recursive: true });
         writeFileSync(join(dir, 'models', `${module}.appling`), `module ${module} {\n}\n`);

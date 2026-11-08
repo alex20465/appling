@@ -65,7 +65,7 @@ Declare a level on the module when all of it shares it, on the declaration other
 
 ## 3. Write and validate
 
-1. Write one module per file with `write_model_file`, starting with the domain layer: enums, value types, entities. It refuses a file that introduces errors and tells you why.
+1. Write one module per file with `write_model_file`, starting with the domain layer: enums, value types, entities. It refuses a file that introduces errors and tells you why. Add a `does` text only where the code holds knowledge the structure cannot carry, such as the vendor endpoint an operation calls or the format of an id; never restate what names, types and effects already say.
 2. Call `check` after each file. Fix errors before moving on; never leave the model invalid.
 3. Add behavior, then application, interfaces and pages, module by module. Use `edit` for small changes to files that exist.
 4. For each element you write, call `record_code_references` with the line ranges of the code it describes, each starting at the line that declares it (the model class, the function, the permission class). Paths are absolute or relative to the model folder.

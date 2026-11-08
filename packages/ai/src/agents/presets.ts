@@ -3,7 +3,7 @@ import { join as nativeJoin, posix } from 'node:path';
 /**
  * Agent presets (#10): which program an agent session runs and how it reaches the repo's Appling MCP server with
  * no manual setup. Every agent gets the MCP server through its own CLI flags, environment or a configuration file
- * Desktop writes into the session's own folder, never through the user's configuration files. Pure: `launch`
+ * the app (Appling Desktop, the VS Code extension) writes into the session's own folder, never through the user's configuration files. Pure: `launch`
  * returns the command, arguments, environment and files, which `AgentSessions` writes and starts in a terminal.
  */
 
@@ -54,7 +54,7 @@ export const BUILTIN_PRESETS: readonly AgentPreset[] = [
     { name: 'opencode', command: 'opencode', args: [], env: {}, wiring: 'opencode', answers: KEYS, builtin: true }
 ];
 
-/** The key of the custom presets in Desktop's `settings.json`. */
+/** The key of the custom presets in the app's settings (Desktop's `settings.json`, VS Code's `appling.agents.presets`). */
 export const PRESETS_KEY = 'agents.presets';
 
 /**
@@ -85,6 +85,14 @@ export function agentPresets(settings: Record<string, unknown>): { presets: Agen
         else presets.push(preset);
     });
     return { presets, problems };
+}
+
+/** Gemini CLI's own system settings file, merged under a session's; see its configuration reference. */
+export function geminiSystemSettingsFile(): string {
+    if (process.env.GEMINI_CLI_SYSTEM_SETTINGS_PATH) return process.env.GEMINI_CLI_SYSTEM_SETTINGS_PATH;
+    if (process.platform === 'darwin') return '/Library/Application Support/GeminiCli/settings.json';
+    if (process.platform === 'win32') return 'C:\\ProgramData\\gemini-cli\\settings.json';
+    return '/etc/gemini-cli/settings.json';
 }
 
 /** What a session's launch needs to know. */
@@ -199,7 +207,7 @@ export function launch(preset: AgentPreset, context: LaunchContext): Launch {
 }
 
 /** The opencode plugin that reports permission requests and idle sessions to the gateway. */
-export const OPENCODE_PLUGIN = `// Written by Appling Desktop for one agent session: reports permission requests and idle sessions.
+export const OPENCODE_PLUGIN = `// Written by Appling for one agent session: reports permission requests and idle sessions.
 const EVENTS = new Set(${JSON.stringify(OPENCODE_EVENTS)});
 export const ApplingStatus = async () => ({
     event: async ({ event }) => {

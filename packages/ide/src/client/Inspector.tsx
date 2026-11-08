@@ -20,6 +20,8 @@ interface InspectorProps {
     /** Whether generation can start now: there are targets and no run. */
     canGenerate?: boolean;
     onOpenCode?(qn: string): void;
+    /** Opens the element's source in the host's editor, where the host offers it. */
+    onOpenSource?(qn: string): void;
     onGenerate?(qn: string): void;
     /** How the element changed, while the canvas marks the review's or the live changes. */
     change?: ElementChange;
@@ -33,7 +35,7 @@ interface InspectorProps {
 
 const TYPED = new Set(['Field', 'Param']);
 
-export function Inspector({ index, qn, code, implementation, canGenerate, onSelect, onEdit, onOpenCode, onGenerate, change, onTextDiff, diff, anchor }: InspectorProps) {
+export function Inspector({ index, qn, code, implementation, canGenerate, onSelect, onEdit, onOpenCode, onOpenSource, onGenerate, change, onTextDiff, diff, anchor }: InspectorProps) {
     const node = qn ? index.nodes.get(qn) : undefined;
     const [errors, setErrors] = useState<string[]>([]);
     const [removing, setRemoving] = useState(false);
@@ -54,6 +56,7 @@ export function Inspector({ index, qn, code, implementation, canGenerate, onSele
         <div className="inspector">
             <div className="eyebrow">{node.props.link ? 'link ' : ''}{kindLabel(node.kind)} · {LAYER_LABELS[node.layer]}</div>
             <h2>{node.qn}</h2>
+            {onOpenSource && <p><button className="button" onClick={() => onOpenSource(node.qn)}>Open source</button></p>}
             {anchor && (
                 <div className="anchor">
                     <p className="impl-line">
