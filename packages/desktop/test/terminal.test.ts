@@ -307,7 +307,8 @@ describe.skipIf(process.platform === 'win32')('terminal service against a pty ho
         const home = temp('home-');
         const data = temp('data-');
         const make = (overrides: Partial<TerminalSettings> = settings) => new TerminalService({
-            host: { dir: host },
+            // no desktop notifications from the test hosts
+            host: { dir: host, host: { notify: false } },
             registryFile: join(data, 'terminals.json'),
             settings: () => ({ ...DEFAULT_TERMINAL_SETTINGS, ...overrides }),
             profiles: () => ({ profiles: [{ name: 'bash', path: '/bin/bash', args: [], source: 'detected' }, { name: 'sh', path: '/bin/sh', args: [], source: 'detected' }], default: 'bash', problems: [] }),
@@ -364,6 +365,20 @@ describe.skipIf(process.platform === 'win32')('terminal service against a pty ho
         expect(service.layout(home).terminals[session.id]).toMatchObject({ exit: { code: 3 } });
         await session.kill();
         expect(service.registry.terminals(home)).toEqual([]);
+        service.dispose();
+    });
+
+    test('endWithApp ends agent sessions too, and their metadata reaches the pty host', async () => {
+        const { host, home, make } = setup({ endWithApp: true });
+        const service = make();
+        const session = await service.createSession(home, { name: 'claude', command: '/bin/sh', args: ['-c', 'sleep 30'], meta: { preset: 'claude', label: 'Refactor' } });
+        const shell = await service.create(home, { profile: 'sh' });
+        expect(session.state).toMatchObject({ meta: { preset: 'claude', label: 'Refactor' } });
+        const client = await PtyHostClient.connect(host);
+        expect((await client.list(home)).map(t => [t.id, t.meta])).toEqual([[session.id, { preset: 'claude', label: 'Refactor' }], [shell.id, undefined]]);
+        await service.endAll();
+        expect(await client.list(home)).toEqual([]);
+        client.close();
         service.dispose();
     });
 

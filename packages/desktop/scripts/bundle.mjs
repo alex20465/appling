@@ -54,7 +54,7 @@ const aiFiles = (to) => ['skills', 'language'].forEach(dir => cpSync(join(packag
 
 // Desktop: main process, preload and the shell page in `out/`, as in this package.
 await bundle(join(root, 'out/main.js'), 'out/main.js');
-for (const preload of ['preload.cjs', 'repo-preload.cjs']) cpSync(join(root, 'out', preload), join(app, 'out', preload));
+for (const file of ['preload.cjs', 'repo-preload.cjs', 'tray-icon.png']) cpSync(join(root, 'out', file), join(app, 'out', file));
 cpSync(join(root, 'out/shell'), join(app, 'out/shell'), { recursive: true });
 // the terminal panel's page (already bundled), its preload and the shell integration scripts, where src/terminal/assets.ts looks
 for (const part of ['view', 'scripts', 'preload.cjs']) {

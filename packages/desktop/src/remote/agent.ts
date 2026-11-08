@@ -47,8 +47,9 @@ async function main([command, ...args]: string[]): Promise<number> {
     }
     if (command === 'ide' && args[0]) return relayIde(args);
     if (command === 'pty-host') {
+        // no notifications on that machine: Desktop raises them where the user is (`remote/notify.ts`)
         const dir = defaultDir();
-        const client = await connectPtyHost({ dir, host: { main: join(server, 'pty-host/out/main.js'), node: process.execPath, idleTimeout: 10 * 60000 } });
+        const client = await connectPtyHost({ dir, host: { main: join(server, 'pty-host/out/main.js'), node: process.execPath, idleTimeout: 10 * 60000, notify: false } });
         client.close();
         console.log(JSON.stringify({ socket: socketPath(dir), token: readFileSync(tokenPath(dir), 'utf8').trim(), pid: client.host.pid }));
         return 0;
