@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { join as nativeJoin, posix } from 'node:path';
 
 /**
  * Agent presets (#10): which program an agent session runs and how it reaches the repo's Appling MCP server with
@@ -103,6 +103,13 @@ export interface LaunchContext {
     hookScript: string;
     /** For Gemini CLI: the machine's system settings, merged under the session's. */
     geminiSystemSettings?: Record<string, unknown>;
+    /**
+     * The agent runs on another machine (a remote repo): paths and hook command lines are POSIX ones there, whatever
+     * this machine is.
+     */
+    posix?: boolean;
+    /** The Node binary that runs the hook script; `node` from the PATH by default. */
+    node?: string;
 }
 
 export interface Launch {
@@ -135,6 +142,8 @@ export function launch(preset: AgentPreset, context: LaunchContext): Launch {
     const files: Record<string, string> = {};
     const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;
     const authorization = `Bearer ${context.token}`;
+    const join = context.posix ? posix.join : nativeJoin;
+    const quote = (value: string) => shellWord(value, context.posix ? 'posix' : process.platform === 'win32' ? 'cmd' : 'posix');
     switch (preset.wiring) {
         case 'claude': {
             const mcp = join(context.dir, 'mcp.json');
@@ -163,7 +172,7 @@ export function launch(preset: AgentPreset, context: LaunchContext): Launch {
             const token = join(context.dir, 'token');
             files[token] = context.token;
             const base = context.geminiSystemSettings ?? {};
-            const hook = (event: string) => ({ hooks: [{ name: `appling-${event}`, type: 'command', command: `node ${quote(context.hookScript)} ${quote(`${context.hookUrl}/${event}`)} ${quote(token)}`, timeout: 5000 }] });
+            const hook = (event: string) => ({ hooks: [{ name: `appling-${event}`, type: 'command', command: `${quote(context.node ?? 'node')} ${quote(context.hookScript)} ${quote(`${context.hookUrl}/${event}`)} ${quote(token)}`, timeout: 5000 }] });
             const hooks = { ...(base.hooks as Record<string, unknown[]> | undefined) ?? {} };
             for (const event of GEMINI_HOOKS) hooks[event] = [...hooks[event] ?? [], hook(event)];
             files[settings] = json({
@@ -205,8 +214,8 @@ export const ApplingStatus = async () => ({
 `;
 
 /** A shell word for a hook command line (POSIX shells, and cmd for paths without quotes). */
-function quote(value: string): string {
-    return /^[\w./:@%+=,-]+$/.test(value) ? value : process.platform === 'win32' ? `"${value}"` : `'${value.replaceAll("'", `'\\''`)}'`;
+function shellWord(value: string, shell: 'posix' | 'cmd'): string {
+    return /^[\w./:@%+=,-]+$/.test(value) ? value : shell === 'cmd' ? `"${value}"` : `'${value.replaceAll("'", `'\\''`)}'`;
 }
 
 /** What the user answers a waiting agent. */

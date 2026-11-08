@@ -176,6 +176,20 @@ export class TerminalPanel {
         }, error => console.error(`The terminals of ${repo} did not reattach: ${(error as Error).message}`));
     }
 
+    /**
+     * A remote repo's connection came back: its terminals (task terminals too) attach again through the new
+     * connection, and its page reloads so every tab draws its terminal again from the scrollback.
+     */
+    reconnectRepo(repo: string): Promise<void> {
+        return this.service.reconnectRepo(repo).then(() => {
+            const view = this.views.get(repo);
+            if (view && !view.webContents.isDestroyed()) view.webContents.reload();
+            const entry = this.service.registry.get(repo);
+            if (entry.open && entry.tabs.length) this.ensureView(repo);
+            this.arrange(repo);
+        }, error => console.error(`The terminals of ${repo} did not reattach: ${(error as Error).message}`));
+    }
+
     /** The repo whose terminal this is, from the pty host (also before the repo is open). */
     async repoOfTerminal(id: string): Promise<string | undefined> {
         const client = await this.service.connection();

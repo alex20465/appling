@@ -9,6 +9,7 @@ import { Forward } from './forward.js';
 import { install, type Installed, type InstallOptions } from './install.js';
 import type { RemoteLocation } from './location.js';
 import { readyPort, RelayProcess } from './relay.js';
+import type { ReverseForward } from './reverse.js';
 import { agentScript, ContainerTransport, transportFor, type Transport, type TransportOptions } from './transport.js';
 
 export interface RemoteRepoOptions {
@@ -30,6 +31,17 @@ export interface RemoteRepoOptions {
     /** Called after every (re)connect, with the stable local URL of the IDE server. */
     onConnected?(url: string, again: boolean): void;
     onProgress?(line: string): void;
+    /** A reverse forward came back on another port there after a reconnect (its old one was still taken). */
+    onReverse?(name: string, port: number): void;
+}
+
+/** A local port made reachable there (`reverse`), set up again after every reconnect. */
+interface Reverse {
+    local: number;
+    /** The port there: the last one, which a reconnect asks for again. */
+    port?: number;
+    forward?: ReverseForward;
+    pending?: Promise<number>;
 }
 
 /** The parts of a remote repo on the other side, through the transport, kept up by a reconnect state machine. */
@@ -46,6 +58,9 @@ export class RemoteRepo {
     private ptyForward?: Forward;
     private stopLost?: () => void;
     private connections = 0;
+    private readonly reverses = new Map<string, Reverse>();
+    /** Between a connect that got the transport, the server and the pty host up and the next teardown. */
+    private up = false;
 
     constructor(private readonly options: RemoteRepoOptions) {
         this.transport = options.transport ?? transportFor(options.location, {
@@ -106,7 +121,60 @@ export class RemoteRepo {
         this.ide = ide;
         this.stopLost = this.transport.onLost(() => this.connection.lost(`The connection to ${this.transport.label} was lost.`));
         await this.startPtyHost().catch(error => this.terminalsProblem = (error as Error).message);
+        this.up = true;
+        // the reverse forwards of the last connection, on their ports there when those are free again
+        for (const [name, reverse] of this.reverses) {
+            await this.establish(name, reverse).catch(error => onProgress?.(`The reverse forward ${name} to ${this.transport.label} failed: ${(error as Error).message}`));
+        }
         this.options.onConnected?.(forward.url, this.connections++ > 0);
+    }
+
+    /**
+     * Makes a port of this machine reachable on 127.0.0.1 there, under a name (`agents`, `code-bridge`), and again
+     * after every reconnect, on the same port there when it is free (`preferred` for the first time, such as the port
+     * an agent started before an app restart was given). Resolves with the port there; the same forward for the same
+     * local port. Rejects while not connected.
+     */
+    async reverse(name: string, local: number, preferred?: number): Promise<number> {
+        const known = this.reverses.get(name);
+        if (known?.local === local) {
+            if (known.forward) return known.forward.port;
+            if (known.pending) return known.pending;
+        }
+        await known?.forward?.close().catch(() => undefined);
+        const reverse: Reverse = { local, port: known?.port ?? preferred };
+        this.reverses.set(name, reverse);
+        if (!this.up) throw new Error(`${this.transport.label} is not connected.`);
+        return this.establish(name, reverse);
+    }
+
+    /** The port there of a reverse forward, while it is up. */
+    reversePort(name: string): number | undefined {
+        return this.reverses.get(name)?.forward?.port;
+    }
+
+    private establish(name: string, reverse: Reverse): Promise<number> {
+        reverse.pending ??= (async () => {
+            const forward = await this.transport.reverse(reverse.local, reverse.port);
+            if (this.reverses.get(name) !== reverse || !this.up) {
+                await forward.close().catch(() => undefined);
+                throw new Error(`${this.transport.label} is not connected.`);
+            }
+            const moved = reverse.port !== undefined && reverse.port !== forward.port;
+            reverse.forward = forward;
+            reverse.port = forward.port;
+            // the process carrying it ended while the connection stays (`docker exec` of the agent): set it up again
+            forward.onEnd(() => {
+                if (reverse.forward !== forward) return;
+                reverse.forward = undefined;
+                setTimeout(() => {
+                    if (this.up && this.reverses.get(name) === reverse && !reverse.forward) void this.establish(name, reverse).catch(() => undefined);
+                }, 1000);
+            });
+            if (moved) this.options.onReverse?.(name, forward.port);
+            return forward.port;
+        })().finally(() => reverse.pending = undefined);
+        return reverse.pending;
     }
 
     /** Starts (or finds) the pty host there and serves its socket and token in `ptyDir`, where `PtyHostClient.connect` looks. */
@@ -127,10 +195,13 @@ export class RemoteRepo {
      * Starts Code OSS there for the code view (installing it the first time) and forwards its port. Resolves with the
      * local port and the connection token; `close` stops it.
      */
-    async startCode(key: string): Promise<{ port: number, token: string, close(): Promise<void>, onExit(listener: (output: string) => void): void }> {
+    async startCode(key: string, env: Record<string, string> = {}): Promise<{ port: number, token: string, close(): Promise<void>, onExit(listener: (output: string) => void): void }> {
         if (this.connection.state !== 'connected' || !this.root) throw new Error(`${this.transport.label} is not connected.`);
         await install(this.transport, { ...this.options.install, code: true, onProgress: this.options.onProgress });
         const child = this.transport.spawn(agentScript(this.installed!.agent, ['code', this.root, key]));
+        // the environment (the code bridge's URL and token there) goes over stdin, not into a command line others can read
+        child.stdin!.on('error', () => undefined);
+        child.stdin!.write(`${JSON.stringify({ env })}\n`);
         let output = '';
         child.stderr!.on('data', chunk => output = (output + chunk).slice(-8000));
         const { port, token } = await new Promise<{ port: number, token: string }>((resolve, reject) => {
@@ -164,6 +235,12 @@ export class RemoteRepo {
     }
 
     private async teardown(): Promise<void> {
+        this.up = false;
+        for (const reverse of this.reverses.values()) {
+            const forward = reverse.forward;
+            reverse.forward = undefined;
+            await forward?.close().catch(() => undefined);
+        }
         this.stopLost?.();
         this.stopLost = undefined;
         const ide = this.ide;

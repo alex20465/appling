@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AgentSession, Claims, MemorySessionStore, SessionStatus } from '@appling/ai';
 import { isRemoteId, repoId } from '../remote/location.js';
@@ -27,6 +27,31 @@ export interface AgentRecord extends SessionView {
     answers: AnswerKeys;
     claims: Claims;
     exit?: { code: number, signal?: number };
+    /**
+     * For an agent on a remote repo's machine: the gateway's port there, the session's folder there and the repo's
+     * folder there, which its MCP session works in (its file claims are paths there).
+     */
+    remote?: { port: number, dir: string, root: string };
+}
+
+/**
+ * The machine of a remote repo, for agents that run there: they reach the gateway through a reverse forward
+ * (`RemoteRepo.reverse`) and read their configuration files and the hook script there.
+ */
+export interface RemoteAgentHost {
+    /** Makes the gateway (this local port) reachable there; resolves with its port there, `preferred` when it is free. */
+    forward(localPort: number, preferred?: number): Promise<number>;
+    /** The repo's folder there. */
+    root: string;
+    /** The folder there that holds each session's own folder. */
+    folder: string;
+    /** The hook client there (`remote/hook.cjs` of the server bundle) and the Node binary that runs it. */
+    hookScript: string;
+    node: string;
+    /** Writes files there by absolute path, mode 0600 in 0700 folders. */
+    write(files: Record<string, string>): Promise<void>;
+    /** Removes a folder there. */
+    remove(path: string): Promise<void>;
 }
 
 export interface AgentSessionsOptions {
@@ -40,6 +65,8 @@ export interface AgentSessionsOptions {
     hookScript?: string;
     /** Gemini CLI's system settings of this machine, merged under a session's own. */
     geminiSystemSettings?(): Record<string, unknown> | undefined;
+    /** The machine of a remote repo while it is connected; undefined for local repos and while it is not. */
+    remote?(repo: string): RemoteAgentHost | undefined;
 }
 
 type Events = {
@@ -99,7 +126,8 @@ export class AgentSessions extends EventEmitter<Events> {
             if (record.status === 'exited') continue;
             store.adopt(this.sessionOf(record), record.token);
             // the agent was started with the old port: its files get the new one, which it reads when it starts again
-            if (saved.port !== port) this.writeFiles(record);
+            // (an agent on a remote repo reaches the gateway through its forward there, set up when the repo connects)
+            if (saved.port !== port && !record.remote) void this.writeFiles(record).catch(() => undefined);
         }
         const on = <E extends 'notification' | 'exit' | 'input' | 'changed'>(event: E, listener: (...args: never[]) => void) => {
             terminals.on(event, listener as never);
@@ -153,10 +181,12 @@ export class AgentSessions extends EventEmitter<Events> {
     async create(repo: string, presetName: string, options: { workspace?: string, cols?: number, rows?: number } = {}): Promise<AgentRecord> {
         const preset = this.options.presets().find(p => p.name === presetName);
         if (!preset) throw new Error(`There is no agent preset "${presetName}".`);
-        // a remote repo's agent runs on that machine, which cannot reach this app's gateway (it needs a reverse forward)
-        if (isRemoteId(repo)) throw new Error('Agent sessions do not run in remote repos yet: the agent there cannot reach the app\'s MCP gateway.');
+        // a remote repo's agent runs on that machine and reaches the gateway through a reverse forward there
+        const remote = isRemoteId(repo) ? this.options.remote?.(repo) : undefined;
+        if (isRemoteId(repo) && !remote) throw new Error('The remote repo is not connected; start the session once it is.');
         if (!this.options.ideMcp(repo)) throw new Error('The repo\'s IDE server is not running yet; start the session once it is.');
-        const { session, token } = await this.options.store.open({ name: preset.name, repo, workspace: options.workspace });
+        // the MCP session works in the folder the IDE server there serves
+        const { session, token } = await this.options.store.open({ name: preset.name, repo: remote?.root ?? repo, workspace: options.workspace });
         const record: AgentRecord = {
             id: session.id, terminal: '', token, preset: preset.name, wiring: preset.wiring, answers: preset.answers,
             name: preset.name, status: 'working', color: session.color,
@@ -165,7 +195,7 @@ export class AgentSessions extends EventEmitter<Events> {
             ...options.workspace ? { workspace: options.workspace } : {}, started: session.started, claims: session.claims
         };
         try {
-            const started = this.writeFiles(record, preset);
+            const started = await this.writeFiles(record, preset, remote);
             const terminal = await this.options.terminals.createSession(repo, {
                 name: preset.name, command: started.command, args: started.args, env: started.env, cols: options.cols, rows: options.rows,
                 // what the pty host's tray and notifications show while the app is closed (#18)
@@ -185,6 +215,20 @@ export class AgentSessions extends EventEmitter<Events> {
         this.save();
         this.emit('changed');
         return record;
+    }
+
+    /**
+     * A remote repo connected (again): the gateway's forward there is up again, and when it came back on another port
+     * the files of the repo's running sessions get it (agents that read them again, such as Claude Code's hooks, follow).
+     */
+    async remoteConnected(repo: string): Promise<void> {
+        const remote = this.options.remote?.(repo);
+        const records = this.list().filter(r => r.repo === repoId(repo) && r.remote && r.status !== 'exited');
+        if (!remote || !records.length || this.gateway.port === undefined) return;
+        const port = await remote.forward(this.gateway.port, records[0].remote!.port);
+        this.gateway.allowPort(port);
+        for (const record of records) if (record.remote!.port !== port) await this.writeFiles(record, undefined, remote).catch(() => undefined);
+        this.save();
     }
 
     /** Answers the session's prompt by writing the preset's keys to its terminal; it then works again. */
@@ -261,7 +305,7 @@ export class AgentSessions extends EventEmitter<Events> {
         this.apply(record, reduce({ status: record.status }, { type: 'exit', ...exit }));
         void this.options.store.end(record.id).catch(() => undefined);
         // the token and the configuration files go with the agent
-        rmSync(this.dirOf(record), { recursive: true, force: true });
+        this.cleanup(record);
     }
 
     /** The repo's terminals changed: a closed tab ends its session, an ended terminal (seen after a restart) exits it. */
@@ -321,7 +365,7 @@ export class AgentSessions extends EventEmitter<Events> {
     private sessionOf(record: AgentRecord): AgentSession {
         return {
             id: record.id, name: record.name, ...record.label ? { label: record.label } : {}, status: record.status as SessionStatus,
-            ...record.note ? { note: record.note } : {}, color: record.color, repo: record.repo,
+            ...record.note ? { note: record.note } : {}, color: record.color, repo: record.remote?.root ?? record.repo,
             ...record.workspace ? { workspace: record.workspace } : {}, claims: record.claims, started: record.started, unread: 0
         };
     }
@@ -330,9 +374,23 @@ export class AgentSessions extends EventEmitter<Events> {
         return join(this.options.folder, 'sessions', record.id);
     }
 
-    /** Writes the session's configuration files (mode 0600 in a 0700 folder) and returns how to start its agent. */
-    private writeFiles(record: AgentRecord, preset?: AgentPreset): ReturnType<typeof launch> {
+    /**
+     * Writes the session's configuration files (mode 0600 in a 0700 folder) and returns how to start its agent. For a
+     * remote repo they go to that machine, with the gateway's URLs at its forward there.
+     */
+    private async writeFiles(record: AgentRecord, preset?: AgentPreset, remote?: RemoteAgentHost): Promise<ReturnType<typeof launch>> {
         preset ??= this.options.presets().find(p => p.name === record.preset) ?? { name: record.preset, command: '', args: [], env: {}, wiring: record.wiring, answers: record.answers, builtin: false };
+        if (remote) {
+            const port = await remote.forward(this.gateway.port!, record.remote?.port);
+            this.gateway.allowPort(port);
+            record.remote = { port, dir: posix.join(remote.folder, record.id), root: remote.root };
+            const started = launch(preset, {
+                session: record.id, ...this.gateway.urlsAt(port), token: record.token, dir: record.remote.dir,
+                hookScript: remote.hookScript, node: remote.node, posix: true
+            });
+            await remote.write(started.files);
+            return started;
+        }
         const dir = this.dirOf(record);
         const started = launch(preset, {
             session: record.id, mcpUrl: this.gateway.mcpUrl, hookUrl: this.gateway.hookUrl, token: record.token, dir,
@@ -349,6 +407,7 @@ export class AgentSessions extends EventEmitter<Events> {
 
     private cleanup(record: AgentRecord): void {
         rmSync(this.dirOf(record), { recursive: true, force: true });
+        if (record.remote) void this.options.remote?.(record.repo)?.remove(record.remote.dir).catch(() => undefined);
     }
 
     private read(): SavedSessions {

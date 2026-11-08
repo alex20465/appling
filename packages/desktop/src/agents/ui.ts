@@ -7,7 +7,7 @@ import type { TerminalPanel } from '../terminal/panel.js';
 import { readSettingsFile } from '../terminal/settings.js';
 import { boardEntries, sessionTitle, shouldNotify, type Attention, type BoardEntry } from './board.js';
 import { agentPresets, isAnswer, PRESETS_KEY, type AgentPreset, type Answer } from './presets.js';
-import { AgentSessions, type AgentRecord } from './sessions.js';
+import { AgentSessions, type AgentRecord, type RemoteAgentHost } from './sessions.js';
 
 export interface AgentUiOptions {
     userData: string;
@@ -15,6 +15,8 @@ export interface AgentUiOptions {
     panel: TerminalPanel;
     /** The MCP endpoint of the repo's IDE server. */
     ideMcp(repo: string): string | undefined;
+    /** The machine of a connected remote repo, where its agents run. */
+    remote?(repo: string): RemoteAgentHost | undefined;
     activeRepo(): string | undefined;
     /** The workspace a new session of the active repo belongs to. */
     activeWorkspace(): string | undefined;
@@ -64,6 +66,7 @@ export class AgentUi {
             terminals: options.panel.service,
             folder: join(options.userData, 'agents'),
             ideMcp: options.ideMcp,
+            remote: options.remote,
             presets: () => this.presets(),
             geminiSystemSettings: () => {
                 const file = geminiSystemSettingsFile();
@@ -153,7 +156,8 @@ export class AgentUi {
     /** The tabs of a session's workspace, for `ide_context`. */
     tabs(session: { workspace?: string, repo: string }) {
         return this.sessions.list()
-            .filter(r => session.workspace ? r.workspace === session.workspace : r.repo === session.repo)
+            // a remote session's MCP session works in the repo's folder there
+            .filter(r => session.workspace ? r.workspace === session.workspace : r.repo === session.repo || r.remote?.root === session.repo)
             .map(r => ({ id: r.id, title: sessionTitle(r), kind: 'agent', repo: r.repo, active: this.options.panel.showing(r.terminal) }));
     }
 

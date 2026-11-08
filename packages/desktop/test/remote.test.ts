@@ -17,6 +17,7 @@ import { connectionContribution } from '../src/remote/rail.js';
 import { readyPort } from '../src/remote/relay.js';
 import { applies, parseSshConfig, readSshHosts } from '../src/remote/ssh-config.js';
 import { agentScript, dockerExecArgs, LocalTransport, shellQuote, sshArgs, wslArgs } from '../src/remote/transport.js';
+import { encodeFrame, FrameReader } from '../src/remote/reverse.js';
 
 const temp: string[] = [];
 afterAll(() => temp.forEach(dir => rmSync(dir, { recursive: true, force: true })));
@@ -182,6 +183,57 @@ describe('transports', () => {
         });
         expect(answer).toBe('pong');
         await forward.close();
+        server.close();
+    });
+
+    test('ssh reverse forwards go through the control master', () => {
+        const args = sshArgs({ kind: 'ssh', host: 'shop', path: '/r' }, '/tmp/ctl');
+        expect(args.forward('127.0.0.1:0:127.0.0.1:4100')).toEqual(['-S', '/tmp/ctl', '-O', 'forward', '-R', '127.0.0.1:0:127.0.0.1:4100', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=15', 'shop']);
+        expect(args.cancel('127.0.0.1:5000:127.0.0.1:4100')).toContain('cancel');
+    });
+
+    test('reverse forward frames split across chunks', () => {
+        const bytes = Buffer.concat([encodeFrame(1, 7), encodeFrame(2, 7, Buffer.from('hello')), encodeFrame(3, 7)]);
+        const reader = new FrameReader();
+        const frames = [...reader.push(bytes.subarray(0, 5)), ...reader.push(bytes.subarray(5, 20)), ...reader.push(bytes.subarray(20))];
+        expect(frames.map(f => [f.type, f.id, f.payload.toString()])).toEqual([[1, 7, ''], [2, 7, 'hello'], [3, 7, '']]);
+    });
+
+    test('a reverse forward over the agent\'s stdio carries connections made there to a port here, and keeps its port', async () => {
+        // the agent runs here: `reverse` is how dev containers and WSL reach a port of Desktop's machine
+        const transport = new LocalTransport();
+        transport.agent = { node: process.execPath, agent: join(import.meta.dirname, '../out/remote/agent.js') };
+        const { createServer: createHttp, request } = await import('node:http');
+        const server = createHttp((req, res) => {
+            let body = '';
+            req.on('data', chunk => body += chunk);
+            req.on('end', () => res.end(`${req.method} ${req.url} ${req.headers.host} ${body}`));
+        });
+        await new Promise<void>(done => server.listen(0, '127.0.0.1', done));
+        const local = (server.address() as { port: number }).port;
+        const call = (port: number, body: string) => new Promise<string>((resolve, reject) => {
+            const req = request({ host: '127.0.0.1', port, method: 'POST', path: '/hooks/Stop' }, res => {
+                let text = '';
+                res.on('data', chunk => text += chunk);
+                res.on('end', () => resolve(text));
+            });
+            req.on('error', reject);
+            req.end(body);
+        });
+        const forward = await transport.reverse(local);
+        expect(forward.port).not.toBe(local);
+        const answers = await Promise.all([call(forward.port, 'one'), call(forward.port, 'x'.repeat(200000))]);
+        expect(answers[0]).toBe(`POST /hooks/Stop 127.0.0.1:${forward.port} one`);
+        expect(answers[1]).toHaveLength(`POST /hooks/Stop 127.0.0.1:${forward.port} `.length + 200000);
+        let ended = false;
+        forward.onEnd(() => ended = true);
+        await forward.close();
+        // a new forward asks for the same port there again
+        const again = await transport.reverse(local, forward.port);
+        expect(again.port).toBe(forward.port);
+        expect(await call(again.port, 'two')).toContain('two');
+        await again.close();
+        expect(ended).toBe(false);
         server.close();
     });
 

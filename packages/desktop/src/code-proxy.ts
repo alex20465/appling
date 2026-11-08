@@ -54,7 +54,8 @@ export class CodeProxy {
     readonly secret: string;
     private readonly targets = new Map<string, CodeTarget>();
     private server?: Server;
-    private port = 0;
+    /** The port it listens on (0 before `listen`). */
+    port = 0;
     /** Upgraded connections, which the server no longer tracks. */
     private readonly upgraded = new Set<Duplex>();
 

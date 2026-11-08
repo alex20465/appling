@@ -33,3 +33,11 @@ export function vscodeArgs(repo: string, file?: { path: string, line?: number, c
     const at = file.line ? `:${file.line}${file.column ? `:${file.column}` : ''}` : '';
     return [repo, '--goto', `${file.path}${at}`];
 }
+
+/**
+ * The `code` arguments that open a remote repo through VS Code's own remote extensions (Remote - SSH, Dev Containers,
+ * WSL): the folder's `vscode-remote://` URI, and a file there by its URI (VS Code takes no line for a URI).
+ */
+export function vscodeRemoteArgs(folder: string, file?: string): string[] {
+    return ['--folder-uri', folder, ...file ? ['--file-uri', file] : []];
+}

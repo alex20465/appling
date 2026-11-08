@@ -74,7 +74,7 @@ The pty host, the background process that owns the terminals, keeps watching the
 
 Clicking it (or **Open**) starts Appling at that session: its repo, its tab, the terminal panel open. A reply is typed into the session followed by Enter. Each wait notifies once; typing into the session clears it.
 
-For a remote repo the pty host on the other machine shows nothing there. While Appling is connected to the repo, it shows the notification on your machine instead; a click shows the repo, and a reply goes to the remote session.
+For a remote repo the pty host on the other machine shows nothing there. While Appling is connected to the repo, it shows the notification on your machine instead; a click opens the repo's terminal panel at that terminal, and a reply goes to the remote session.
 
 To see or stop sessions without the app, use the `appling-pty-host` command (from a clone of the repository, `node packages/pty-host/out/main.js`):
 
@@ -120,8 +120,7 @@ Add your own presets, or change the built in ones, in `settings.json` of the app
 
 `wiring` is `claude`, `codex`, `gemini`, `opencode` or `env` (the default): with `env` the agent gets `APPLING_MCP_URL`, `APPLING_MCP_TOKEN` and `APPLING_HOOK_URL`, the arguments may use `{mcpUrl}`, `{token}` and `{hookUrl}`, and any OSC 9 or OSC 777 notification marks it as waiting. `answers` sets the keys of `allow`, `deny`, `option` (`{n}` for the number) and `submit`.
 
-> [!NOTE]
-> Agent sessions run in local repos for now. An agent in a remote repo runs on that machine, which cannot reach the app's local MCP endpoint yet.
+In a remote repo the agent runs on that machine, in the repo's folder there, and the command must be installed there. Appling makes its local MCP and hook endpoint reachable on that machine's `127.0.0.1` (over the ssh connection, or through the Appling server for dev containers and WSL) and writes the session's configuration files and token into `~/.appling-server/agent-sessions/<session>` there, readable only by you. Command hooks there run with the Node binary of the Appling server. After a reconnect the endpoint comes back on the same port there when it is free; when it moved, the session's files get the new port, which agents that read them again (Claude Code's hooks) follow. The machine's own Gemini CLI system settings are not merged into a remote session's.
 
 ## Remote repos
 
@@ -143,9 +142,9 @@ The paths work on the command line too:
 - **Dev containers** start with the [devcontainer CLI](https://github.com/devcontainers/cli) when it is installed, so features and lifecycle commands run as in VS Code. Without it, Desktop runs the container itself with `docker`, from the `image` or `build.dockerfile` of devcontainer.json, mounts the folder at `workspaceFolder` (`/workspaces/<folder>` by default) and reuses the folder's container on the next start, also one that VS Code created. Docker Compose configurations need the CLI.
 - **WSL** runs through `wsl.exe -d <distribution>`.
 
-The first connection to a machine installs the Appling server into `~/.appling-server` there: the IDE server, the pty host and a Node binary for that machine, uploaded over the connection, so the machine needs no internet access. The code view adds Code OSS on first use; for remote repos it does not follow the canvas selection yet. Each Desktop build installs once per machine. The other machine must run Linux (glibc based, not Alpine) or macOS, on x64 or arm64. Terminals need node-pty for its platform; the Linux build of Desktop brings it for Linux x64.
+The first connection to a machine installs the Appling server into `~/.appling-server` there: the IDE server, the pty host and a Node binary for that machine, uploaded over the connection, so the machine needs no internet access. The code view adds Code OSS on first use; it follows the canvas selection as for a local repo (its Appling extension reaches Desktop through a forward on that machine), shows the implementation marks and code links with that machine's paths, and **Open in VS Code** opens the repo through VS Code's own remote extensions. Each Desktop build installs once per machine. The other machine must run Linux (glibc based, not Alpine) or macOS, on x64 or arm64. Terminals need node-pty for its platform; the Linux build of Desktop brings it for Linux x64.
 
-The rail shows each remote repo's connection: a dashed amber border while it connects or reconnects, a dashed red one when it failed (the repo shows the reason with Retry), a small grey square when it is connected. The tooltip names the machine and, while reconnecting, the attempt. When the network drops, Desktop reconnects with growing pauses (1 s, doubling up to 30 s, ten attempts) and keeps the repo's view at the same address; the terminals keep running on the other machine and reattach. The branch and the changes in the rail come from `git status` on the other machine every 10 seconds.
+The rail shows each remote repo's connection: a dashed amber border while it connects or reconnects, a dashed red one when it failed (the repo shows the reason with Retry), a small grey square when it is connected. The tooltip names the machine and, while reconnecting, the attempt. When the network drops, Desktop reconnects with growing pauses (1 s, doubling up to 30 s, ten attempts) and keeps the repo's view at the same address; the terminals and task terminals keep running on the other machine and reattach after the reconnect, with their output from meanwhile. The branch and the changes in the rail come from `git status` on the other machine every 10 seconds.
 
 In a `.code-workspace` file remote repos are written as VS Code writes them (`"uri": "vscode-remote://ssh-remote+build/srv/shop"`), so VS Code opens the same workspace.
 
