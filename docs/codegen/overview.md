@@ -101,7 +101,7 @@ $ appling generate --plan examples
 
 Each line names the node that produced the step; `(project)` marks setup steps that run once. The table counts the registry entries per element kind by status and the registry tasks they leave, so you see where the extension still leaves work. The last line counts the registry entries by status.
 
-Each extension in this repository has a coverage test over a fixture that uses every construct of the language (`packages/lang/test/fixtures/constructs`). It compares this table with the committed `test/coverage.json` of the extension and fails when a kind generates less or leaves more tasks; after a gain, `pnpm vitest run -u` raises the baseline.
+Each extension in this repository has a coverage test over a fixture that uses every construct of the language (`packages/lang/test/fixtures/constructs`). It compares this table with the committed `test/coverage.json` of the extension and fails when a kind generates less or leaves more tasks; after a gain, `pnpm vitest run -u` raises the baseline. CI reports the coverage of every extension over that fixture and the examples on each pull request, with the change against `main` (see [Development setup](../contributing/development.md#continuous-integration)).
 
 ## Generate
 

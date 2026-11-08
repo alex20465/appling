@@ -1,5 +1,7 @@
 ![Appling](assets/readme_banner.png)
 
+[![CI](https://github.com/alex20465/appling/actions/workflows/ci.yml/badge.svg)](https://github.com/alex20465/appling/actions/workflows/ci.yml) [![codegen coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falex20465%2Fappling%2Fbadges%2Fcodegen-coverage.json)](docs/contributing/development.md#codegen-coverage-report)
+
 Appling is a declarative language that describes a business or web application as one validated model. The model covers what exists, what can happen, how capabilities are organized and exposed, and how people interact with them.
 
 The text is the canonical source of truth. Parsed and linked, it becomes a semantic graph that tools validate, visualize, edit with AI and generate draft Django or Ash projects from.

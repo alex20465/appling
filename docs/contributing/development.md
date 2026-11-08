@@ -37,6 +37,39 @@ node packages/desktop/out/bin.js examples                           # Appling De
 
 The language tests import `src/` directly and only need `langium generate`. Every other package's tests import `@appling/*` through the packages' `out/` exports, so rebuild an upstream package before testing a downstream one.
 
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request and every push to `main`. Each step is a plain command, so you can run it the same way locally:
+
+| Job | Runs |
+|---|---|
+| Build and test | `pnpm install --frozen-lockfile`, `pnpm build` (the landing site validates the docs examples), `pnpm test`, `node packages/cli/out/main.js check examples`, then `fmt examples` followed by `git diff --exit-code` |
+| Codegen coverage | `node scripts/ci/codegen-coverage.mjs` on the pull request and on its base, written to the job summary |
+| Coverage comment | Posts the report as one comment on the pull request and updates it on every push. Pull requests from forks get no write token, so they only get the job summary |
+| Coverage badge | On `main` only: pushes the badge JSON to the `badges` branch, which the README shows through shields.io |
+
+No test starts Electron, and pnpm does not run Electron's download script, so the runner never fetches the Electron binary. `packages/desktop/test/remote-integration.test.ts` runs against a real sshd and a docker container and skips each one without it. The Ubuntu runner has docker, and the job installs `openssh-server` when sshd is missing, so CI runs both remote transports.
+
+### Codegen coverage report
+
+```sh
+pnpm --filter "@appling/codegen-*..." build
+node scripts/ci/codegen-coverage.mjs                      # Markdown on stdout
+node scripts/ci/codegen-coverage.mjs --json coverage.json --markdown coverage.md --badge badge.json
+node scripts/ci/codegen-coverage.mjs --root ../appling-main --json base.json --markdown /dev/null
+node scripts/ci/codegen-coverage.mjs --base base.json     # with the change against base.json
+```
+
+The script plans every extension in `packages/codegen-*` over two inputs: the fixture that uses every construct (`packages/lang/test/fixtures/constructs`, the one the `coverage.test.ts` files use) and `examples/`. Per extension it reports the share of elements that are `generated`, `partial` and `todo`, the completion and the registry tasks, then each figure per element kind. `--root` plans another checkout (its language, fixture, examples and extensions) with this script; CI measures the base branch that way.
+
+The headline figure, and the badge, is the completion over every extension and both inputs:
+
+```
+completion = (generated + partial / 2) / (generated + partial + todo)
+```
+
+A `partial` element has code and open registry tasks, so it counts as half. With `--base`, each figure shows its change: `▲` for a gain, `▼` for a drop, in percentage points for shares. Fewer registry tasks is a gain, so `▲ -2` means two tasks fewer. `appling generate --coverage` prints the same report for the targets of a project (see [the CLI](../tools/cli.md#coverage)).
+
 ## Conventions
 
 - Every validation rule has a negative fixture in `packages/lang/test/validation.test.ts`. Add one with each new rule.

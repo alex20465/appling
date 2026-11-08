@@ -6,3 +6,4 @@ export * from './migrate.js';
 export * from './sync.js';
 export * from './written.js';
 export * from './generate.js';
+export * from './report.js';

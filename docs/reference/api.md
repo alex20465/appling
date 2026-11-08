@@ -159,6 +159,12 @@ Planning and running:
 | `describe(step)` | A one line description of a step, as `--plan` prints it |
 | `coverage(entries)` | The registry entries per node kind: generated, partial, todo and the number of tasks, plus a total (`Coverage`) |
 | `coverageTable(coverage)` | That coverage as the Markdown table `--plan` prints, the total with the generated share |
+| `coverageReport(plans)` | The coverage of several extensions over several inputs (`PlannedInput[]`): per extension the total per input, the rows per kind, the total and its completion, plus an overall total (`CoverageReport`) |
+| `completion(row)` | The completion of a row between 0 and 1: `(generated + partial / 2) / (generated + partial + todo)`, 1 without elements |
+| `coverageMarkdown(report, base?, options?)` | The report as Markdown, as `generate --coverage` prints it; with a `base` report every figure shows its change and the changed kinds are listed. Options: `title`, `note`, `marker` (the first line `COVERAGE_MARKER`, default true) |
+| `formatChange(now, before, options?)` | The change of one figure: `▲ +1.5 pp` for a gain, `▼ -2` for a drop, empty without change, `new` without a value before; `share` prints percentage points, `lowerIsBetter` makes a drop the gain (tasks) |
+| `coverageBadge(report)` | A shields.io endpoint badge with the overall completion |
+| `COVERAGE_MARKER` | The HTML comment that marks the sticky coverage comment of a pull request |
 | `mapContext(graph, name, options)` | The `MapContext` passed to extensions |
 | `checkPrerequisites(prerequisites)` | One message per missing tool |
 | `runPlan(plan, out, log, written?)` | Runs the steps into `out` and writes the registry; with `written`, collects what each step wrote |

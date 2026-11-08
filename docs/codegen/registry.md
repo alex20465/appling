@@ -116,6 +116,8 @@ Because every graph node has an entry, the registry doubles as a coverage report
 70 element(s): 45 generated, 15 partial, 10 todo
 ```
 
+`appling generate --coverage` prints the share of generated, partial and todo elements per extension and per element kind, with the completion `(generated + partial / 2) / elements`; see [the CLI](../tools/cli.md#coverage).
+
 To list the open work yourself, filter the entries, for example with `jq`:
 
 ```sh
