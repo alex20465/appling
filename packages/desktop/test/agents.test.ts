@@ -411,4 +411,62 @@ describe.skipIf(process.platform === 'win32')('agent sessions in a pty host', { 
         agents.dispose();
         service.dispose();
     });
+
+    test('two sessions in one repo run side by side in their own tabs; the user renames a running and an exited one', async () => {
+        const { repo, data, terminals, sessions } = setup();
+        const store = new MemorySessionStore();
+        const ide = await startIdeProcess(repo, { sessions: store });
+        ides.push(ide);
+        const service = terminals();
+        let output = '';
+        service.on('data', (_, chunk) => output += chunk);
+        const agents = sessions(store, service, ide);
+        await agents.start();
+        const first = await agents.create(repo, 'Fake');
+        const second = await agents.create(repo, 'Fake');
+        expect(first.id).not.toBe(second.id);
+        expect(first.terminal).not.toBe(second.terminal);
+        // each in its own tab of the repo's panel
+        const tabs = service.registry.get(repo).tabs;
+        expect(tabs.map(t => t.panes)).toEqual([[first.terminal], [second.terminal]]);
+        await until(() => agents.get(first.id)?.status === 'needs-input' && agents.get(second.id)?.status === 'needs-input', () => output);
+        // each reached MCP as its own session
+        expect((await store.get(first.id))?.label).toBe('Fake work');
+        expect((await store.get(second.id))?.label).toBe('Fake work');
+        expect(agents.rail(repo).map(r => r.id).sort()).toEqual([first.id, second.id].sort());
+
+        // answering one leaves the other waiting
+        service.write(first.terminal, '\r');
+        await until(() => agents.get(first.id)?.note === 'after the answer', () => output);
+        expect(agents.get(second.id)?.status).toBe('needs-input');
+
+        // a running session renamed: its MCP label, its tab and the rail follow
+        await agents.rename(first.id, 'Checkout fix');
+        expect((await store.get(first.id))?.label).toBe('Checkout fix');
+        await until(() => agents.get(first.id)?.label === 'Checkout fix');
+        expect(agents.tabs(repo)[first.terminal]).toMatchObject({ session: first.id, title: 'Checkout fix' });
+        expect(agents.rail(repo).find(r => r.id === first.id)).toMatchObject({ title: 'Checkout fix' });
+        expect(agents.tabs(repo)[second.terminal]).toMatchObject({ session: second.id, title: 'Fake work' });
+
+        // the second one exits; renamed then, the label stays on its gray tab and in the saved sessions
+        service.write(second.terminal, '\r');
+        await until(() => agents.get(second.id)?.note === 'after the answer', () => output);
+        service.write(second.terminal, 'bye\r');
+        await until(() => agents.get(second.id)?.status === 'exited', () => output);
+        expect(await store.get(second.id)).toBeUndefined();
+        await agents.rename(second.id, 'Old attempt');
+        expect(agents.get(second.id)).toMatchObject({ status: 'exited', label: 'Old attempt' });
+        expect(agents.tabs(repo)[second.terminal]).toMatchObject({ title: 'Old attempt', status: 'exited' });
+        await until(() => JSON.parse(readFileSync(join(data, 'agents', 'sessions.json'), 'utf8')).sessions.find((r: { id: string }) => r.id === second.id)?.label === 'Old attempt');
+        // an empty name gives the session its agent's name back
+        await agents.rename(second.id, '  ');
+        expect(agents.get(second.id)?.label).toBeUndefined();
+        expect(agents.get(first.id)?.status).not.toBe('exited');
+
+        await agents.close(first.id);
+        await agents.close(second.id);
+        expect(agents.list()).toEqual([]);
+        agents.dispose();
+        service.dispose();
+    });
 });
