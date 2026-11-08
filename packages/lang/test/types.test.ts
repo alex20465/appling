@@ -184,3 +184,24 @@ test('a role holds a condition on the actor, and an actor binds to its entity', 
       }
     }` }))).toEqual([]);
 });
+
+const ACTORS = `
+  role Buyer
+  role Seller
+  entity Customer { name: String }
+  entity Vendor { name: String }
+  actor human Shopper roles Buyer { account: Customer }
+  actor human Merchant roles Seller { account: Vendor }`;
+
+test('actor.f declared with different types has the union of them', async () => {
+    expect(errors(await build({ 'shop.appling': `module shop { ${ACTORS}
+      entity Offer {
+        vendor: Vendor
+        customer: Customer
+        label: String
+        policy read { actor.is(Seller) && vendor == actor.account }
+        policy update { actor.is(Buyer) && customer == actor.account }
+        policy create { actor.account.name == label }
+      }
+    }` }))).toEqual([]);
+});

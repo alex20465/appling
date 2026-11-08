@@ -44,7 +44,30 @@ actor service PaymentWebhook roles Integration
 | `roles A, B` | The roles this actor carries; references to `role` declarations, also from other modules (`roles crm.Clerk`) |
 | `{ fields }` | Typed fields, written like [entity fields](domain.md#fields), that expressions read as `actor.<field>` |
 
-In an expression, `actor.account` is valid when at least one actor in the workspace declares `account`, itself or through its `is` entity. When some actors do not declare it, the value is optional for them, and `actor.account` has an optional type. Actor fields are collected from the whole workspace, so they need no export.
+In an expression, `actor.account` is valid when at least one actor in the workspace declares `account`, itself or through its `is` entity. When some actors do not declare it, the value is optional for them, and `actor.account` has an optional type. When actors declare `account` with different types, `actor.account` has the union of them, shown as `Customer | Vendor`: it compares with and is assignable to anything one of the types fits, its fields are those of any of the types, and graph edges and renames follow every declaration. Actor fields are collected from the whole workspace, so they need no export.
+
+```appling check
+module shop {
+  role Buyer
+  role Seller
+  entity Customer {
+    name: String
+  }
+  entity Vendor {
+    name: String
+  }
+  actor human Shopper roles Buyer {
+    account: Customer
+  }
+  actor human Merchant roles Seller {
+    account: Vendor
+  }
+  entity Offer {
+    vendor: Vendor
+    policy read { actor.is(Seller) && vendor == actor.account }
+  }
+}
+```
 
 ## Tenants
 

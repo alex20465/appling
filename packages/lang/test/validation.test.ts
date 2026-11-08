@@ -101,3 +101,22 @@ test('a role condition reads only actor, tenant and now', async () => {
     expect(await check(`module m { ${ORDER} role Clerk { status == open } }`))
         .toContain('A role condition reads only actor, tenant and now, not "status".');
 });
+
+test('a union of actor field types rejects what none of them fits', async () => {
+    const actors = `
+      role Buyer
+      role Seller
+      entity Customer { name: String }
+      entity Vendor { name: String }
+      actor human Shopper roles Buyer { account: Customer }
+      actor human Merchant roles Seller { account: Vendor }`;
+    const result = await check(`module shop { ${actors}
+      entity Offer {
+        label: String
+        policy read { label == actor.account }
+        policy update { actor.account.missing == label }
+      }
+    }`);
+    expect(result).toContain('Operator "==" does not apply to String and Customer | Vendor.');
+    expect(result).toContain('Customer | Vendor has no field "missing".');
+});

@@ -81,7 +81,7 @@ actor human Shopper roles Customer {
 }
 ```
 
-`actor.account` is valid when at least one actor declares `account`, itself or through its entity; it is optional when some actors do not.
+`actor.account` is valid when at least one actor declares `account`, itself or through its entity; it is optional when some actors do not. When actors declare it with different types, it has their union (`Customer | Vendor`), which fits wherever one of the types does.
 
 ### Rules
 

@@ -126,3 +126,11 @@ test('does: set inserts, replaces and removes it, rename follows its @names', as
     expect((await run(base, { op: 'rename', target: 'shop.Account', name: 'Customer' }))[shop]).toContain('does "Closes the @Customer by @Customer.email"');
     expect((await run(base, { op: 'rename', target: 'shop.Account.email', name: 'mail' }))[shop]).toContain('does "Closes the @Account by @Account.mail"');
 });
+
+test('rename an actor field follows actor.f even when another actor declares it with another type', async () => {
+    const shop = uriOf('shop.appling');
+    const source = { [shop]: 'module shop {\n  role Buyer\n  role Seller\n  entity Customer {\n    name: String\n  }\n  entity Vendor {\n    name: String\n  }\n  actor human Shopper roles Buyer {\n    account: Customer\n  }\n  actor human Merchant roles Seller {\n    account: Vendor\n  }\n  entity Offer {\n    vendor: Vendor\n    policy read { actor.is(Seller) && vendor == actor.account }\n  }\n}\n' };
+    const result = await applyEdit(source, { op: 'rename', target: 'shop.Merchant.account', name: 'vendor_account' });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.sources[shop]).toContain('vendor == actor.vendor_account');
+});
