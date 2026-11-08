@@ -70,6 +70,8 @@ The app of a module is its qualified name with dots replaced by underscores: the
 | `query` | a function in `<app>/queries.py` returning a queryset with filter and ordering, plus a `<QUERY>_PAGE_SIZE` constant for `paginate` |
 | `projection` | a REST framework `ModelSerializer` in `<app>/serializers.py`; derived fields and computed fields that follow references, such as `customer.name`, become read only fields |
 | `external` | a `typing.Protocol` in `<app>/externals.py` |
+| `setting`, `secret` of an external | a constant in `config/settings.py` read from the environment and a line in `.env.example` (see [settings and secrets](#settings-and-secrets)) |
+| `interface webhook` | tasks: register each endpoint at the vendor, receive it and verify its signature |
 | `usecase` | a function in `<app>/usecases.py` that calls its steps in order |
 | `interface rest` | views in `<app>/api.py` and routes in `<app>/api_urls.py`, included under `api/` in `config/urls.py`, so `GET "/orders"` answers at `/api/orders` |
 | `page` | a view in `<app>/pages.py` and a route in `<app>/urls.py`, included at the site root (see [pages](#pages)) |
@@ -155,6 +157,25 @@ Each endpoint of a REST interface becomes a view:
 | `POST`, `PUT`, `PATCH` or `DELETE` an action | an `APIView` that loads the instance by `{id}`, calls the action with the request data and `actor=request.user`, and answers `204`; declared errors and `InvalidTransition` answer `400` with `{"error": "<name>"}` |
 
 Path parameters become Django converters: `{id}` becomes `<int:id>`, others `<str:name>`. A `limit` on the interface becomes a `UserRateThrottle` on every view. An action on an entity needs `{id}` in its path; endpoints that do not fit these patterns become tasks.
+
+### Settings and secrets
+
+Each `setting` and `secret` of an external becomes a constant in `config/settings.py`, named `<EXTERNAL>_<KEY>` in upper snake case and read from the environment variable of the same name (`import os` is added once):
+
+| Type | Python |
+|---|---|
+| `Int` | `CLERK_MAX_SESSIONS = int(os.environ["CLERK_MAX_SESSIONS"]) if "CLERK_MAX_SESSIONS" in os.environ else None` |
+| `Bool` | `CLERK_TEST_MODE = os.environ.get("CLERK_TEST_MODE", "").lower() in ("1", "true", "yes")` |
+| any other | `CLERK_SECRET_KEY = os.environ.get("CLERK_SECRET_KEY")` |
+
+`.env.example` lists every key with an empty value, under a comment with its kind, its external and its `does` text:
+
+```sh
+# secret of Clerk: API keys page of the Clerk dashboard
+CLERK_SECRET_KEY=
+```
+
+The setup on the vendor's side becomes [registry](registry.md) tasks: for every endpoint of an `interface webhook ... from <External>` one to register it at the vendor and one to receive it and verify its signature, and for `auth <scheme> from <External>` one to let the vendor issue the tokens, naming the model's roles for the role claim.
 
 ### Jobs
 

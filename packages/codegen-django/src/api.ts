@@ -3,11 +3,13 @@ import type { GraphNode } from '@appling/model';
 import { pageSizeName, queryCall, queryCode } from './application.js';
 import { children, includeStep, pythonFile, routesStep, task, template } from './files.js';
 import { appOf, lastOf, snake } from './python.js';
+import { vendorTasks } from './vendors.js';
 
 const WRITES = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
 /** A REST interface becomes REST framework views in `api.py` and its routes in `api_urls.py`, mounted under `api/`. */
 export function interfaceSteps(api: GraphNode, context: MapContext): Step[] | undefined {
+    if (api.data.protocol === 'webhook') return vendorTasks(api, context);
     if (api.data.protocol !== 'rest') return undefined;
     const app = appOf(api.module);
     const name = lastOf(api.qn);
@@ -29,7 +31,7 @@ export function interfaceSteps(api: GraphNode, context: MapContext): Step[] | un
         blocks.push(view.code);
         routes.push(`    path(${JSON.stringify(djangoPath(endpoint.data.path as string))}, api.${view.name}.as_view()),`);
     }
-    if (api.data.auth) tasks.push(task(`configure ${api.data.auth} authentication for ${name} in REST_FRAMEWORK settings`));
+    if (api.data.auth) tasks.push(task(`configure ${api.data.auth} authentication for ${name} in REST_FRAMEWORK settings`), ...vendorTasks(api, context));
     if ((api.data.origins as string[] | undefined)?.length) tasks.push(task(`allow the CORS origins ${(api.data.origins as string[]).join(', ')} for ${name}, for example with django-cors-headers`));
     if (!blocks.length) return tasks;
     return [

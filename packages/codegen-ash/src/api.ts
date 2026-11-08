@@ -4,12 +4,14 @@ import { lastOf } from './elixir.js';
 import { app, children, fileOf, moduleName, pascal, patch, snake, task, typeModule } from './naming.js';
 import { hasPages } from './pages.js';
 import { addExtension, addToSection } from './resource.js';
+import { vendorTasks } from './vendors.js';
 
 /**
  * A REST interface becomes AshJsonApi routes on the domain, served by a JSON:API router that Bandit
  * starts with the application, without Phoenix.
  */
 export function interfaceSteps(api: GraphNode, context: MapContext): Step[] | undefined {
+    if (api.data.protocol === 'webhook') return vendorTasks(api, context);
     if (api.data.protocol !== 'rest') return undefined;
     const tasks: Step[] = [];
     const routes = new Map<GraphNode, string[]>();
@@ -22,7 +24,7 @@ export function interfaceSteps(api: GraphNode, context: MapContext): Step[] | un
         routes.set(route.resource, [...(routes.get(route.resource) ?? []), route.line]);
         if (route.note) tasks.push(task(route.note));
     }
-    if (api.data.auth) tasks.push(task(`authenticate ${lastOf(api.qn)} with ${api.data.auth}, for example with AshAuthentication`));
+    if (api.data.auth) tasks.push(task(`authenticate ${lastOf(api.qn)} with ${api.data.auth}, for example with AshAuthentication`), ...vendorTasks(api, context));
     if (api.data.rateLimit) tasks.push(task(`limit ${lastOf(api.qn)} to ${api.data.rateLimit} requests per ${api.data.rateUnit}`));
     if ((api.data.origins as string[] | undefined)?.length) tasks.push(task(`allow the CORS origins ${(api.data.origins as string[]).join(', ')} for ${lastOf(api.qn)}`));
     if (!routes.size) return tasks;

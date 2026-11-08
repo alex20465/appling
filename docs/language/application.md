@@ -92,6 +92,8 @@ external Clerk {
 
 The type is a primitive (`String`, `Int`, `Bool`, `Duration`, ...), optional with `?`; anything else is an error: `A secret has a primitive type, not String[].` Expressions do not read keys. An external that declares keys but that no step calls and no interface names gets a warning: `External Clerk declares settings or secrets, but nothing calls or names it.` Interfaces name an external with [`auth <scheme> from <External>`](interfaces.md#vendors) or `interface webhook <Name> from <External>`.
 
+Code generation reads every key from the environment variable `<EXTERNAL>_<KEY>` in upper snake case (`CLERK_SECRET_KEY`) and lists them with their `does` text in `.env.example` (see [Django](../codegen/django.md#settings-and-secrets) and [Ash](../codegen/ash.md#settings-and-secrets)).
+
 ## Use cases
 
 A use case is the single process concept: it orchestrates actions, queries, external operations and events into one application level operation, which may run for a long time.

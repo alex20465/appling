@@ -85,6 +85,8 @@ Modules are named `<App>.<Module>`, with nested modules as `<App>.<A>.<B>`; a ty
 | `role` | an `Ash.Policy.SimpleCheck` module `<App>.<Module>.Checks.<Role>` in `lib/<app>/<module>/checks/<role>.ex` (see [roles](#roles)) |
 | `tenant` | attribute multitenancy on the resources that belong to the tenant's entity (see [tenants](#tenants)) |
 | `event`, `external`, `usecase` | tasks: an Ash notifier, a client module or generic actions, a Reactor or generic action |
+| `setting`, `secret` of an external | a `config` line in `config/runtime.exs` read from the environment and a line in `.env.example` (see [settings and secrets](#settings-and-secrets)) |
+| `interface webhook` | tasks: register each endpoint at the vendor, receive it and verify its signature |
 
 ### Types
 
@@ -209,6 +211,18 @@ A REST interface becomes [AshJsonApi](https://hexdocs.pm/ash_json_api) routes. W
 - Without pages, `lib/<app>/api_router.ex` defines `<App>.ApiRouter` with `use AshJsonApi.Router` over the domains and an OpenAPI document at `/open_api`, and the application starts `{Bandit, plug: <App>.ApiRouter, port: 4000}`.
 
 Path parameters such as `{id}` become `:id`. Authentication, rate limits and CORS are tasks.
+
+### Settings and secrets
+
+Each `setting` and `secret` of an external becomes a `config` line in `config/runtime.exs` under the external's module, read from the environment variable `<EXTERNAL>_<KEY>` in upper snake case, so the code reads it with `Application.get_env(:shop, Shop.Sales.Clerk)[:secret_key]`:
+
+```elixir
+config :shop, Shop.Sales.Clerk, max_sessions: System.get_env("CLERK_MAX_SESSIONS") |> then(&(&1 && String.to_integer(&1)))
+config :shop, Shop.Sales.Clerk, test_mode: System.get_env("CLERK_TEST_MODE") in ~w(1 true yes)
+config :shop, Shop.Sales.Clerk, secret_key: System.get_env("CLERK_SECRET_KEY")
+```
+
+`.env.example` lists every key with an empty value, under a comment with its kind, its external and its `does` text. The setup on the vendor's side becomes [registry](registry.md) tasks: for every endpoint of an `interface webhook ... from <External>` one to register it at the vendor and one to receive it and verify its signature, and for `auth <scheme> from <External>` one to let the vendor issue the tokens, naming the model's roles for the role claim.
 
 ### Tests
 

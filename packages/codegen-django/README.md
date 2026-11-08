@@ -33,6 +33,7 @@ Requires `uv` on the PATH. Python and Django (6.1) are installed by uv into the 
 | `query` | a function in `<app>/queries.py` returning a queryset with filter and ordering, and the page size |
 | `projection` | a REST framework `ModelSerializer` in `<app>/serializers.py`; computed fields that follow references become `source` paths |
 | `external` | a `typing.Protocol` in `<app>/externals.py` that use cases receive as a parameter |
+| `setting`, `secret` | `<EXTERNAL>_<KEY>` in `config/settings.py`, read from the environment, and a line in `.env.example` |
 | `usecase` | a function in `<app>/usecases.py` calling its steps in order, with `try`/`except` for error handlers |
 | `interface rest` | REST framework views in `<app>/api.py` and routes in `<app>/api_urls.py` under `api/`: list views for queries with projection, picks and pagination, `APIView`s for actions; `limit` becomes a throttle |
 | `page` | a server rendered view with its list, detail and form components, posting row actions and forms to a runner view per action |
@@ -50,7 +51,7 @@ Models with projections or interfaces also get Django REST framework. The projec
 
 `appling generate --migrate` continues that history: renamed, retyped and removed fields become `RenameField`, `AlterField` and `RemoveField`, renamed and removed entities `RenameModel` and `DeleteModel`, a renamed enum value an `AlterField` with a data migration of the stored values. `models.py` and `enums.py` change with them, so `makemigrations` finds nothing left to guess.
 
-What cannot be translated becomes a registry task: invariants over derived fields or other entities, derived fields and defaults that use `actor` or other context, policy and role conditions without a Python translation, field policies on writes, guards and effects that cannot be expressed in Python, the client of an external system, scheduling of jobs, use cases from their first `await` on, authentication and CORS of interfaces.
+What cannot be translated becomes a registry task: invariants over derived fields or other entities, derived fields and defaults that use `actor` or other context, policy and role conditions without a Python translation, field policies on writes, guards and effects that cannot be expressed in Python, the client of an external system, scheduling of jobs, use cases from their first `await` on, authentication and CORS of interfaces, webhook endpoints and the vendor side setup (registering webhooks, issuing tokens with a role claim).
 
 ## License
 
