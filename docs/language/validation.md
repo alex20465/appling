@@ -129,6 +129,24 @@ interface rest Api {
 }
 ```
 
+## Externals and vendors
+
+| Rule | Severity | Message |
+|---|---|---|
+| A `setting` or `secret` has a primitive type, not a list | error | `A <setting or secret> has a primitive type, not <Type>.` |
+| A `webhook` interface names its external with `from` | error | `A webhook interface names its vendor: "interface webhook <Name> from <External>".` |
+| A `webhook` interface has endpoints | warning | `Webhook interface <Name> has no endpoints.` |
+| An external with settings or secrets is called by a step or named by an interface | warning | `External <Name> declares settings or secrets, but nothing calls or names it.` |
+
+```appling
+external Mail {
+  secret key: String[] // A secret has a primitive type, not String[].
+}
+interface webhook Events { // A webhook interface names its vendor: "interface webhook Events from <External>".
+  POST "/hooks" -> Sync
+}
+```
+
 ## Migrations
 
 | Rule | Message |

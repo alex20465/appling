@@ -164,6 +164,8 @@ module shop core {
     op Charge (amount: Money, reference: String) returns String errors Declined, Timeout
     op Ping () does "Checks that @Payments answers"
     op Refund (amount: Money)
+    setting region: String does "The region of the merchant account"
+    secret api_key: String
   }
 
   usecase Checkout (order: Order) core {
@@ -181,7 +183,7 @@ module shop core {
 
   // L4 Interfaces
   interface rest PublicApi core {
-    auth bearer
+    auth bearer from Payments
     limit 100 per minute
     cors "https://shop.example", "https://admin.example"
     GET "/orders" -> OpenOrders as OrderView { reference, status, total }
@@ -196,6 +198,10 @@ module shop core {
 
   interface rest BatchApi peripheral {
     limit 1000 per hour
+  }
+
+  interface webhook PaymentEvents from Payments {
+    POST "/webhooks/payments" -> PlaceOrder
   }
 
   // L5 Experience

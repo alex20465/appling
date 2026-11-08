@@ -23,7 +23,7 @@ The clauses come in this order, each optional:
 
 | Clause | Meaning | Example |
 |---|---|---|
-| `auth <scheme>` | The authentication scheme, any identifier | `auth bearer`, `auth apikey` |
+| `auth <scheme>` | The authentication scheme, any identifier, optionally with the [external](application.md#settings-and-secrets) that provides it | `auth bearer`, `auth apikey`, `auth bearer from Clerk` |
 | `limit <n> per <unit>` | A rate limit; the unit is `second`, `minute` or `hour` | `limit 100 per minute` |
 | `cors "<origin>", ...` | Allowed CORS origins | `cors "https://a.example", "https://b.example"` |
 | Endpoints | One per line | `GET "/orders" -> OpenOrders as OrderSummary` |
@@ -54,9 +54,44 @@ An endpoint that targets a query must name a projection: `An endpoint exposes qu
 
 Picks resolve against the fields of the projection after `as`, including its computed fields.
 
+## Vendors
+
+An interface can name the [external](application.md#settings-and-secrets) a vendor stands behind, in two places:
+
+| Where | Meaning | Example |
+|---|---|---|
+| `auth <scheme> from <External>` | The vendor signs the users in, such as an identity provider | `auth bearer from Clerk` |
+| `interface <protocol> <Name> from <External>` | The vendor calls these endpoints, such as webhooks | `interface webhook ClerkEvents from Clerk` |
+
+A `webhook` interface must name its vendor: `A webhook interface names its vendor: "interface webhook ClerkEvents from <External>".` A webhook interface without endpoints gets a warning: `Webhook interface ClerkEvents has no endpoints.` For other protocols `from` is optional.
+
+```appling check
+module accounts {
+  entity Account {
+    email: String
+  }
+
+  action SyncAccount on Account {
+  }
+
+  external Clerk {
+    secret secret_key: String does "API keys page of the Clerk dashboard"
+    secret webhook_secret: String
+  }
+
+  interface rest Api {
+    auth bearer from Clerk
+  }
+
+  interface webhook ClerkEvents from Clerk {
+    POST "/webhooks/clerk" -> SyncAccount
+  }
+}
+```
+
 ### What an interface may reference
 
-Queries, projections and use cases from L3, actions from L2, enums and value types from L1, and cross cutting declarations. Any other reference is a layer error; in particular an interface never references a page. See [reference rules](overview.md#reference-rules).
+Queries, projections, externals and use cases from L3, actions from L2, enums and value types from L1, and cross cutting declarations. Any other reference is a layer error; in particular an interface never references a page. See [reference rules](overview.md#reference-rules).
 
 ## Complete example
 

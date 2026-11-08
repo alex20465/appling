@@ -29,7 +29,7 @@
   },
   {
     "kind": "Endpoint",
-    "generated": 4,
+    "generated": 5,
     "partial": 0,
     "todo": 0,
     "tasks": 0
@@ -77,6 +77,13 @@
     "tasks": 1
   },
   {
+    "kind": "ExternalKey",
+    "generated": 0,
+    "partial": 0,
+    "todo": 2,
+    "tasks": 3
+  },
+  {
     "kind": "ExternalOperation",
     "generated": 2,
     "partial": 1,
@@ -101,8 +108,8 @@
     "kind": "Interface",
     "generated": 0,
     "partial": 0,
-    "todo": 3,
-    "tasks": 3
+    "todo": 4,
+    "tasks": 4
   },
   {
     "kind": "Invariant",
@@ -239,9 +246,9 @@
   },
   {
     "kind": "total",
-    "generated": 98,
+    "generated": 99,
     "partial": 21,
-    "todo": 17,
-    "tasks": 40
+    "todo": 20,
+    "tasks": 44
   }
 ]
