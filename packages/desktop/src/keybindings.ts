@@ -27,7 +27,16 @@ export const COMMANDS = {
     devTools: 'Toggle Developer Tools',
     keybindings: 'Keyboard Shortcuts',
     checkForUpdates: 'Check for Updates…',
-    quit: 'Quit'
+    quit: 'Quit',
+    newTerminal: 'New Terminal',
+    splitTerminal: 'Split Terminal',
+    toggleTerminal: 'Toggle Terminal Panel',
+    nextTerminal: 'Next Terminal Tab',
+    previousTerminal: 'Previous Terminal Tab',
+    findInTerminal: 'Find in Terminal…',
+    clearTerminal: 'Clear Terminal',
+    killTerminal: 'Kill Terminal',
+    terminalSettings: 'Terminal Settings'
 } as Record<string, string>;
 
 export type Keybindings = Record<string, string | null>;
@@ -59,7 +68,18 @@ export const DEFAULT_KEYBINDINGS: Keybindings = {
     devTools: 'CmdOrCtrl+Alt+I',
     keybindings: 'CmdOrCtrl+K',
     checkForUpdates: null,
-    quit: 'CmdOrCtrl+Q'
+    quit: 'CmdOrCtrl+Q',
+    // the terminal commands with a shortcut also work while a terminal has the focus (terminal/keys.ts)
+    newTerminal: 'Ctrl+Shift+`',
+    splitTerminal: 'CmdOrCtrl+Shift+5',
+    toggleTerminal: 'Ctrl+`',
+    nextTerminal: 'CmdOrCtrl+Shift+]',
+    previousTerminal: 'CmdOrCtrl+Shift+[',
+    // the terminal page handles Find (CmdOrCtrl+Shift+F, Cmd+F on macOS) itself
+    findInTerminal: null,
+    clearTerminal: null,
+    killTerminal: null,
+    terminalSettings: null
 };
 
 const KEY = /^(?:(?:Command|Cmd|Control|Ctrl|CommandOrControl|CmdOrCtrl|Alt|Option|AltGr|Shift|Super|Meta)\+)*(?:[0-9A-Z]|F(?:[1-9]|1[0-9]|2[0-4])|[-=;',./\\`[\]]|Plus|Space|Tab|Capslock|Numlock|Scrolllock|Backspace|Delete|Insert|Return|Enter|Up|Down|Left|Right|Home|End|PageUp|PageDown|Escape|Esc|PrintScreen|num[0-9]|numdec|numadd|numsub|nummult|numdiv)$/i;

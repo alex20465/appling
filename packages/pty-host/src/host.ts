@@ -178,8 +178,15 @@ export class PtyHost {
         switch (request.type) {
             case 'hello':
                 return respond(client, request.id, 'Already authenticated.');
-            case 'spawn':
-                return respond(client, request.id, undefined, this.spawn(request.options));
+            case 'spawn': {
+                const info = this.spawn(request.options);
+                if (request.options.attach) {
+                    // queued from the first byte on; the client's `attach` takes the queue over
+                    client.attached.set(info.id, []);
+                    this.sessions.get(info.id)!.clients.add(client);
+                }
+                return respond(client, request.id, undefined, info);
+            }
             case 'list':
                 return respond(client, request.id, undefined, [...this.sessions.values()]
                     .filter(s => request.group === undefined || s.info.group === request.group)
@@ -189,7 +196,8 @@ export class PtyHost {
                 if (request.cols && request.rows) this.resize(session, request.cols, request.rows);
                 // The snapshot is taken once the headless terminal has parsed everything written so far; output that
                 // arrives in between is queued for this client and sent right after the snapshot.
-                const queue: string[] = [];
+                // a terminal this client spawned with `attach` has queued its output since the first byte
+                const queue: string[] = client.attached.get(session.info.id) ?? [];
                 client.attached.set(session.info.id, queue);
                 session.clients.add(client);
                 session.screen.write('', () => {

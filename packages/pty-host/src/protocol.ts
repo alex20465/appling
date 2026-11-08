@@ -36,6 +36,11 @@ export interface SpawnOptions {
     title?: string;
     /** Lines kept above the screen, 10000 by default. */
     scrollback?: number;
+    /**
+     * Queue the output for the spawning client from the first byte on, until its `attach` (which follows right after),
+     * so it misses nothing a program prints at once. `PtyHostClient.spawnAttached` does both.
+     */
+    attach?: boolean;
 }
 
 /** Client to host. Messages with an `id` are requests and get exactly one response with that `id`. */

@@ -113,6 +113,17 @@ describe.skipIf(process.platform === 'win32')('pty host', () => {
         client.close();
     }, 20000);
 
+    test('spawnAttached streams the output from the first byte, also what a program prints at once', async () => {
+        const dir = hostDir();
+        const client = await connectPtyHost({ dir });
+        const terminal = await client.spawnAttached({ ...SH, args: ['-c', 'printf first-line; exit 4'], cwd: dir });
+        const live = output(terminal);
+        expect(await new Promise(done => terminal.onExit(done))).toMatchObject({ code: 4 });
+        expect(live.text()).toContain('first-line');
+        expect(terminal.info).toMatchObject({ attached: 1 });
+        client.close();
+    }, 20000);
+
     test('a client without the token is turned away', async () => {
         const dir = hostDir();
         (await connectPtyHost({ dir })).close();

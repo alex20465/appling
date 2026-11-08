@@ -56,6 +56,10 @@ const aiFiles = (to) => ['skills', 'language'].forEach(dir => cpSync(join(packag
 await bundle(join(root, 'out/main.js'), 'out/main.js');
 for (const preload of ['preload.cjs', 'repo-preload.cjs']) cpSync(join(root, 'out', preload), join(app, 'out', preload));
 cpSync(join(root, 'out/shell'), join(app, 'out/shell'), { recursive: true });
+// the terminal panel's page (already bundled), its preload and the shell integration scripts, where src/terminal/assets.ts looks
+for (const part of ['view', 'scripts', 'preload.cjs']) {
+    cpSync(join(root, 'out/terminal', part), join(app, 'out/terminal', part), { recursive: true, filter: file => !/\.(map|d\.ts|d\.cts)$/.test(file) });
+}
 aiFiles('.');
 
 // The programs, at the paths of BUNDLED in src/resources.ts, each with the files its package reads next to its code.
