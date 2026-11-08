@@ -21,6 +21,7 @@ const deps = dependencies(graph);
 | `applyEdit(sources, operation, { release })` | Applies one edit operation to sources keyed by URI |
 | `writeRelease(root, version, graph)`, `readReleases(root)`, `latestRelease(releases)` | Release snapshots in `<root>/.appling/releases/` |
 | `migrationBlockName(version)` | The migration block for steps after a release, such as `since_v1_0_0` |
+| `subAnchors(qns)`, `isAnchorAddress(name)`, `anchorOwner(name)`, `anchorStates(graph, references, states)` | Sub-anchors (`@appling/model/anchors`): addresses such as `sales.Checkout#step[2]` for declaring lines that are no elements (use case steps and handlers, `requires`, page components, navigation items, messages), listed in `graph.anchors`, so they carry code references and a state of their own |
 | `recordReferences(root, qn, ranges)`, `readReferences(root)`, `resolveReferences(root, graph?)` | Code references in `<root>/.appling/references.json`: where elements are implemented, by file, line range and anchor line, resolved as `current`, `shifted`, `broken` or `orphaned` |
 | `Graph`, `GraphNode`, `GraphEdge`, `Dependency` | The serializable graph types |
 

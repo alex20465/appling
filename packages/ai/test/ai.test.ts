@@ -46,9 +46,14 @@ test('the MCP server exposes model and registry tools and the registry prompt', 
     expect(readFileSync(join(root, 'crm.appling'), 'utf8')).toContain('mail: String');
     writeFileSync(join(root, 'models.py'), 'class Order(models.Model):\n    pass\n');
     expect(await text('record_code_references', { qn: 'sales.Order', ranges: [{ file: 'models.py', start: 1, end: 2 }] })).toEqual([{ file: 'models.py', start: 1, end: 2, anchor: 'class Order(models.Model):' }]);
-    expect((await text('record_code_references', { qn: 'sales.Nope', ranges: [] })).error).toBe('No element sales.Nope.');
+    expect((await text('record_code_references', { qn: 'sales.Nope', ranges: [] })).error).toBe('No element or sub-anchor sales.Nope.');
     expect((await text('code_references', { qn: 'sales.Order' })).references).toEqual([{ qn: 'sales.Order', file: 'models.py', start: 1, end: 2, anchor: 'class Order(models.Model):', status: 'current' }]);
     expect(await text('code_references', {})).toEqual({ references: [] });
+    // a use case step is no element, but its line carries code references by its sub-anchor address (#20)
+    expect(await text('record_code_references', { qn: 'sales.Checkout#step[2]', ranges: [{ file: 'models.py', start: 2, end: 2 }] })).toEqual([{ file: 'models.py', start: 2, end: 2, anchor: 'pass' }]);
+    expect((await text('code_references', { qn: 'sales.Checkout' })).references).toMatchObject([{ qn: 'sales.Checkout#step[2]', status: 'current' }]);
+    expect((await text('record_code_references', { qn: 'sales.Checkout#step[9]', ranges: [] })).error).toBe('No element or sub-anchor sales.Checkout#step[9].');
+    await text('record_code_references', { qn: 'sales.Checkout#step[2]', ranges: [] });
     const prompt = await client.getPrompt({ name: 'implement_next_task' });
     expect((prompt.messages[0].content as { text: string }).text).toContain('registry_next');
 });

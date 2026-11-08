@@ -162,7 +162,7 @@ export const REFERENCE_TOOLS = {
         run: async (context, input) => ({ references: await context.project.references(input.qn) })
     }),
     record_code_references: define({
-        description: 'Record where an element is implemented, replacing its earlier references: one line range per place in the code. The first line of each range becomes its anchor, so start at the line that declares the code, such as the class or function. An empty list removes the references.',
+        description: 'Record where an element is implemented, replacing its earlier references: one line range per place in the code. qn may also be the sub-anchor of a declaring line that is no element: `<usecase>#step[<n>]`, `<usecase>#step[<n>].on[<Error>]`, `<action>#requires[<n>]`, `<page>#component[<n>]`, `<navigation>#item[<label>/<label>]`, `<messages>#message[<key>]` (n from 1). The first line of each range becomes its anchor, so start at the line that declares the code, such as the class or function. An empty list removes the references.',
         input: {
             qn: z.string(),
             ranges: z.array(z.object({

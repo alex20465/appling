@@ -112,6 +112,8 @@ console.log(result.ok ? result.edits : result.errors);
 | `replaceReferencesIn(root, folder, updates)` | Replaces the references of these elements that point into `folder` (such as a generated project) with the given ranges, relative to the folder, and keeps their references elsewhere |
 | `implementationStates(graph, { references, tasks, outstanding })` | The [implementation state](../tools/implementation.md#implementation-states) of every element (`ElementImplementation`: `state`, current `references`, open `tasks`, `outstanding`) |
 | `fingerprint(node)`, `fingerprints(graph)`, `outstandingElements(graph, records)` | The hash generation records per element, and the elements new or changed since the given `GenerationRecord`s (every element for a missing record) |
+| `anchorStates(graph, references, states)` | The state of every [sub-anchor](graph.md#sub-anchors) (`graph.anchors`): its own from its code references, else its element's (a handler's, its step's) |
+| `subAnchors(qns)`, `isAnchorAddress(name)`, `anchorOwner(name)` | The sub-anchors of the elements of `qualifiedNames(models)` with their AST nodes; whether a name is an address; the element an address belongs to (`@appling/model/anchors`, browser safe) |
 | `rollupState(states)`, `lineMarks(locations, texts, states)` | One state for several, and the mark of each model line that declares an element, by file URI (`LineMark`) |
 | `ImplementationState`, `IMPLEMENTATION_STATES`, `TaskEntry`, `GenerationRecord` | The implementation types |
 | `relevance(graph)` | The [relevance](../language/relevance.md) of every module and top level declaration, from 0 to 1, by qualified name |

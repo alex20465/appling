@@ -273,7 +273,7 @@ appling refs <qualified name> [paths...]
 appling refs --check [paths...]
 ```
 
-Prints the [code references](references.md) of the workspace in the current folder (`.appling/references.json`): where elements are implemented, by file and line range. The model must be valid. With a qualified name, it prints the references of that element and its members, each with its status when it is not `current`:
+Prints the [code references](references.md) of the workspace in the current folder (`.appling/references.json`): where elements are implemented, by file and line range. The model must be valid. With a qualified name, it prints the references of that element, its members and its [sub-anchors](../reference/graph.md#sub-anchors) (such as `sales.Checkout#step[2]`), each with its status when it is not `current`:
 
 ```
 $ appling refs sales.Order

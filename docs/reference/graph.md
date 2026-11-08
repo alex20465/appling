@@ -121,7 +121,31 @@ module sales {
 |---|---|
 | `nodes` | Every element, in document order (files in the order they were loaded, each element before its members) |
 | `edges` | For each element in node order its `contains` edges and references, then all `uses` edges; each edge appears once |
+| `anchors` | The [sub-anchors](#sub-anchors) of declaring lines that are no elements, in document order; absent when the model has none |
 | `dependencies` | Module to module dependencies. Only `appling graph` adds this key; releases and `buildGraph` hold `nodes` and `edges` only |
+
+## Sub-anchors
+
+Some lines declare something without being an element: the steps of a use case and their error handlers, the `requires` of an action, the components of a page, navigation items and messages. They fold into their element's `props`, so they are no nodes, but each has a stable address in `anchors`, so it can carry a [code reference](../tools/references.md), an implementation state and a gutter mark of its own:
+
+| Line | Address |
+|---|---|
+| A use case step (`step` or `await`), counted from 1 | `sales.Checkout#step[2]` |
+| The handler of a step for an error | `sales.Checkout#step[2].on[Declined]` |
+| A `requires` of an action, counted from 1 | `sales.PlaceOrder#requires[1]` |
+| A page component (`list`, `detail`, `form`), counted from 1 | `sales.Orders#component[1]` |
+| A navigation item by its label; nested items by the path of labels | `sales.Main#item[Orders/Open]` |
+| A message by its key | `sales.en#message[order.placed]` |
+
+A second sibling with the same label or key gets `#2` after it. Each entry holds the `address`, its `owner` element and its `kind` (`step`, `on`, `requires`, `component`, `item` or `message`):
+
+```json
+"anchors": [
+  { "address": "sales.Checkout#step[1]", "owner": "sales.Checkout", "kind": "step" }
+]
+```
+
+Steps, `requires` and components are addressed by position, so inserting one above moves the addresses of the ones below; a reference recorded on a moved address then points at another line and shows as `orphaned` once the address is gone.
 
 ## Nodes
 
