@@ -199,7 +199,7 @@ Invariants, policies, transitions and actions with preconditions get a `TestCase
 | Rule | Test methods | Body |
 |---|---|---|
 | invariant | `test_holds_for_valid_rows`, `test_rejects_violations` | for an invariant enforced as a `CheckConstraint`: stores the factory's row; then sets one field the condition compares to a value (`-1`, `0` or `1000000` for numbers, either boolean, each enum literal) that breaks this invariant and no other, and asserts `IntegrityError` |
-| policy | `test_allows_permitted_actors`, `test_denies_other_actors` | skipped |
+| policy | `test_allows_permitted_actors`, `test_denies_other_actors` | for a policy on a whole entity whose condition reads the actor only through `actor.is(...)` (of actors or of roles without a condition): signs in a user who is only in the group of one declared actor, takes the factory's row and asserts `can_<operation>_<entity>` for each operation the policy covers; true for an actor the policy and every other policy of that operation let through, false for an actor the policy keeps out. Action, query, use case and field policies, and conditions that read actor fields or the tenant, stay skipped |
 | transition | `test_moves_from_allowed_states`, `test_refuses_other_states` | creates the entity in each allowed state, runs the action (or sends the event) and asserts the target state; in every state no transition of that action or event leaves, asserts `InvalidTransition` |
 | action with preconditions | `test_precondition_<n>_is_enforced` | creates a row for which the precondition fails and asserts its error (`ValueError` without one) |
 

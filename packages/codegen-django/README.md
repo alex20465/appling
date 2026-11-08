@@ -45,7 +45,7 @@ Requires `uv` on the PATH. Python and Django (6.1) are installed by uv into the 
 | groups | the groups of roles and actors are created after `migrate` by a `post_migrate` receiver in `<app>/groups.py` |
 
 | `does` | the docstring of the generated class or function, `help_text` on model fields, and a registry task |
-| rules | a `TestCase` per invariant, policy, transition and action with preconditions in `<app>/tests.py`, one method per case; tests of invariants enforced as check constraints, transitions and preconditions get bodies (rows from `make_<entity>()` factories in `<app>/factories.py`) where the simulator proves the fixture satisfies the guards, preconditions and invariants; the other cases are skipped and writing them is a registry task |
+| rules | a `TestCase` per invariant, policy, transition and action with preconditions in `<app>/tests.py`, one method per case; tests of invariants enforced as check constraints, of entity policies that read the actor only through `actor.is(...)`, of transitions and of preconditions get bodies (rows from `make_<entity>()` factories in `<app>/factories.py`) where the simulator proves the fixture satisfies the guards, preconditions and invariants; the other cases are skipped and writing them is a registry task |
 
 Models with projections or interfaces also get Django REST framework. The project ends with `manage.py makemigrations`, so its migration history starts with the generated models.
 
