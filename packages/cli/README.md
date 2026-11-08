@@ -24,7 +24,7 @@ appling check [files or folders...]
 appling fmt   [files or folders...]
 appling graph [files or folders...]
 appling release <version> [files or folders...]
-appling generate [--plan | --migrate] [files or folders...]
+appling generate [--plan | --coverage [--json] | --migrate | --sync] [files or folders...]
 appling simulate reach <machine> <state> [files or folders...]
 appling simulate actors <action> [files or folders...]
 appling simulate risks <action> [files or folders...]
@@ -83,7 +83,7 @@ Once a release exists, tools that edit the model (the IDE, the AI) record rename
 
 ### generate
 
-Generates a draft project for every target in `appling.config.json` through its code generation extension, and writes the task registry `.appling/tasks.json` into it. See [`@appling/codegen`](https://www.npmjs.com/package/@appling/codegen) for the configuration. With `--plan`, it prints the steps without running them.
+Generates a draft project for every target in `appling.config.json` through its code generation extension, and writes the task registry `.appling/tasks.json` into it. See [`@appling/codegen`](https://www.npmjs.com/package/@appling/codegen) for the configuration. With `--plan`, it prints the steps without running them. With `--coverage`, it plans every target and prints only the coverage as Markdown: the share of generated, partial and todo elements per extension, the completion (`(generated + partial / 2) / elements`), the registry tasks and the same per element kind; `--coverage --json` prints it as JSON.
 
 Generation checks the tools the extension needs first and refuses to write into a folder that is not empty.
 

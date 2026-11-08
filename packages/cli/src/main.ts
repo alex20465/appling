@@ -6,8 +6,8 @@ import { URI, type LangiumDocument } from 'langium';
 import { NodeFileSystem } from 'langium/node';
 import { createApplingServices, print, type ApplingServices, type Model } from '@appling/lang';
 import {
-    BASELINE, checkPrerequisites, coverage, coverageTable, describe, loadExtension, mergeGeneration, pendingChanges, plan, planMigrations, readApplied, readConfig, readRegistry,
-    recordWritten, runMigrations, runPlan, type Plan, type Written
+    BASELINE, checkPrerequisites, coverage, coverageMarkdown, coverageReport, coverageTable, describe, loadExtension, mergeGeneration, pendingChanges, plan, planMigrations, readApplied, readConfig, readRegistry,
+    recordWritten, runMigrations, runPlan, type Plan, type PlannedInput, type Written
 } from '@appling/codegen';
 import { buildGraph, dependencies, findApplingFiles, resolveReferences, Simulator, writeRelease, type Graph, type ResolvedReference } from '@appling/model';
 import { init } from './init.js';
@@ -16,7 +16,7 @@ const USAGE = [
     'Usage: appling init [folder] [--name <name>] [--agents <claude,codex,opencode,gemini,antigravity>] [--stack <django|ash|go|rust|none>]',
     '       appling <check|fmt|graph> [files or folders...]',
     '       appling release <version> [files or folders...]',
-    '       appling generate [--plan | --migrate | --sync] [files or folders...]',
+    '       appling generate [--plan | --coverage [--json] | --migrate | --sync] [files or folders...]',
     '       appling simulate <reach <machine> <state> | actors <action> | risks <action>> [files or folders...]',
     '       appling refs <qualified name | --check> [files or folders...]'
 ].join('\n');
@@ -29,8 +29,9 @@ async function main([command, ...args]: string[]): Promise<number> {
         console.error(USAGE);
         return 2;
     }
-    const mode = command === 'generate' && ['--plan', '--migrate', '--sync'].includes(args[0]) ? args[0] : undefined;
-    const [version, paths] = command === 'release' ? [args[0], args.slice(1)] : ['', args.slice(mode ? 1 : question.length)];
+    const mode = command === 'generate' && ['--plan', '--coverage', '--migrate', '--sync'].includes(args[0]) ? args[0] : undefined;
+    const json = mode === '--coverage' && args[1] === '--json';
+    const [version, paths] = command === 'release' ? [args[0], args.slice(1)] : ['', args.slice(mode ? (json ? 2 : 1) : question.length)];
     const files = (paths.length ? paths : ['.']).flatMap(p => findApplingFiles(resolve(p)));
     const { shared, Appling } = createApplingServices(NodeFileSystem);
     const documents = await Promise.all(files.map(f => shared.workspace.LangiumDocuments.getOrCreateDocument(URI.file(f))));
@@ -38,7 +39,7 @@ async function main([command, ...args]: string[]): Promise<number> {
     if (command === 'fmt') return format(documents);
     if (command === 'graph') return graph(documents, Appling);
     if (command === 'release') return release(documents, Appling, version);
-    if (command === 'generate') return generate(documents, Appling, mode);
+    if (command === 'generate') return generate(documents, Appling, mode, json);
     if (command === 'simulate') return simulate(documents, Appling, question);
     if (command === 'refs') return refs(documents, Appling, question[0]);
     const errors = report(documents, console.log);
@@ -89,7 +90,7 @@ function refs(documents: LangiumDocument[], services: ApplingServices, target: s
     return stale.length ? 1 : 0;
 }
 
-async function generate(documents: LangiumDocument[], services: ApplingServices, mode: string | undefined): Promise<number> {
+async function generate(documents: LangiumDocument[], services: ApplingServices, mode: string | undefined, json: boolean): Promise<number> {
     if (report(documents, console.error)) return 1;
     const targets = readConfig('.').generate ?? [];
     if (!targets.length) {
@@ -97,6 +98,19 @@ async function generate(documents: LangiumDocument[], services: ApplingServices,
         return 1;
     }
     const graph = buildGraph(documents.map(doc => doc.parseResult.value as Model), services);
+    if (mode === '--coverage') {
+        // Plans every target without running anything: the coverage of each extension over this model
+        const plans: PlannedInput[] = [];
+        for (const target of targets) {
+            const extension = await loadExtension(target.extension, '.');
+            if (plans.some(p => p.extension === extension.name)) continue;
+            const options = target.options ?? {};
+            plans.push({ extension: extension.name, input: 'model', entries: plan(graph, extension, String(options.name ?? basename(resolve(target.out))), options).entries });
+        }
+        const result = coverageReport(plans);
+        console.log(json ? JSON.stringify(result, null, 2) : coverageMarkdown(result, undefined, { marker: false }).trimEnd());
+        return 0;
+    }
     for (const target of targets) {
         const failed = mode === '--migrate' ? await migrateTarget(graph, target.extension, target.out, target.options ?? {})
             : mode === '--sync' ? await syncTarget(graph, target.extension, target.out, target.options ?? {})

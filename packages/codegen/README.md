@@ -83,6 +83,7 @@ Generation collects what each step writes (`runPlan(plan, out, log, written)`) a
 | `readConfig(root)`, `loadExtension(name, root)` | Configuration and extension loading |
 | `describe(step)` | A one line description of a step |
 | `coverage(entries)`, `coverageTable(coverage)` | Registry entries and tasks per node kind and status, and that count as the Markdown table `--plan` prints |
+| `coverageReport(plans)`, `completion(row)`, `coverageMarkdown(report, base?)`, `formatChange(now, before)`, `coverageBadge(report)` | The coverage of several extensions over several inputs, its completion `(generated + partial / 2) / elements`, as Markdown with the change against a base report (`appling generate --coverage`, the CI report), and as a shields.io endpoint badge |
 | `saveBaseline(out, exclude)`, `mergeGeneration(out, next, exclude)` | The generation baseline, and the three way merge of a fresh generation into a project |
 | `pendingChanges(graph, applied, stamp)`, `planMigrations(...)`, `runMigrations(...)`, `readApplied(out)` | Migration steps not yet applied to a generated project, and carrying them into it |
 | `generateElements(options)`, `GenerationEvent`, `GenerationSelection` | Generation of a selection into every target, with its events |

@@ -25,7 +25,7 @@ appling check [files or folders...]
 appling fmt   [files or folders...]
 appling graph [files or folders...]
 appling release <version> [files or folders...]
-appling generate [--plan | --migrate | --sync] [files or folders...]
+appling generate [--plan | --coverage [--json] | --migrate | --sync] [files or folders...]
 appling simulate <reach <machine> <state> | actors <action> | risks <action>> [files or folders...]
 appling refs <qualified name | --check> [files or folders...]
 ```
@@ -209,6 +209,42 @@ appling generate --plan
 
 After the steps, a Markdown table counts the registry entries per element kind by status, with the number of registry tasks they leave; the total row gives the generated share. `partial` means the element was generated with open tasks; here the invariant got a skipped test whose body is a registry task. See [Task registry](../codegen/registry.md).
 
+### Coverage
+
+Plans every target without running anything, like `--plan`, and prints only how much of the model each extension generates: the share of elements that are `generated`, `partial` and `todo`, the completion and the registry tasks, then the same per element kind in a folded section per extension. With the Django and Ash targets on the examples:
+
+```sh
+appling generate --coverage examples
+```
+
+```
+## Codegen coverage
+
+**85.8%** generated completion, 40 registry tasks, over model.
+
+| extension | generated | partial | todo | completion | tasks |
+|---|---|---|---|---|---|
+| django | 80.6% | 18.1% | 1.4% | 89.6% | 15 |
+| ash | 72.2% | 19.4% | 8.3% | 81.9% | 25 |
+
+### Per node kind
+
+<details>
+<summary>django: 89.6% (model 89.6%)</summary>
+
+| kind | generated | partial | todo | completion | tasks |
+|---|---|---|---|---|---|
+| Action | 2 | 0 | 0 | 100.0% | 0 |
+...
+| Policy | 0 | 7 | 0 | 50.0% | 7 |
+...
+</details>
+
+Completion = (generated + partial / 2) / elements: a partial element has code and open registry tasks, so it counts as half.
+```
+
+The output is Markdown, so it renders in a pull request or a job summary. The completion counts a `partial` element as half, because it has code and open tasks. `--coverage --json` prints the same report as JSON (`CoverageReport` of [`@appling/codegen`](../reference/api.md)). A target whose extension appears twice is planned once.
+
 ### Migrate
 
 Carries the model's migration steps that a generated project has not applied yet into it. Renames, type changes and removals become framework migrations that keep the data (a rename stays a rename, not a drop and an add), the generated model code changes with them, and the rest of the work becomes registry tasks.
@@ -240,7 +276,7 @@ The target must have been generated with a version of appling that stores the ge
 
 The IDE generates the same way from its [Code tab](implementation.md#generate-from-the-ide), also for single elements or what changed since the last generation.
 
-`--plan`, `--migrate` and `--sync` must come directly after `generate`, before any path.
+`--plan`, `--coverage` (with `--json` right after it), `--migrate` and `--sync` must come directly after `generate`, before any path.
 
 ## simulate
 
