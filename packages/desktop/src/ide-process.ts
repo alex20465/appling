@@ -15,6 +15,14 @@ export interface IdeProcessOptions {
     timeout?: number;
     /** Called when the server ends on its own, such as after a crash. */
     onExit?(code: number | null, stderr: string): void;
+    /** Called with the repo's status whenever the server reports it: at start and after every model change. */
+    onStatus?(status: IdeStatus): void;
+}
+
+/** What a repo's server reports for the rail. */
+export interface IdeStatus {
+    /** Validation errors in the repo's model. */
+    errors: number;
 }
 
 /** The IDE server's entry, `appling-ide`. */
@@ -42,7 +50,8 @@ export function startIdeProcess(root: string, options: IdeProcessOptions = {}): 
             reject(error);
         };
         child.once('error', fail);
-        child.on('message', (message: { type?: string, url?: string }) => {
+        child.on('message', (message: { type?: string, url?: string, errors?: unknown }) => {
+            if (message.type === 'status' && typeof message.errors === 'number') return options.onStatus?.({ errors: message.errors });
             if (message.type !== 'ready' || !message.url || ready) return;
             ready = true;
             clearTimeout(timer);

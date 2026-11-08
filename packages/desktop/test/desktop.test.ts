@@ -1,9 +1,10 @@
-import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { readCodeWorkspace, workspaceName, writeCodeWorkspace } from '../src/code-workspace.js';
-import { startIdeProcess, type IdeProcess } from '../src/ide-process.js';
+import { gitBranch, headFile } from '../src/git.js';
+import { startIdeProcess, type IdeProcess, type IdeStatus } from '../src/ide-process.js';
 import { DEFAULT_KEYBINDINGS, loadKeybindings } from '../src/keybindings.js';
 import { Repos } from '../src/repos.js';
 import { readSession, restore, sessionOf, writeSession } from '../src/session.js';
@@ -262,6 +263,28 @@ test('every default shortcut is valid and no two commands share one', () => {
     expect(loadKeybindings(file).problems).toEqual([]);
 });
 
+test('the rail reads the branch from HEAD: a branch, a detached commit, a worktree, no git', () => {
+    const root = mkdtempSync(join(tmpdir(), 'appling-desktop-'));
+    const repo = join(root, 'shop');
+    mkdirSync(join(repo, '.git'), { recursive: true });
+    writeFileSync(join(repo, '.git', 'HEAD'), 'ref: refs/heads/feature/rail\n');
+    expect(gitBranch(repo)).toBe('feature/rail');
+    writeFileSync(join(repo, '.git', 'HEAD'), `${'a1b2c3d4e5'.repeat(4)}\n`);
+    expect(gitBranch(repo)).toBe('a1b2c3d');
+
+    const worktree = join(root, 'shop-review');
+    mkdirSync(join(repo, '.git', 'worktrees', 'review'), { recursive: true });
+    writeFileSync(join(repo, '.git', 'worktrees', 'review', 'HEAD'), 'ref: refs/heads/review\n');
+    mkdirSync(worktree);
+    writeFileSync(join(worktree, '.git'), 'gitdir: ../shop/.git/worktrees/review\n');
+    expect(headFile(worktree)).toBe(join(repo, '.git', 'worktrees', 'review', 'HEAD'));
+    expect(gitBranch(worktree)).toBe('review');
+
+    expect(gitBranch(root)).toBeUndefined();
+    writeFileSync(join(root, '.git'), 'not a pointer');
+    expect(gitBranch(root)).toBeUndefined();
+});
+
 let ide: IdeProcess | undefined;
 afterEach(() => ide?.close());
 
@@ -276,6 +299,22 @@ test('each repo gets its own IDE server process that reports its URL and ends wi
     ide.close();
     ide = undefined;
     await exited;
+}, 30000);
+
+test('a repo server reports its validation errors at start and after every model change', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'appling-desktop-'));
+    writeFileSync(join(root, 'shop.appling'), 'module shop {\n  entity Order {\n    total: Missing\n  }\n}\n');
+    const statuses: IdeStatus[] = [];
+    let next: (() => void) | undefined;
+    const reported = () => new Promise<void>(done => next = done);
+    let first = reported();
+    ide = await startIdeProcess(root, { onStatus: status => { statuses.push(status); next?.(); } });
+    await first;
+    expect(statuses.at(-1)!.errors).toBeGreaterThan(0);
+    first = reported();
+    writeFileSync(join(root, 'shop.appling'), 'module shop {\n  entity Order {\n    total: Int\n  }\n}\n');
+    await first;
+    expect(statuses.at(-1)).toEqual({ errors: 0 });
 }, 30000);
 
 test('a server that cannot start rejects with its reason', async () => {

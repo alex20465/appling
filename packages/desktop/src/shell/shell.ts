@@ -8,6 +8,10 @@ interface RepoState {
     name: string;
     status: 'starting' | 'ready' | 'failed';
     error?: string;
+    /** Validation errors of its model. */
+    errors: number;
+    /** The checked out branch; undefined outside git. */
+    branch?: string;
     pinned: boolean;
     hidden: boolean;
 }
@@ -17,6 +21,8 @@ interface WorkspaceState {
     name: string;
     /** How many repos are hidden from the rail. */
     hidden: number;
+    /** Validation errors summed over its repos. */
+    errors: number;
     repos: RepoState[];
 }
 
@@ -87,13 +93,16 @@ function render(state: ShellState): void {
 
     const workspace = state.workspaces.find(w => w.id === state.active);
     for (const button of workspaceRail.querySelectorAll<HTMLElement>('.workspace')) {
-        const hidden = state.workspaces.find(w => w.id === button.dataset.id)?.hidden ?? 0;
+        const { hidden = 0, errors = 0 } = state.workspaces.find(w => w.id === button.dataset.id) ?? {};
         if (hidden) button.title += `\n${hidden} hidden repo${hidden > 1 ? 's' : ''}`;
+        badge(button, errors);
     }
     repoRail.replaceChildren(...(workspace?.repos ?? []).map(repo => {
         const flags = `${repo.pinned ? ' pinned' : ''}${repo.hidden ? ' hidden' : ''}${repo.id === state.repo ? ' active' : ''}`;
         const note = repo.pinned ? 'Pinned. ' : repo.hidden ? 'Hidden from the rail. ' : '';
-        const button = railButton(`repo ${repo.status}${flags}`, repo.name, `${repo.name}\n${repo.id}\n${note}Drag to reorder, middle click closes, right click for more`);
+        const branch = repo.branch ? `On ${repo.branch}\n` : '';
+        const button = railButton(`repo ${repo.status}${flags}`, repo.name, `${repo.name}\n${repo.id}\n${branch}${note}Drag to reorder, middle click closes, right click for more`);
+        badge(button, repo.errors);
         button.onclick = () => bridge.select(repo.id, workspace!.id);
         button.draggable = true;
         button.ondragstart = event => {
@@ -138,6 +147,16 @@ function railButton(className: string, name: string, title: string): HTMLButtonE
     button.title = title;
     button.setAttribute('aria-label', name);
     return button;
+}
+
+/** The count of validation errors in the button's corner, and in its tooltip. */
+function badge(button: HTMLElement, errors: number): void {
+    if (!errors) return;
+    const count = document.createElement('span');
+    count.className = 'badge';
+    count.textContent = errors > 99 ? '99+' : String(errors);
+    button.append(count);
+    button.title += `\n${errors} validation error${errors > 1 ? 's' : ''}`;
 }
 
 function heading(text: string): HTMLElement {
