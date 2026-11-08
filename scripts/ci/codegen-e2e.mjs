@@ -139,7 +139,7 @@ function failsNaming([command, ...rest], cwd, env, secrets) {
     const result = spawnSync(command, rest, { cwd, encoding: 'utf8', env: clean });
     const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
     if (result.status !== 0 && secrets.some(name => output.includes(name))) {
-        console.log(`stopped as expected: ${output.trim().split('\n').filter(l => secrets.some(n => l.includes(n)))[0]}`);
+        console.log(`stopped as expected: ${output.trim().split('\n').filter(l => secrets.some(n => l.includes(n))).at(-1)}`);
         return true;
     }
     console.error(output.slice(-4000));
