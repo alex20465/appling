@@ -1,3 +1,4 @@
+import type { AgentSession, IdeAction } from '@appling/ai';
 import type { Dependency, Graph, ResolvedReference } from '@appling/model';
 
 export interface SourceFile {
@@ -30,3 +31,21 @@ export interface Snapshot {
 }
 
 export { DEFAULT_VIEW, type ViewSettings } from '@appling/viz/views';
+
+/** An `ide_act` of an agent session, pushed to the client over `/events`. */
+export type SessionAct = IdeAction & { session: string, color: string };
+
+/** What the server pushes over `/events`. */
+export interface IdeEvents {
+    snapshot(snapshot: Snapshot): void;
+    /** Every agent session of the workspace, after each change. */
+    sessions?(sessions: AgentSession[]): void;
+    act?(act: SessionAct): void;
+}
+
+/** What the client reports it shows, for the sessions' IDE context. */
+export interface ClientReport {
+    selection?: string;
+    view?: Record<string, unknown>;
+    file?: string;
+}

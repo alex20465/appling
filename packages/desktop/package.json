@@ -21,10 +21,12 @@
     "build": "tsc && cp src/shell/index.html src/shell/shell.css out/shell/"
   },
   "dependencies": {
+    "@appling/ai": "workspace:*",
     "@appling/ide": "workspace:*",
     "electron": "44.9.1"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@types/node": "^24.19.2",
     "typescript": "7.0.2"
   },

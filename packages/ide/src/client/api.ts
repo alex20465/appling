@@ -1,6 +1,6 @@
 import type { ChatEvent } from '@appling/ai';
 import type { EditOperation, EditResult } from '@appling/model';
-import { DEFAULT_VIEW, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
+import { DEFAULT_VIEW, type ClientReport, type IdeEvents, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
 import { monaco } from './monaco.js';
 
 export async function loadSnapshot(): Promise<Snapshot> {
@@ -21,14 +21,27 @@ export async function saveFile(path: string, text: string): Promise<void> {
     if (!response.ok) throw new Error(await response.text());
 }
 
-/** Calls back with every new snapshot the server pushes after files change on disk. */
-export function onSnapshot(callback: (snapshot: Snapshot) => void): () => void {
+/**
+ * Calls back with what the server pushes: every new snapshot after files change on disk, the agent sessions and
+ * their actions. `report` tells the server what the client shows.
+ */
+export function onEvents(handlers: IdeEvents): { close(): void, report(report: ClientReport): void } {
     const socket = new WebSocket(`ws://${location.host}/events`);
+    let pending: ClientReport | undefined;
+    socket.onopen = () => pending && socket.send(JSON.stringify({ type: 'context', ...pending }));
     socket.onmessage = event => {
         const message = JSON.parse(event.data);
-        if (message.type === 'snapshot') callback(message.snapshot);
+        if (message.type === 'snapshot') handlers.snapshot(message.snapshot);
+        if (message.type === 'sessions') handlers.sessions?.(message.sessions);
+        if (message.type === 'act') handlers.act?.(message);
     };
-    return () => socket.close();
+    return {
+        close: () => socket.close(),
+        report: report => {
+            pending = report;
+            if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'context', ...report }));
+        }
+    };
 }
 
 export async function requestEdit(sources: Record<string, string>, operation: EditOperation): Promise<EditResult> {

@@ -8,11 +8,12 @@ import { createConnection } from 'vscode-languageserver/node';
 import { WebSocketMessageReader, WebSocketMessageWriter, type IWebSocket } from 'vscode-ws-jsonrpc';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { createApplingLspServices } from '@appling/lang/lsp';
-import { chat, languageModel, modelSettings } from '@appling/ai';
+import { chat, createMcpServer, handleMcpRequest, languageModel, MemorySessionStore, modelSettings, type AppHost, type SessionStore } from '@appling/ai';
 import { applyEdit, latestRelease, readReleases, REFERENCES, type EditOperation } from '@appling/model';
 import type { ModelMessage } from 'ai';
 import type { Snapshot } from '../shared/snapshot.js';
 import { readView, snapshot, writeView } from './workspace.js';
+import { ideHost, type ClientContext } from './sessions.js';
 
 const CLIENT = fileURLToPath(new URL('../../dist/client/', import.meta.url));
 const TYPES: Record<string, string> = {
@@ -22,22 +23,40 @@ const TYPES: Record<string, string> = {
 
 export interface Ide {
     url: string;
+    /** The repo's MCP server; agents reach it with a session's token as bearer token. */
+    mcp: string;
+    sessions: SessionStore;
     close(): Promise<void>;
 }
 
 export interface IdeOptions {
     /** Called with every snapshot the server pushes after a model file changed. */
     onSnapshot?(snapshot: Snapshot): void;
+    /** The agent sessions, shared by the repos of a workspace; default: a store of this server's own. */
+    sessions?: SessionStore;
+    /** What the app around the IDE adds to a session's context and does with its actions, such as Appling Desktop. */
+    host?: AppHost;
 }
 
 /** Serves the IDE for one workspace folder on 127.0.0.1. */
 export async function startIde(root: string, port = 0, options: IdeOptions = {}): Promise<Ide> {
     const events = new Set<WebSocket>();
     let origins: string[] = [];
+    const sessions = options.sessions ?? new MemorySessionStore();
+    const client: ClientContext = {};
+    const broadcast = (message: unknown) => {
+        const text = JSON.stringify(message);
+        events.forEach(ws => ws.send(text));
+    };
+    const host = ideHost(root, client, () => events.size, broadcast, options.host);
+    const stopSessions = sessions.onChange(list => broadcast({ type: 'sessions', sessions: list }));
 
     const server = createServer((request, response) => {
         if (!trusted(request, origins)) return send(response, 403, 'Forbidden');
-        handle(request, response, root).catch(error => send(response, 500, String(error)));
+        const work = request.url === '/mcp' ? serveMcp(request, response, root, sessions, host)
+            : request.url?.startsWith('/api/sessions') ? serveSessions(request, response, root, sessions)
+            : handle(request, response, root);
+        work.catch(error => response.headersSent ? response.end() : send(response, 500, String(error)));
     });
     const sockets = new WebSocketServer({ noServer: true });
     server.on('upgrade', (request, socket, head) => {
@@ -47,6 +66,16 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
             else if (request.url === '/events') {
                 events.add(ws);
                 ws.on('close', () => events.delete(ws));
+                // The client reports what it shows, for the sessions' IDE context.
+                ws.on('message', data => {
+                    try {
+                        const message = JSON.parse(data.toString()) as { type?: string } & ClientContext;
+                        if (message.type === 'context') Object.assign(client, { selection: message.selection, view: message.view, file: message.file });
+                    } catch {
+                        // not JSON: ignored
+                    }
+                });
+                sessions.list().then(list => ws.send(JSON.stringify({ type: 'sessions', sessions: list })), () => undefined);
             } else ws.close();
         });
     });
@@ -68,13 +97,54 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
     origins = [`http://127.0.0.1:${address.port}`, `http://localhost:${address.port}`];
     return {
         url: origins[0],
+        mcp: `${origins[0]}/mcp`,
+        sessions,
         close: () => new Promise(done => {
+            stopSessions();
             watcher.close();
             clearTimeout(timer);
             sockets.clients.forEach(ws => ws.terminate());
             server.close(() => done());
+            // Agents' MCP clients keep their connections alive.
+            server.closeAllConnections();
         })
     };
+}
+
+/** The repo's MCP server for one agent session, named by the bearer token of the request. */
+async function serveMcp(request: IncomingMessage, response: ServerResponse, root: string, sessions: SessionStore, host: ReturnType<typeof ideHost>): Promise<void> {
+    const token = /^Bearer (.+)$/.exec(request.headers.authorization ?? '')?.[1];
+    const id = token && await sessions.authenticate(token);
+    if (!id) {
+        response.writeHead(401, { 'content-type': 'text/plain', 'www-authenticate': 'Bearer' });
+        response.end('An agent session token is required.');
+        return;
+    }
+    await handleMcpRequest(createMcpServer(root, { session: { id, store: sessions, host } }), request, response);
+}
+
+/**
+ * The sessions for the IDE client and for an IDE server without Appling Desktop: list, open (returns the token and
+ * the MCP URL once), rename or set the status as the user, end.
+ */
+async function serveSessions(request: IncomingMessage, response: ServerResponse, root: string, sessions: SessionStore): Promise<void> {
+    const id = decodeURIComponent(request.url!.slice('/api/sessions'.length).replace(/^\//, ''));
+    if (!id && request.method === 'GET') return json(response, await sessions.list());
+    if (!id && request.method === 'POST') {
+        const input = JSON.parse(await body(request) || '{}') as { name?: string, label?: string, workspace?: string };
+        const opened = await sessions.open({ name: input.name, label: input.label, workspace: input.workspace, repo: root });
+        return json(response, { ...opened, mcp: `http://${request.headers.host}/mcp` });
+    }
+    try {
+        if (id && request.method === 'PATCH') return json(response, await sessions.update(id, JSON.parse(await body(request))));
+        if (id && request.method === 'DELETE') {
+            await sessions.end(id);
+            return send(response, 204, '');
+        }
+    } catch (error) {
+        return send(response, 404, (error as Error).message);
+    }
+    send(response, 405, 'Method not allowed');
 }
 
 async function handle(request: IncomingMessage, response: ServerResponse, root: string): Promise<void> {

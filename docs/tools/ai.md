@@ -252,6 +252,48 @@ Claude changes the model with `edit` and the window shows the change as it happe
 
 A question from the window arrives in the session as a channel message with the attributes `ask_id`, `selected` (the selected element) and `view` (the view and its focus).
 
+## Agent sessions
+
+Several coding agents can work on one repo, or on the repos of one workspace, at the same time. Each one runs in an agent session: a terminal of [Appling Desktop](https://github.com/alex20465/appling/tree/main/packages/desktop) with an identity that its MCP connection carries. Through the session tools an agent labels its session with what it is about, keeps its status current, claims the elements and files it works on, sees the other sessions with their claims and messages them. An edit that touches another session's claim still goes through but comes back with a warning.
+
+### Connect an agent
+
+The [IDE server](ide.md) of every repo serves the repo's MCP server over Streamable HTTP at `http://127.0.0.1:<port>/mcp`. Every request needs the bearer token of a session; a request without a known token gets `401`. Appling Desktop opens a session for every agent it starts and hands the agent the URL and the token. Without Desktop, open one with `POST /api/sessions` on the IDE server:
+
+```sh
+curl -s -X POST http://127.0.0.1:4410/api/sessions -d '{"name": "Claude Code"}'
+# { "session": { "id": "...", "name": "Claude Code", "status": "working", ... }, "token": "...", "mcp": "http://127.0.0.1:4410/mcp" }
+claude mcp add --transport http appling http://127.0.0.1:4410/mcp --header "Authorization: Bearer <token>"
+```
+
+`DELETE /api/sessions/<id>` ends a session, and its claims and token end with it. `PATCH /api/sessions/<id>` with `{ "label" }` renames it as the user. Every tool call of the connection is attributed to its session: the session records the last tool and when it ran.
+
+The server instructions tell the agent to set the label after reading the first prompt, keep the status current, check the claims of the other sessions before it changes anything, claim what it works on, and settle conflicts by message.
+
+### Session tools
+
+| Tool | Input | Returns |
+|---|---|---|
+| `session_set_label` | `label`: a few words, such as `Invoice entity and its payment flow` | The session. The tab shows the agent's name until the label is set; the label stays until the agent or the user changes it |
+| `session_set_status` | `status`: `working`, `blocked`, `needs-input`, `done` or `failed`; `note?` | The session |
+| `session_claim` | `elements?`: qualified names; `files?`: paths, absolute or relative to the repo | `{ claims }`, with `conflicts` and a `warning` when other sessions claimed something that overlaps |
+| `session_release` | `elements?`, `files?`; neither releases every claim | `{ claims }` |
+| `sessions_list` | none | `{ self, others }`: the sessions of the workspace with label, status, note, repo, claims and last tool call |
+| `session_message` | `to`: a session id or label; `text` | `{ sent: true, to }`, or `{ error }` for an unknown or ambiguous session |
+| `session_inbox` | none | `{ messages }`: the unread messages, each with `from`, `fromLabel`, `text` and `at`; reading marks them read |
+| `ide_context` | none | What the IDE shows: the session's `tab`, the `repo`, the `activeRepo` and `workspace`, the open `tabs`, the canvas `view`, the `selection` and the open `file` |
+| `ide_act` | `action`: `focus`, `open`, `highlight` or `reveal`; `elements?`; `file?`, `line?` | `{ ok: true }`, or `{ ok: false, reason }`. `focus` shows the session's tab (Desktop only), `open` and `reveal` select an element or open a file, `highlight` marks elements on the canvas in the session's colour (an empty list clears them) |
+
+A claim of an element covers its members, and a claim of a member touches its element: `sales.Order` and `sales.Order.status` overlap, `sales.Order` and `sales.OrderFlow` do not. Element claims count within one repo, file claims across the workspace.
+
+When another session claimed what a tool call touches, `edit`, `propose_edits` and `write_model_file` return `conflicts` (`session`, `label`, `claimed`, `touched`) and a `warning`. The edit target, the parent of an `add`, and every file the edit changed count. Every tool result also carries `messages` while messages wait unread.
+
+### Where sessions live
+
+The sessions sit in a session store that the IDE servers of a workspace share. Appling Desktop holds one store in its main process and serves it to every repo's IDE server child over the child's IPC channel (`appling-ide --shared-sessions`), so sessions of different repos see each other and keep their claims while a server restarts. A session belongs to a workspace and works in one repo; it sees the sessions of its workspace, or of its repo when it has none. An IDE server started on its own keeps a store of its own.
+
+The IDE server pushes every change of the sessions over its `/events` websocket as `{ type: "sessions", sessions }`, and every `ide_act` except `focus` as `{ type: "act", session, color, action, ... }`. The IDE client reports what it shows (`{ type: "context", selection, view, file }`) on the same socket, which `ide_context` returns, and draws the claimed and highlighted elements of its repo's sessions with a ring in the session's colour.
+
 ## IDE chat
 
 The AI tab of the [IDE](ide.md#the-ai-tab) runs one chat turn per message with the four model tools and a system prompt about Appling's layers. It uses the [AI SDK](https://ai-sdk.dev) and works with Anthropic and OpenAI models.

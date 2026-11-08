@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { resolve } from 'node:path';
+import { ipcChannel, remoteAppHost, RemoteSessionStore } from '@appling/ai';
 import { startIde } from './server.js';
 import { snapshot } from './workspace.js';
 
@@ -10,7 +11,9 @@ const root = resolve(args.find((a, i) => !a.startsWith('--') && args[i - 1] !== 
 
 // Started by Appling Desktop with an IPC channel: it shows the number of model errors on the rail.
 const status = (errors: string[]) => process.send?.({ type: 'status', errors: errors.length });
-const ide = await startIde(root, port, process.send ? { onSnapshot: s => status(s.errors) } : {});
+// With --shared-sessions, Appling Desktop holds the agent sessions of the workspace and serves them over IPC.
+const shared = process.send && args.includes('--shared-sessions') ? { sessions: new RemoteSessionStore(ipcChannel(process)), host: remoteAppHost(ipcChannel(process)) } : {};
+const ide = await startIde(root, port, process.send ? { onSnapshot: s => status(s.errors), ...shared } : {});
 console.log(`Appling IDE for ${root} at ${ide.url}`);
 
 // Started by Appling Desktop with an IPC channel: report the URL and end with the app.

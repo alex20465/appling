@@ -1,7 +1,7 @@
 import type { ChatEvent } from '@appling/ai';
 import { applyEdit, type EditOperation, type EditResult } from '@appling/model/edit';
 import { buildSnapshot } from '../shared/model.js';
-import { DEFAULT_VIEW, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
+import { DEFAULT_VIEW, type ClientReport, type IdeEvents, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
 import { monaco } from '../client/monaco.js';
 
 /**
@@ -32,9 +32,10 @@ export async function saveFile(path: string, text: string): Promise<void> {
     for (const listener of listeners) listener(snapshot);
 }
 
-export function onSnapshot(callback: (snapshot: Snapshot) => void): () => void {
-    listeners.add(callback);
-    return () => listeners.delete(callback);
+/** The demo has no agent sessions: only snapshots. */
+export function onEvents(handlers: IdeEvents): { close(): void, report(report: ClientReport): void } {
+    listeners.add(handlers.snapshot);
+    return { close: () => listeners.delete(handlers.snapshot), report: () => undefined };
 }
 
 export function requestEdit(sources: Record<string, string>, operation: EditOperation): Promise<EditResult> {

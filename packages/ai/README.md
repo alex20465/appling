@@ -30,6 +30,10 @@ The server instructions tell the assistant that the model is the source of truth
 
 The prompt `implement_next_task` carries the registry workflow.
 
+### Agent sessions
+
+The IDE server of each repo serves this MCP server at `/mcp` for agent sessions, authenticated by a session's bearer token: Appling Desktop opens a session per agent terminal. The session tools `session_set_label`, `session_set_status`, `session_claim`, `session_release`, `sessions_list`, `session_message`, `session_inbox`, `ide_context` and `ide_act` let agents label their work, keep its status, claim elements and files, see and message each other and act on the IDE; edits that touch another session's claim come back with a warning. `MemorySessionStore`, `serveSessionStore` and `RemoteSessionStore` share one store across processes. See https://www.appling.tools/docs/tools/ai/#agent-sessions.
+
 ### Visualization window
 
 Over stdio the server also drives a floating window (`@appling/viz`, Electron; macOS, Windows and Linux, through XWayland on Wayland). Ask Claude Code to show part of the model and the window opens at the top right of the main screen, above every other window.

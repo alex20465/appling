@@ -4,7 +4,7 @@ import { buildGraph, Simulator } from '@appling/model';
 import { buildWorkspace, examples } from '../../lang/test/workspace.js';
 import { layoutFlow } from '../src/layout.js';
 import {
-    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, policyText, relations, revealPath, search, trailOf, viewFor,
+    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, sessionMarks, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, policyText, relations, revealPath, search, trailOf, viewFor,
     type Card, type Flow, type TreeNode
 } from '../src/views.js';
 
@@ -166,6 +166,16 @@ test('change marks lift members to their declaration and skip removed elements',
     const index = await indexOf(examples());
     const marks = changeMarks(index, { added: ['sales.OrderFlow', 'sales.Order.placed_at', 'sales.Gone'], changed: ['crm.Account', 'sales.OrderFlow'] });
     expect(Object.fromEntries(marks)).toEqual({ 'sales.OrderFlow': 'added', 'sales.Order': 'changed', 'crm.Account': 'changed' });
+});
+
+test('session marks lift members to their declaration; the first session wins', async () => {
+    const index = await indexOf(examples());
+    const marks = sessionMarks(index, [
+        { element: 'sales.Order.status', color: 'green', label: 'Totals', session: 'a' },
+        { element: 'sales.Order', color: 'blue', label: 'Status', session: 'b' },
+        { element: 'sales.Gone', color: 'blue', label: 'Status', session: 'b' }
+    ]);
+    expect([...marks].map(([qn, m]) => [qn, m.session])).toEqual([['sales.Order', 'a']]);
 });
 
 test('the element at an offset is the innermost one', () => {

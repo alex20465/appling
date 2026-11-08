@@ -276,6 +276,26 @@ export function changeMarks(index: GraphIndex, changes: { added: string[], chang
     return marks;
 }
 
+/** An element an agent session claimed or highlighted, drawn in the session's colour. */
+export interface SessionMark {
+    element: string;
+    color: string;
+    /** The session's label. */
+    label: string;
+    session: string;
+}
+
+/** The declarations the canvas draws for session marks: a member's mark goes to its declaration; the first mark wins. */
+export function sessionMarks(index: GraphIndex, marks: SessionMark[]): Map<string, SessionMark> {
+    const result = new Map<string, SessionMark>();
+    for (const mark of marks) {
+        if (!index.nodes.has(mark.element)) continue;
+        const declaration = index.declaration(mark.element);
+        if (!result.has(declaration)) result.set(declaration, mark);
+    }
+    return result;
+}
+
 export type ViewKind = 'machine' | 'action' | 'usecase' | 'event' | 'node';
 
 /** The element kinds each view is drawn for; the views of one kind come before `node`, which draws any declaration. */
