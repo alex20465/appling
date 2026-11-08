@@ -26,6 +26,11 @@ export interface RemoteRepoOptions {
      * reaches the remote pty host through it as if it ran here.
      */
     ptyDir: string;
+    /**
+     * Only the pty host there, no IDE server: the tray mode (#18) follows the terminals and agents of a remote repo
+     * while the app is closed. `onConnected` then gets no URL.
+     */
+    ptyOnly?: boolean;
     backoff?: Backoff;
     onState?(state: ConnectionState, detail: { attempt: number, error?: string, retryIn?: number }): void;
     /** Called after every (re)connect, with the stable local URL of the IDE server. */
@@ -101,6 +106,13 @@ export class RemoteRepo {
         await this.transport.open();
         this.installed = await install(this.transport, { ...this.options.install, onProgress });
         this.root = this.remoteRoot(this.installed.probe.home);
+        if (this.options.ptyOnly) {
+            this.stopLost = this.transport.onLost(() => this.connection.lost(`The connection to ${this.transport.label} was lost.`));
+            await this.startPtyHost();
+            this.up = true;
+            this.options.onConnected?.('', this.connections++ > 0);
+            return;
+        }
         this.ideForward ??= await Forward.listen();
         const forward = this.ideForward;
         const agent = this.installed.agent;

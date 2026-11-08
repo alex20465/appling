@@ -6,10 +6,14 @@ export interface RemoteStatusOptions {
     /** A click on a remote terminal's notification: show its repo. */
     open(repo: string, terminal: string): void;
     log?(message: string): void;
+    /** The terminals of a watched repo changed (the tray redraws its list). */
+    onChange?(): void;
 }
 
 interface Watched {
     client: PtyHostClient;
+    /** The host's terminals, kept up to date from its events. */
+    terminals: Map<string, TerminalInfo>;
     /** The `since` of each terminal's needs input status already notified, so each wait is raised once. */
     notified: Map<string, number>;
 }
@@ -33,22 +37,48 @@ export class RemoteStatus {
         const notified = this.watched.get(repo)?.notified ?? this.seen.get(repo) ?? new Map<string, number>();
         this.unwatch(repo);
         const client = await PtyHostClient.connect(dir);
-        const watched: Watched = { client, notified };
+        const watched: Watched = { client, notified, terminals: new Map() };
         this.watched.set(repo, watched);
+        const changed = () => this.watched.get(repo) === watched && this.options.onChange?.();
+        client.on('terminal', info => {
+            watched.terminals.set(info.id, info);
+            changed();
+        });
         client.on('status', (terminal, status) => {
+            const info = watched.terminals.get(terminal);
+            if (info) watched.terminals.set(terminal, { ...info, status });
+            changed();
             if (status.state === 'needsInput') void this.needsInput(repo, watched, terminal, status.since);
         });
-        client.on('removed', terminal => watched.notified.delete(terminal));
+        client.on('removed', terminal => {
+            watched.notified.delete(terminal);
+            watched.terminals.delete(terminal);
+            changed();
+        });
         client.on('close', () => {
             if (this.watched.get(repo) !== watched) return;
             this.watched.delete(repo);
             // the connection dropped: the next `watch` after the reconnect keeps what was notified
             this.seen.set(repo, watched.notified);
+            this.options.onChange?.();
         });
         // terminals that waited while the app was away
-        for (const info of await client.subscribe()) {
+        const list = await client.subscribe();
+        for (const info of list) watched.terminals.set(info.id, info);
+        changed();
+        for (const info of list) {
             if (info.status.state === 'needsInput') void this.needsInput(repo, watched, info.id, info.status.since, info);
         }
+    }
+
+    /** The repos followed now, each with its terminals there. */
+    terminals(): { repo: string, terminals: TerminalInfo[] }[] {
+        return [...this.watched].map(([repo, watched]) => ({ repo, terminals: [...watched.terminals.values()] }));
+    }
+
+    /** Stops (or removes, when it ended) a terminal of a followed repo there. */
+    async kill(repo: string, terminal: string): Promise<void> {
+        await this.watched.get(repo)?.client.kill(terminal);
     }
 
     unwatch(repo: string): void {
@@ -56,6 +86,7 @@ export class RemoteStatus {
         this.watched.delete(repo);
         this.seen.delete(repo);
         watched?.client.close();
+        if (watched) this.options.onChange?.();
     }
 
     close(): void {

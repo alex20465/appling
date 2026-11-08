@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { connectPtyHost, type NotifyRequest, type TerminalInfo } from '@appling/pty-host';
@@ -6,6 +6,7 @@ import { describe, expect, test } from 'vitest';
 import { RemoteStatus } from '../src/remote/notify.js';
 import { appCommand, openCommand, sessionArg, trayMode, withoutAppFlags } from '../src/app-flags.js';
 import { trayEntries, trayTooltip } from '../src/tray-menu.js';
+import { appRunning, knownRemoteRepos, markRunning } from '../src/remote/tray-remotes.js';
 
 describe('app flags', () => {
     test('--session and --tray are read before -- and dropped from the paths', () => {
@@ -43,6 +44,46 @@ describe('tray', () => {
         ]);
         expect(trayTooltip(list, true)).toBe('Appling: 2 sessions running, 1 needs input');
         expect(trayTooltip([], false)).toBe('Appling: no sessions running');
+    });
+
+    test('remote sessions are listed among the local ones, by where they run (#18)', () => {
+        const local = [terminal('t2', { state: 'running', since: 1 }, { group: '/work/shop', title: 'build' })];
+        const remote = [{ repo: 'ssh://build@box/srv/billing', where: 'build@box', terminals: [terminal('t5', { state: 'needsInput', since: 1 }, { group: '/srv/billing', meta: { label: 'Invoices' } })] }];
+        expect(trayEntries(local, remote)).toEqual([
+            { id: 't5', label: 'Invoices · billing on build@box', status: 'needs input', needsInput: true, running: true, repo: 'ssh://build@box/srv/billing' },
+            { id: 't2', label: 'build · shop', status: 'running', needsInput: false, running: true }
+        ]);
+    });
+
+    test('the tray follows the remote repos of the saved workspaces, and lets go of them while the app runs', () => {
+        const data = mkdtempSync(join(tmpdir(), 'tray-app-'));
+        try {
+            // nothing saved yet
+            expect(knownRemoteRepos(data)).toEqual([]);
+            writeFileSync(join(data, 'session.json'), JSON.stringify({ workspaces: ['/w/a.code-workspace', '/w/b.code-workspace', '/w/gone.code-workspace'] }));
+            const folders: Record<string, string[]> = {
+                '/w/a.code-workspace': ['/work/shop', 'ssh://build@box/srv/billing'],
+                '/w/b.code-workspace': ['ssh://build@box/srv/billing', 'devcontainer:///work/api']
+            };
+            const read = (file: string) => {
+                if (!folders[file]) throw new Error('gone');
+                return folders[file];
+            };
+            expect(knownRemoteRepos(data, read)).toEqual(['ssh://build@box/srv/billing', 'devcontainer:///work/api']);
+
+            expect(appRunning(data)).toBe(false);
+            const mark = markRunning(data);
+            expect(appRunning(data)).toBe(true);
+            // a crashed app leaves its mark; its process is gone
+            expect(appRunning(data, () => false)).toBe(false);
+            mark.clear();
+            expect(appRunning(data)).toBe(false);
+            mkdirSync(join(data, 'x'));
+            writeFileSync(join(data, 'running.json'), 'not json');
+            expect(appRunning(data)).toBe(false);
+        } finally {
+            rmSync(data, { recursive: true, force: true });
+        }
     });
 });
 

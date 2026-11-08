@@ -9,23 +9,41 @@ export interface TrayEntry {
     status: string;
     needsInput: boolean;
     running: boolean;
+    /** The remote repo whose pty host runs the session (#18); absent for the local host's. */
+    repo?: string;
+}
+
+/** The sessions of a remote repo's pty host, as the tray follows them while the app is closed. */
+export interface RemoteSessions {
+    repo: string;
+    /** Where it runs, such as `build@box` or `container shop`. */
+    where: string;
+    terminals: TerminalInfo[];
 }
 
 function lastPart(path: string): string {
     return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 }
 
-/** The sessions, the ones waiting for input first, then the running ones, then the ended ones; the newest first in each. */
-export function trayEntries(terminals: TerminalInfo[]): TrayEntry[] {
+/**
+ * The sessions, the local host's and those of remote repos, the ones waiting for input first, then the running ones,
+ * then the ended ones; the newest first in each. A remote one names where it runs.
+ */
+export function trayEntries(terminals: TerminalInfo[], remote: RemoteSessions[] = []): TrayEntry[] {
     const rank = (t: TerminalInfo) => t.status.state === 'needsInput' ? 0 : t.status.state === 'running' ? 1 : 2;
-    return [...terminals]
-        .sort((a, b) => rank(a) - rank(b) || b.created - a.created)
-        .map(t => ({
+    const all = [
+        ...terminals.map(terminal => ({ terminal, remote: undefined as RemoteSessions | undefined })),
+        ...remote.flatMap(r => r.terminals.map(terminal => ({ terminal, remote: r })))
+    ];
+    return all
+        .sort((a, b) => rank(a.terminal) - rank(b.terminal) || b.terminal.created - a.terminal.created)
+        .map(({ terminal: t, remote }) => ({
             id: t.id,
-            label: [t.meta?.label ?? t.title ?? lastPart(t.shell), t.group ? lastPart(t.group) : undefined].filter(Boolean).join(' · '),
+            label: [t.meta?.label ?? t.title ?? lastPart(t.shell), t.group ? lastPart(t.group) : undefined].filter(Boolean).join(' · ') + (remote ? ` on ${remote.where}` : ''),
             status: describeStatus(t.status),
             needsInput: t.status.state === 'needsInput',
-            running: t.status.state !== 'exited'
+            running: t.status.state !== 'exited',
+            ...(remote && { repo: remote.repo })
         }));
 }
 

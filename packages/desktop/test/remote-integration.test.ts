@@ -12,6 +12,8 @@ import { remoteAgentHost } from '../src/remote/agents.js';
 import type { ConnectionState } from '../src/remote/connection.js';
 import { codeServerAsset } from '../src/code-download.js';
 import { RemoteRepo } from '../src/remote/remote-repo.js';
+import { TrayRemotes } from '../src/remote/tray-remotes.js';
+import type { NotifyRequest } from '@appling/pty-host';
 import { shellQuote } from '../src/remote/transport.js';
 import { TaskRunner } from '../src/tasks/runner.js';
 import { remoteTasks, remoteTerminals } from '../src/tasks/remote.js';
@@ -320,6 +322,61 @@ describe.skipIf(!SSH)('over ssh', () => {
         await agents.close(record.id);
         agents.dispose();
         service.dispose();
+    }, 120000);
+
+    test('while the app is closed the tray follows the remote pty host over ssh: lists, notifies, replies and stops (#18)', async () => {
+        const id = `ssh://${userInfo().username}@127.0.0.1:${port}${repo.root}`;
+        const notified: NotifyRequest[] = [];
+        const opened: string[] = [];
+        let changes = 0;
+        const tray = new TrayRemotes({
+            userData: join(dir, 'tray'),
+            app: () => app,
+            notifier: { notify: async request => (notified.push(request), { action: 'reply', text: 'yes' }) },
+            open: (repo, terminal) => opened.push(`${repo} ${terminal}`),
+            onChange: () => changes++,
+            repo: {
+                transportOptions: {
+                    ssh: {
+                        args: ['-F', '/dev/null', '-i', join(dir, 'id'), '-o', 'IdentitiesOnly=yes', '-o', `UserKnownHostsFile=${join(dir, 'known_hosts')}`],
+                        controlDir: join(dir, 'tray-ctl'),
+                        keepAlive: 2
+                    }
+                },
+                install: { app, cache: join(dir, 'cache'), node: process.execPath },
+                backoff: { initial: 200, factor: 2, max: 2000, attempts: 10 }
+            }
+        });
+        // an agent that waits for an answer, started by the app before it closed; nobody is attached to it now
+        const app_ = await connectPtyHost({ dir: join(dir, 'local-pty'), start: false });
+        const ask = ['-c', 'printf "\\033]9;Approve?\\007"; read a; echo "got-$a"; [ "$a" = yes ] && exec sleep 600; exit 5'];
+        const waiting = await app_.spawn({ shell: '/bin/sh', args: ask, cwd: repo.root, group: repo.root, meta: { label: 'Plan' } });
+        app_.close();
+        try {
+            tray.follow([id]);
+            expect(tray.followed()).toEqual([id]);
+            // the tray connects only to the pty host there, raises the wait here and the reply reaches the pty
+            await until(() => notified.length > 0, () => JSON.stringify(tray.terminals()), 60000);
+            expect(notified[0]).toMatchObject({ terminal: waiting.id, title: 'Plan · ssh-repo', body: 'Approve?' });
+            await until(() => tray.terminals()[0]?.terminals.find(t => t.id === waiting.id)?.status.state === 'running', () => JSON.stringify(tray.terminals()));
+            expect(changes).toBeGreaterThan(0);
+            const check = await connectPtyHost({ dir: join(dir, 'local-pty'), start: false });
+            expect((await check.attach(waiting.id)).scrollback).toContain('got-yes');
+            check.close();
+            // listed with the repo, and stopped from the tray
+            expect(tray.terminals().map(r => r.repo)).toEqual([id]);
+            await tray.stopAll();
+            await until(() => !tray.terminals()[0]?.terminals.some(t => t.id === waiting.id && t.status.state !== 'exited'), () => JSON.stringify(tray.terminals()));
+            // the app opens again: the tray lets go of the repo
+            tray.follow([]);
+            expect(tray.followed()).toEqual([]);
+            expect(tray.terminals()).toEqual([]);
+        } finally {
+            await tray.close();
+            const cleanup = await connectPtyHost({ dir: join(dir, 'local-pty'), start: false }).catch(() => undefined);
+            await cleanup?.kill(waiting.id).catch(() => undefined);
+            cleanup?.close();
+        }
     }, 120000);
 
     test('after the ssh master dies, terminals and task terminals attach again and take input', async () => {

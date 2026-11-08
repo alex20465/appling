@@ -34,6 +34,7 @@ import { Workspaces } from './workspaces.js';
 import { systemNotifier } from '@appling/pty-host';
 import { RemoteRepos } from './remote/desktop.js';
 import { RemoteStatus } from './remote/notify.js';
+import { markRunning } from './remote/tray-remotes.js';
 import { findDevcontainer } from './remote/devcontainer.js';
 import { serverBundle } from './remote/install.js';
 import { isRemoteId, parseLocation, vscodeUriAt, type RemoteLocation } from './remote/location.js';
@@ -68,8 +69,12 @@ if (process.argv.slice(0, process.argv.includes('--') ? process.argv.indexOf('--
     app.exit(0);
 } else if (trayMode(process.argv)) {
     // the tray only mode: a process of its own (own profile, own lock) that holds no windows and no terminals
+    const appUserData = app.getPath('userData');
     app.setPath('userData', join(app.getPath('appData'), 'Appling Tray'));
-    app.whenReady().then(() => startTray({ icon: fileURLToPath(new URL('./tray-icon.png', import.meta.url)), command: args => appCommand(appLaunch(), args) }));
+    app.whenReady().then(() => startTray({
+        icon: fileURLToPath(new URL('./tray-icon.png', import.meta.url)), command: args => appCommand(appLaunch(), args),
+        appUserData, userData: app.getPath('userData'), serverBundle: () => serverBundle()
+    }));
 } else if (!app.requestSingleInstanceLock({ paths: initial, session: initialSession })) {
     // An instance runs already: it receives the paths through `second-instance`.
     app.quit();
@@ -82,6 +87,9 @@ if (process.argv.slice(0, process.argv.includes('--') ? process.argv.indexOf('--
         if (session) void openSession(session);
     });
     app.whenReady().then(start);
+    // while the app runs it follows its remote repos itself; the tray lets go of them meanwhile (#18)
+    const presence = markRunning(app.getPath('userData'));
+    app.on('quit', () => presence.clear());
     app.on('window-all-closed', () => app.quit());
     // the layout is saved before the windows close, so closing them on the way out changes nothing
     app.on('before-quit', () => {
