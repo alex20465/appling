@@ -1,20 +1,24 @@
 import { existsSync, mkdirSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell, WebContentsView, type MenuItemConstructorOptions, type WebContents } from 'electron';
+import { app, dialog, ipcMain, Menu, screen, shell, WebContentsView, type IpcMainEvent, type MenuItemConstructorOptions, type WebContents } from 'electron';
 import type { TextDiffRequest } from './code-bridge.js';
 import { CodeViews, type SourceLocation } from './code-view.js';
 import { EXTENSION, readCodeWorkspace, writeCodeWorkspace } from './code-workspace.js';
+import { displayFingerprint, displayOf, placeWindow, type DisplayInfo } from './displays.js';
 import { gitBranch, watchGit } from './git.js';
 import { agentSessions, desktopHost } from './agent-sessions.js';
 import { cloneIpc } from './clone-ipc.js';
 import { agentContributions, RailStatus, railBadge, railLines } from './rail-status.js';
 import { startIdeProcess, type IdeProcess } from './ide-process.js';
 import { COMMANDS, loadKeybindings } from './keybindings.js';
+import { IDE_PANE, paneId, paneLabel, parsePane, registerPaneType } from './panes.js';
 import { Repos } from './repos.js';
 import { readSession, restore, sessionOf, writeSession } from './session.js';
 import { switcherEntries } from './switcher.js';
 import { Updater } from './updater.js';
+import { currentDisplays, WindowHost } from './window-host.js';
+import { dropTarget, layoutFor, MAIN, rememberLayout, type SavedLayout } from './windows.js';
 import { Workspaces } from './workspaces.js';
 
 /** The width of the rail on the left (none while it is collapsed); every repo view fills the rest of the window. */
@@ -22,6 +26,8 @@ const RAIL = 48;
 const SHELL = fileURLToPath(new URL('./shell/index.html', import.meta.url));
 const PRELOAD = fileURLToPath(new URL('./preload.cjs', import.meta.url));
 const REPO_PRELOAD = fileURLToPath(new URL('./repo-preload.cjs', import.meta.url));
+/** The code view's pane type (#8): a strip on the right of the repo's column, or a column of its own when moved. */
+const CODE_PANE = 'code';
 
 /**
  * Folders and workspace files handed to this instance on the command line, after `--`, as absolute paths (see `bin.ts`);
@@ -44,13 +50,16 @@ if (process.argv.slice(0, process.argv.includes('--') ? process.argv.indexOf('--
 } else {
     app.on('second-instance', (_event, argv, _cwd, data) => {
         const paths = (data as { paths?: string[] } | undefined)?.paths ?? pathsOf(argv);
-        if (!window) return;
-        if (window.isMinimized()) window.restore();
-        window.focus();
+        host.show(windows.focused().id);
         openPaths(paths);
     });
     app.whenReady().then(start);
     app.on('window-all-closed', () => app.quit());
+    // the layout is saved before the windows close, so closing them on the way out changes nothing
+    app.on('before-quit', () => {
+        save();
+        quitting = true;
+    });
     app.on('will-quit', () => {
         for (const process of processes.values()) process.close();
         for (const unwatch of heads.values()) unwatch();
@@ -61,7 +70,6 @@ if (process.argv.slice(0, process.argv.includes('--') ? process.argv.indexOf('--
 
 const workspaces = new Workspaces();
 const repos = new Repos();
-const views = new Map<string, WebContentsView>();
 const processes = new Map<string, IdeProcess>();
 /** The agent sessions of every workspace, shared by the repo servers (issue #16). */
 const sessions = agentSessions();
@@ -72,25 +80,47 @@ sessions.onChange(list => railSources.agents.replace(agentContributions(list)));
 rail.onChange(() => refresh());
 /** Watchers of each repo's git `HEAD`, so the rail follows checkouts made anywhere. */
 const heads = new Map<string, () => void>();
-let window: BrowserWindow | undefined;
-const updater = new Updater(() => window);
+const updater = new Updater(() => host.base());
 let keybindingsWatcher: FSWatcher | undefined;
 /** The code view (Code OSS) of every repo. */
 let code: CodeViews | undefined;
-/** While the switcher is open the repo views are hidden, so the shell page (which draws it) is on top. */
-let switcherOpen = false;
-/** The same while the clone form is open. */
-let cloneOpen = false;
+/** The window whose shell page draws the clone form; its panes are covered meanwhile. */
+let cloneWindow: string | undefined;
 const openClone = cloneIpc({
-    window: () => window,
+    window: () => host.base(cloneWindow),
+    shell: () => cloneWindow ? host.native(cloneWindow)?.shell.webContents : undefined,
     folders: () => workspaces.current()?.folders.map(f => f.path) ?? [],
     shown: open => {
-        cloneOpen = open;
+        if (open) cloneWindow = windows.focused().id;
+        if (cloneWindow) host.cover(cloneWindow, 'clone', open);
         refresh();
         if (!open) activeView()?.webContents.focus();
     },
     add: folder => openPaths([folder])
 });
+/**
+ * The windows (issue #14). Every window has the rail and the switcher; the panes (each repo's view first) move
+ * between them without reloading. While a window's switcher is open its panes are hidden, so the shell page is on top.
+ */
+const host = new WindowHost({
+    shell: SHELL, preload: PRELOAD,
+    rail: () => workspaces.collapsed ? 0 : RAIL,
+    shown: id => workspaces.get(windows.activeOf(id, openIds()) ?? '')?.active,
+    onFocus: id => focusWindow(id),
+    onClosed: () => changed(),
+    onMainClosed: () => app.quit(),
+    onMoved: () => saveSoon(),
+    quitting: () => quitting
+});
+const windows = host.windows;
+/** The window layouts per monitor setup, as the session holds them. */
+let layouts: Record<string, SavedLayout> = {};
+/** The displays at the last change, to place windows whose display is gone where they were. */
+let displays: DisplayInfo[] = [];
+/** The workspace and repo shown at the last change, to reveal their window when they change. */
+let lastShown = '';
+let saveTimer: NodeJS.Timeout | undefined;
+let quitting = false;
 
 function userFile(...parts: string[]): string {
     return join(app.getPath('userData'), ...parts);
@@ -102,44 +132,55 @@ function defaultWorkspace(): string {
 }
 
 function start(): void {
-    window = new BrowserWindow({
-        width: 1440, height: 900, minWidth: 800, minHeight: 500, title: 'Appling', backgroundColor: '#0c0a08', show: false,
-        webPreferences: { preload: PRELOAD, contextIsolation: true, sandbox: true, nodeIntegration: false }
+    code = new CodeViews({
+        userData: app.getPath('userData'),
+        attach: (repo, view) => host.addPane(paneId(CODE_PANE, repo), view),
+        detach: repo => host.removePane(paneId(CODE_PANE, repo)),
+        ideView: repo => host.panes.get(paneId(IDE_PANE, repo)),
+        onChange: () => refresh()
     });
-    window.once('ready-to-show', () => window!.show());
-    window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    window.webContents.on('will-navigate', event => event.preventDefault());
-    window.on('resize', layout);
-    window.loadFile(SHELL);
-    code = new CodeViews({ window, userData: app.getPath('userData'), ideView: repo => views.get(repo), onChange: () => refresh() });
-
-    ipcMain.on('select', (_event, repo: string, workspace?: string) => {
+    registerPaneType({ type: CODE_PANE, label: 'Code', region: 'side', share: code.settings.width });
+    /** Every message from a shell page acts in the window that sent it, which becomes the focused one. */
+    const on = (channel: string, listener: (window: string, ...args: any[]) => void) =>
+        ipcMain.on(channel, (event: IpcMainEvent, ...args: any[]) => {
+            const window = host.idOf(event.sender);
+            if (window) listener(enter(window), ...args);
+        });
+    on('select', (window, repo: string, workspace?: string) => {
         const selected = workspaces.select(repo, workspace);
-        if (switcherOpen) closeSwitcher();
+        closeSwitcher(window);
         if (selected) changed();
     });
-    ipcMain.on('selectWorkspace', (_event, id: string) => workspaces.selectWorkspace(id) && changed());
-    ipcMain.on('close', (_event, repo: string) => closeRepo(repo));
-    ipcMain.on('open', () => addFolderDialog());
-    ipcMain.on('addMenu', () => addMenu());
-    ipcMain.on('openClone', () => openClone());
-    ipcMain.on('move', (_event, repo: string, from: string, to: string) => moveRepo(repo, from, to));
-    ipcMain.on('newWorkspace', () => newWorkspaceDialog());
-    ipcMain.on('retry', (_event, id: string) => retry(id));
-    ipcMain.on('repoMenu', (_event, repo: string) => repoMenu(repo));
-    ipcMain.on('workspaceMenu', (_event, id: string) => workspaceMenu(id));
-    ipcMain.on('pin', (_event, workspace: string, repo: string, pinned: boolean) => workspaces.pin(workspace, repo, pinned) && changed());
-    ipcMain.on('hide', (_event, workspace: string, repo: string, hidden: boolean) => workspaces.hide(workspace, repo, hidden) && changed());
-    ipcMain.on('reorder', (_event, workspace: string, repo: string, before?: string) => {
+    on('selectWorkspace', (_window, id: string) => workspaces.selectWorkspace(id) && changed());
+    on('close', (_window, repo: string) => closeRepo(repo));
+    on('open', () => addFolderDialog());
+    on('addMenu', window => addMenu(window));
+    on('openClone', () => openClone());
+    on('move', (_window, repo: string, from: string, to: string) => moveRepo(repo, from, to));
+    on('newWorkspace', () => newWorkspaceDialog());
+    on('retry', (_window, id: string) => retry(id));
+    on('repoMenu', (window, repo: string) => repoMenu(window, repo));
+    on('workspaceMenu', (window, id: string) => workspaceMenu(window, id));
+    on('paneMenu', (window, pane: string) => paneMenu(window, pane));
+    on('pin', (_window, workspace: string, repo: string, pinned: boolean) => workspaces.pin(workspace, repo, pinned) && changed());
+    on('hide', (_window, workspace: string, repo: string, hidden: boolean) => workspaces.hide(workspace, repo, hidden) && changed());
+    on('reorder', (_window, workspace: string, repo: string, before?: string) => {
         if (workspaces.reorder(workspace, repo, before)) persist(workspace);
         changed();
     });
-    ipcMain.on('toggleRail', () => toggleRail());
-    ipcMain.on('closeSwitcher', () => closeSwitcher());
+    on('toggleRail', () => toggleRail());
+    on('closeSwitcher', window => closeSwitcher(window));
+    on('detach', (window, kind: DragKind, id: string, x: number, y: number) => detach(window, kind, id, { x, y }));
+    on('drop', (window, kind: DragKind, id: string) => moveTo(kind, id, window));
+    on('focusPane', (_window, pane: string) => focusPane(pane));
+    on('dockPane', (_window, pane: string) => windows.dockPane(pane) && changed());
     ipcMain.handle('switch', (_event, query: string) => switcherEntries(workspaces, repoName, typeof query === 'string' ? query : ''));
-    ipcMain.handle('state', () => state());
+    ipcMain.handle('state', event => state(host.idOf(event.sender) ?? MAIN));
     ipcMain.on('codeViewSupported', event => event.returnValue = CodeViews.supported());
-    const repoOf = (sender: WebContents) => [...views].find(([, view]) => view.webContents === sender)?.[0];
+    const repoOf = (sender: WebContents) => {
+        const pane = [...host.panes].find(([id, view]) => view.webContents === sender && parsePane(id)?.type === IDE_PANE)?.[0];
+        return pane ? parsePane(pane)?.repo : undefined;
+    };
     ipcMain.on('ideSelected', (event, location: SourceLocation) => {
         const repo = repoOf(event.sender);
         if (repo && typeof location?.uri === 'string' && Number.isInteger(location.start)) code?.selected(repo, location);
@@ -153,6 +194,16 @@ function start(): void {
     buildMenu();
     const session = readSession(userFile('session.json'));
     const problems = session ? restore(session, workspaces) : [];
+    layouts = session?.layouts ?? {};
+    displays = currentDisplays();
+    const layout = layoutFor(layouts, displays);
+    if (layout) {
+        windows.restore(layout, openIds(), workspaces.live());
+        placeWindows(layout.displays);
+    }
+    screen.on('display-added', () => displaysChanged());
+    screen.on('display-removed', () => displaysChanged());
+    screen.on('display-metrics-changed', () => displaysChanged());
     if (problems.length) dialog.showErrorBox('Some workspaces did not reopen', problems.join('\n'));
     openPaths(initial);
     changed();
@@ -168,9 +219,11 @@ function openPaths(paths: string[]): void {
     changed();
 }
 
+/** Opens a workspace in the focused window (an open one is only shown, in its window). */
 function openWorkspace(file: string): void {
     try {
-        workspaces.open(file, existsSync(file) ? readCodeWorkspace(file).folders : []);
+        const { workspace, added } = workspaces.open(file, existsSync(file) ? readCodeWorkspace(file).folders : []);
+        if (added && windows.focused().id !== MAIN) windows.moveWorkspace(workspace.id, windows.focused().id);
         if (!existsSync(file)) writeCodeWorkspace(file, []);
     } catch (error) {
         dialog.showErrorBox(`${basename(file)} did not open`, (error as Error).message);
@@ -200,7 +253,10 @@ function persist(id: string): void {
     }
 }
 
-/** After every change: start servers for new repos, stop those that left every workspace, redraw, save the session. */
+/**
+ * After every change: start servers for new repos, stop those that left every workspace, close the windows left
+ * empty, show the window of a newly shown workspace or repo, redraw, save the session.
+ */
 function changed(): void {
     const live = workspaces.live();
     for (const repo of live) {
@@ -213,8 +269,13 @@ function changed(): void {
         if (!live.has(repo.id)) stop(repo.id);
     }
     code?.sync(live);
+    windows.prune(openIds(), live);
+    const shown = shownKey();
+    const revealed = shown !== lastShown ? reveal() : undefined;
+    lastShown = shown;
     refresh();
-    writeSession(userFile('session.json'), sessionOf(workspaces));
+    if (revealed) host.show(revealed);
+    save();
 }
 
 async function launch(id: string): Promise<void> {
@@ -246,7 +307,7 @@ async function launch(id: string): Promise<void> {
         if (!repos.get(id)) return ide.close();
         processes.set(id, ide);
         repos.update(id, { status: 'ready', url: ide.url });
-        views.set(id, view(ide.url));
+        host.addPane(paneId(IDE_PANE, id), view(ide.url));
     } catch (error) {
         repos.update(id, { status: 'failed', error: (error as Error).message });
     }
@@ -290,26 +351,23 @@ function view(url: string): WebContentsView {
         if (new URL(target).origin !== origin) event.preventDefault();
     });
     view.webContents.loadURL(`${url}/?shell=desktop`);
-    window!.contentView.addChildView(view);
     view.setVisible(false);
     return view;
 }
 
 function drop(id: string): void {
-    const view = views.get(id);
-    if (!view) return;
-    views.delete(id);
-    window?.contentView.removeChildView(view);
-    view.webContents.close();
+    host.removePane(paneId(IDE_PANE, id))?.webContents.close();
 }
 
 async function addFolderDialog(): Promise<void> {
+    const window = host.base();
     if (!window) return;
     const result = await dialog.showOpenDialog(window, { title: 'Add a repo to the workspace', properties: ['openDirectory', 'multiSelections'] });
     openPaths(result.filePaths);
 }
 
 async function openWorkspaceDialog(): Promise<void> {
+    const window = host.base();
     if (!window) return;
     const result = await dialog.showOpenDialog(window, {
         title: 'Open a workspace', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Workspaces', extensions: [EXTENSION.slice(1)] }]
@@ -319,6 +377,7 @@ async function openWorkspaceDialog(): Promise<void> {
 
 /** Creates a workspace file (or opens the chosen one when it exists, so a dialog's overwrite never empties a workspace). */
 async function newWorkspaceDialog(): Promise<void> {
+    const window = host.base();
     if (!window) return;
     mkdirSync(dirname(defaultWorkspace()), { recursive: true });
     const result = await dialog.showSaveDialog(window, {
@@ -334,12 +393,14 @@ function closeWorkspace(id: string): void {
     changed();
 }
 
-/** The rail's context menu of a repo: move it to another open workspace, or close it. */
-function repoMenu(repo: string): void {
+/** The rail's context menu of a repo: move it to another open workspace or window, or close it. */
+function repoMenu(window: string, repo: string): void {
     const from = workspaces.current();
-    if (!window || !from) return;
+    const base = host.base(window);
+    if (!base || !from) return;
     const others = workspaces.all().filter(w => w.id !== from.id);
     const pinned = from.pinned.includes(repo);
+    const away = windows.windowOfPane(paneId(IDE_PANE, repo));
     Menu.buildFromTemplate([
         { label: pinned ? 'Unpin' : 'Pin to Top', click: () => workspaces.pin(from.id, repo, !pinned) && changed() },
         { label: 'Hide from Rail', click: () => workspaces.hide(from.id, repo, true) && changed() },
@@ -348,11 +409,14 @@ function repoMenu(repo: string): void {
             label: 'Move to Workspace', enabled: others.length > 0,
             submenu: others.map(to => ({ label: to.name, click: () => moveRepo(repo, from.id, to.id) }))
         },
+        ...moveItems('repo', repo, window),
+        ...(away ? [{ label: `Dock Back from ${windowName(away.id)}`, click: () => windows.dockPane(paneId(IDE_PANE, repo)) && changed() }] : []),
+        ...paneItems(repo, window),
         { label: 'Reveal in File Manager', click: () => shell.showItemInFolder(repo) },
         { label: 'Open in VS Code', click: () => code?.openInVSCode(repo, false) },
         { type: 'separator' },
         { label: 'Close Repo', click: () => closeRepo(repo) }
-    ]).popup({ window });
+    ]).popup({ window: base });
 }
 
 /** Moves a repo to another workspace (rail menu, or a repo dropped on a workspace) and writes both workspace files. */
@@ -362,49 +426,63 @@ function moveRepo(repo: string, from: string, to: string): void {
 }
 
 /** The `+` below the repos: add a folder or clone a repository. */
-function addMenu(): void {
-    if (!window) return;
+function addMenu(window: string): void {
+    const base = host.base(window);
+    if (!base) return;
     Menu.buildFromTemplate([
         { label: 'Add Folder…', click: () => addFolderDialog() },
         { label: 'Clone Repository…', click: () => openClone() }
-    ]).popup({ window });
+    ]).popup({ window: base });
 }
 
-function workspaceMenu(id: string): void {
+function workspaceMenu(window: string, id: string): void {
     const workspace = workspaces.get(id);
-    if (!window || !workspace) return;
+    const base = host.base(window);
+    if (!base || !workspace) return;
     Menu.buildFromTemplate([
         {
             label: 'Hidden Repos', enabled: workspace.hidden.length > 0,
             submenu: workspace.hidden.map(repo => ({ label: `Show ${repoName(repo, workspace.folders.find(f => f.path === repo)?.name)}`, click: () => workspaces.hide(workspace.id, repo, false) && changed() }))
         },
         { type: 'separator' },
+        ...moveItems('workspace', workspace.id, window),
+        { type: 'separator' },
         { label: 'Reveal Workspace File', click: () => shell.showItemInFolder(workspace.id) },
         { type: 'separator' },
         { label: 'Close Workspace', click: () => closeWorkspace(workspace.id) }
-    ]).popup({ window });
+    ]).popup({ window: base });
 }
 
-/** Shows the active repo's view over the shell, hides the others (they keep running) and tells the rail. */
+/** The context menu of a pane moved into a window: send it back to its repo, or on to another window. */
+function paneMenu(window: string, pane: string): void {
+    const base = host.base(window);
+    if (!base || !parsePane(pane)) return;
+    Menu.buildFromTemplate([
+        { label: 'Dock Back', click: () => windows.dockPane(pane) && changed() },
+        ...moveItems('pane', pane, window)
+    ]).popup({ window: base });
+}
+
+/** Shows each window's repo and panes (the others keep running hidden) and tells every rail. */
 function refresh(): void {
-    if (!window) return;
-    const active = workspaces.activeRepo();
-    for (const [id, view] of views) view.setVisible(id === active && !switcherOpen && !cloneOpen);
-    layout();
-    const repo = active ? repos.get(active) : undefined;
-    const workspace = workspaces.current();
-    window.setTitle([repo?.name, workspace?.name, 'Appling'].filter(Boolean).join(' · '));
-    window.webContents.send('state', state());
-}
-
-function layout(): void {
-    if (!window) return;
-    const [width, height] = window.getContentSize();
-    const rail = workspaces.collapsed ? 0 : RAIL;
-    const area = { x: rail, y: 0, width: Math.max(0, width - rail), height };
-    // the code view, when open, takes the right part of the repo
-    const ide = code?.layout(workspaces.activeRepo(), area, switcherOpen || cloneOpen) ?? area;
-    for (const view of views.values()) view.setBounds(ide);
+    // a closed code view stays alive, hidden; the canvas then fills the repo's column
+    for (const pane of host.panes.keys()) {
+        const ref = parsePane(pane);
+        if (ref?.type === CODE_PANE) host.setHidden(pane, !code?.isShown(ref.repo));
+    }
+    host.arrange();
+    code?.visible(new Set(windows.all().flatMap(w => {
+        const repo = workspaces.get(windows.activeOf(w.id, openIds()) ?? '')?.active;
+        return [...(repo ? [repo] : []), ...w.panes.flatMap(p => parsePane(p)?.type === CODE_PANE ? [parsePane(p)!.repo] : [])];
+    })));
+    for (const [id] of host.shells()) {
+        const shown = state(id);
+        const repo = shown.repo ? repos.get(shown.repo) : undefined;
+        const workspace = shown.active ? workspaces.get(shown.active) : undefined;
+        const panes = shown.panes.map(p => `${p.name} · ${p.label}`);
+        host.base(id)?.setTitle([repo?.name, workspace?.name, ...(repo || workspace ? [] : panes), 'Appling'].filter(Boolean).join(' · '));
+        host.send(id, 'state', shown);
+    }
 }
 
 /** A repo's name in the rail and the switcher: the workspace file's display name, else the folder's name. */
@@ -412,12 +490,21 @@ function repoName(path: string, folderName?: string): string {
     return folderName ?? repos.get(path)?.name ?? (basename(path) || path);
 }
 
-function state() {
-    const current = workspaces.current();
+/** What a window's rail shows: the workspaces it holds, the repos of its shown one, and the panes moved into it. */
+function state(window: string) {
+    const open = openIds();
+    const active = windows.activeOf(window, open);
+    const current = active ? workspaces.get(active) : undefined;
     // the shown repo stays on the rail while it is hidden, so you can see where you are
     const shownHidden = current?.active && current.hidden.includes(current.active) ? current.active : undefined;
+    const away = (repo: string) => {
+        const pane = paneId(IDE_PANE, repo);
+        const moved = windows.windowOfPane(pane);
+        return moved && moved.id !== window ? { window: windowName(moved.id), pane } : undefined;
+    };
     return {
-        workspaces: workspaces.all().map(w => ({
+        window: { id: window, name: windowName(window), main: window === MAIN, count: windows.all().length },
+        workspaces: windows.workspacesOf(window, open).map(id => workspaces.get(id)!).map(w => ({
             id: w.id,
             name: w.name,
             hidden: w.hidden.length,
@@ -430,12 +517,19 @@ function state() {
                     return {
                         id: f.path, name: repoName(f.path, f.name), status: repo?.status ?? 'starting', error: repo?.error,
                         ...railView(rail.repo(f.path)),
-                        pinned: w.pinned.includes(f.path), hidden: w.hidden.includes(f.path)
+                        pinned: w.pinned.includes(f.path), hidden: w.hidden.includes(f.path), away: away(f.path)
                     };
                 })
         })),
-        active: workspaces.active,
-        repo: workspaces.activeRepo(),
+        // other workspaces live in other windows: the rail counts them, the switcher still finds them
+        elsewhere: open.length - windows.workspacesOf(window, open).length,
+        panes: (windows.get(window)?.panes ?? []).map(pane => {
+            const ref = parsePane(pane)!;
+            const repo = repos.get(ref.repo);
+            return { id: pane, repo: ref.repo, name: repoName(ref.repo), label: paneLabel(pane), status: repo?.status ?? 'starting', ...railView(rail.repo(ref.repo)) };
+        }),
+        active,
+        repo: current?.active,
         collapsed: workspaces.collapsed
     };
 }
@@ -450,32 +544,210 @@ function toggleRail(): void {
     changed();
 }
 
-/** Opens the switcher over the shell page; the shell asks for its lines through `switch` and picks with `select`. */
+/** Opens the switcher over the focused window's shell page; the shell asks for its lines through `switch` and picks with `select`. */
 function openSwitcher(): void {
-    if (!window || switcherOpen) return;
-    switcherOpen = true;
+    const window = windows.focused().id;
+    if (!host.cover(window, 'switcher', true)) return;
     refresh();
-    window.webContents.focus();
-    window.webContents.send('switcher');
+    host.native(window)?.shell.webContents.focus();
+    host.send(window, 'switcher');
 }
 
-function closeSwitcher(): void {
-    if (!switcherOpen) return;
-    switcherOpen = false;
+function closeSwitcher(window: string = windows.focused().id): void {
+    if (!host.cover(window, 'switcher', false)) return;
     refresh();
     activeView()?.webContents.focus();
 }
 
+/** The view the focused window shows: its repo's canvas, else the first pane moved into it. */
 function activeView(): WebContentsView | undefined {
-    const active = workspaces.activeRepo();
-    return active ? views.get(active) : undefined;
+    const window = windows.focused().id;
+    const repo = workspaces.get(windows.activeOf(window, openIds()) ?? '')?.active;
+    const canvas = repo ? paneId(IDE_PANE, repo) : undefined;
+    const pane = canvas && host.paneWindow(canvas) === window ? canvas : windows.focused().panes.find(p => host.panes.has(p));
+    return pane ? host.panes.get(pane) : undefined;
 }
+
+// ---- windows (issue #14) ----
+
+/** The open workspace ids in rail order. */
+function openIds(): string[] {
+    return workspaces.all().map(w => w.id);
+}
+
+function shownKey(): string {
+    return `${workspaces.active}\n${workspaces.activeRepo()}`;
+}
+
+/** Acting in a window makes its workspace the active one, so every command (and the switcher) works on it. */
+function enter(window: string): string {
+    windows.focus(window);
+    const active = windows.activeOf(window, openIds());
+    if (active && active !== workspaces.active) workspaces.selectWorkspace(active);
+    lastShown = shownKey();
+    return window;
+}
+
+/** A window got the focus from the system: its workspace becomes the active one. */
+function focusWindow(window: string): void {
+    if (!windows.get(window)) return;
+    const before = shownKey();
+    enter(window);
+    if (shownKey() !== before) refresh();
+}
+
+/**
+ * After the shown workspace or repo changed (through a shortcut, the switcher or another window's rail): the window
+ * holding it shows it and gets the focus, or the window the repo's canvas was moved to.
+ */
+function reveal(): string | undefined {
+    if (!workspaces.active) return undefined;
+    const owner = windows.follow(workspaces.active);
+    const repo = workspaces.activeRepo();
+    const target = (repo ? windows.windowOfPane(paneId(IDE_PANE, repo)) : undefined) ?? owner;
+    windows.focus(target.id);
+    return target.id;
+}
+
+/** Places the windows on the displays there are now; those whose display is gone go to the primary one. */
+function placeWindows(before: readonly DisplayInfo[]): void {
+    const now = currentDisplays();
+    const primary = screen.getPrimaryDisplay().id;
+    windows.all().forEach((window, index) => {
+        if (!window.bounds) return;
+        const placed = placeWindow({ bounds: window.bounds, display: window.display }, now, primary, before, index);
+        windows.setBounds(window.id, placed.bounds, placed.display, window.maximized === true);
+        host.native(window.id)?.base.setBounds(placed.bounds);
+    });
+}
+
+/** A monitor was plugged in or out: windows take their bounds saved for the new setup, or fall back from a gone display. */
+function displaysChanged(): void {
+    const now = currentDisplays();
+    const saved = layouts[displayFingerprint(now)];
+    for (const window of windows.all()) {
+        const match = saved?.windows.find(w => w.id === window.id);
+        if (match?.bounds) windows.setBounds(window.id, match.bounds, match.display, match.maximized === true);
+    }
+    placeWindows(displays);
+    displays = now;
+    saveSoon();
+}
+
+type DragKind = 'workspace' | 'repo' | 'pane';
+
+/** The pane a dragged rail item stands for: a repo is its canvas. */
+function paneOf(kind: DragKind, id: string): string {
+    return kind === 'repo' ? paneId(IDE_PANE, id) : id;
+}
+
+/** A drag out of a window's rail ended at a screen point: into another window, or into a new window there. */
+function detach(from: string, kind: DragKind, id: string, point: { x: number, y: number }): void {
+    if (![point.x, point.y].every(Number.isFinite)) return;
+    const target = dropTarget(point, from, host.bounds());
+    if (target === 'new') newWindow(kind, id, point);
+    else if (target) moveTo(kind, id, target);
+}
+
+/** Moves a workspace, a repo's canvas or a pane into a window of its own, at a screen point when given. */
+function newWindow(kind: DragKind, id: string, point?: { x: number, y: number }): void {
+    if (kind === 'workspace' ? !workspaces.get(id) : !parsePane(paneOf(kind, id))) return;
+    const source = host.base()?.getBounds();
+    const size = { width: Math.max(800, Math.round((source?.width ?? 1440) * 0.8)), height: Math.max(500, Math.round((source?.height ?? 900) * 0.8)) };
+    const at = point ? { x: point.x - 80, y: point.y - 16 } : { x: (source?.x ?? 0) + 48, y: (source?.y ?? 0) + 48 };
+    const now = currentDisplays();
+    const display = displayOf({ ...at, width: 1, height: 1 }, now)?.id ?? screen.getPrimaryDisplay().id;
+    const placed = placeWindow({ bounds: { ...at, ...size }, display }, now, screen.getPrimaryDisplay().id);
+    const window = kind === 'workspace' ? windows.open({ workspaces: [id] }, placed.bounds) : windows.open({ panes: [paneOf(kind, id)] }, placed.bounds);
+    window.display = placed.display;
+    if (kind === 'workspace') workspaces.selectWorkspace(id);
+    lastShown = shownKey();
+    changed();
+}
+
+/**
+ * Moves a dragged item into a window. A workspace goes to its rail. A repo or pane goes back to its repo's column
+ * when the window holds a workspace of that repo (docking), else it gets a column of its own there.
+ */
+function moveTo(kind: DragKind, id: string, to: string): void {
+    if (kind === 'workspace') {
+        if (!workspaces.get(id) || !windows.moveWorkspace(id, to)) return;
+        workspaces.selectWorkspace(id);
+    } else {
+        const pane = paneOf(kind, id);
+        const repo = parsePane(pane)?.repo;
+        if (!repo) return;
+        const home = windows.workspacesOf(to, openIds()).find(w => workspaces.get(w)?.folders.some(f => f.path === repo));
+        if (home) {
+            windows.dockPane(pane);
+            windows.get(to)!.active = home;
+            workspaces.select(repo, home);
+        } else if (!windows.movePane(pane, to)) return;
+    }
+    windows.focus(to);
+    lastShown = shownKey();
+    changed();
+    host.show(to);
+}
+
+function focusPane(pane: string): void {
+    const window = host.paneWindow(pane);
+    if (!window) return;
+    host.show(window);
+    host.panes.get(pane)?.webContents.focus();
+}
+
+/** "Window 2" for the second window, "Main Window" for the first. */
+function windowName(id: string): string {
+    return id === MAIN ? 'Main Window' : `Window ${id.replace(/^w/, '')}`;
+}
+
+/** The menu items that move an item into a new window or another one. */
+function moveItems(kind: DragKind, id: string, here: string): MenuItemConstructorOptions[] {
+    const others = windows.all().filter(w => w.id !== here);
+    return [
+        { label: 'Move to New Window', click: () => newWindow(kind, id) },
+        { label: 'Move to Window', enabled: others.length > 0, submenu: others.map(w => ({ label: windowName(w.id), click: () => moveTo(kind, id, w.id) })) }
+    ];
+}
+
+/** The repo's other panes (the code view, terminals), each with its move items, for the repo's rail menu. */
+function paneItems(repo: string, here: string): MenuItemConstructorOptions[] {
+    const panes = [...host.panes.keys()].filter(p => parsePane(p)?.repo === repo && parsePane(p)?.type !== IDE_PANE && !host.isHidden(p));
+    return panes.map(pane => ({
+        label: `Move ${paneLabel(pane)}`,
+        submenu: [...moveItems('pane', pane, here), ...(windows.windowOfPane(pane) ? [{ label: 'Dock Back', click: () => windows.dockPane(pane) && changed() }] : [])]
+    }));
+}
+
+/** Closes the focused window other than the main one; its workspaces and panes go back. */
+function dockWindow(): void {
+    const window = windows.focused();
+    if (window.id === MAIN) return;
+    windows.close(window.id);
+    changed();
+}
+
+/** Saves the session a moment after a window moved, so dragging a window does not write the file on every pixel. */
+function saveSoon(): void {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 400);
+}
+
+function save(): void {
+    clearTimeout(saveTimer);
+    if (!app.isReady() || quitting) return;
+    layouts = rememberLayout(layouts, windows.save(currentDisplays(), Date.now()));
+    writeSession(userFile('session.json'), sessionOf(workspaces, layouts));
+}
+
+// ---- menu ----
 
 const actions: Record<string, () => void> = {
     open: () => addFolderDialog(),
     clone: () => openClone(),
     closeRepo: () => { const repo = workspaces.activeRepo(); if (repo) closeRepo(repo); },
-    switcher: () => switcherOpen ? closeSwitcher() : openSwitcher(),
+    switcher: () => host.covered(windows.focused().id, 'switcher') ? closeSwitcher() : openSwitcher(),
     nextRepo: () => workspaces.stepRecent(1, Date.now()) && changed(),
     previousRepo: () => workspaces.stepRecent(-1, Date.now()) && changed(),
     ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`repo${i + 1}`, () => workspaces.selectAt(i) && changed()])),
@@ -485,13 +757,16 @@ const actions: Record<string, () => void> = {
     nextWorkspace: () => { workspaces.cycleWorkspace(1); changed(); },
     previousWorkspace: () => { workspaces.cycleWorkspace(-1); changed(); },
     ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`workspace${i + 1}`, () => workspaces.selectWorkspaceAt(i) && changed()])),
+    detachRepo: () => { const repo = workspaces.activeRepo(); if (repo) newWindow('repo', repo); },
+    detachWorkspace: () => workspaces.active && newWindow('workspace', workspaces.active),
+    dockWindow: () => dockWindow(),
     toggleRail: () => toggleRail(),
     toggleSource: () => activeView()?.webContents.executeJavaScript(`document.querySelector('.bar button[aria-pressed]')?.click()`),
     toggleCode: () => { const repo = workspaces.activeRepo(); if (repo) code?.toggle(repo); },
     openFileInVSCode: () => { const repo = workspaces.activeRepo(); if (repo) code?.openInVSCode(repo, true); },
     openRepoInVSCode: () => { const repo = workspaces.activeRepo(); if (repo) code?.openInVSCode(repo, false); },
     reload: () => activeView()?.webContents.reload(),
-    devTools: () => (activeView()?.webContents ?? window?.webContents)?.toggleDevTools(),
+    devTools: () => (activeView()?.webContents ?? host.native(windows.focused().id)?.shell.webContents)?.toggleDevTools(),
     keybindings: () => {
         const file = keybindingsFile();
         if (!existsSync(file)) writeFileSync(file, '{\n}\n');
@@ -530,7 +805,8 @@ function buildMenu(): void {
         { role: 'editMenu' },
         { label: 'View', submenu: [item('toggleRail'), item('toggleSource'), item('toggleCode'), item('reload'), item('devTools'), { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' }] },
         { label: 'Repo', submenu: [item('switcher'), { type: 'separator' }, item('openFileInVSCode'), item('openRepoInVSCode'), { type: 'separator' }, item('nextRepo'), item('previousRepo'), { type: 'separator' }, ...numbered('repo')] },
-        { label: 'Workspace', submenu: [item('nextWorkspace'), item('previousWorkspace'), { type: 'separator' }, ...numbered('workspace')] }
+        { label: 'Workspace', submenu: [item('nextWorkspace'), item('previousWorkspace'), { type: 'separator' }, ...numbered('workspace')] },
+        { label: 'Window', submenu: [item('detachRepo'), item('detachWorkspace'), item('dockWindow'), { type: 'separator' }, { role: 'minimize' }] }
     ];
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

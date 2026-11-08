@@ -3,13 +3,13 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
-import { dialog, session, shell, WebContentsView, type BrowserWindow, type Session } from 'electron';
+import { dialog, session, shell, WebContentsView, type Session } from 'electron';
 import { BRIDGE_ENV, CodeBridge, diffMessage, TOKEN_ENV, type TextDiffRequest } from './code-bridge.js';
 import { codeServerAsset, ensureCodeServer } from './code-download.js';
 import { CodeInstances, type InstanceState } from './code-instances.js';
 import { CodeProxy, PROXY_COOKIE } from './code-proxy.js';
 import { codeDirs, installExtension, repoKey, startCodeServer, type CodeServer } from './code-server.js';
-import { loadCodeViewSettings, splitBounds, type Bounds, type CodeViewSettings } from './code-settings.js';
+import { loadCodeViewSettings, type CodeViewSettings } from './code-settings.js';
 import { programPath } from './resources.js';
 import { findCode, lineColumn, vscodeArgs } from './vscode-cli.js';
 
@@ -26,7 +26,10 @@ interface Instance {
 }
 
 export interface CodeViewsOptions {
-    window: BrowserWindow;
+    /** Hands a repo's code view to the windows as its `code` pane (issue #14), which place, size and show it. */
+    attach(repo: string, view: WebContentsView): void;
+    /** Takes a repo's code view out of its window; the code view closes its web contents. */
+    detach(repo: string): void;
     /** The app's user data folder. */
     userData: string;
     /** The repo's IDE view, which hears the cursor of the code view. */
@@ -128,21 +131,18 @@ export class CodeViews {
         this.open(repo);
     }
 
-    /** Places the code views and returns the IDE views' bounds; only the shown repo's view is visible. */
-    layout(active: string | undefined, area: Bounds, covered: boolean): Bounds {
-        const split = splitBounds(area, !!active && this.shown.has(active), this.settings.width);
-        // an open code view whose instance was suspended comes back when its repo is shown again
-        if (active && this.shown.has(active) && !this.views.has(active)) {
-            this.ensureView(active);
-            this.open(active);
+    /**
+     * Follows the repos in sight in some window (the windows place and show the views as `code` panes): an open code
+     * view whose instance was suspended comes back when its repo is in sight again, and the instances learn which are
+     * in sight for the idle suspend.
+     */
+    visible(inSight: ReadonlySet<string>): void {
+        for (const repo of inSight) {
+            if (!this.shown.has(repo) || this.views.has(repo)) continue;
+            this.ensureView(repo);
+            this.open(repo);
         }
-        for (const [repo, view] of this.views) {
-            const visible = repo === active && this.shown.has(repo) && !covered;
-            view.setVisible(visible);
-            if (split.code) view.setBounds(split.code);
-        }
-        for (const repo of this.instances.repos()) this.instances.visible(repo, repo === active && this.shown.has(repo));
-        return split.ide;
+        for (const repo of this.instances.repos()) this.instances.visible(repo, inSight.has(repo) && this.shown.has(repo));
     }
 
     /** An element was selected in the repo's IDE: its source opens in the code view, when that runs. */
@@ -280,9 +280,9 @@ export class CodeViews {
         view.webContents.on('will-navigate', (event, target) => {
             if (!target.startsWith(`${this.proxy.origin}/`)) event.preventDefault();
         });
-        this.options.window.contentView.addChildView(view);
         view.setVisible(false);
         this.views.set(repo, view);
+        this.options.attach(repo, view);
         const state = this.instances.get(repo);
         if (state?.status === 'running') view.webContents.loadURL(this.proxy.url(repoKey(repo), repo));
         else this.status(repo, 'Starting Code OSS…');
@@ -293,7 +293,7 @@ export class CodeViews {
         const view = this.views.get(repo);
         if (!view) return;
         this.views.delete(repo);
-        this.options.window.contentView.removeChildView(view);
+        this.options.detach(repo);
         view.webContents.close();
     }
 }

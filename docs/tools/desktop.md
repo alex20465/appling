@@ -34,6 +34,23 @@ Each `.code-workspace` file opens as a workspace, and each folder joins the acti
 
 From a clone of the repository, `node packages/desktop/out/bin.js [paths...]` does the same after `pnpm build`.
 
+## Windows and monitors
+
+Every window has the rail and the switcher. The first window is the main window: it holds every workspace no other window holds, and closing it quits the app.
+
+| To | Do |
+|---|---|
+| Put a workspace or a repo in a window of its own | Drag it out of the rail and drop it outside every window, or right click it and choose **Move to New Window** |
+| Move it into another window | Drop it on that window, or right click it and choose **Move to Window** |
+| Move the code view of a repo | Right click the repo, then **Move Code** |
+| Dock it back | Right click the moved pane and choose **Dock Back**, drag it back, or close its window |
+
+A moved workspace takes its repos along. A moved repo takes its canvas: the new window shows it as a column, and its button in the old rail turns dashed. Closing a window gives everything in it back to the main window, so nothing closes with it.
+
+Moving never reloads anything: the canvas, its selection, the code view and agent sessions stay as they were.
+
+Appling saves which window holds what and where every window is, once per monitor setup, and restores it at the next start. A window whose monitor is gone opens on the primary display.
+
 ## Updates
 
 Desktop looks for a new version on GitHub Releases at every start, and on **File › Check for Updates…**.

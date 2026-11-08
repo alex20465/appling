@@ -2,7 +2,7 @@
 
 Appling Desktop: one native app for many repos. Repos are grouped into workspaces, each repo gets its own Appling IDE server and a view that stays alive while you switch, with the model canvas, search and inspector as its main area.
 
-In development (epic #15); the package is private until the first release. This is the shell with workspaces: the rail (collapsible, with pinned, reordered and hidden repos), one IDE server per repo, `.code-workspace` files, session restore, the fuzzy switcher, the app menu and rebindable shortcuts. Repos are added by folder or by cloning a git URL. The rail shows each repo's agent sessions, validation errors, unsaved files and git state (branch, ahead and behind, dirty). Each repo's IDE has a Review tab with the model diff against any commit. Each repo has a code view, an embedded Code OSS. It packages as an AppImage, an NSIS installer and a dmg, and updates itself from GitHub Releases. Task status in the rail and terminals follow.
+In development (epic #15); the package is private until the first release. This is the shell with workspaces: the rail (collapsible, with pinned, reordered and hidden repos), one IDE server per repo, `.code-workspace` files, session restore, the fuzzy switcher, the app menu and rebindable shortcuts. Repos are added by folder or by cloning a git URL. The rail shows each repo's agent sessions, validation errors, unsaved files and git state (branch, ahead and behind, dirty). Each repo's IDE has a Review tab with the model diff against any commit. Each repo has a code view, an embedded Code OSS. Workspaces, repos and panes move between windows on several monitors. It packages as an AppImage, an NSIS installer and a dmg, and updates itself from GitHub Releases. Task status in the rail and terminals follow.
 
 To install a release, see [Desktop](https://appling.tools/docs/tools/desktop/) in the docs.
 
@@ -57,7 +57,20 @@ Pins, hidden repos and the collapsed rail are part of the session, not of the wo
 
 Several workspaces stay open at once. A folder may sit in more than one workspace; it is still one repo with one server and one view. A repo's server runs while any open workspace holds it, so switching repos or workspaces never reloads a view.
 
-The open workspaces, the repo shown in each, the active workspace, the most recently used order, the pinned and hidden repos and whether the rail is collapsed are saved to `session.json` in the user data folder on every change and restored at the next start. Workspace files are read again then, so changes made in VS Code meanwhile show up; a file that is gone or broken is reported and left out.
+The open workspaces, the repo shown in each, the active workspace, the most recently used order, the pinned and hidden repos, whether the rail is collapsed and the window layouts (see [Windows](#windows)) are saved to `session.json` in the user data folder on every change and restored at the next start. Workspace files are read again then, so changes made in VS Code meanwhile show up; a file that is gone or broken is reported and left out.
+
+## Windows
+
+Every window has the rail and the switcher. The first window is the main window: it holds every workspace that no other window holds, and closing it quits the app.
+
+- **Detach** a workspace or a repo by dragging it out of the rail and dropping it outside every window: it opens in a new window there. Right click › **Move to New Window** does the same, and **Window › Move Repo to New Window** (`CmdOrCtrl+Shift+D`) or **Move Workspace to New Window** do it for the shown one.
+- A detached **workspace** takes its repos along: the new window's rail shows it, the main window's rail no longer does. A detached **repo** moves its canvas: the new window shows it as a column of its own, listed below a line at the bottom of the rail, and the repo's button in its workspace's rail turns dashed. Selecting it there shows where it is, with **Go There** and **Dock Here**.
+- **Panes** of a repo other than its canvas (the code view, with #9 terminals) move on their own: right click the repo › **Move Code** › **Move to New Window** or **Move to Window**. A closed code view keeps its view alive and leaves its place to the canvas.
+- **Move** an item into another window by dropping it on that window (its rail or its panes), or through right click › **Move to Window**. A repo dropped on a window that holds one of its workspaces docks back into its column there; elsewhere it gets a column of its own, next to whatever that window shows.
+- **Dock back**: right click a moved pane › **Dock Back** (or the repo › **Dock Back from Window n**), drag a workspace back onto the main window, or close the window: **Window › Dock Window** or the window's close button gives every workspace back to the main window and every pane back to its repo. A window left empty closes.
+- **Nothing reloads.** Every pane is one kept alive view; moving it between windows moves that view, so the canvas, its selection, the source view, agent sessions and (with #9) terminals stay exactly as they were.
+- Shortcuts act in the focused window. Selecting a repo or workspace that lives in another window (with the switcher, `Ctrl+Tab` or `CmdOrCtrl+Alt+1..9`) brings that window to the front.
+- **Layouts per monitor setup.** Which window holds what, and every window's bounds, display and maximized state, are saved in `session.json` per monitor setup (keyed by the ids and bounds of every display) and restored at the next start; up to 8 setups are kept. A setup never seen before takes the newest layout. A window whose display is gone opens on the primary display, at the same offset into its work area and no larger than it. Plugging a monitor in or out while the app runs moves the windows to the bounds saved for the new setup, or off a display that is gone.
 
 ## Code view
 
@@ -85,8 +98,9 @@ Each instance listens on its own port on 127.0.0.1 and requires its own connecti
 - `workspaces.ts` holds the pure state (open workspaces, the shown repo per workspace, pins and hidden repos, the rail order, the collapsed rail, the most recently used order); `switcher.ts` ranks the switcher's lines (`fuzzyMatch`, `switcherEntries`); `code-workspace.ts` reads and writes the files; `session.ts` saves and restores the session; `repos.ts` tracks the repos that have a server; `git.ts` reads the branch from `HEAD` without running git and the full state with `git status --porcelain=v2 --branch` (`parseGitStatus`, `readGitState`); `watchGit` follows it for the main process; `clone.ts` runs `git clone` with progress (`clone-ipc.ts` connects it to the shell's form).
 - `rail-status.ts` is the rail's status model. Each feature reports through its own source, `rail.source('name').set(repo, { counts, branch, notes })` (or `replace` for every repo at once, `clear`), so no feature overwrites another's numbers; `repo(id)` sums the sources and `sum(repos)` a workspace. Sources today: `validation` (the server's error count), `editor` (unsaved files), `git` (branch, ahead, behind and dirty from `watchGit`) and `agents` (the agent sessions store, through `agentContributions`). A new count is a key of `RailCounts` and a place in `RAIL_COUNTS`, which orders them by urgency for the badge.
 - Every repo runs `appling-ide <folder> --port 0` in its own child process (Electron's binary with `ELECTRON_RUN_AS_NODE`), so a failing repo cannot take the app down. The server reports its URL over the IPC channel, then `{ type: 'status', errors }` at start and after every model change and `{ type: 'status', unsaved }` (repo relative paths) whenever the files with unsaved edits change; the IDE client sends those to its server over `/events` (`{ type: 'unsaved', files }`). It ends when the channel closes, also when the app is killed. A server that ends shows its error with Retry and Close.
-- The window holds the shell page (`src/shell`: the 48px rail with workspaces on top and the repos of the active workspace below, and the empty and error states) and one `WebContentsView` per repo loading `<ide url>/?shell=desktop`: the IDE client with the canvas as the main area, the source folded away behind **Source** and no AI chat. Views of inactive repos are hidden, not destroyed. A view may navigate only within its own server; `https` links open in the browser.
+- Each window holds the shell page (`src/shell`: the 48px rail with workspaces on top and the repos of the active workspace below, and the empty and error states) and one `WebContentsView` per repo loading `<ide url>/?shell=desktop`: the IDE client with the canvas as the main area, the source folded away behind **Source** and no AI chat. Views of inactive repos are hidden, not destroyed. A view may navigate only within its own server; `https` links open in the browser.
 - `agent-sessions.ts`: the main process holds one store of agent sessions for every workspace and serves it to each repo's server over its IPC channel (`--shared-sessions`), with `desktopHost` adding the active repo, the workspace and the focus action to the sessions' IDE context. Agents reach the repo server's `/mcp` with their session's token (`openAgentSession`).
+- `windows.ts` holds the windows as pure state (`Windows`: which window holds which workspace, the panes moved into each, the shown workspace per window, the focus order, `placement` of every pane, `dropTarget` of a drag that left the rail, `rememberLayout` and `layoutFor` per monitor setup); `displays.ts` the display fingerprint and the fallback placement (`placeWindow`); `panes.ts` the pane ids, types and the column layout (`layoutPanes`). `window-host.ts` is the thin Electron side: one `BaseWindow` per window with its shell page as a `WebContentsView`, the pane views moved with `contentView.removeChildView` and `addChildView`.
 - The shell talks to the main process only through the preload bridge (`preload.cts`); every page runs sandboxed with context isolation. A repo view's own preload (`repo-preload.cts`) exposes `window.applingDesktop` for the code view's selection sync and `openTextDiff` (only where the code view runs).
 - The code view: `code-download.ts` (pinned release, verified download), `code-server.ts` (one openvscode-server per repo: `--host 127.0.0.1 --port 0 --connection-token-file --server-base-path /r/<key>` with the shared `--user-data-dir`, `--extensions-dir` and `--server-data-dir`), `code-instances.ts` (the pure lifecycle: lazy start, idle suspend, always alive), `code-proxy.ts` (the one origin proxy, which swaps the cookie for each instance's token), `code-bridge.ts` (the extension channel), `code-settings.ts`, `vscode-cli.ts` and the Electron glue in `code-view.ts` (one kept alive `WebContentsView` per repo in the `persist:appling-code` session).
 
@@ -134,6 +148,16 @@ Pushing a tag `desktop-v<version>` runs `.github/workflows/desktop-release.yml`:
 | `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` | Windows signing with a certificate (base64 `.pfx`) |
 | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_SIGNING_PROFILE`, `AZURE_PUBLISHER_NAME` | Windows signing with Azure Trusted Signing instead |
 
+## Adding a pane type
+
+A pane is one `WebContentsView` of a repo that can live in any window. The repo view (type `ide`, labeled Canvas) and the code view (type `code`, a `side` strip whose share is `codeView.width`; `code-view.ts` hands its views over through `attach` and `detach`) are panes; the terminal (#9) and agent sessions plug in the same way:
+
+1. Register the type once: `registerPaneType({ type: 'terminal', label: 'Terminal', region: 'bottom' })`. The region places it in the window that shows its repo: `main` fills the repo's column, `bottom` panes share a strip below it, `side` panes a strip on its right. A pane moved into another window always gets a column of its own there.
+2. Create its view and hand it over: `host.addPane(paneId('terminal', repo, key), view)`, then `refresh()`. The key tells several panes of one type and repo apart. Do not add the view to a window yourself; `host.arrange()` puts it into its window, sizes it and shows or hides it.
+3. When it ends, `host.removePane(id)?.webContents.close()`. Panes of a repo whose server stopped are forgotten by the windows; a moved pane whose view is not there yet (restored before it started) keeps its window.
+
+Moving, docking, the rail entry of a moved pane and saving it in the layout work for every type without more code.
+
 ## Shortcuts
 
 | Command | Default |
@@ -148,6 +172,8 @@ Pushing a tag `desktop-v<version>` runs `.github/workflows/desktop-release.yml`:
 | `repo1` … `repo9` (the rail's repos of the active workspace) | `CmdOrCtrl+1` … `CmdOrCtrl+9` |
 | `nextWorkspace`, `previousWorkspace` | `CmdOrCtrl+PageDown`, `CmdOrCtrl+PageUp` |
 | `workspace1` … `workspace9` | `CmdOrCtrl+Alt+1` … `CmdOrCtrl+Alt+9` |
+| `detachRepo` (moves the shown repo's canvas to a new window) | `CmdOrCtrl+Shift+D` |
+| `detachWorkspace`, `dockWindow` (closes the focused window, everything in it goes back) | none |
 | `toggleRail` | `CmdOrCtrl+B` |
 | `toggleSource` | `CmdOrCtrl+E` |
 | `toggleCode` (the code view) | `CmdOrCtrl+Alt+C` |

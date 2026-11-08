@@ -24,6 +24,17 @@ interface RepoState extends RailView {
     error?: string;
     pinned: boolean;
     hidden: boolean;
+    /** Set while the repo's canvas was moved into another window. */
+    away?: { window: string, pane: string };
+}
+
+/** A pane moved into this window (issue #14), shown as a column of its own. */
+interface PaneState extends RailView {
+    id: string;
+    repo: string;
+    name: string;
+    label: string;
+    status: 'starting' | 'ready' | 'failed';
 }
 
 interface WorkspaceState extends RailView {
@@ -35,6 +46,10 @@ interface WorkspaceState extends RailView {
 }
 
 interface ShellState {
+    window: { id: string, name: string, main: boolean, count: number };
+    /** How many open workspaces other windows hold. */
+    elsewhere: number;
+    panes: PaneState[];
     workspaces: WorkspaceState[];
     active?: string;
     repo?: string;
@@ -76,17 +91,29 @@ interface Bridge {
     chooseCloneParent(current: string): Promise<string | undefined>;
     clone(url: string, parent: string, name?: string): Promise<{ folder?: string, error?: string }>;
     closeClone(): void;
+    detach(kind: DragKind, id: string, x: number, y: number): void;
+    drop(kind: DragKind, id: string): void;
+    paneMenu(pane: string): void;
+    focusPane(pane: string): void;
+    dockPane(pane: string): void;
 }
+
+type DragKind = 'workspace' | 'repo' | 'pane';
+/** The drag data of a rail item, so another window's rail can take it. */
+const DRAG = 'application/x-appling-item';
 
 const bridge = (window as unknown as { appling: Bridge }).appling;
 const workspaceRail = document.querySelector<HTMLElement>('#workspaces')!;
 const repoRail = document.querySelector<HTMLElement>('#repos')!;
+const paneRail = document.querySelector<HTMLElement>('#panes')!;
 const stage = document.querySelector<HTMLElement>('#stage')!;
 const switcher = document.querySelector<HTMLElement>('#switcher')!;
 const switcherInput = switcher.querySelector<HTMLInputElement>('input')!;
 const switcherList = switcher.querySelector<HTMLElement>('ul')!;
 /** The repo being dragged in the rail. */
 let dragged: string | undefined;
+/** Whether a rail item of this window is being dragged (drops from other windows only move items between windows). */
+let dragging = false;
 
 /** Two letters for the rail: the initials of the name's words, or its first two letters. */
 function initials(name: string): string {
@@ -107,6 +134,7 @@ function render(state: ShellState): void {
             if (dragged && state.active && workspace.id !== state.active) bridge.move(dragged, state.active, workspace.id);
             dragged = undefined;
         };
+        detachable(button, 'workspace', workspace.id);
         button.oncontextmenu = event => {
             event.preventDefault();
             bridge.workspaceMenu(workspace.id);
@@ -125,17 +153,14 @@ function render(state: ShellState): void {
     repoRail.replaceChildren(...(workspace?.repos ?? []).map(repo => {
         const flags = `${repo.pinned ? ' pinned' : ''}${repo.hidden ? ' hidden' : ''}${repo.id === state.repo ? ' active' : ''}`;
         const note = repo.pinned ? 'Pinned. ' : repo.hidden ? 'Hidden from the rail. ' : '';
-        const button = railButton(`repo ${repo.status}${flags}`, repo.name, `${repo.name}\n${repo.id}\n${note}Drag to reorder or onto a workspace, middle click closes, right click for more`);
+        const away = repo.away ? `Its canvas is in ${repo.away.window}.\n` : '';
+        const button = railButton(`repo ${repo.status}${flags}${repo.away ? ' away' : ''}`, repo.name, `${repo.name}\n${repo.id}\n${away}${note}Drag to reorder, onto a workspace or out of the window, middle click closes, right click for more`);
         badge(button, repo);
         gitMarks(button, repo);
         unseenMark(button, repo.counts.unseen, repo.id === state.repo);
         button.onclick = () => bridge.select(repo.id, workspace!.id);
         button.draggable = true;
-        button.ondragstart = event => {
-            dragged = repo.id;
-            event.dataTransfer?.setData('text/plain', repo.name);
-        };
-        button.ondragend = () => dragged = undefined;
+        detachable(button, 'repo', repo.id, () => dragged = repo.id);
         button.ondragover = event => dragged && dragged !== repo.id && event.preventDefault();
         button.ondrop = event => {
             event.preventDefault();
@@ -150,14 +175,35 @@ function render(state: ShellState): void {
         return button;
     }));
 
+    paneRail.replaceChildren(...(state.panes.length ? [document.createElement('hr')] : []), ...state.panes.map(pane => {
+        const button = railButton(`repo pane ${pane.status}`, pane.name, `${pane.name} · ${pane.label}\n${pane.repo}\nMoved into this window. Drag out or right click to move it on or dock it back`);
+        badge(button, pane);
+        button.onclick = () => bridge.focusPane(pane.id);
+        button.oncontextmenu = event => {
+            event.preventDefault();
+            bridge.paneMenu(pane.id);
+        };
+        detachable(button, 'pane', pane.id);
+        return button;
+    }));
+
     const active = workspace?.repos.find(r => r.id === state.repo);
     stage.replaceChildren();
-    if (!workspace) {
+    if (!workspace && state.panes.length) {
+        // the moved panes cover the stage
+    } else if (!workspace && state.elsewhere) {
+        stage.append(heading(state.window.name), paragraph(`The open workspaces are in other windows. Drag one onto this rail, or open a workspace here.`),
+            action('New Workspace…', () => bridge.newWorkspace()));
+    } else if (!workspace) {
         stage.append(heading('No workspace open'), paragraph('A workspace groups git repos and is stored as a .code-workspace file, which VS Code opens too.'),
             action('New Workspace…', () => bridge.newWorkspace()), action('Add Folder…', () => bridge.open()), action('Clone Repository…', () => bridge.openClone()));
     } else if (!active) {
         stage.append(heading(workspace.name), paragraph('This workspace has no repos yet. Add a folder, clone one, or run appling-desktop <folder> in a terminal.'),
             action('Add Folder…', () => bridge.open()), action('Clone Repository…', () => bridge.openClone()));
+    } else if (active.away) {
+        const away = active.away;
+        stage.append(heading(active.name), paragraph(`Its canvas is in ${away.window}.`),
+            action('Go There', () => bridge.focusPane(away.pane)), action('Dock Here', () => bridge.dockPane(away.pane)));
     } else if (active.status === 'starting') {
         stage.append(heading(active.name), paragraph('Starting the IDE server…'));
     } else if (active.status === 'failed') {
@@ -166,6 +212,43 @@ function render(state: ShellState): void {
         stage.append(heading(`${active.name} did not start`), details, action('Retry', () => bridge.retry(active.id)), action('Close', () => bridge.close(active.id)));
     }
 }
+
+/**
+ * Makes a rail item draggable to another window's rail, or out of every window into a new one: a drag that ends
+ * without a drop target sends its screen point, and the main process decides (see `dropTarget`).
+ */
+function detachable(button: HTMLElement, kind: DragKind, id: string, start?: () => void): void {
+    button.draggable = true;
+    button.ondragstart = event => {
+        dragging = true;
+        start?.();
+        event.dataTransfer?.setData(DRAG, JSON.stringify({ kind, id }));
+        event.dataTransfer?.setData('text/plain', button.getAttribute('aria-label') ?? id);
+        if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+    };
+    button.ondragend = event => {
+        dragged = undefined;
+        dragging = false;
+        if (event.dataTransfer?.dropEffect === 'none') bridge.detach(kind, id, event.screenX, event.screenY);
+    };
+}
+
+// a rail item dragged in from another window lands in this window
+const rail = document.querySelector<HTMLElement>('.rail')!;
+rail.addEventListener('dragover', event => {
+    if (!dragging && event.dataTransfer?.types.includes(DRAG)) event.preventDefault();
+});
+rail.addEventListener('drop', event => {
+    const data = event.dataTransfer?.getData(DRAG);
+    if (dragging || event.defaultPrevented || !data) return;
+    event.preventDefault();
+    try {
+        const { kind, id } = JSON.parse(data) as { kind: DragKind, id: string };
+        bridge.drop(kind, id);
+    } catch {
+        // not ours
+    }
+});
 
 function railButton(className: string, name: string, title: string): HTMLButtonElement {
     const button = document.createElement('button');
