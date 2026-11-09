@@ -40,6 +40,7 @@ The crate name is the project name in snake case. The module `sales` is `src/sal
 | invariants | a test in the module's `tests` per invariant that `validate()` checks: `valid_<entity>()` (`<Entity>::new` with a sample for every argument, records through their own `new`, value types field by field) passes `validate()`, and the same record with one field set to a value the simulator proves to break the invariant fails with its label. Without such a value the violation case is a registry task; without a sample for every argument the test stays `#[ignore]`d |
 | transitions | a test in the module's `tests` per transition an action runs: `valid_<entity>()` in a `from` state goes to the `to` state through the action, and the action refuses a state no transition of it leaves with `Error::InvalidTransition`. Once the model has a policy, the test passes the first declared actor (`Actor::<actor>()`) the simulator proves the policies let run the action; records the action creates go to create functions that store nothing. The test stays `#[ignore]`d as a registry task when the simulator cannot prove that the preconditions and the guard hold for the record and the sample inputs, when an earlier transition of the action could take the record, when a policy involved has no Rust translation, when no actor is proven allowed, or when the action, the entity and the machine are in different modules; so do transitions on an event |
 | policies, preconditions | `#[ignore]`d tests in the module's `tests` |
+| `scenario` | a test `scenario_<name>` in the module's `tests` that builds the given rows, calls the action and checks the `then`, see [Scenarios](#scenarios) |
 
 This is the generated `place_order` of the [example](../../examples/sales.appling):
 
@@ -92,6 +93,43 @@ Each policy becomes a private function in its module, such as `order_policy_read
 Once the model has any policy, an operation that no policy covers is denied, the same rule as the [Django extension](django.md): an entity without policies gets checks that all return `false`, so its actions are forbidden too. A model without policies generates no checks, and its actions take no actor; only a [tenant](../language/access.md) then guards the actions on records in the tenant. Transitions on an event run without an actor and check nothing.
 
 Checks borrow single required records and take every other input by value. A policy whose condition has no Rust translation returns `false` until you write it; the registry lists it as a task. Its tests stay ignored, with their bodies as registry tasks.
+
+## Scenarios
+
+Each [scenario](../language/scenarios.md) becomes one test, `scenario_<name>`, in the `tests` module of the scenario's module. It reproduces the run of the [simulator](../tools/simulator.md), which has to pass the scenario first.
+
+| Scenario | Rust |
+|---|---|
+| `given` row | `let mut <name> = <Entity>::new(...)` with the given values and a sample for every required field the scenario does not give, then the other given fields; each row gets its own `id` (1, 2, ...) in order, so records compare by id as the simulator compares rows. A record field holds `Box::new(<row>.clone())`, a list of records `vec![<row>.clone(), ...]`. A row without a name is `_given_<n>` |
+| `as` | `Actor::<actor>()` (a role stands for the first actor holding it) with the given fields set: records as `Some(<row>.id)`, other values in `Some` |
+| no `as` | the call goes without an actor when the action takes none. Once the model has a policy every action checks an actor, so the test uses the first declared actor the simulator also passes the scenario as |
+| `when` an action | one call of the action's function: `&mut` the row, the inputs in order (`None` or `Vec::new()` for optional inputs left out), and create functions that store nothing |
+| `when` an endpoint | the crate has no HTTP layer, so the test calls the endpoint's action directly with the same arguments |
+| `then` checks | `assert!` per expression over the rows, which the call changed in place; optional fields are read through a clone |
+| `emitted E { f = v }` | `assert!` that the returned events hold an `Event::E` with those field values, records by id |
+| `then fails E` | `assert!(matches!(outcome, Err(Error::E)))` |
+| `then fails` | an error other than `Error::Forbidden` |
+| `then refused` | `Error::Forbidden` |
+
+A scenario test replaces the guessed tests of what it covers: the action its `when` runs gets no ignored test of its own, and the transitions that action triggers get no transition test, so their registry entries have no test task.
+
+This is the test of `EmptyOrderIsRefused` in the [example](../../examples/sales.appling), which calls `POST /orders/{id}/place` of `PublicApi`:
+
+```rust
+#[test]
+fn scenario_empty_order_is_refused() {
+    let mut acme = crate::crm::Account::new("Acme".to_string(), "email-1".to_string());
+    acme.id = 1;
+    let mut order = Order::new("A-2".to_string(), Box::new(acme.clone()), chrono::Utc::now());
+    order.id = 2;
+    let mut actor = crate::access::Actor::shopper();
+    actor.account = Some(acme.id);
+    let outcome = place_order(&actor, &mut order);
+    assert!(matches!(outcome, Err(Error::EmptyOrder)), "place_order fails with EmptyOrder: {outcome:?}");
+}
+```
+
+The test stays `#[ignore]`d, with the reason as the Scenario entry's registry task, when Rust cannot run the scenario the way the simulator does: the `when` runs a use case (use cases have no generated function), the simulator does not pass the scenario, the action has registry tasks of its own, a policy or role condition the call checks has no Rust translation, no declared actor fits a call without `as`, a given value, actor field or check has no Rust translation, a check compares two records (Rust holds them as clones), a check reads the called row through another record (that record holds a clone from before the call), or, for `then fails E`, the simulator cannot prove that `E` is the first error the action returns.
 
 ## What becomes a task
 

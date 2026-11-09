@@ -440,33 +440,51 @@ mod tests {
     #[ignore = "registry task: sales.Order.policy[read fields total]"]
     fn order_policy_read_fields_total() {}
     #[test]
-    #[ignore = "registry task: sales.PlaceOrder"]
-    fn sales_place_order() {}
-    #[test]
     #[ignore = "registry task: sales.PlaceOrder.policy[]"]
     fn place_order_policy() {}
-    #[test]
-    #[ignore = "registry task: sales.Cancel"]
-    fn sales_cancel() {}
     #[test]
     #[ignore = "registry task: sales.Cancel.policy[]"]
     fn cancel_policy() {}
     #[test]
-    #[ignore = "registry task: sales.OrderFlow.transition[draft->placed]"]
-    fn order_flow_transition_draft_placed() {}
-    #[test]
     #[ignore = "registry task: sales.OrderFlow.transition[placed->paid]"]
     fn order_flow_transition_placed_paid() {}
+    /// A clerk cancels a draft order
     #[test]
-    fn order_flow_transition_draft_placed_cancelled() {
+    fn scenario_clerk_cancels_draft() {
+        let mut acme = crate::crm::Account::new("Acme".to_string(), "email-1".to_string());
+        acme.id = 1;
+        let mut order = Order::new("A-1".to_string(), Box::new(acme.clone()), chrono::Utc::now());
+        order.id = 2;
         let actor = crate::access::Actor::employee();
-        let mut x = valid_order();
-        x.status = OrderStatus::Draft;
-        cancel(&actor, &mut x, None).expect("cancel from draft");
-        assert_eq!(x.status, OrderStatus::Cancelled, "cancel from draft goes to cancelled");
-        let mut x = valid_order();
-        x.status = OrderStatus::Paid;
-        assert!(matches!(cancel(&actor, &mut x, None), Err(Error::InvalidTransition { .. })), "cancel refuses paid");
+        let outcome = cancel(&actor, &mut order, Some("changed mind".to_string()));
+        outcome.expect("cancel runs");
+        assert!(order.status == OrderStatus::Cancelled, "order.status == cancelled");
+    }
+    /// The scenario sales.EmptyOrderIsRefused.
+    #[test]
+    fn scenario_empty_order_is_refused() {
+        let mut acme = crate::crm::Account::new("Acme".to_string(), "email-1".to_string());
+        acme.id = 1;
+        let mut order = Order::new("A-2".to_string(), Box::new(acme.clone()), chrono::Utc::now());
+        order.id = 2;
+        let mut actor = crate::access::Actor::shopper();
+        actor.account = Some(acme.id);
+        let outcome = place_order(&actor, &mut order);
+        assert!(matches!(outcome, Err(Error::EmptyOrder)), "place_order fails with EmptyOrder: {outcome:?}");
+    }
+    /// The scenario sales.OnlyOwnOrders.
+    #[test]
+    fn scenario_only_own_orders() {
+        let mut acme = crate::crm::Account::new("Acme".to_string(), "email-1".to_string());
+        acme.id = 1;
+        let mut globex = crate::crm::Account::new("Globex".to_string(), "email-1".to_string());
+        globex.id = 2;
+        let mut order = Order::new("A-3".to_string(), Box::new(acme.clone()), chrono::Utc::now());
+        order.id = 3;
+        let mut actor = crate::access::Actor::shopper();
+        actor.account = Some(globex.id);
+        let outcome = place_order(&actor, &mut order);
+        assert!(matches!(outcome, Err(Error::Forbidden { .. })), "place_order refuses the actor: {outcome:?}");
     }
 }
 ",

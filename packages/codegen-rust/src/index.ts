@@ -1,6 +1,6 @@
 import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
-import { Simulator, UNKNOWN, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
-import { accessFile, accessOf, accessSteps, actorFieldType, durationAttribute, durationSteps, libStep, PRIMITIVES, tenantOf, tenantPaths } from './access.js';
+import { coveredByScenarios, scenarioCall, Simulator, UNKNOWN, type Actor as SimActor, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
+import { accessFile, accessOf, accessSteps, actorFields, actorFieldType, durationAttribute, durationSteps, libStep, PRIMITIVES, roleCondition, tenantOf, tenantPaths } from './access.js';
 import { enumVariant, pascal, qualify, rustExpr, rustTerm, snake, type RustScope } from './rust.js';
 
 const OPERATIONS = ['read', 'create', 'update', 'delete'];
@@ -42,6 +42,7 @@ const extension: CodegenExtension = {
             case 'Action': return actionSteps(node, context);
             case 'Machine': return machineSteps(node, context);
             case 'Transition': return transitionTestSteps(node, context);
+            case 'Scenario': return scenarioSteps(node, context);
             case 'EnumLiteral':
             case 'Param':
             case 'SetEffect':
@@ -215,8 +216,17 @@ function validation(invariant: GraphNode, context: MapContext): string | undefin
     return rustExpr(invariant.data.condition as ExprData, { ...rustScope(context.node(parentOf(invariant.qn))!, context), self: 'self' });
 }
 
-/** An action becomes a function on `&mut` its entity: preconditions, the state transition, effects, and the emitted events. */
+/**
+ * An action becomes a function on `&mut` its entity: preconditions, the state transition, effects, and the emitted
+ * events. Its guessed test is left out when a scenario calls the action; the scenario's test replaces it.
+ */
 function actionSteps(action: GraphNode, context: MapContext): Step[] {
+    const { code, tasks } = actionCode(action, context);
+    return [append(action.module, code), ...guardSteps(action, context), ...tasks, ...(covered(context).has(action.qn) ? [] : testSteps(action))];
+}
+
+/** The function of an action, the tasks for what Rust cannot say in it, and the entities it creates through `create_<entity>`. */
+function actionCode(action: GraphNode, context: MapContext): { code: string, tasks: Step[], creating: Creating } {
     const entity = action.data.entity ? context.node(action.data.entity as string) : undefined;
     const self = entity ? snake(last(entity.qn)) : undefined;
     const scope = { ...rustScope(action, context), self };
@@ -253,7 +263,12 @@ function actionSteps(action: GraphNode, context: MapContext): Step[] {
         '    Ok(events)',
         '}'
     ].join('\n');
-    return [append(action.module, code), ...guardSteps(action, context), ...tasks, ...testSteps(action)];
+    return { code, tasks, creating };
+}
+
+/** Whether an action's function takes the actor: when a check guards it or the model has any policy. */
+function takesActor(action: GraphNode, context: MapContext): boolean {
+    return !!guardOf(action, context) || enforced(context);
 }
 
 /** What the policy checks of an element receive besides the actor: the record they guard and the inputs. */
@@ -563,12 +578,11 @@ function machineSteps(machine: GraphNode, context: MapContext): Step[] {
     return steps;
 }
 
-/** An ignored test per rule in the module's test module; writing its body is a registry task. */
-function testSteps(node: GraphNode): Step[] {
-    const name = testName(node);
+/** An ignored test per rule in the module's test module; writing its body is a registry task, with the reason when one is known. */
+function testSteps(node: GraphNode, name = testName(node), why?: string): Step[] {
     return [
         rustFile(node.module, text => text.replace(/(#\[cfg\(test\)\]\nmod tests \{\n)([\s\S]*?)(\}\n?$)/, (_, head, body, end) => `${head}${body}    #[test]\n    #[ignore = ${JSON.stringify(`registry task: ${node.qn}`)}]\n    fn ${name}() {}\n${end}`)),
-        task(`write the test ${name}`)
+        task(`write the test ${name}${why ? `: ${why}` : ''}`)
     ];
 }
 
@@ -577,9 +591,9 @@ function testName(node: GraphNode): string {
 }
 
 /** Adds a block to the test module of a module's file, which then imports the module (`use super::*;`). */
-function testBlock(module: string, block: string): Step {
+function testBlock(module: string, block: string, glob = true): Step {
     return rustFile(module, text => text.replace(/(#\[cfg\(test\)\]\nmod tests \{\n)([\s\S]*?)(\}\n?$)/, (_, head, body, end) => {
-        const uses = body.startsWith('    use super::*;\n') ? body : `    use super::*;\n\n${body}`;
+        const uses = !glob || body.startsWith('    use super::*;\n') ? body : `    use super::*;\n\n${body}`;
         return `${head}${uses}${block.split('\n').map(l => l ? `    ${l}` : l).join('\n')}\n${end}`;
     }));
 }
@@ -631,6 +645,8 @@ function invariantTestSteps(invariant: GraphNode, context: MapContext): Step[] {
  * code in another module) the test stays ignored as a registry task.
  */
 function transitionTestSteps(transition: GraphNode, context: MapContext): Step[] {
+    // A scenario that calls the transition's action has the test of it.
+    if (covered(context).has(transition.qn)) return [];
     const plan = transitionTest(transition, context);
     if (!plan) return testSteps(transition);
     const { action, valid, state, from, to, invalid, args, actor } = plan;
@@ -657,6 +673,21 @@ function transitionTestSteps(transition: GraphNode, context: MapContext): Step[]
 
 interface Literal { rust: string, label: string }
 
+/**
+ * Whether every policy the simulator weighs for an action is one Rust checks: those of the action, of its entity
+ * and of the entities it creates. Otherwise Rust denies where the simulator allows.
+ */
+function checksTranslate(action: GraphNode, context: MapContext): boolean {
+    const transitions = context.graph.nodes.filter(n => n.kind === 'Transition' && n.data.action === action.qn);
+    const created = [action, ...transitions].flatMap(n => context.children(n.qn)).filter(c => c.kind === 'CreateEffect').map(c => c.data.entity as string);
+    const owners = [action.qn, ...(action.data.entity ? [action.data.entity as string] : []), ...created];
+    const entity = action.data.entity ? context.node(action.data.entity as string) : undefined;
+    const scope: RustScope = { ...rustScope(action, context), self: entity && snake(last(entity.qn)), actor: 'actor' };
+    const roles = context.graph.nodes.filter(n => n.kind === 'Role' && n.data.condition);
+    return owners.flatMap(qn => context.children(qn)).filter(c => c.kind === 'Policy').every(p => rustExpr(p.data.condition as ExprData, scope))
+        && roles.every(r => roleCondition(r, context));
+}
+
 function transitionTest(transition: GraphNode, context: MapContext) {
     const action = transition.data.action ? context.node(transition.data.action as string) : undefined;
     const machine = context.node(parentOf(transition.qn))!;
@@ -670,13 +701,8 @@ function transitionTest(transition: GraphNode, context: MapContext) {
     const transitions = context.graph.nodes.filter(n => n.kind === 'Transition' && n.data.action === action.qn);
     const self = snake(last(entity.qn));
     const dry: RustScope = { ...rustScope(action, context), self };
-    const takesActor = !!guardOf(action, context) || enforced(context);
-    if (takesActor) {
-        // Every policy the simulator weighs must be one Rust checks, or Rust denies where the simulator allows.
-        const created = [action, ...transitions].flatMap(n => context.children(n.qn)).filter(c => c.kind === 'CreateEffect').map(c => c.data.entity as string);
-        const policies = [action.qn, entity.qn, ...created].flatMap(qn => context.children(qn)).filter(c => c.kind === 'Policy');
-        if (!policies.every(p => rustExpr(p.data.condition as ExprData, { ...dry, actor: 'actor' }))) return undefined;
-    }
+    const acting = takesActor(action, context);
+    if (acting && !checksTranslate(action, context)) return undefined;
     const args: string[] = [];
     const inputs: { [name: string]: Value } = {};
     for (const param of context.children(action.qn).filter(c => c.kind === 'Param')) {
@@ -685,11 +711,8 @@ function transitionTest(transition: GraphNode, context: MapContext) {
         args.push(sample.rust);
         inputs[last(param.qn)] = sample.value;
     }
-    // The create functions the action takes, found the way actionSteps finds them; the test stores nothing.
-    const creating: Creating = { action: last(action.qn), entities: new Map() };
-    transitionMatch(transitions, self, last(action.qn), dry, context, [], creating);
-    for (const effect of context.children(action.qn).filter(c => c.kind.endsWith('Effect'))) effectLines(effect, self, dry, context, [], creating);
-    for (const created of creating.entities.values()) args.push(`&mut |_: ${qualify(created, scope)}| Ok(())`);
+    // The create functions the action takes; the test stores nothing.
+    args.push(...storeArgs(action, scope, context));
     const field = context.node(machine.data.field as string)!;
     if ((field.data.type as TypeData).optional) return undefined;
     const enumNode = context.node((field.data.type as TypeData).decl!)!;
@@ -712,7 +735,7 @@ function transitionTest(transition: GraphNode, context: MapContext) {
     });
     if (!from) return undefined;
     let actor: string | undefined;
-    if (takesActor) {
+    if (acting) {
         // The first declared actor the simulator proves the policies let run the action, created as Actor::<actor>() makes it.
         const record = { ...valid.record, [fieldName]: from };
         const found = context.graph.nodes.filter(n => n.kind === 'Actor').find(a => sim.run(action.qn, record, { actor: a.qn }, inputs).allowed === 'yes');
@@ -728,6 +751,315 @@ function transitionTest(transition: GraphNode, context: MapContext) {
         to: literal(transition.data.to as string),
         invalid: invalid ? literal(invalid) : undefined
     };
+}
+
+/** The create functions an action takes, as closures that store nothing. */
+function storeArgs(action: GraphNode, scope: RustScope, context: MapContext): string[] {
+    return [...actionCode(action, context).creating.entities.values()].map(e => `&mut |_: ${qualify(e, scope)}| Ok(())`);
+}
+
+const coverage = new WeakMap<Graph, Set<string>>();
+
+/** The actions and transitions a scenario calls: the scenario tests replace their guessed tests. */
+function covered(context: MapContext): Set<string> {
+    let found = coverage.get(context.graph);
+    if (!found) coverage.set(context.graph, found = coveredByScenarios(context.graph));
+    return found;
+}
+
+/** A scenario inside `GraphNode.data`. */
+interface ScenarioData {
+    does?: string;
+    fixtures?: { name?: string, entity: string, assignments?: Assignment[] }[];
+    actor?: { persona: string, assignments?: Assignment[] };
+    checks?: { $type: 'Expectation' | 'Emitted', condition?: ExprData, event?: string, assignments?: Assignment[] }[];
+    fails?: boolean;
+    error?: string;
+    refused?: boolean;
+}
+
+interface Assignment { name: string, value: ExprData }
+
+/** Why a scenario test cannot be generated; the scenario's test stays ignored with this as its task. */
+class Unsupported extends Error {}
+
+/** Names a given row cannot have in the test: Rust keywords and the test's own variables. */
+const RESERVED = new Set([
+    'as', 'async', 'await', 'box', 'break', 'const', 'continue', 'crate', 'dyn', 'else', 'enum', 'extern', 'false', 'fn', 'for', 'gen', 'if', 'impl',
+    'in', 'let', 'loop', 'match', 'mod', 'move', 'mut', 'pub', 'ref', 'return', 'self', 'static', 'struct', 'super', 'trait', 'true', 'try', 'type',
+    'unsafe', 'use', 'where', 'while', 'yield', 'actor', 'outcome', 'events', 'emitted', 'fired', 'error'
+]);
+
+/**
+ * A scenario becomes one test in its module's test module, `scenario_<name>`: the given rows built with `new`
+ * (samples for the required fields the scenario does not give) and distinct ids, the actor, one call of the
+ * action (an endpoint call calls the endpoint's action, as the crate has no HTTP layer), and its `then`. What
+ * Rust cannot reproduce exactly as the simulator runs it leaves the test ignored, with a registry task.
+ */
+function scenarioSteps(scenario: GraphNode, context: MapContext): Step[] {
+    const name = `scenario_${snake(last(scenario.qn))}`;
+    try {
+        const { code, local } = scenarioTest(scenario, name, context);
+        return [testBlock(scenario.module, code, local)];
+    } catch (error) {
+        if (!(error instanceof Unsupported)) throw error;
+        return testSteps(scenario, name, error.message);
+    }
+}
+
+/**
+ * The test's code, and whether it calls an action of its own module: then it names that module's declarations as
+ * the module's other tests do, through `use super::*;`, otherwise it qualifies every name with its crate path.
+ */
+function scenarioTest(scenario: GraphNode, name: string, context: MapContext): { code: string, local: boolean } {
+    const call = scenarioCall(context.graph, scenario);
+    if (!call) throw new Unsupported('the endpoint it calls does not exist');
+    const action = context.node(call.target)!;
+    if (action.kind !== 'Action') throw new Unsupported(`the ${action.kind === 'UseCase' ? 'use case' : action.kind} ${last(action.qn)} has no generated function to call`);
+    const fn = snake(last(action.qn));
+    const sim = simulator(context);
+    const result = sim.scenario(scenario.qn);
+    if (!result.passed) throw new Unsupported(`the simulator does not pass it: ${result.failures.join(' ')}`);
+    if (actionCode(action, context).tasks.length) throw new Unsupported(`${fn} has registry tasks of its own, so it does not do all the model says yet`);
+    const data = scenario.data as ScenarioData;
+    const fixtures = data.fixtures ?? [];
+    const named = new Set(fixtures.flatMap(f => f.name ? [f.name] : []));
+    for (const binding of named) if (RESERVED.has(binding)) throw new Unsupported(`the name ${binding} is a Rust keyword or a variable of the test`);
+    const local = action.module === scenario.module;
+    const scope: RustScope = { ...rustScope(scenario, context), module: local ? scenario.module : '', vars: new Map([...named].map(n => [n, 'other' as const])) };
+    const lines: string[] = [];
+    const rows = new Map<string, GraphNode>();
+
+    // given: each row through `new`, with an id of its own, so records compare as the simulator compares them.
+    fixtures.forEach((fixture, i) => {
+        const entity = context.node(fixture.entity)!;
+        const variable = fixture.name ?? `_given_${i + 1}`;
+        if (fixture.name) rows.set(fixture.name, entity);
+        const given = new Map((fixture.assignments ?? []).map(a => [a.name, a.value]));
+        const stored = fieldsOf(entity, context).filter(f => !f.data.derived);
+        for (const field of given.keys()) if (!stored.some(f => last(f.qn) === field)) throw new Unsupported(`${last(entity.qn)} stores no field ${field}`);
+        const required = requiredFields(entity, context, rustScope(entity, context));
+        const args = required.map(field => {
+            const expr = given.get(last(field.qn));
+            if (expr) return givenValue(field.data.type as TypeData, expr, scope, context);
+            const sample = rustSample(last(field.qn), field.data.type as TypeData, scope, context, 0);
+            if (!sample) throw new Unsupported(`there is no sample for the field ${last(field.qn)} of ${last(entity.qn)}`);
+            return sample.rust;
+        });
+        lines.push(`let mut ${variable} = ${qualify(entity, scope)}::new(${args.join(', ')});`, `${variable}.id = ${i + 1};`);
+        for (const field of stored.filter(f => !required.includes(f) && given.has(last(f.qn)))) {
+            lines.push(`${variable}.${last(field.qn)} = ${givenValue(field.data.type as TypeData, given.get(last(field.qn))!, scope, context)};`);
+        }
+    });
+
+    // as: the declared actor (a role stands for the first actor holding it); without one, a function that checks
+    // an actor gets the first declared actor the simulator passes the scenario as.
+    const acting = takesActor(action, context);
+    const persona = data.actor;
+    let actorQn: string | undefined;
+    if (persona) {
+        const node = context.node(persona.persona)!;
+        actorQn = node.kind === 'Role' ? context.graph.nodes.find(n => n.kind === 'Actor' && ((n.data.roles ?? []) as string[]).includes(node.qn))?.qn : node.qn;
+        if (!actorQn) throw new Unsupported(`no declared actor holds the role ${last(node.qn)}`);
+    } else if (acting) {
+        actorQn = actorFor(scenario, context);
+        if (!actorQn) throw new Unsupported(`${fn} always checks an actor, and the simulator passes the scenario as no declared actor`);
+    }
+    const actorUsed = !!actorQn && (acting || JSON.stringify(data.checks ?? []).includes('"name":"actor"'));
+    if (actorUsed) {
+        const sets = (persona?.assignments ?? []).map(a => actorField(a, scope, context));
+        lines.push(`let ${sets.length ? 'mut ' : ''}actor = ${accessPath(scope, 'Actor')}::${snake(accessOf(context).name(actorQn!))}();`, ...sets);
+    }
+    if (acting && !data.refused && enforced(context) && !checksTranslate(action, context)) {
+        throw new Unsupported(`a policy or role condition that ${fn} checks has no Rust translation, so Rust denies what the simulator allows`);
+    }
+
+    // when: the action's function, the row first, then the inputs in order; missing optional inputs are None.
+    const args = [...call.args];
+    const rustArgs = acting ? ['&actor'] : [];
+    let subject: string | undefined;
+    if (action.data.entity) {
+        const row = args.shift();
+        if (row?.$type !== 'NameExpr' || !named.has(row.name!)) throw new Unsupported(`the first argument of ${fn} is not a given row`);
+        subject = row.name!;
+        rustArgs.push(`&mut ${subject}`);
+    }
+    const params = context.children(action.qn).filter(c => c.kind === 'Param');
+    const inputs: string[] = params.map((param, i) => {
+        const type = param.data.type as TypeData;
+        const expr = args[i];
+        if (expr) return givenValue(type, expr, scope, context);
+        if (type.many) return 'Vec::new()';
+        if (type.optional) return 'None';
+        throw new Unsupported(`the scenario gives no value for the input ${last(param.qn)} of ${fn}`);
+    });
+    if (subject && inputs.some(i => new RegExp(`\\b${subject}\\b`).test(i))) throw new Unsupported(`an input of ${fn} reads ${subject}, which the call borrows mutably`);
+    rustArgs.push(...inputs, ...storeArgs(action, scope, context));
+    const path = local ? '' : `crate::${action.module.replaceAll('.', '::')}::`;
+    lines.push(`let outcome = ${path || (named.has(fn) ? 'super::' : '')}${fn}(${rustArgs.join(', ')});`);
+
+    // then
+    if (data.refused) {
+        if (!guardOf(action, context)) throw new Unsupported(`${fn} checks no policy before it runs`);
+        lines.push(`assert!(matches!(outcome, Err(${path}Error::Forbidden { .. })), ${rustMessage(`${fn} refuses the actor`, ': {outcome:?}')});`);
+    } else if (data.fails) {
+        failsFirst(action, call.args, data, result.rows, persona, actorQn, context);
+        lines.push(data.error
+            ? `assert!(matches!(outcome, Err(${path}Error::${last(data.error)})), ${rustMessage(`${fn} fails with ${last(data.error)}`, ': {outcome:?}')});`
+            : `assert!(matches!(outcome, Err(ref error) if !matches!(error, ${path}Error::Forbidden { .. })), ${rustMessage(`${fn} fails`, ': {outcome:?}')});`);
+    } else {
+        const checks = data.checks ?? [];
+        const shown = (scenario.props.checks ?? []) as string[];
+        const asserts = checks.map((check, i) => {
+            if (check.$type === 'Expectation') return `assert!(${expectation(check.condition!, subject ? { name: subject, entity: rows.get(subject)! } : undefined, actorUsed, scope, context)}, ${rustMessage(shown[i])});`;
+            return `assert!(events.iter().any(|emitted| ${emittedPattern(check.event!, check.assignments ?? [], action, path, scope, context)}), ${rustMessage(`${fn} emits ${shown[i].replace(/^emitted /, '')}`, ': {events:?}')});`;
+        });
+        lines.push(`${checks.some(c => c.$type === 'Emitted') ? 'let events = ' : ''}outcome.expect(${rustMessage(`${fn} runs`)});`, ...asserts);
+    }
+
+    // A row nothing reads is named with `_`, so the test compiles without warnings.
+    const body = [...lines];
+    for (const binding of named) {
+        const declared = new RegExp(`^(let mut |)${binding}\\b`);
+        const reads = body.filter(l => !declared.test(l) && new RegExp(`\\b${binding}\\b`).test(l));
+        if (!reads.length) body.forEach((l, i) => { if (declared.test(l)) body[i] = l.replace(new RegExp(`\\b${binding}\\b`), `_${binding}`); });
+    }
+    const doc = data.does ? `/// ${data.does}` : `/// The scenario ${scenario.qn}.`;
+    return { code: [doc, '#[test]', `fn ${name}() {`, ...body.map(l => `    ${l}`), '}'].join('\n'), local };
+}
+
+/**
+ * The pattern an emitted event matches: its variant of the action module's `Event`, and the given field values,
+ * records by id (the event holds a clone from when it was emitted, the simulator compares rows by identity).
+ */
+function emittedPattern(eventQn: string, assignments: Assignment[], action: GraphNode, path: string, scope: RustScope, context: MapContext): string {
+    const event = context.node(eventQn)!;
+    if (event.module !== action.module) throw new Unsupported(`${last(event.qn)} is not an event of the module of ${last(action.qn)}`);
+    const variant = `${path}Event::${last(event.qn)}`;
+    if (!assignments.length) return `matches!(emitted, ${variant}(_))`;
+    const conditions = assignments.map(({ name, value }) => {
+        const field = fieldsOf(event, context).find(f => last(f.qn) === name);
+        const type = field?.data.type as TypeData | undefined;
+        if (!field || !type || type.many) throw new Unsupported(`Rust cannot compare the field ${name} of ${last(event.qn)}`);
+        if (type.decl && context.node(type.decl)?.kind === 'Entity') {
+            if (value.$type === 'NullExpr') return `fired.${name}.is_none()`;
+            const term = rustTerm(value, scope);
+            if (!term || term.option || term.null) throw new Unsupported(`the value of ${name} in emitted ${last(event.qn)} is not a given row`);
+            return type.optional ? `fired.${name}.as_ref().map(|r| r.id) == Some(${term.value}.id)` : `fired.${name}.id == ${term.value}.id`;
+        }
+        const expected = assigned(field, value, scope);
+        if (!expected) throw new Unsupported(`Rust cannot say the value of ${name} in emitted ${last(event.qn)}`);
+        return `fired.${name} == ${expected}`;
+    });
+    return `matches!(emitted, ${variant}(fired) if ${conditions.join(' && ')})`;
+}
+
+/** A string literal for an assertion message: braces doubled, then the format arguments. */
+function rustMessage(text: string, args = ''): string {
+    return JSON.stringify(text.replace(/\{/g, '{{').replace(/\}/g, '}}') + args);
+}
+
+/** A field type as the pseudo field `assigned` reads. */
+function typed(type: TypeData): GraphNode {
+    return { qn: '', kind: 'Field', data: { type } } as unknown as GraphNode;
+}
+
+/**
+ * A value the scenario gives to a field or an input: a record is a clone of the given row in a `Box`, a list of
+ * records holds clones, other values as effects assign them.
+ */
+function givenValue(type: TypeData, expr: ExprData, scope: RustScope, context: MapContext): string {
+    const entity = !!type.decl && context.node(type.decl)?.kind === 'Entity';
+    const record = (e: ExprData) => {
+        const term = rustTerm(e, scope);
+        if (!term || term.option || term.null) throw new Unsupported(`the record ${JSON.stringify(e.name ?? e.member ?? e.$type)} is not a given row Rust can clone`);
+        return `${term.value}.clone()`;
+    };
+    if (type.many && expr.$type === 'ListExpr') {
+        const items = (expr.items ?? []).map(item => entity ? record(item) : givenValue({ ...type, many: false, optional: false }, item, scope, context));
+        return items.length ? `vec![${items.join(', ')}]` : 'Vec::new()';
+    }
+    if (entity && !type.many) {
+        if (expr.$type === 'NullExpr' && type.optional) return 'None';
+        return type.optional ? `Some(Box::new(${record(expr)}))` : `Box::new(${record(expr)})`;
+    }
+    const value = assigned(typed(type), expr, scope);
+    if (!value) throw new Unsupported(`Rust cannot say the value of type ${type.primitive ?? type.decl} it gives`);
+    return value;
+}
+
+/** A field value of the actor: records by id, everything else in `Some`. */
+function actorField(assignment: Assignment, scope: RustScope, context: MapContext): string {
+    const field = actorFields(context).find(f => last(f.qn) === assignment.name);
+    const type = field?.data.type as TypeData | undefined;
+    if (!field || !type || !actorFieldType(field, context) || type.many) throw new Unsupported(`the Actor has no field ${assignment.name} that Rust can set`);
+    if (assignment.value.$type === 'NullExpr') return `actor.${assignment.name} = None;`;
+    if (type.decl) {
+        const term = rustTerm(assignment.value, scope);
+        if (!term || term.option) throw new Unsupported(`the actor field ${assignment.name} is not a given row`);
+        return `actor.${assignment.name} = Some(${term.value}.id);`;
+    }
+    const value = assigned(typed({ ...type, optional: true }), assignment.value, scope);
+    if (!value) throw new Unsupported(`Rust cannot say the value of the actor field ${assignment.name}`);
+    return `actor.${assignment.name} = ${value};`;
+}
+
+/** The first declared actor the simulator passes the scenario as, for a call without `as` to a function that checks an actor. */
+function actorFor(scenario: GraphNode, context: MapContext): string | undefined {
+    return context.graph.nodes.filter(n => n.kind === 'Actor').find(actor => {
+        const nodes = context.graph.nodes.map(n => n === scenario ? { ...n, data: { ...n.data, actor: { $type: 'ScenarioActor', persona: actor.qn } } } : n);
+        return new Simulator({ ...context.graph, nodes }).scenario(scenario.qn).passed;
+    })?.qn;
+}
+
+/**
+ * For a call that should fail: the policies must allow it (else Rust returns `Forbidden`), and the first
+ * precondition that does not hold, the one Rust returns, must be proven false and carry the expected error.
+ */
+function failsFirst(action: GraphNode, args: ExprData[], data: ScenarioData, rows: { [name: string]: SimRecord }, persona: ScenarioData['actor'], actorQn: string | undefined, context: MapContext): void {
+    const sim = simulator(context);
+    const vars = new Map<string, Value>(Object.entries(rows));
+    const actor: SimActor | undefined = actorQn ? { actor: actorQn, fields: Object.fromEntries((persona?.assignments ?? []).map(a => [a.name, sim.evaluate(a.value, { vars })])) } : undefined;
+    const values = args.map(a => sim.evaluate(a, { actor, vars }));
+    const self = action.data.entity ? values.shift() as SimRecord : {};
+    const inputs = Object.fromEntries(context.children(action.qn).filter(c => c.kind === 'Param').map((p, i) => [last(p.qn), values[i] ?? null]));
+    if (actor && enforced(context) && sim.run(action.qn, self, actor, inputs).allowed !== 'yes') throw new Unsupported(`the simulator cannot prove that the policies let the actor call ${last(action.qn)}`);
+    if (!data.error) return;
+    for (const precondition of (action.data.preconditions ?? []) as { condition: ExprData, error?: string }[]) {
+        const holds = sim.evaluate(precondition.condition, { self, actor, inputs });
+        if (holds === true) continue;
+        if (holds === false && precondition.error === data.error) return;
+        break;
+    }
+    throw new Unsupported(`the simulator cannot prove that ${last(data.error)} is the first error ${last(action.qn)} returns`);
+}
+
+/**
+ * A `then` expression in Rust, over the rows as local variables. A comparison of records (a `Box` against a row)
+ * and a read of the called row through another record (a clone from before the call) are left to a task.
+ */
+function expectation(condition: ExprData, subject: { name: string, entity: GraphNode } | undefined, actor: boolean, scope: RustScope, context: MapContext): string {
+    const entities = new Set(context.graph.nodes.filter(n => n.kind === 'Entity').map(n => last(n.qn)));
+    const base = (e?: ExprData) => e?.type?.replace(/\?$/, '').replace(/\[\]$/, '') ?? '';
+    const actorRooted = (e?: ExprData): boolean => !!e && (e.$type === 'NameExpr' ? e.name === 'actor' || (!!e.target && context.node(e.target)?.kind === 'Tenant') : actorRooted(e.receiver));
+    const walk = (e: unknown): void => {
+        if (Array.isArray(e)) { e.forEach(walk); return; }
+        if (!e || typeof e !== 'object') return;
+        const node = e as ExprData;
+        if (node.$type === 'BinaryExpr' && ['==', '!=', 'in'].includes(node.op!)) {
+            const sides = [node.left, node.op === 'in' ? node.right?.items?.[0] : node.right];
+            if (sides.some(s => entities.has(base(s))) && !sides.some(actorRooted)) throw new Unsupported('a check compares records, which Rust holds as clones');
+        }
+        if (node.$type === 'MemberExpr' && subject && node.receiver && !(node.receiver.$type === 'NameExpr' && scope.vars?.has(node.receiver.name!))) {
+            if (base(node.receiver) === last(subject.entity.qn)) throw new Unsupported(`a check reads ${subject.name} through another record, which holds a clone from before the call`);
+        }
+        for (const value of Object.values(node)) walk(value);
+    };
+    walk(condition);
+    const code = rustExpr(condition, { ...scope, actor: actor ? '(&actor)' : undefined });
+    if (!code) throw new Unsupported('Rust cannot say one of its checks');
+    // Reading an optional field must not move it out of the row, which later checks read again.
+    return code.replace(/\b([a-z_]\w*(?:\.[a-z_]\w*)+)\.unwrap\(\)/g, '$1.clone().unwrap()');
 }
 
 /**

@@ -1,6 +1,6 @@
 import type { ExprData, GraphNode } from '@appling/model';
 
-type Kind = 'decimal' | 'time' | 'duration' | 'int' | 'string' | 'bool' | 'list' | 'null' | 'other' | 'id';
+export type Kind = 'decimal' | 'time' | 'duration' | 'int' | 'string' | 'bool' | 'list' | 'null' | 'other' | 'id';
 
 interface Rust {
     code: string;

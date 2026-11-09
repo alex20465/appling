@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import type { Model } from '@appling/lang';
 import { plan } from '@appling/codegen';
 import { buildGraph } from '@appling/model';
-import { buildWorkspace, examples } from '../../lang/test/workspace.js';
+import { buildWorkspace, constructs, examples } from '../../lang/test/workspace.js';
 import rust from '../src/index.js';
 
 test('examples generate a Rust crate for the domain and behavior layers', async () => {
@@ -12,7 +12,9 @@ test('examples generate a Rust crate for the domain and behavior layers', async 
     for (const { step } of result.steps) if (step.kind === 'template') files.set(step.file, step.write(files.get(step.file)));
     expect(Object.fromEntries(files)).toMatchSnapshot();
     const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
-    expect(entries['sales.PlaceOrder'].status).toBe('partial');
+    // The scenarios that call PlaceOrder replace its guessed test.
+    expect(entries['sales.PlaceOrder'].status).toBe('generated');
+    expect(entries['sales.EmptyOrderIsRefused'].status).toBe('generated');
     expect(entries['sales.OpenOrders'].status).toBe('partial');
     expect(entries['sales.Order.total'].status).toBe('generated');
 });
@@ -260,4 +262,157 @@ test('once the model has a policy, what no policy covers is denied, and effects 
     const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
     expect(entries['n.Ping'].missing.map(m => m.what)).toContain('emit Noted with its fields item, count, which the model does not give or Rust cannot say');
     expect(entries['n.Record'].missing.map(m => m.what)).toEqual(['write the test n_record']);
+});
+
+const SCENARIOS = `module s {
+  export Customer, Item, Basket, Place, Placed, Phase
+  enum Phase {
+    draft
+    placed
+  }
+  entity Customer {
+    name: String
+  }
+  entity Item {
+    sku: String
+    price: Money
+  }
+  entity Basket {
+    owner: Customer
+    items: Item[]
+    phase: Phase state default draft
+    note: String?
+    count: Int default 0
+    total: Money = sum(items.map(i, i.price))
+  }
+  event Placed {
+    basket: Basket
+    note: String?
+    count: Int
+  }
+  action Place on Basket {
+    input {
+      remark: String
+      extra: Int?
+    }
+    requires { items.size() > 0 } else Empty
+    effect {
+      set note = remark
+      set count = items.size()
+      emit Placed { basket = this, note = remark, count = items.size() }
+    }
+    errors Empty
+  }
+  machine Flow on Basket.phase {
+    transition draft -> placed via Place
+  }
+  scenario PlaceBasket does "A basket with an item is placed" {
+    given {
+      ada = create Customer { name = "Ada" }
+      ink = create Item { sku = "ink", price = 2.5 }
+      basket = create Basket { owner = ada, items = [ink] }
+      create Item { sku = "pen", price = 1 }
+    }
+    when Place(basket, "now")
+    then {
+      basket.phase == placed
+      basket.total == 2.5
+      basket.note == "now"
+      basket.owner.name == "Ada"
+      emitted Placed { basket = basket, note = "now", count = 1 }
+      emitted Placed
+    }
+  }
+  scenario EmptyBasket {
+    given {
+      ada = create Customer { name = "Ada" }
+      basket = create Basket { owner = ada }
+    }
+    when Place(basket, "x")
+    then fails Empty
+  }
+  scenario PlacedTwice {
+    given {
+      ada = create Customer { name = "Ada" }
+      ink = create Item { sku = "ink", price = 2 }
+      basket = create Basket { owner = ada, items = [ink], phase = placed }
+    }
+    when Place(basket, "x")
+    then fails
+  }
+  scenario SameOwner {
+    given {
+      ada = create Customer { name = "Ada" }
+      ink = create Item { sku = "ink", price = 2 }
+      basket = create Basket { owner = ada, items = [ink] }
+    }
+    when Place(basket, "x")
+    then {
+      basket.owner == ada
+    }
+  }
+}
+
+module t {
+  scenario FromOutside {
+    given {
+      ada = create s.Customer { name = "Ada" }
+      ink = create s.Item { sku = "ink", price = 2 }
+      basket = create s.Basket { owner = ada, items = [ink] }
+    }
+    when s.Place(basket, "x", 3)
+    then {
+      basket.count == 1
+      emitted s.Placed { basket = basket }
+    }
+  }
+}`;
+
+test('scenarios become tests with the given rows, the call and the then, and replace the guessed tests of what they call', async () => {
+    const { documents, services } = await buildWorkspace({ 's.appling': SCENARIOS });
+    const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), rust, 'app');
+    const files = new Map<string, string>();
+    for (const { step } of result.steps) if (step.kind === 'template') files.set(step.file, step.write(files.get(step.file)));
+    const tests = files.get('src/s.rs')!.split('#[cfg(test)]')[1];
+    expect(tests).toContain([
+        '    fn scenario_place_basket() {',
+        '        let mut ada = Customer::new("Ada".to_string());',
+        '        ada.id = 1;',
+        '        let mut ink = Item::new("ink".to_string(), rust_decimal::Decimal::from_str_exact("2.5").unwrap());',
+        '        ink.id = 2;',
+        '        let mut basket = Basket::new(Box::new(ada.clone()));',
+        '        basket.id = 3;',
+        '        basket.items = vec![ink.clone()];',
+        '        let mut _given_4 = Item::new("pen".to_string(), rust_decimal::Decimal::from(1));',
+        '        _given_4.id = 4;',
+        '        let outcome = place(&mut basket, "now".to_string(), None);',
+        '        let events = outcome.expect("place runs");',
+        '        assert!(basket.phase == Phase::Placed, "basket.phase == placed");',
+        '        assert!(basket.total() == rust_decimal::Decimal::from_str_exact("2.5").unwrap(), "basket.total == 2.5");',
+        '        assert!(basket.note.clone().unwrap() == "now", "basket.note == \\"now\\"");'
+    ].join('\n'));
+    expect(tests).toContain('assert!(events.iter().any(|emitted| matches!(emitted, Event::Placed(fired) if fired.basket.id == basket.id && fired.note == Some("now".to_string()) && fired.count == 1)), "place emits Placed {{ basket = basket, note = \\"now\\", count = 1 }}: {events:?}");');
+    expect(tests).toContain('assert!(matches!(outcome, Err(Error::Empty)), "place fails with Empty: {outcome:?}");');
+    expect(tests).toContain('assert!(matches!(outcome, Err(ref error) if !matches!(error, Error::Forbidden { .. })), "place fails: {outcome:?}");');
+    // A scenario calling another module's action names everything by its crate path, without `use super::*;`.
+    const outside = files.get('src/t.rs')!.split('#[cfg(test)]')[1];
+    expect(outside).not.toContain('use super::*;');
+    expect(outside).toContain('let outcome = crate::s::place(&mut basket, "x".to_string(), Some(3));');
+    expect(outside).toContain('matches!(emitted, crate::s::Event::Placed(fired) if fired.basket.id == basket.id)');
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    for (const qn of ['s.EmptyBasket', 's.PlacedTwice', 't.FromOutside']) expect(entries[qn].status).toBe('generated');
+    expect(entries['s.SameOwner'].missing.map(m => m.what)).toEqual(['write the test scenario_same_owner: a check compares records, which Rust holds as clones']);
+    // The scenarios replace the guessed tests of the action they call and of its transition.
+    expect(tests).not.toContain('fn s_place()');
+    expect(entries['s.Place'].missing).toEqual([]);
+    expect(entries['s.Flow.transition[draft->placed]'].status).toBe('generated');
+});
+
+test('a scenario Rust cannot run as the simulator does stays an ignored test with the reason as its task', async () => {
+    const { documents, services } = await buildWorkspace(constructs());
+    const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), rust, 'shop');
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['shop.PlaceFullOrder'].missing.map(m => m.what)).toContain('write the test scenario_place_full_order: place_order always checks an actor, and the simulator passes the scenario as no declared actor');
+    expect(entries['shop.EmptyCheckout'].missing.map(m => m.what)).toEqual(['write the test scenario_empty_checkout: the use case Checkout has no generated function to call']);
+    expect(entries['shop.ShopperCannotCancel'].status).toBe('generated');
 });
