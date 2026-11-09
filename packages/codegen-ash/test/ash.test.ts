@@ -488,7 +488,10 @@ test('entity policies get Ash.can? tests for actors that their actor.is checks d
     const can = (assertion: string, action: string) => `    ${assertion} Ash.can?({Shop.Ops.Ticket, :${action}}, actor, maybe_is: false)`;
     const employee = '    actor = %Shop.Ops.Employee{roles: [:operator, :auditor]}';
     const guest = '    actor = %Shop.Ops.Guest{roles: []}';
-    expect(ticket).toContain(['  test "policy[read] allows permitted actors" do', employee, can('assert', 'read'), '  end'].join('\n'));
+    // Ash allows every read and filters it, so Ash.can? without records cannot tell; read policies stay tasks.
+    expect(ticket).toContain('  @tag skip: "registry task: ops.Ticket.policy[read]"\n  test "policy[read] allows permitted actors"\n');
+    expect(ticket).toContain('  @tag skip: "registry task: ops.Ticket.policy[read]"\n  test "policy[read] denies other actors"\n');
+    expect(ticket).not.toContain(':read}');
     expect(ticket).toContain(['  test "policy[create,delete] allows permitted actors" do', employee, can('assert', 'create'), can('assert', 'destroy'), '  end'].join('\n'));
     expect(ticket).toContain(['  test "policy[create,delete] denies other actors" do', guest, can('refute', 'create'), can('refute', 'destroy'), '  end'].join('\n'));
     // forbid_unless Operator keeps Guest out before the expr check; Employee reaches it, so that case stays a task.

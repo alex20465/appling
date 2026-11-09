@@ -364,10 +364,8 @@ end
   "test/shop/crm/account_test.exs": "defmodule Shop.Crm.AccountTest do
   use ExUnit.Case, async: true
 
-  test "policy[read] allows permitted actors" do
-    actor = %Shop.Crm.Employee{roles: [:clerk]}
-    assert Ash.can?({Shop.Crm.Account, :read}, actor, maybe_is: false)
-  end
+  @tag skip: "registry task: crm.Account.policy[read]"
+  test "policy[read] allows permitted actors"
 
   @tag skip: "registry task: crm.Account.policy[read]"
   test "policy[read] denies other actors"

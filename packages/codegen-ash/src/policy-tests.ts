@@ -15,8 +15,9 @@ const ACTIONS: Record<string, string> = { read: 'read', create: 'create', update
  * an actor struct that carries the actor's roles; it needs no database while every check that decides is an
  * `actor.is(...)` check (an `Ash.Policy.SimpleCheck`). An actor is tested when the policy checks, in Ash's order,
  * decide it without reaching an `expr` check and the simulator agrees: one the policy (with every other policy of
- * the operation) lets through, and one it keeps out. A case stays a registry task when no declared actor fits, the
- * resource is partitioned by a tenant (reads need a tenant), or the policy guards fields.
+ * the operation) lets through, and one it keeps out. Reads are left out: Ash allows a read and filters its records,
+ * so `Ash.can?` without records answers true for every actor. A case stays a registry task when no declared actor
+ * fits, the policy covers only reads, the resource is partitioned by a tenant, or the policy guards fields.
  */
 export function policyTests(policy: GraphNode, context: MapContext): Step[] {
     const entity = context.node(parentOf(policy.qn))!;
@@ -24,7 +25,8 @@ export function policyTests(policy: GraphNode, context: MapContext): Step[] {
     const cases = ['allows permitted actors', 'denies other actors'];
     if (((policy.data.fields ?? []) as string[]).length || partitioned(entity, context)) return testSteps(policy, entity, title, cases, context);
     const wholes = context.children(entity.qn).filter(p => p.kind === 'Policy' && !((p.data.fields ?? []) as string[]).length);
-    const operations = covered(policy);
+    // Ash allows a read and filters it: without records `Ash.can?` answers true for any read, so reads stay tasks.
+    const operations = covered(policy).filter(o => o !== 'read');
     const actors = context.graph.nodes.filter(n => n.kind === 'Actor');
     const verdict = (p: GraphNode, actor: GraphNode) => {
         const ash = ashVerdict(p, actor, context);
@@ -40,7 +42,7 @@ export function policyTests(policy: GraphNode, context: MapContext): Step[] {
     ];
     const tests: TestCase[] = [
         { name: cases[0], body: allowed && body(allowed.actor, 'assert', allowed.operations) },
-        { name: cases[1], body: denied && body(denied, 'refute', operations) }
+        { name: cases[1], body: denied && operations.length ? body(denied, 'refute', operations) : undefined }
     ];
     return testSteps(policy, entity, title, tests, context);
 }

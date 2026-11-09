@@ -259,16 +259,17 @@ end
 
 `moves from allowed states` only gets a body when the simulator proves the action's preconditions and guards true on that record, and the translated invariants true after the transition, with no effect setting a field they read. An action whose transitions lead to more than one state (picking the target is a task), an action on another entity, a required argument without a sample value (a record, a value type, a file) and a resource without a sample input keep both tests skipped; a state machine where every state leads on keeps `refuses other states` skipped. Precondition tests stay skipped.
 
-A policy on a whole entity gets test bodies that ask its authorizer with `Ash.can?` for the resource's default action of each operation (`read`, `create`, `update`, `destroy`), with `maybe_is: false`. The actor is a struct: a record of the actor's resource with the actor's own roles, or the struct of a system or service actor. This needs no database as long as the checks that decide are `actor.is(...)` checks, which are `Ash.Policy.SimpleCheck`s. The generator walks the policy's checks in Ash's order (`authorize_if` stops when its check holds, `forbid_unless` stops when it fails), and an actor is tested only when the walk ends before an `expr` check or a role with a condition, and the simulator gives the same verdict. `allows permitted actors` asserts every operation that this policy and every other policy of the entity on that operation let the actor do. `denies other actors` refutes every operation of the policy for an actor it keeps out.
+A policy on a whole entity gets test bodies that ask its authorizer with `Ash.can?` for the resource's default action of each operation it covers other than reads (`create`, `update`, `destroy`), with `maybe_is: false`. Reads are left out: Ash allows a read and filters its records, so `Ash.can?` without records answers true for every actor, and a policy on reads only keeps its tests skipped. The actor is a struct: a record of the actor's resource with the actor's own roles, or the struct of a system or service actor. This needs no database as long as the checks that decide are `actor.is(...)` checks, which are `Ash.Policy.SimpleCheck`s. The generator walks the policy's checks in Ash's order (`authorize_if` stops when its check holds, `forbid_unless` stops when it fails), and an actor is tested only when the walk ends before an `expr` check or a role with a condition, and the simulator gives the same verdict. `allows permitted actors` asserts every operation that this policy and every other policy of the entity on that operation let the actor do. `denies other actors` refutes every operation of the policy for an actor it keeps out.
 
 ```elixir
-test "policy[read] allows permitted actors" do
+test "policy[create,delete] allows permitted actors" do
   actor = %Shop.Crm.Employee{roles: [:clerk]}
-  assert Ash.can?({Shop.Crm.Account, :read}, actor, maybe_is: false)
+  assert Ash.can?({Shop.Sales.Order, :create}, actor, maybe_is: false)
+  assert Ash.can?({Shop.Sales.Order, :destroy}, actor, maybe_is: false)
 end
 ```
 
-A case without such an actor stays skipped. So do field policies and the policies of resources partitioned by a tenant, where reads need a tenant.
+A case without such an actor stays skipped. So do field policies and the policies of resources partitioned by a tenant.
 
 
 ## Actors
