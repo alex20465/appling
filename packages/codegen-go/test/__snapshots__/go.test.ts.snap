@@ -367,6 +367,8 @@ func CanOpenOrders(actor access.Actor, order *Order) bool {
   "internal/sales/sales_test.go": "package sales
 
 import (
+	"errors"
+	"shop/internal/access"
 	"testing"
 	"time"
 )
@@ -432,7 +434,23 @@ func TestOrderFlowTransitionPlacedPaid(t *testing.T) {
 }
 
 func TestOrderFlowTransitionDraftPlacedCancelled(t *testing.T) {
-	t.Skip("registry task: sales.OrderFlow.transition[draft,placed->cancelled]")
+	t.Run("goes from draft to cancelled", func(t *testing.T) {
+		x := validOrder()
+		x.Status = OrderStatusDraft
+		if _, err := Cancel(access.NewEmployee(), x, nil); err != nil {
+			t.Fatalf("Cancel from draft: %v", err)
+		}
+		if x.Status != OrderStatusCancelled {
+			t.Fatalf("Cancel from draft: want cancelled, got %v", x.Status)
+		}
+	})
+	t.Run("refuses paid", func(t *testing.T) {
+		x := validOrder()
+		x.Status = OrderStatusPaid
+		if _, err := Cancel(access.NewEmployee(), x, nil); !errors.Is(err, ErrInvalidTransition) {
+			t.Fatalf("Cancel from paid: want ErrInvalidTransition, got %v", err)
+		}
+	})
 }
 ",
   "internal/sales/support.go": "package sales

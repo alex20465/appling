@@ -38,7 +38,7 @@ const extension: CodegenExtension = {
                 return accessSteps(node, context);
             case 'Action': return actionSteps(node, context);
             case 'Machine': return machineSteps(node, context);
-            case 'Transition': return testSteps(node, context);
+            case 'Transition': return transitionTestSteps(node, context);
             case 'EnumLiteral':
             case 'Param':
             case 'SetEffect':
@@ -536,6 +536,127 @@ function invariantTestSteps(invariant: GraphNode, context: MapContext): Step[] {
         goFile(invariant.module, `${pkgOf(invariant.module)}_test.go`, context, imports, code),
         ...(violation ? [] : [task(`write the violation case of the test ${name}`)])
     ];
+}
+
+/**
+ * The test of a transition an action runs: the entity's valid record in a `from` state goes to the `to`
+ * state through the action, and, when the action allows a state no transition leaves, the action refuses it
+ * with `ErrInvalidTransition`. The simulator must prove that the preconditions and the guard hold and that no
+ * earlier case of the switch takes the record; without that (an actor to pass, an input or state it cannot
+ * say, code in another package) the test stays skipped as a registry task.
+ */
+function transitionTestSteps(transition: GraphNode, context: MapContext): Step[] {
+    const plan = transitionTest(transition, context);
+    if (!plan) return testSteps(transition, context);
+    const { action, valid, state, from, to, invalid, args, actor, imports } = plan;
+    const call = `${last(action.qn)}(${[...(actor ? [actor] : []), 'x', ...args].join(', ')})`;
+    const name = testName(transition);
+    const code = [
+        `func ${name}(t *testing.T) {`,
+        `\tt.Run("goes from ${from.label} to ${to.label}", func(t *testing.T) {`,
+        `\t\tx := ${valid.name}()`,
+        `\t\tx.${state} = ${from.go}`,
+        `\t\tif _, err := ${call}; err != nil {`,
+        `\t\t\tt.Fatalf("${last(action.qn)} from ${from.label}: %v", err)`,
+        '\t\t}',
+        `\t\tif x.${state} != ${to.go} {`,
+        `\t\t\tt.Fatalf("${last(action.qn)} from ${from.label}: want ${to.label}, got %v", x.${state})`,
+        '\t\t}',
+        '\t})',
+        ...(invalid ? [
+            `\tt.Run("refuses ${invalid.label}", func(t *testing.T) {`,
+            `\t\tx := ${valid.name}()`,
+            `\t\tx.${state} = ${invalid.go}`,
+            `\t\tif _, err := ${call}; !errors.Is(err, ErrInvalidTransition) {`,
+            `\t\t\tt.Fatalf("${last(action.qn)} from ${invalid.label}: want ErrInvalidTransition, got %v", err)`,
+            '\t\t}',
+            '\t})'
+        ] : []),
+        '}'
+    ].join('\n');
+    if (invalid) imports.add('errors');
+    return [valid.step, goFile(transition.module, `${pkgOf(transition.module)}_test.go`, context, imports, code)];
+}
+
+interface Literal { go: string, label: string }
+
+function transitionTest(transition: GraphNode, context: MapContext) {
+    const action = transition.data.action ? context.node(transition.data.action as string) : undefined;
+    const machine = context.node(parentOf(transition.qn))!;
+    const entity = action?.data.entity ? context.node(action.data.entity as string) : undefined;
+    if (!action || !entity || !(machine.data.field as string).startsWith(`${entity.qn}.`)) return undefined;
+    // Code in another package is more than a generated test sets up.
+    if (action.module !== transition.module || entity.module !== transition.module) return undefined;
+    const imports = new Set(['testing']);
+    const scope = goScope(transition, context, imports);
+    const valid = validRecord(entity, context);
+    if (!valid) return undefined;
+    const transitions = context.graph.nodes.filter(n => n.kind === 'Transition' && n.data.action === action.qn);
+    const self = camel(last(entity.qn));
+    const dry = { ...goScope(action, context, new Set()), self };
+    const args: string[] = [];
+    const inputs: { [name: string]: Value } = {};
+    const takesActor = !!guardOf(action, context) || enforced(context);
+    if (takesActor) {
+        // Every policy the simulator weighs must be one Go checks, or Go denies where the simulator allows.
+        const created = [action, ...transitions].flatMap(n => context.children(n.qn)).filter(c => c.kind === 'CreateEffect').map(c => c.data.entity as string);
+        const policies = [action.qn, entity.qn, ...created].flatMap(qn => context.children(qn)).filter(c => c.kind === 'Policy');
+        if (!policies.every(p => goExpr(p.data.condition as ExprData, { ...dry, actor: 'actor' }))) return undefined;
+    }
+    for (const param of context.children(action.qn).filter(c => c.kind === 'Param')) {
+        const type = param.data.type as TypeData;
+        if (type.optional || type.many) {
+            args.push('nil');
+            inputs[last(param.qn)] = type.many ? [] : null;
+            continue;
+        }
+        const sample = goSample(last(param.qn), type, scope, context);
+        if (!sample || sample.value === UNKNOWN) return undefined;
+        args.push(sample.go);
+        inputs[last(param.qn)] = sample.value;
+    }
+    // The create functions the action takes, found the way actionSteps finds them; the test stores nothing.
+    const creating: Creating = { action: last(action.qn), entities: new Map() };
+    transitionSwitch(transitions, self, last(action.qn), dry, context, [], creating);
+    for (const effect of context.children(action.qn).filter(c => c.kind.endsWith('Effect'))) effectLines(effect, self, dry, context, [], creating);
+    for (const created of creating.entities.values()) args.push(`func(${typeOf({ $type: 'TypeRef', decl: created.qn } as TypeData, scope)}) error { return nil }`);
+    const field = context.node(machine.data.field as string)!;
+    const enumNode = context.node((field.data.type as TypeData).decl!)!;
+    const literal = (value: string): Literal => ({ go: enumConstant(context.node(`${enumNode.qn}.${value}`)!, scope), label: value });
+    const sim = simulator(context);
+    const holds = (record: SimRecord) => ((action.data.preconditions ?? []) as { condition: ExprData }[]).every(p => sim.evaluate(p.condition, { self: record, inputs }) === true);
+    const guard = (t: GraphNode, record: SimRecord) => t.data.guard ? sim.evaluate(t.data.guard as ExprData, { self: record, inputs }) : true;
+    const fieldName = last(field.qn);
+    const from = (transition.data.from as string[]).find(state => {
+        const record = { ...valid.record, [fieldName]: state };
+        if (!holds(record)) return false;
+        for (const t of transitions) {
+            if (!(t.data.from as string[]).includes(state)) continue;
+            const verdict = guard(t, record);
+            if (t === transition) return verdict === true && (!t.data.guard || !!goExpr(t.data.guard as ExprData, dry));
+            // An earlier case takes the record unless Go checks its guard and the guard is false.
+            if (verdict !== false || !goExpr(t.data.guard as ExprData, dry)) return false;
+        }
+        return false;
+    });
+    if (!from) return undefined;
+    let actor: string | undefined;
+    if (takesActor) {
+        // The first declared actor the simulator proves the policies let run the action, created as New<Actor> makes it.
+        const record = { ...valid.record, [fieldName]: from };
+        const found = context.graph.nodes.filter(n => n.kind === 'Actor').find(a => sim.run(action.qn, record, { actor: a.qn }, inputs).allowed === 'yes');
+        if (!found) return undefined;
+        actor = `${accessIn(scope, `New${accessOf(context).name(found.qn)}`)}()`;
+    }
+    const left = new Set(transitions.flatMap(t => t.data.from as string[]));
+    const invalid = context.children(enumNode.qn).map(c => last(c.qn)).find(state => !left.has(state) && holds({ ...valid.record, [fieldName]: state }));
+    return {
+        action, valid, imports, args, actor,
+        state: pascal(fieldName),
+        from: literal(from),
+        to: literal(transition.data.to as string),
+        invalid: invalid ? literal(invalid) : undefined
+    };
 }
 
 /**
