@@ -78,6 +78,15 @@ module sales {
     paginate 50
   }
 
+  query OrdersOf from Order {
+    input {
+      of: crm.Account
+      since: DateTime?
+    }
+    where { customer == of && (since == null || placed_at >= since) }
+    sort placed_at desc
+  }
+
   projection OrderSummary from Order {
     reference
     status
@@ -100,6 +109,7 @@ module sales {
     auth bearer
     limit 100 per minute
     GET "/orders" -> OpenOrders as OrderSummary { reference, status, total }
+    GET "/accounts/{of}/orders" -> OrdersOf as OrderSummary { reference, status, total }
     POST "/orders/{id}/place" -> PlaceOrder
   }
 

@@ -141,6 +141,7 @@ Job:
 
 Query:
     'query' name=Ident 'from' entity=[Entity:QualifiedName] relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{'
+        ('input' '{' inputs+=Param* '}')?
         ('where' '{' filter=Expr '}')?
         ('sort' sorts+=Sort (',' sorts+=Sort)*)?
         ('paginate' pageSize=NUMBER)?

@@ -137,7 +137,11 @@ module shop core {
 
   // L3 Application
   query OpenOrders from Order core {
-    where { status in [placed, paid] && ["x", "y"] [0] != reference }
+    input {
+      of: party.Person?
+      since: DateTime?
+    }
+    where { status in [placed, paid] && ["x", "y"] [0] != reference && (of == null || buyer == of) && (since == null || placed_at >= since) }
     sort placed_at desc, reference asc, created_at
     paginate 50
     policy { actor.is(Manager) }
@@ -171,7 +175,7 @@ module shop core {
   usecase Checkout (order: Order) core {
     step PlaceOrder(order, now)
     step Payments.Charge(order.total, order.reference) on Declined do Cancel(order) on Timeout do Payments.Refund(order.total)
-    step OpenOrders()
+    step OpenOrders(order.buyer)
     await PaymentReceived timeout "24h" do Cancel(order)
     await OrderPlaced
     policy { actor.is(Buyer) }
@@ -187,7 +191,7 @@ module shop core {
     limit 100 per minute
     cors "https://shop.example", "https://admin.example"
     GET "/orders" -> OpenOrders as OrderView { reference, status, total }
-    GET "/orders/{id}" -> OpenOrders as OrderView
+    GET "/buyers/{of}/orders" -> OpenOrders as OrderView
     POST "/orders/{id}/place" -> PlaceOrder
     POST "/checkout" -> Checkout
   }

@@ -113,6 +113,25 @@ test('call argument types', async () => {
     expect(await check('usecase U (o: Order) { step Close(o, 5) }')).toContain('Int is not assignable to String?.');
 });
 
+const BY_STATUS = `query ByStatus from Order {
+    input {
+      wanted: Status
+      after: DateTime?
+    }
+    where { status == wanted && (after == null || closed_at >= after) }
+  }`;
+
+test('query inputs are typed in the filter and passed by calls', async () => {
+    expect(await check(`${BY_STATUS} usecase U { step ByStatus(open) step ByStatus(done, now) }`)).toEqual([]);
+    expect(await check(`${BY_STATUS} usecase U { step ByStatus() }`)).toContain('ByStatus takes 1 to 2 argument(s), got 0.');
+    expect(await check(`${BY_STATUS} usecase U { step ByStatus(open, "x") }`)).toContain('String is not assignable to DateTime?.');
+    expect(await check('query Q from Order { input { n: Int } where { n == "x" } }')).toContain('Operator "==" does not apply to Int and String.');
+});
+
+test('query policies read the inputs', async () => {
+    expect(await check(`query Q from Order { input { mine: Bool } policy { actor.is(Clerk) && mine } }`)).toEqual([]);
+});
+
 test('index needs a list and an Int', async () => {
     expect(await check('entity N { l: Int[] invariant "x" { l["a"] > 0 } }')).toContain('Int[] cannot be indexed by String.');
 });
