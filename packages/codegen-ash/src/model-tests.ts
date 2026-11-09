@@ -2,7 +2,7 @@ import type { MapContext, Step } from '@appling/codegen';
 import { Simulator, UNKNOWN, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
 import { homeAt } from './actors.js';
 import { constant, lastOf, parentOf, validation } from './elixir.js';
-import { fieldsOf, relationTarget, storedAttributes, typeModule } from './naming.js';
+import { fieldsOf, relationTarget, snake, storedAttributes, typeModule } from './naming.js';
 import { testSteps, type TestCase } from './tests.js';
 
 /** A value a test may give an attribute, as Elixir and as the simulator sees it (UNKNOWN when the test must not rely on it). */
@@ -63,10 +63,11 @@ export function invariantTests(invariant: GraphNode, context: MapContext): Step[
  * stored attribute without a default. Undefined when the model does not say enough, such as a required
  * relationship, a value type, a file, a default that does not translate, or an actor resource.
  */
-function sampleInput(entity: GraphNode, context: MapContext): { attributes: [string, string][], record: SimRecord } | undefined {
+function sampleInput(entity: GraphNode, context: MapContext): { attributes: [string, string][], defaults: [string, string][], record: SimRecord } | undefined {
     if (homeAt(entity, context)) return undefined;
     const record: SimRecord = { $type: entity.qn };
     const attributes: [string, string][] = [];
+    const defaults: [string, string][] = [];
     for (const field of fieldsOf(entity, context)) {
         const type = field.data.type as TypeData;
         const name = lastOf(field.qn);
@@ -80,7 +81,9 @@ function sampleInput(entity: GraphNode, context: MapContext): { attributes: [str
             continue;
         }
         if (field.data.default) {
-            if (defaultValue(field, context) === undefined) return undefined;
+            const value = defaultValue(field, context);
+            if (value === undefined) return undefined;
+            defaults.push([name, value === '&DateTime.utc_now/0' ? 'DateTime.utc_now()' : value]);
             record[name] = simulator(context).evaluate(field.data.default as ExprData, { self: record });
             continue;
         }
@@ -94,7 +97,7 @@ function sampleInput(entity: GraphNode, context: MapContext): { attributes: [str
         record[name] = value.value;
     }
     if (!enforcedInvariants(entity, context).every(i => holds(i, context, record))) return undefined;
-    return { attributes, record };
+    return { attributes, defaults, record };
 }
 
 /**
@@ -118,6 +121,96 @@ function violating(invariant: GraphNode, entity: GraphNode, record: SimRecord, c
         }
     }
     return undefined;
+}
+
+/**
+ * The tests of a transition. They build a changeset for the update action AshStateMachine runs it with, on a
+ * record struct built from the sample input, which runs the transition check without a database: from an
+ * allowed state the changeset must be valid, from a state no transition of that action leaves it must carry
+ * AshStateMachine's NoMatchingTransition error. The first case needs the simulator to prove the action's
+ * preconditions and guards true and the entity's translated invariants true after the transition, with no
+ * effect changing a field they read. Without a single target state for the action, a sample input or sample
+ * values for its required arguments, a case stays a registry task.
+ */
+export function transitionTests(transition: GraphNode, context: MapContext): Step[] {
+    const machine = context.node(parentOf(transition.qn))!;
+    const stateField = context.node(machine.data.field as string)!;
+    const entity = context.node(parentOf(stateField.qn))!;
+    const title = `transition ${(transition.data.from as string[]).join(', ')} -> ${transition.data.to}`;
+    const cases = ['moves from allowed states', 'refuses other states'];
+    const plan = transitionPlan(transition, entity, context);
+    const input = plan && sampleInput(entity, context);
+    if (!plan || !input) return testSteps(transition, entity, title, cases, context);
+    const state = lastOf(stateField.qn);
+    const resource = typeModule(entity, context);
+    const pairs = (values: [string, string][]) => values.map(([n, v]) => `${n}: ${v}`).join(', ');
+    const changeset = (from: string) => [
+        `record = struct!(${resource}, %{${pairs([...input.attributes, ...input.defaults.filter(([n]) => n !== state), [state, `:${from}`]])}})`,
+        `changeset = Ash.Changeset.for_update(record, :${plan.action}, %{${pairs(plan.arguments)}}, authorize?: false)`
+    ];
+    const literals = context.children((stateField.data.type as TypeData).decl!).map(l => lastOf(l.qn));
+    const allowed = new Set(plan.transitions.flatMap(t => t.data.from as string[]));
+    const other = literals.find(l => !allowed.has(l));
+    const from = (transition.data.from as string[]).find(f => movesFrom(f, transition, plan, entity, input.record, state, context));
+    const tests: TestCase[] = [
+        { name: cases[0], body: from ? [...changeset(from), 'assert changeset.valid?'] : undefined },
+        {
+            name: cases[1],
+            body: other ? [...changeset(other), 'refute changeset.valid?', 'assert Enum.any?(changeset.errors, &match?(%AshStateMachine.Errors.NoMatchingTransition{}, &1))'] : undefined
+        }
+    ];
+    return testSteps(transition, entity, title, tests, context);
+}
+
+interface TransitionPlan {
+    /** The update action AshStateMachine runs the transition with. */
+    action: string;
+    /** Every transition of that action; they share one target state. */
+    transitions: GraphNode[];
+    /** The action node, for a transition bound to an action. */
+    node?: GraphNode;
+    /** Sample values for the action's required arguments. */
+    arguments: [string, string][];
+}
+
+/** The update action the generator writes for the transition, or undefined when it writes none with transition_state. */
+function transitionPlan(transition: GraphNode, entity: GraphNode, context: MapContext): TransitionPlan | undefined {
+    const action = transition.data.action as string | undefined;
+    const event = transition.data.event as string | undefined;
+    if (!action && !event) return undefined;
+    // An action's update action is written once for every transition it drives, an event's per machine.
+    const transitions = action
+        ? context.graph.nodes.filter(n => n.kind === 'Transition' && n.data.action === action)
+        : context.children(parentOf(transition.qn)).filter(n => n.kind === 'Transition' && n.data.event === event);
+    if (new Set(transitions.map(t => t.data.to)).size !== 1) return undefined;
+    if (!action) return { action: snake(lastOf(event!)), transitions, arguments: [] };
+    const node = context.node(action)!;
+    if (node.data.entity !== entity.qn) return undefined;
+    const args: [string, string][] = [];
+    for (const param of context.children(node.qn).filter(c => c.kind === 'Param')) {
+        const type = param.data.type as TypeData;
+        if (type.optional) continue;
+        const value = type.many ? { elixir: '[]' } : sample(lastOf(param.qn), type, context);
+        if (!value) return undefined;
+        args.push([lastOf(param.qn), value.elixir]);
+    }
+    return { action: snake(lastOf(action)), transitions, node, arguments: args };
+}
+
+/** Whether the simulator proves the action's changeset valid on the sample record in the given state. */
+function movesFrom(from: string, transition: GraphNode, plan: TransitionPlan, entity: GraphNode, record: SimRecord, state: string, context: MapContext): boolean {
+    const before: SimRecord = { ...record, [state]: from };
+    const conditions = [
+        ...((plan.node?.data.preconditions ?? []) as { condition: ExprData }[]).map(p => p.condition),
+        ...plan.transitions.filter(t => t.data.guard).map(t => t.data.guard as ExprData)
+    ];
+    if (!conditions.every(c => simulator(context).evaluate(c, { self: before }) === true)) return false;
+    const invariants = enforcedInvariants(entity, context);
+    const read = new Set(invariants.flatMap(i => [...targets(i.data.condition)]));
+    const effects = [...(plan.node ? context.children(plan.node.qn) : []), ...context.children(transition.qn)].filter(c => c.kind === 'SetEffect');
+    if (effects.some(e => read.has(e.data.field as string))) return false;
+    const after: SimRecord = { ...before, [state]: transition.data.to as string };
+    return invariants.every(i => holds(i, context, after));
 }
 
 function enforcedInvariants(entity: GraphNode, context: MapContext): GraphNode[] {

@@ -244,7 +244,20 @@ test "invariant positive rejects violations" do
 end
 ```
 
-A case only gets a body when the Appling simulator proves that the sample input satisfies every translated invariant (for `rejects violations`, also that the changed input breaks this invariant and no other, with every attribute the condition compares set, since the validations pass on nil). Resources with a required relationship, a required value type or file, a default that does not translate, and actor resources keep both tests skipped, as do invariants that stay a task. Policy, transition and precondition tests stay skipped.
+A case only gets a body when the Appling simulator proves that the sample input satisfies every translated invariant (for `rejects violations`, also that the changed input breaks this invariant and no other, with every attribute the condition compares set, since the validations pass on nil). Resources with a required relationship, a required value type or file, a default that does not translate, and actor resources keep both tests skipped, as do invariants that stay a task.
+
+A transition gets test bodies the same way. Both tests build a record struct from that sample input (with the defaults filled in and the state field set) and a changeset for the update action AshStateMachine runs the transition with, with `Ash.Changeset.for_update(record, :<action>, ..., authorize?: false)` and a sample value for every required argument. AshStateMachine checks the state when the changeset is built, so neither test needs a database. `moves from allowed states` starts from a state the transition leaves and asserts that the changeset is valid; `refuses other states` starts from a state no transition of that action leaves and asserts AshStateMachine's `NoMatchingTransition` error.
+
+```elixir
+test "transition draft -> placed refuses other states" do
+  record = struct!(Shop.Shop.Order, %{code: "code-1", total: 0, status: :placed})
+  changeset = Ash.Changeset.for_update(record, :place, %{}, authorize?: false)
+  refute changeset.valid?
+  assert Enum.any?(changeset.errors, &match?(%AshStateMachine.Errors.NoMatchingTransition{}, &1))
+end
+```
+
+`moves from allowed states` only gets a body when the simulator proves the action's preconditions and guards true on that record, and the translated invariants true after the transition, with no effect setting a field they read. An action whose transitions lead to more than one state (picking the target is a task), an action on another entity, a required argument without a sample value (a record, a value type, a file) and a resource without a sample input keep both tests skipped; a state machine where every state leads on keeps `refuses other states` skipped. Policy and precondition tests stay skipped.
 
 
 ## Actors

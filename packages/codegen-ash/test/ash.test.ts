@@ -109,6 +109,63 @@ test('translated invariants get changeset tests the simulator proves', async () 
     expect(entries['shop.Line.invariant["counted"]'].missing.map(m => m.what)).toEqual(['write the tests "invariant counted" in test/shop/shop/line_test.exs']);
 });
 
+test('transitions get changeset tests on a record struct the simulator proves', async () => {
+    const result = await planFor({
+        'shop.appling': `module shop {
+            enum Status { draft placed paid cancelled }
+            entity Order {
+                code: String
+                status: Status state default draft
+                total: Int default 0
+                note: Text?
+                invariant "paid has a total" { status != paid || total > 0 }
+            }
+            event Paid { order: Order }
+            action Place on Order {
+                input { by: String }
+            }
+            action Cancel on Order {
+                requires { has(note) }
+            }
+            action Retry on Order {
+                input { order: Order }
+            }
+            machine Flow on Order.status {
+                transition draft -> placed via Place
+                transition placed -> paid on Paid
+                transition draft, placed -> cancelled via Cancel
+                transition cancelled -> draft via Retry
+            }
+        }`
+    });
+    const file = 'test/shop/shop/order_test.exs';
+    const text = result.steps.reduce<string | undefined>((current, { step }) => step.kind === 'template' && step.file === file ? step.write(current) : current, undefined);
+    const update = (status: string, action: string, args = '') => [
+        `    record = struct!(Shop.Shop.Order, %{code: "code-1", total: 0, status: :${status}})`,
+        `    changeset = Ash.Changeset.for_update(record, :${action}, %{${args}}, authorize?: false)`
+    ];
+    const refused = ['    refute changeset.valid?', '    assert Enum.any?(changeset.errors, &match?(%AshStateMachine.Errors.NoMatchingTransition{}, &1))'];
+    const skipped = (qn: string, name: string) => [`  @tag skip: ${JSON.stringify(`registry task: ${qn}`)}`, `  test "${name}"`];
+    // The invariant and precondition tests come first.
+    expect(text!.slice(text!.indexOf('  test "transition'))).toBe([
+        '  test "transition draft -> placed moves from allowed states" do', ...update('draft', 'place', 'by: "by-1"'), '    assert changeset.valid?', '  end', '',
+        '  test "transition draft -> placed refuses other states" do', ...update('placed', 'place', 'by: "by-1"'), ...refused, '  end', '',
+        // The invariant needs a total above 0 once paid, which the sample record does not have.
+        ...skipped('shop.Flow.transition[placed->paid]', 'transition placed -> paid moves from allowed states'), '',
+        '  test "transition placed -> paid refuses other states" do', ...update('draft', 'paid'), ...refused, '  end', '',
+        // The sample record has no note, so the precondition does not hold.
+        ...skipped('shop.Flow.transition[draft,placed->cancelled]', 'transition draft, placed -> cancelled moves from allowed states'), '',
+        '  test "transition draft, placed -> cancelled refuses other states" do', ...update('paid', 'cancel'), ...refused, '  end', '',
+        // A required record argument has no sample value.
+        ...skipped('shop.Flow.transition[cancelled->draft]', 'transition cancelled -> draft moves from allowed states'), '',
+        ...skipped('shop.Flow.transition[cancelled->draft]', 'transition cancelled -> draft refuses other states'),
+        'end', ''
+    ].join('\n'));
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['shop.Flow.transition[draft->placed]'].missing).toEqual([]);
+    expect(entries['shop.Flow.transition[placed->paid]'].missing.map(m => m.what)).toEqual([`write the tests "transition placed -> paid" in ${file} ("transition placed -> paid moves from allowed states")`]);
+});
+
 test('behavior, queries and the JSON:API are patched into the generated modules', async () => {
     const result = await planFor(examples());
     const files = new Map<string, string>([
