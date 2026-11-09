@@ -9,7 +9,7 @@ import { hasPages, navigationSteps, pageSteps } from './pages.js';
 import { actorAttributeSpecs, actorFieldSteps, actorSteps, constrainRoles, homeAt, homeFields } from './actors.js';
 import { actorCheckSteps, closeResource, enforced, policySteps, policyTask, roleCalculations, roleSteps } from './roles.js';
 import { tenantSteps } from './tenants.js';
-import { check, defaultValue, invariantTests } from './model-tests.js';
+import { check, defaultValue, invariantTests, transitionTests } from './model-tests.js';
 import { testSteps } from './tests.js';
 import { externalKeySteps, secretPlaceholders } from './vendors.js';
 import { app, attributeType, calculation, fieldPolicyOf, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, task, typeModule } from './naming.js';
@@ -95,13 +95,6 @@ export default extension;
 
 function owner(node: GraphNode, context: MapContext): GraphNode {
     return context.node(parentOf(node.qn))!;
-}
-
-function transitionTests(transition: GraphNode, context: MapContext): Step[] {
-    const machine = owner(transition, context);
-    const entity = owner(context.node(machine.data.field as string)!, context);
-    const title = `transition ${(transition.data.from as string[]).join(', ')} -> ${transition.data.to}`;
-    return testSteps(transition, entity, title, ['moves from allowed states', 'refuses other states'], context);
 }
 
 function entitySteps(entity: GraphNode, context: MapContext): Step[] {
