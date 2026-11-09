@@ -456,3 +456,52 @@ test('does texts become the moduledoc and attribute descriptions, and one regist
     const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
     expect(entries['shop.Item'].missing.map(m => m.what)).toEqual(['check that Item matches its description: Something to sell, #{not} interpolated']);
 });
+
+test('entity policies get Ash.can? tests for actors that their actor.is checks decide', async () => {
+    const result = await planFor({
+        'ops.appling': `module ops {
+            role Operator
+            role Auditor { actor.level > 1 }
+            actor human Employee roles Operator, Auditor { level: Int }
+            actor human Guest
+            entity Company { name: String }
+            tenant Org on Company
+            entity Ticket {
+                note: String?
+                policy read { actor.is(Operator) || actor.is(Guest) }
+                policy update { actor.is(Operator) && note != "" }
+                policy create, delete { actor.is(Operator) }
+                policy read fields note { actor.is(Operator) }
+            }
+            entity Report {
+                policy { actor.is(Auditor) }
+            }
+            entity Invoice {
+                company: Company
+                policy read { actor.is(Operator) }
+            }
+        }`
+    });
+    const files = new Map<string, string>();
+    for (const { step } of result.steps) if (step.kind === 'template' && step.file.startsWith('test/')) files.set(step.file, step.write(files.get(step.file)));
+    const ticket = files.get('test/shop/ops/ticket_test.exs')!;
+    const can = (assertion: string, action: string) => `    ${assertion} Ash.can?({Shop.Ops.Ticket, :${action}}, actor, maybe_is: false)`;
+    const employee = '    actor = %Shop.Ops.Employee{roles: [:operator, :auditor]}';
+    const guest = '    actor = %Shop.Ops.Guest{roles: []}';
+    // Ash allows every read and filters it, so Ash.can? without records cannot tell; read policies stay tasks.
+    expect(ticket).toContain('  @tag skip: "registry task: ops.Ticket.policy[read]"\n  test "policy[read] allows permitted actors"\n');
+    expect(ticket).toContain('  @tag skip: "registry task: ops.Ticket.policy[read]"\n  test "policy[read] denies other actors"\n');
+    expect(ticket).not.toContain(':read}');
+    expect(ticket).toContain(['  test "policy[create,delete] allows permitted actors" do', employee, can('assert', 'create'), can('assert', 'destroy'), '  end'].join('\n'));
+    expect(ticket).toContain(['  test "policy[create,delete] denies other actors" do', guest, can('refute', 'create'), can('refute', 'destroy'), '  end'].join('\n'));
+    // forbid_unless Operator keeps Guest out before the expr check; Employee reaches it, so that case stays a task.
+    expect(ticket).toContain('  @tag skip: "registry task: ops.Ticket.policy[update]"\n  test "policy[update] allows permitted actors"\n');
+    expect(ticket).toContain(['  test "policy[update] denies other actors" do', guest, can('refute', 'update'), '  end'].join('\n'));
+    // Field policies, roles with a condition and resources partitioned by a tenant stay registry tasks.
+    expect(ticket).toContain('  @tag skip: "registry task: ops.Ticket.policy[read fields note]"\n');
+    expect(files.get('test/shop/ops/report_test.exs')).not.toContain('Ash.can?');
+    expect(files.get('test/shop/ops/invoice_test.exs')).not.toContain('Ash.can?');
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['ops.Ticket.policy[create,delete]'].missing).toEqual([]);
+    expect(entries['ops.Ticket.policy[update]'].missing.map(m => m.what)).toContain('write the tests "policy[update]" in test/shop/ops/ticket_test.exs ("policy[update] allows permitted actors")');
+});
