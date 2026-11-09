@@ -11,7 +11,6 @@ import { actorCheckSteps, closeResource, enforced, policySteps, policyTask, role
 import { tenantSteps } from './tenants.js';
 import { check, defaultValue, invariantTests, transitionTests } from './model-tests.js';
 import { policyTests } from './policy-tests.js';
-import { testSteps } from './tests.js';
 import { externalKeySteps, secretPlaceholders } from './vendors.js';
 import { app, attributeType, calculation, fieldPolicyOf, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, task, typeModule } from './naming.js';
 
@@ -93,10 +92,6 @@ const extension: CodegenExtension = {
 };
 
 export default extension;
-
-function owner(node: GraphNode, context: MapContext): GraphNode {
-    return context.node(parentOf(node.qn))!;
-}
 
 function entitySteps(entity: GraphNode, context: MapContext): Step[] {
     const attributes = fieldsOf(entity, context).filter(f => !f.data.derived && !relationTarget(f, context));
