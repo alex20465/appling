@@ -27,7 +27,8 @@ Requires Rust 1.85 or later. The crate name is the project name in snake case.
 | `role`, `actor`, `tenant` | the module `src/access.rs`: `Actor` (type, roles, tenant, the actor fields, records by id), `is_<role>(actor)` checks, `Actor::<actor>()`, and `in_tenant` with `Tenanted` on every entity that belongs to the tenant |
 | `policy` | pure checks: `can_<op>_<entity>`, `can_<op>_<entity>_<field>`, `can_<action>` (called by the action, which then takes `&Actor` and returns `Error::Forbidden`), `can_<query>`, `can_<use case>`. Once the model has any policy, every entity, action and query gets its check, and what no policy covers is denied |
 | invariants | a test in the module's `tests`: `valid_<entity>()` passes `validate()`, and one field set to a value the simulator proves to break the invariant fails with its label (without such a value that case stays a registry task) |
-| policies, transitions, preconditions | `#[ignore]`d tests in the module's `tests`; writing their bodies is a registry task |
+| transitions | a test in the module's `tests` per transition an action runs: `valid_<entity>()` in a `from` state reaches the `to` state, a state the action does not leave fails with `Error::InvalidTransition`; with policies it passes an actor the simulator proves allowed. `#[ignore]`d as a registry task when the simulator cannot prove the preconditions, the guard or the actor |
+| policies, preconditions | `#[ignore]`d tests in the module's `tests`; writing their bodies is a registry task |
 
 Queries, projections, interfaces, pages, use cases, external systems and jobs become registry tasks, as do policies Rust cannot translate (their check returns `false` until written). `cargo test` is the registry's test command. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
 

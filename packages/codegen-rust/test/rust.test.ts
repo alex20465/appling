@@ -61,6 +61,75 @@ test('invariant tests check a valid record and a violation the simulator proves'
     expect(entries['v.Ticket.invariant["points in range"]'].status).toBe('generated');
 });
 
+const TRANSITIONS = `module t {
+  enum Phase {
+    draft
+    review
+    done
+    archived
+  }
+  entity Doc {
+    title: String
+    pages: Int default 1
+    phase: Phase state default draft
+  }
+  entity Note {
+    text: String
+  }
+  event Archived {
+    doc: Doc
+  }
+  action Submit on Doc {
+    input {
+      reviewer: String
+      remark: String?
+    }
+    requires { pages > 0 }
+    effect {
+      create Note { text = reviewer }
+    }
+  }
+  action Finish on Doc {
+    input {
+      due: Date
+    }
+  }
+  action Rework on Doc {
+    requires { pages > 5 }
+  }
+  machine DocFlow on Doc.phase {
+    transition draft -> review via Submit
+    transition review -> done via Finish
+    transition review -> draft via Rework
+    transition done -> archived on Archived
+  }
+}`;
+
+test('transition tests run the action from a proven state and expect the invalid transition error elsewhere', async () => {
+    const { documents, services } = await buildWorkspace({ 't.appling': TRANSITIONS });
+    const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), rust, 'app');
+    const files = new Map<string, string>();
+    for (const { step } of result.steps) if (step.kind === 'template') files.set(step.file, step.write(files.get(step.file)));
+    const tests = files.get('src/t.rs')!.split('#[cfg(test)]')[1];
+    expect(tests.match(/fn valid_doc\(\)/g)).toHaveLength(1);
+    expect(tests).toContain([
+        '    fn doc_flow_transition_draft_review() {',
+        '        let mut x = valid_doc();',
+        '        x.phase = Phase::Draft;',
+        '        submit(&mut x, "reviewer-1".to_string(), None, &mut |_: Note| Ok(())).expect("submit from draft");',
+        '        assert_eq!(x.phase, Phase::Review, "submit from draft goes to review");',
+        '        let mut x = valid_doc();',
+        '        x.phase = Phase::Review;',
+        '        assert!(matches!(submit(&mut x, "reviewer-1".to_string(), None, &mut |_: Note| Ok(())), Err(Error::InvalidTransition { .. })), "submit refuses review");',
+        '    }'
+    ].join('\n'));
+    // A date input has no value the simulator knows, the precondition of Rework fails on the valid record, and Archived is an event.
+    for (const name of ['review_done', 'review_draft', 'done_archived']) expect(tests).toContain(`#[ignore = "registry task: t.DocFlow.transition[${name.replace('_', '->')}]"]`);
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['t.DocFlow.transition[draft->review]'].status).toBe('generated');
+    expect(entries['t.DocFlow.transition[review->done]'].missing.map(m => m.what)).toEqual(['write the test doc_flow_transition_review_done']);
+});
+
 const ACCESS = `module m {
   role Clerk { actor.active && tenant != null }
   role Customer

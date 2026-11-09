@@ -41,7 +41,7 @@ const extension: CodegenExtension = {
                 return accessSteps(node, context);
             case 'Action': return actionSteps(node, context);
             case 'Machine': return machineSteps(node, context);
-            case 'Transition': return testSteps(node);
+            case 'Transition': return transitionTestSteps(node, context);
             case 'EnumLiteral':
             case 'Param':
             case 'SetEffect':
@@ -621,6 +621,113 @@ function invariantTestSteps(invariant: GraphNode, context: MapContext): Step[] {
         '}'
     ].join('\n');
     return [valid.step, testBlock(invariant.module, code), ...(violation ? [] : [task(`write the violation case of the test ${name}`)])];
+}
+
+/**
+ * The test of a transition an action runs: the entity's valid record in a `from` state goes to the `to` state
+ * through the action, and, when the action allows a state no transition leaves, the action refuses it with
+ * `Error::InvalidTransition`. The simulator must prove that the preconditions and the guard hold and that no
+ * earlier arm of the match takes the record; without that (an actor to pass, an input or state it cannot say,
+ * code in another module) the test stays ignored as a registry task.
+ */
+function transitionTestSteps(transition: GraphNode, context: MapContext): Step[] {
+    const plan = transitionTest(transition, context);
+    if (!plan) return testSteps(transition);
+    const { action, valid, state, from, to, invalid, args, actor } = plan;
+    const fn = snake(last(action.qn));
+    const call = `${fn}(${[...(actor ? ['&actor'] : []), '&mut x', ...args].join(', ')})`;
+    const message = (text: string) => JSON.stringify(text.replace(/\{/g, '{{').replace(/\}/g, '}}'));
+    const code = [
+        '#[test]',
+        `fn ${testName(transition)}() {`,
+        ...(actor ? [`    let actor = ${actor};`] : []),
+        `    let mut x = ${valid.name}();`,
+        `    x.${state} = ${from.rust};`,
+        `    ${call}.expect(${message(`${fn} from ${from.label}`)});`,
+        `    assert_eq!(x.${state}, ${to.rust}, ${message(`${fn} from ${from.label} goes to ${to.label}`)});`,
+        ...(invalid ? [
+            `    let mut x = ${valid.name}();`,
+            `    x.${state} = ${invalid.rust};`,
+            `    assert!(matches!(${call}, Err(Error::InvalidTransition { .. })), ${message(`${fn} refuses ${invalid.label}`)});`
+        ] : []),
+        '}'
+    ].join('\n');
+    return [valid.step, testBlock(transition.module, code)];
+}
+
+interface Literal { rust: string, label: string }
+
+function transitionTest(transition: GraphNode, context: MapContext) {
+    const action = transition.data.action ? context.node(transition.data.action as string) : undefined;
+    const machine = context.node(parentOf(transition.qn))!;
+    const entity = action?.data.entity ? context.node(action.data.entity as string) : undefined;
+    if (!action || !entity || !(machine.data.field as string).startsWith(`${entity.qn}.`)) return undefined;
+    // Code in another module is more than a generated test sets up.
+    if (action.module !== transition.module || entity.module !== transition.module) return undefined;
+    const scope = rustScope(transition, context);
+    const valid = validRecord(entity, scope, context);
+    if (!valid) return undefined;
+    const transitions = context.graph.nodes.filter(n => n.kind === 'Transition' && n.data.action === action.qn);
+    const self = snake(last(entity.qn));
+    const dry: RustScope = { ...rustScope(action, context), self };
+    const takesActor = !!guardOf(action, context) || enforced(context);
+    if (takesActor) {
+        // Every policy the simulator weighs must be one Rust checks, or Rust denies where the simulator allows.
+        const created = [action, ...transitions].flatMap(n => context.children(n.qn)).filter(c => c.kind === 'CreateEffect').map(c => c.data.entity as string);
+        const policies = [action.qn, entity.qn, ...created].flatMap(qn => context.children(qn)).filter(c => c.kind === 'Policy');
+        if (!policies.every(p => rustExpr(p.data.condition as ExprData, { ...dry, actor: 'actor' }))) return undefined;
+    }
+    const args: string[] = [];
+    const inputs: { [name: string]: Value } = {};
+    for (const param of context.children(action.qn).filter(c => c.kind === 'Param')) {
+        const sample = rustSample(last(param.qn), param.data.type as TypeData, scope, context, 0);
+        if (!sample || sample.value === UNKNOWN) return undefined;
+        args.push(sample.rust);
+        inputs[last(param.qn)] = sample.value;
+    }
+    // The create functions the action takes, found the way actionSteps finds them; the test stores nothing.
+    const creating: Creating = { action: last(action.qn), entities: new Map() };
+    transitionMatch(transitions, self, last(action.qn), dry, context, [], creating);
+    for (const effect of context.children(action.qn).filter(c => c.kind.endsWith('Effect'))) effectLines(effect, self, dry, context, [], creating);
+    for (const created of creating.entities.values()) args.push(`&mut |_: ${qualify(created, scope)}| Ok(())`);
+    const field = context.node(machine.data.field as string)!;
+    if ((field.data.type as TypeData).optional) return undefined;
+    const enumNode = context.node((field.data.type as TypeData).decl!)!;
+    const literal = (value: string): Literal => ({ rust: enumVariant(context.node(`${enumNode.qn}.${value}`)!, scope), label: value });
+    const sim = simulator(context);
+    const holds = (record: SimRecord) => ((action.data.preconditions ?? []) as { condition: ExprData }[]).every(p => sim.evaluate(p.condition, { self: record, inputs }) === true);
+    const guard = (t: GraphNode, record: SimRecord) => t.data.guard ? sim.evaluate(t.data.guard as ExprData, { self: record, inputs }) : true;
+    const fieldName = last(field.qn);
+    const from = (transition.data.from as string[]).find(state => {
+        const record = { ...valid.record, [fieldName]: state };
+        if (!holds(record)) return false;
+        for (const t of transitions) {
+            if (!(t.data.from as string[]).includes(state)) continue;
+            const verdict = guard(t, record);
+            if (t === transition) return verdict === true && (!t.data.guard || !!rustExpr(t.data.guard as ExprData, dry));
+            // An earlier arm takes the record unless Rust checks its guard and the guard is false.
+            if (verdict !== false || !rustExpr(t.data.guard as ExprData, dry)) return false;
+        }
+        return false;
+    });
+    if (!from) return undefined;
+    let actor: string | undefined;
+    if (takesActor) {
+        // The first declared actor the simulator proves the policies let run the action, created as Actor::<actor>() makes it.
+        const record = { ...valid.record, [fieldName]: from };
+        const found = context.graph.nodes.filter(n => n.kind === 'Actor').find(a => sim.run(action.qn, record, { actor: a.qn }, inputs).allowed === 'yes');
+        if (!found) return undefined;
+        actor = `${accessPath(scope, 'Actor')}::${snake(accessOf(context).name(found.qn))}()`;
+    }
+    const left = new Set(transitions.flatMap(t => t.data.from as string[]));
+    const invalid = context.children(enumNode.qn).map(c => last(c.qn)).find(state => !left.has(state) && holds({ ...valid.record, [fieldName]: state }));
+    return {
+        action, valid, args, actor,
+        state: fieldName,
+        from: literal(from),
+        to: literal(transition.data.to as string),
+        invalid: invalid ? literal(invalid) : undefined
+    };
 }
 
 /**
