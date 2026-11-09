@@ -6,7 +6,7 @@ import { appOf, constantOf, lastOf, parentOf, python, snake } from './python.js'
 import { testSteps, type TestCase } from './tests.js';
 
 /** The rows and inputs a test runs an action with, as Python and as the simulator sees them. */
-interface Setup {
+export interface Setup {
     entity?: GraphNode;
     instance?: string;
     record?: SimRecord;
@@ -18,7 +18,7 @@ interface Setup {
 }
 
 /** The factory of the action's entity and a sample for every required input; undefined when a fixture is missing. */
-function setup(action: GraphNode, context: MapContext): Setup | undefined {
+export function setup(action: GraphNode, context: MapContext): Setup | undefined {
     const imports = new Set<string>([`from ${appOf(action.module)}.actions import ${snake(lastOf(action.qn))}`]);
     const steps: Step[] = [];
     const result: Setup = { args: [], inputs: {}, imports, steps };
@@ -57,17 +57,18 @@ function setup(action: GraphNode, context: MapContext): Setup | undefined {
     return result;
 }
 
-function call(action: GraphNode, run: Setup): string {
-    return `${snake(lastOf(action.qn))}(${[...(run.instance ? [run.instance] : []), ...run.args].join(', ')})`;
+/** The call of the action in a test, with extra keyword arguments such as `actor=user`. */
+export function call(action: GraphNode, run: Setup, extra: string[] = []): string {
+    return `${snake(lastOf(action.qn))}(${[...(run.instance ? [run.instance] : []), ...run.args, ...extra].join(', ')})`;
 }
 
 /** Whether every invariant of the entity holds for the record. */
-function valid(entity: GraphNode | undefined, record: SimRecord | undefined, context: MapContext): boolean {
+export function valid(entity: GraphNode | undefined, record: SimRecord | undefined, context: MapContext): boolean {
     return !entity || children(entity, context, 'Invariant').every(i => holds(i.data.condition as ExprData, context, record));
 }
 
 /** The record after the effects, or undefined when an effect creates rows or depends on something the test does not know. */
-function afterEffects(effects: GraphNode[], record: SimRecord, inputs: { [name: string]: Value }, context: MapContext): SimRecord | undefined {
+export function afterEffects(effects: GraphNode[], record: SimRecord, inputs: { [name: string]: Value }, context: MapContext): SimRecord | undefined {
     const after: SimRecord = { ...record };
     for (const effect of effects) {
         if (effect.kind === 'CreateEffect') return undefined;
@@ -83,7 +84,7 @@ function afterEffects(effects: GraphNode[], record: SimRecord, inputs: { [name: 
 }
 
 /** Whether the action's preconditions are all translated to Python and all hold. */
-function preconditionsHold(action: GraphNode, record: SimRecord | undefined, inputs: { [name: string]: Value }, context: MapContext): boolean {
+export function preconditionsHold(action: GraphNode, record: SimRecord | undefined, inputs: { [name: string]: Value }, context: MapContext): boolean {
     return ((action.data.preconditions ?? []) as { condition: ExprData }[]).every(p => translated(p.condition, context) && holds(p.condition, context, record, inputs));
 }
 

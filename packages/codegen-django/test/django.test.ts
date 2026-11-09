@@ -302,6 +302,75 @@ test('an entity policy over actor kinds gets active tests for an allowed and a d
     ]);
 });
 
+test('action and query policies over actor kinds get active tests', async () => {
+    const { files, entries } = await generate({
+        'shop.appling': `module shop {
+            role Clerk
+            actor human Employee roles Clerk
+            actor human Guest
+            entity Order {
+                total: Money
+                note: String?
+                policy read { actor.is(Clerk) }
+                policy update { actor.is(Employee) }
+            }
+            action Touch on Order {
+                effect { set note = "seen" }
+                policy { actor.is(Clerk) }
+            }
+            action Jot on Order {
+                effect { create Order { total = total } }
+                policy { actor.is(Employee) }
+            }
+            query All from Order {
+                policy { actor.is(Employee) }
+            }
+            query Unseen from Order {
+                where { note != null }
+                policy { actor.is(Clerk) }
+            }
+        }`
+    });
+    const tests = files['shop/tests.py'];
+    expect(tests).toContain('from django.core.exceptions import PermissionDenied');
+    expect(tests).toContain('from shop.queries import all, unseen');
+    expect(tests).toContain([
+        'class TouchAnyPolicyTest(TestCase):',
+        '    """shop.Touch.policy[]: actor.is(Clerk)"""',
+        '',
+        '    def test_allows_permitted_actors(self):',
+        '        user = get_user_model().objects.create(username="tester")',
+        '        user.groups.add(Group.objects.get_or_create(name="Employee")[0])',
+        '        order = make_order()',
+        '        touch(order, actor=user)',
+        '',
+        '    def test_denies_other_actors(self):',
+        '        user = get_user_model().objects.create(username="tester")',
+        '        user.groups.add(Group.objects.get_or_create(name="Guest")[0])',
+        '        order = make_order()',
+        '        with self.assertRaises(PermissionDenied):',
+        '            touch(order, actor=user)'
+    ].join('\n'));
+    expect(tests).toContain([
+        '    def test_allows_permitted_actors(self):',
+        '        user = get_user_model().objects.create(username="tester")',
+        '        user.groups.add(Group.objects.get_or_create(name="Employee")[0])',
+        '        order = make_order()',
+        '        self.assertIn(order, list(all(actor=user)))',
+        '',
+        '    def test_denies_other_actors(self):',
+        '        user = get_user_model().objects.create(username="tester")',
+        '        user.groups.add(Group.objects.get_or_create(name="Guest")[0])',
+        '        order = make_order()',
+        '        self.assertNotIn(order, list(all(actor=user)))'
+    ].join('\n'));
+    const missing = (owner: string) => Object.values(entries).filter(e => e.kind === 'Policy' && e.qn.startsWith(`shop.${owner}.`)).flatMap(e => e.missing.map(m => m.what));
+    expect(missing('Touch')).toEqual([]);
+    expect(missing('All')).toEqual([]);
+    expect(missing('Jot')).toEqual([expect.stringMatching(/\(test_allows_permitted_actors\)$/)]);
+    expect(missing('Unseen')).toEqual([expect.stringMatching(/\(test_allows_permitted_actors\)$/)]);
+});
+
 test('a model without policies keeps open queries and actions', async () => {
     const { files } = await generate({ 'shop.appling': 'module shop {\n role Clerk\n entity Order {\n note: String?\n }\n action Touch on Order {\n effect { set note = "seen" }\n }\n query All from Order {\n }\n}' });
     expect(files['shop/policies.py']).toBeUndefined();
