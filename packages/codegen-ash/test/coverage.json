@@ -4,7 +4,7 @@
     "generated": 0,
     "partial": 2,
     "todo": 1,
-    "tasks": 9
+    "tasks": 8
   },
   {
     "kind": "Actor",
@@ -210,6 +210,13 @@
     "tasks": 0
   },
   {
+    "kind": "Scenario",
+    "generated": 0,
+    "partial": 3,
+    "todo": 0,
+    "tasks": 4
+  },
+  {
     "kind": "SetEffect",
     "generated": 3,
     "partial": 0,
@@ -225,10 +232,10 @@
   },
   {
     "kind": "Transition",
-    "generated": 0,
-    "partial": 3,
+    "generated": 2,
+    "partial": 1,
     "todo": 0,
-    "tasks": 3
+    "tasks": 1
   },
   {
     "kind": "UseCase",
@@ -246,9 +253,9 @@
   },
   {
     "kind": "total",
-    "generated": 100,
-    "partial": 22,
+    "generated": 102,
+    "partial": 23,
     "todo": 18,
-    "tasks": 60
+    "tasks": 61
   }
 ]

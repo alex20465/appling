@@ -36,6 +36,22 @@ export function tenantSteps(tenant: GraphNode, context: MapContext): Step[] {
     return steps;
 }
 
+/**
+ * The relationship that partitions a resource by a tenant, as `tenantSteps` writes it, or undefined when the
+ * resource is not partitioned. Actor resources are partitioned too, but stay readable without a tenant.
+ */
+export function partitionOf(resource: GraphNode, context: MapContext): string | undefined {
+    const tenants = context.graph.nodes.filter(n => n.kind === 'Tenant').map(n => n.data.entity as string);
+    const fields = storedRelations(resource, context);
+    for (const entity of tenants) {
+        const own = fields.filter(f => relationTarget(f, context)!.qn === entity);
+        if (resource.qn === entity || !own.length) continue;
+        if (own.length > 1 || fields.some(f => relationTarget(f, context)!.qn !== entity && tenants.includes(relationTarget(f, context)!.qn))) continue;
+        return lastOf(own[0].qn);
+    }
+    return undefined;
+}
+
 /** Every resource: the entities and the human actors without `is`. */
 function resources(context: MapContext): GraphNode[] {
     return [

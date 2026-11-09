@@ -186,8 +186,8 @@ test('behavior, queries and the JSON:API are patched into the generated modules'
     const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
     expect(entries['sales.PlaceOrder'].missing.map(m => m.what)).toEqual([
         'check the precondition requires { lines.size() > 0 } else EmptyOrder in PlaceOrder',
-        'apply the effect effect[emit OrderPlaced] in PlaceOrder, for example with an Ash notifier or a change',
-        'write the tests "action place_order precondition" in test/shop/sales/order_test.exs'
+        // The scenarios that run PlaceOrder replace its guessed precondition tests.
+        'apply the effect effect[emit OrderPlaced] in PlaceOrder, for example with an Ash notifier or a change'
     ]);
 });
 
@@ -504,4 +504,98 @@ test('entity policies get Ash.can? tests for actors that their actor.is checks d
     const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
     expect(entries['ops.Ticket.policy[create,delete]'].missing).toEqual([]);
     expect(entries['ops.Ticket.policy[update]'].missing.map(m => m.what)).toContain('write the tests "policy[update]" in test/shop/ops/ticket_test.exs ("policy[update] allows permitted actors")');
+});
+
+test('scenarios become ExUnit tests that seed the given rows, run the action as the actor and assert the outcome', async () => {
+    const result = await planFor({
+        'shop.appling': `module shop {
+            role Clerk
+            actor human Staff roles Clerk
+            actor system Robot roles Clerk
+            actor human Guest
+            enum Status { open done }
+            value Address { street: String zip: String? }
+            entity Customer { name: String unique }
+            tenant Org on Customer
+            entity Item {
+                code: String unique
+                customer: Customer
+                status: Status state default open
+                price: Money
+                count: Int
+                note: Text?
+                address: Address
+                policy update { actor.is(Clerk) }
+            }
+            action Close on Item {
+                input { reason: String? }
+                requires { count > 0 } else Empty
+                effect { set note = "closed" }
+                errors Empty
+            }
+            machine Flow on Item.status {
+                transition open -> done via Close
+            }
+            usecase Batch (item: Item) { step Close(item, "batch") }
+
+            scenario Closes does "A clerk closes an item" {
+                given {
+                    acme = create Customer { name = "Acme" }
+                    item = create Item { code = "a", customer = acme, price = 2, count = 1 }
+                    create Customer { name = "Other" }
+                }
+                as Clerk
+                when Close(item, "done")
+                then {
+                    item.status == done
+                    item.price >= 2
+                    item.customer == acme
+                    has(item.note) && item.count != 0
+                }
+            }
+            scenario EmptyFails {
+                given {
+                    acme = create Customer { name = "Acme" }
+                    item = create Item { code = "b", customer = acme, price = 2, count = 0 }
+                }
+                as Robot
+                when Close(item)
+                then fails Empty
+            }
+            scenario ClosedFails {
+                given {
+                    acme = create Customer { name = "Acme" }
+                    item = create Item { code = "c", customer = acme, price = 2, count = 1, status = done }
+                }
+                when Close(item)
+                then fails
+            }
+            scenario GuestRefused {
+                given {
+                    acme = create Customer { name = "Acme" }
+                    item = create Item { code = "d", customer = acme, price = 2, count = 1 }
+                }
+                as Guest
+                when Close(item)
+                then refused
+            }
+            scenario Batched {
+                given {
+                    acme = create Customer { name = "Acme" }
+                    item = create Item { code = "e", customer = acme, price = 2, count = 1 }
+                }
+                when Batch(item)
+                then { item.status == done }
+            }
+        }`
+    });
+    const file = 'test/shop/shop/scenarios_test.exs';
+    const text = result.steps.reduce<string | undefined>((current, { step }) => step.kind === 'template' && step.file === file ? step.write(current) : current, undefined);
+    expect(text).toMatchSnapshot();
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    for (const name of ['EmptyFails', 'ClosedFails', 'GuestRefused']) expect(entries[`shop.${name}`].status).toBe('generated');
+    expect(entries['shop.Batched'].missing.map(m => m.what)).toEqual([`write the test "scenario Batched" in ${file}: the use case Batch is not generated yet (its own registry task)`]);
+    // The scenarios replace the guessed tests of the action and of the transition it triggers.
+    expect(entries['shop.Close'].missing).toEqual([]);
+    expect(entries['shop.Flow.transition[open->done]'].steps).toEqual([]);
 });
