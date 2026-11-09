@@ -31,6 +31,7 @@ export function pageSteps(page: GraphNode, context: MapContext): Step[] {
     const assigns: string[] = [];
     const markup: string[] = [];
     const events = new Map<string, string>();
+    let params = false;
     (page.data.components as { $type: string, query?: string, projection?: string, picks?: string[], actions?: string[], submits?: string }[]).forEach((component, i) => {
         const id = `${component.$type === 'ListView' ? 'list' : component.$type === 'DetailView' ? 'record' : 'form'}_${i + 1}`;
         const actions = (component.actions ?? []).map(qn => context.node(qn)!).filter(action => {
@@ -45,7 +46,13 @@ export function pageSteps(page: GraphNode, context: MapContext): Step[] {
             const entity = context.node(query.data.entity as string)!;
             const columns = columnsOf(component.projection!, component.picks, context, tasks);
             const load = columns.filter(c => c.load).map(c => `:${c.field}`);
-            const read = `Ash.read!(${typeModule(entity, context)}, action: :${snake(lastOf(query.qn))}${load.length ? `, load: [${load.join(', ')}]` : ''}${query.data.pageSize ? `, page: [limit: ${query.data.pageSize}]` : ''})`;
+            const options = `${load.length ? `, load: [${load.join(', ')}]` : ''}${query.data.pageSize ? `, page: [limit: ${query.data.pageSize}]` : ''}`;
+            // The query's inputs come from the page's parameters, the route and the query string.
+            const inputs = children(query, context, 'Param').map(p => JSON.stringify(lastOf(p.qn)));
+            if (inputs.length) params = true;
+            const read = inputs.length
+                ? `Ash.read!(Ash.Query.for_read(${typeModule(entity, context)}, :${snake(lastOf(query.qn))}, Map.take(socket.assigns.params, [${inputs.join(', ')}]))${options})`
+                : `Ash.read!(${typeModule(entity, context)}, action: :${snake(lastOf(query.qn))}${options})`;
             assigns.push(`|> assign(:${id}, ${query.data.pageSize ? `${read}.results` : read})`);
             markup.push(
                 `<.table id="${id.replace('_', '-')}" rows={@${id}}>`,
@@ -94,8 +101,8 @@ export function pageSteps(page: GraphNode, context: MapContext): Step[] {
         `  use ${web(context)}, :live_view`,
         '',
         '  @impl true',
-        `  def mount(${byId ? '%{"id" => id}' : '_params'}, _session, socket) do`,
-        `    {:ok, socket |> assign(:page_title, ${JSON.stringify(title(lastOf(page.qn)))})${byId ? ' |> assign(:id, id)' : ''} |> load()}`,
+        `  def mount(${params ? 'params' : byId ? '%{"id" => id}' : '_params'}, _session, socket) do`,
+        `    {:ok, socket |> assign(:page_title, ${JSON.stringify(title(lastOf(page.qn)))})${params ? ' |> assign(:params, params)' : ''}${byId ? ` |> assign(:id, ${params ? 'params["id"]' : 'id'})` : ''} |> load()}`,
         '  end',
         '',
         '  defp load(socket) do',

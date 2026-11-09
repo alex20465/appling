@@ -98,6 +98,11 @@ function binary(expr: ExprData, scope: RustScope): Rust | undefined {
         if (!same || (op !== '==' && op !== '!=')) return undefined;
         return { code: op === '!=' ? `!${wrap(same)}` : same, kind: 'bool' };
     }
+    // Two records are the same when their ids are: `order.customer.id == of.id`.
+    if ((op === '==' || op === '!=') && isRecord(expr.left!, scope) && isRecord(expr.right!, scope)) {
+        const id = (r: Rust) => r.option ? `${r.code}.as_ref().map(|r| r.id)` : left.option !== right.option ? `Some(${r.code}.id)` : `${r.code}.id`;
+        return { code: `${id(left)} ${op} ${id(right)}`, kind: 'bool' };
+    }
     const decimal = left.kind === 'decimal' || right.kind === 'decimal';
     const [a, b] = decimal ? [toDecimal(left), toDecimal(right)] : [value(left), value(right)];
     const comparison = ['==', '!=', '<', '<=', '>', '>='].includes(op);
@@ -244,6 +249,13 @@ function atomic(code: string): boolean {
         else if (depth === 0 && !/[\w.:]/.test(c)) return false;
     }
     return depth === 0;
+}
+
+/** Whether the expression names one record of an entity: a field or an input of an entity type. */
+function isRecord(expr: ExprData, scope: RustScope): boolean {
+    const target = expr.target && !expr.call ? scope.node(expr.target) : undefined;
+    const type = target?.kind === 'Field' || target?.kind === 'Param' ? target.data.type as { decl?: string, many?: boolean } | undefined : undefined;
+    return !!type?.decl && !type.many && scope.node(type.decl)?.kind === 'Entity';
 }
 
 function isRecordField(field: GraphNode, scope: RustScope): boolean {

@@ -414,6 +414,21 @@ pub fn can_open_orders(actor: &crate::access::Actor, order: &Order) -> bool {
     can_read_order(actor, order)
 }
 
+/// Whether a record is among the results of the query sales.OpenOrders.
+pub fn in_open_orders(order: &Order) -> bool {
+    [OrderStatus::Placed, OrderStatus::Paid].contains(&order.status)
+}
+
+/// Whether the actor may read a record through sales.OrdersOf, including the read check of sales.Order.
+pub fn can_orders_of(actor: &crate::access::Actor, order: &Order, _of: &crate::crm::Account, _since: Option<chrono::DateTime<chrono::Utc>>) -> bool {
+    can_read_order(actor, order)
+}
+
+/// Whether a record is among the results of the query sales.OrdersOf for the inputs.
+pub fn in_orders_of(order: &Order, of: &crate::crm::Account, since: Option<chrono::DateTime<chrono::Utc>>) -> bool {
+    (order.customer.id == of.id) && (since.is_none() || (order.placed_at.unwrap() >= since.unwrap()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

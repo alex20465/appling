@@ -30,7 +30,7 @@ Requires Rust 1.85 or later. The crate name is the project name in snake case.
 | transitions | a test in the module's `tests` per transition an action runs: `valid_<entity>()` in a `from` state reaches the `to` state, a state the action does not leave fails with `Error::InvalidTransition`; with policies it passes an actor the simulator proves allowed. `#[ignore]`d as a registry task when the simulator cannot prove the preconditions, the guard or the actor |
 | policies, preconditions | `#[ignore]`d tests in the module's `tests`; writing their bodies is a registry task |
 
-Queries, projections, interfaces, pages, use cases, external systems and jobs become registry tasks, as do policies Rust cannot translate (their check returns `false` until written). `cargo test` is the registry's test command. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
+Queries, projections, interfaces, pages, use cases, external systems and jobs become registry tasks (a query whose filter translates still gets `in_<query>(record, inputs...)`, which says whether a record belongs to its results), as do policies Rust cannot translate (their check returns `false` until written). `cargo test` is the registry's test command. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
 
 ## License
 

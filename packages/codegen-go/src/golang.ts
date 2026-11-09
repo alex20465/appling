@@ -117,6 +117,8 @@ function binary(expr: ExprData, scope: GoScope): Go | undefined {
         if (!same || (op !== '==' && op !== '!=')) return undefined;
         return { code: op === '!=' ? `!${wrap(same)}` : same, kind: 'bool' };
     }
+    // Two records are the same when their IDs are: `order.Customer.ID == of.ID`.
+    if ((op === '==' || op === '!=') && isRecord(expr.left!, scope) && isRecord(expr.right!, scope)) return { code: `${left.code}.ID ${op} ${right.code}.ID`, kind: 'bool' };
     const kinds = [left.kind, right.kind];
     if (kinds.includes('decimal')) {
         const [a, b] = [decimal(left, scope), decimal(right, scope)];
@@ -300,6 +302,13 @@ function atomic(code: string): boolean {
         else if (depth === 0 && !/[\w.]/.test(c)) return false;
     }
     return depth === 0;
+}
+
+/** Whether the expression names one record of an entity: a field or an input of an entity type. */
+function isRecord(expr: ExprData, scope: GoScope): boolean {
+    const target = expr.target && !expr.call ? scope.node(expr.target) : undefined;
+    const type = target?.kind === 'Field' || target?.kind === 'Param' ? target.data.type as { decl?: string, many?: boolean } | undefined : undefined;
+    return !!type?.decl && !type.many && scope.node(type.decl)?.kind === 'Entity';
 }
 
 function isRecordField(field: GraphNode, scope: GoScope): boolean {

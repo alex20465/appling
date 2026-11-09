@@ -23,6 +23,9 @@ export function ashExpr(expr: ExprData, node: Lookup): string | undefined {
             const shift = relativeTime(expr);
             if (shift) return shift;
             if (expr.op === '==' || expr.op === '!=') {
+                // A query input compared with null, as an optional input's filter writes it: `since == null`.
+                const input = [expr.left!, expr.right!].find(e => isInput(e, node));
+                if (input && [expr.left!, expr.right!].some(e => e.$type === 'NullExpr')) return `${expr.op === '!=' ? 'not ' : ''}is_nil(^arg(:${input.name}))`;
                 const references = [referenceId(expr.left!, node), referenceId(expr.right!, node)];
                 if (references.some(r => r && r !== 'nil') && references.every(Boolean)) return `${references[0]} ${expr.op} ${references[1]}`;
             }
@@ -74,6 +77,8 @@ function referenceId(expr: ExprData, node: Lookup): string | undefined {
         if (expr.name === 'this' && !expr.target) return 'id';
         const target = expr.target ? node(expr.target) : undefined;
         if (target?.kind === 'Tenant') return '^tenant()';
+        // An input that names a record, such as `of: Customer` of a query, is the record's id.
+        if (target?.kind === 'Param' && isRecordType(target, node)) return `^arg(:${expr.name})`;
         return target && isRelation(target, node) ? `${expr.name}_id` : undefined;
     }
     if (expr.$type === 'MemberExpr' && !expr.call) {
@@ -88,8 +93,18 @@ function referenceId(expr: ExprData, node: Lookup): string | undefined {
 
 /** A single valued field whose type is an entity, a `belongs_to` relationship. */
 function isRelation(target: GraphNode, node: Lookup): boolean {
+    return isRecordField(target, node) && isRecordType(target, node);
+}
+
+/** A field or input that holds one record of an entity. */
+function isRecordType(target: GraphNode, node: Lookup): boolean {
     const type = target.data.type as { decl?: string, many?: boolean } | undefined;
-    return isRecordField(target, node) && !!type?.decl && !type.many && node(type.decl)?.kind === 'Entity';
+    return !!type?.decl && !type.many && node(type.decl)?.kind === 'Entity';
+}
+
+/** The bare name of an input, such as a query input. */
+function isInput(expr: ExprData, node: Lookup): expr is ExprData & { name: string } {
+    return expr.$type === 'NameExpr' && !expr.call && !!expr.target && node(expr.target)?.kind === 'Param';
 }
 
 /** Translates a condition over stored attributes to an Ash builtin validation, or undefined. */
@@ -146,7 +161,19 @@ function relativeTime(expr: ExprData): string | undefined {
 }
 
 function wrap(code: string): string {
-    return /^\^?[\w.:]+(\(.*\))?$/.test(code) || /^".*"$/.test(code) || /^\[.*\]$/.test(code) ? code : `(${code})`;
+    const call = /^\^?[\w.:]+(\(.*\))?$/.exec(code);
+    // `is_nil(a) or (b)` looks like one call to the pattern; the call's parenthesis has to close at the end.
+    return (call && (!call[1] || closesAtEnd(call[1]))) || /^".*"$/.test(code) || /^\[.*\]$/.test(code) ? code : `(${code})`;
+}
+
+/** Whether the parenthesis that opens the text closes only at its end. */
+function closesAtEnd(text: string): boolean {
+    let depth = 0;
+    for (let i = 0; i < text.length; i++) {
+        if (text[i] === '(') depth++;
+        else if (text[i] === ')' && --depth === 0) return i === text.length - 1;
+    }
+    return false;
 }
 
 function joined(parts: (string | undefined)[], combine: (parts: string[]) => string): string | undefined {

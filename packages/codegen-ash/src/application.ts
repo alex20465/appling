@@ -1,10 +1,10 @@
 import type { MapContext, Step } from '@appling/codegen';
-import type { ExprData, GraphNode } from '@appling/model';
+import type { ExprData, GraphNode, TypeData } from '@appling/model';
 import { ashExpr, lastOf } from './elixir.js';
-import { fileOf, patch, snake, task, TYPES } from './naming.js';
+import { attributeType, children, fileOf, patch, snake, task, TYPES } from './naming.js';
 import { addToSection } from './resource.js';
 
-/** A query becomes a read action of its entity's resource with filter, sort and pagination. */
+/** A query becomes a read action of its entity's resource with its inputs as arguments, filter, sort and pagination. */
 export function querySteps(query: GraphNode, context: MapContext): Step[] {
     const entity = context.node(query.data.entity as string)!;
     const translated = query.data.filter ? ashExpr(query.data.filter as ExprData, context.node) : undefined;
@@ -14,12 +14,19 @@ export function querySteps(query: GraphNode, context: MapContext): Step[] {
     const sorts = ((query.data.sorts ?? []) as { field: string, direction?: string }[]).map(s => `${lastOf(s.field)}: :${s.direction ?? 'asc'}`);
     const lines = [
         `read :${snake(lastOf(query.qn))} do`,
+        ...children(query, context, 'Param').map(input => `  argument :${lastOf(input.qn)}, ${argumentType(input.data.type as TypeData, context)}, allow_nil?: ${(input.data.type as TypeData).optional ? 'true' : 'false'}`),
         ...(filter ? [`  filter expr(${filter})`] : []),
         ...(sorts.length ? [`  prepare build(sort: [${sorts.join(', ')}])`] : []),
         ...(query.data.pageSize ? [`  pagination offset?: true, default_limit: ${query.data.pageSize}, required?: false`] : []),
         'end'
     ];
     return [patch(fileOf(entity, context), existing => addToSection(existing, 'actions', lines)), ...tasks];
+}
+
+/** The Ash type of a read action argument; an input that names a record of an entity takes its id. */
+function argumentType(type: TypeData, context: MapContext): string {
+    const base = type.decl && context.node(type.decl)?.kind === 'Entity' ? ':uuid' : attributeType(type, context, true);
+    return type.many ? `{:array, ${base}}` : base;
 }
 
 /** Computed projection fields become calculations on the source resource; plain fields are its attributes already. */

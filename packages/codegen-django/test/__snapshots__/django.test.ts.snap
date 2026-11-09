@@ -200,8 +200,8 @@ from rest_framework.response import Response
 from sales.actions import place_order
 from sales.errors import EmptyOrder, InvalidTransition
 from sales.models import Order
-from sales.queries import OPEN_ORDERS_PAGE_SIZE, open_orders
-from sales.serializers import OrderSummary
+from sales.queries import OPEN_ORDERS_PAGE_SIZE, open_orders, orders_of
+from sales.serializers import OrderSummary, OrdersOfInput
 
 
 class PublicApiThrottle(throttling.UserRateThrottle):
@@ -226,6 +226,23 @@ class PublicApiOpenOrders(generics.ListAPIView):
         return open_orders(actor=self.request.user)
 
 
+class PublicApiOrdersOfSerializer(OrderSummary):
+    class Meta(OrderSummary.Meta):
+        fields = ["reference", "status", "total"]
+
+
+class PublicApiOrdersOf(generics.ListAPIView):
+    serializer_class = PublicApiOrdersOfSerializer
+    throttle_classes = [PublicApiThrottle]
+
+    def get_queryset(self):
+        params = self.request.query_params.copy()
+        params.update(self.kwargs)
+        inputs = OrdersOfInput(data=params)
+        inputs.is_valid(raise_exception=True)
+        return orders_of(**inputs.validated_data, actor=self.request.user)
+
+
 class PublicApiPlaceOrder(views.APIView):
     throttle_classes = [PublicApiThrottle]
 
@@ -243,6 +260,7 @@ from sales import api
 
 urlpatterns = [
     path("orders", api.PublicApiOpenOrders.as_view()),
+    path("accounts/<str:of>/orders", api.PublicApiOrdersOf.as_view()),
     path("orders/<int:id>/place", api.PublicApiPlaceOrder.as_view()),
 ]
 ",
@@ -343,6 +361,7 @@ from django.db import models
 from django.tasks import task
 from django.utils import timezone
 from sales.actions import cancel
+from sales.enums import OrderStatus
 from sales.models import Order
 
 
@@ -510,7 +529,9 @@ def readable_order_rows(actor, rows):
         return rows.none()
     return rows.filter(((models.Q(pk__isnull=False) if is_clerk(actor) else models.Q(pk__in=[]))) | (((models.Q(pk__isnull=False) if is_customer(actor) else models.Q(pk__in=[]))) & (models.Q(customer=actor.account))))
 ",
-  "sales/queries.py": "from django.db import models
+  "sales/queries.py": "from datetime import datetime
+from django.db import models
+from crm.models import Account
 from sales.models import Order
 from sales.policies import readable_order_rows
 
@@ -526,6 +547,16 @@ def open_orders(actor=None):
         return rows.none()
     rows = readable_order_rows(actor, rows)
     return rows
+
+
+def orders_of(of: Account, since: datetime | None = None, actor=None):
+    rows = Order.objects.filter((models.Q(customer=of)) & (models.Q(pk__isnull=False) if since is None else models.Q(placed_at__gte=since))).order_by("-placed_at")
+    if actor is None:
+        return rows
+    if not actor.is_authenticated:
+        return rows.none()
+    rows = readable_order_rows(actor, rows)
+    return rows
 ",
   "sales/roles.py": "import rules
 
@@ -535,8 +566,15 @@ def is_customer(user):
     return user is not None and user.groups.filter(name__in=["Customer", "Shopper"]).exists()
 ",
   "sales/serializers.py": "from rest_framework import serializers
+from crm.models import Account
 from sales.models import Order
 from sales.policies import can_read_order_total
+
+
+class OrdersOfInput(serializers.Serializer):
+    """The inputs of OrdersOf, read from URL parameters."""
+    of = serializers.PrimaryKeyRelatedField(queryset=Account.objects.all())
+    since = serializers.DateTimeField(required=False, allow_null=True)
 
 
 class OrderSummary(serializers.ModelSerializer):
