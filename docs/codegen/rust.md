@@ -38,7 +38,8 @@ The crate name is the project name in snake case. The module `sales` is `src/sal
 | `role`, `actor`, `tenant` | the module `src/access.rs`, see [Access](#access) |
 | `policy` | a function per policy and the `can_...` checks, see [Policies](#policies) |
 | invariants | a test in the module's `tests` per invariant that `validate()` checks: `valid_<entity>()` (`<Entity>::new` with a sample for every argument, records through their own `new`, value types field by field) passes `validate()`, and the same record with one field set to a value the simulator proves to break the invariant fails with its label. Without such a value the violation case is a registry task; without a sample for every argument the test stays `#[ignore]`d |
-| policies, transitions, preconditions | `#[ignore]`d tests in the module's `tests` |
+| transitions | a test in the module's `tests` per transition an action runs: `valid_<entity>()` in a `from` state goes to the `to` state through the action, and the action refuses a state no transition of it leaves with `Error::InvalidTransition`. Once the model has a policy, the test passes the first declared actor (`Actor::<actor>()`) the simulator proves the policies let run the action; records the action creates go to create functions that store nothing. The test stays `#[ignore]`d as a registry task when the simulator cannot prove that the preconditions and the guard hold for the record and the sample inputs, when an earlier transition of the action could take the record, when a policy involved has no Rust translation, when no actor is proven allowed, or when the action, the entity and the machine are in different modules; so do transitions on an event |
+| policies, preconditions | `#[ignore]`d tests in the module's `tests` |
 
 This is the generated `place_order` of the [example](../../examples/sales.appling):
 

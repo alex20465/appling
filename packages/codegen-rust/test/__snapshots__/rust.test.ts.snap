@@ -458,8 +458,16 @@ mod tests {
     #[ignore = "registry task: sales.OrderFlow.transition[placed->paid]"]
     fn order_flow_transition_placed_paid() {}
     #[test]
-    #[ignore = "registry task: sales.OrderFlow.transition[draft,placed->cancelled]"]
-    fn order_flow_transition_draft_placed_cancelled() {}
+    fn order_flow_transition_draft_placed_cancelled() {
+        let actor = crate::access::Actor::employee();
+        let mut x = valid_order();
+        x.status = OrderStatus::Draft;
+        cancel(&actor, &mut x, None).expect("cancel from draft");
+        assert_eq!(x.status, OrderStatus::Cancelled, "cancel from draft goes to cancelled");
+        let mut x = valid_order();
+        x.status = OrderStatus::Paid;
+        assert!(matches!(cancel(&actor, &mut x, None), Err(Error::InvalidTransition { .. })), "cancel refuses paid");
+    }
 }
 ",
 }
