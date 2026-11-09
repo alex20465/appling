@@ -13,7 +13,8 @@ interface Sample {
 
 const simulators = new WeakMap<Graph, Simulator>();
 
-function simulator(context: MapContext): Simulator {
+/** One simulator per graph, used to prove what a test may rely on. */
+export function simulator(context: MapContext): Simulator {
     let found = simulators.get(context.graph);
     if (!found) simulators.set(context.graph, found = new Simulator(context.graph));
     return found;

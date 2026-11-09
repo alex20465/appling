@@ -148,7 +148,7 @@ function policyTarget(owner: GraphNode, operations: string[], fields: string[], 
  * The checks of a policy body. Branches with one check authorize directly; at most one branch with several checks
  * comes last, as `forbid_unless` for all but its last check, which authorizes.
  */
-function checkLines(condition: ExprData, context: MapContext, field: boolean): string[] | undefined {
+export function checkLines(condition: ExprData, context: MapContext, field: boolean): string[] | undefined {
     const branches = split(condition, '||').map(b => split(b, '&&').map(c => check(c, context, field)));
     if (branches.some(b => b.some(c => c === undefined))) return undefined;
     const singles = branches.filter(b => b.length === 1) as string[][];
@@ -224,7 +224,7 @@ function checkModuleCode(module: string, description: string, clauses: string[])
 }
 
 /** The role or actor of `actor.is(X)`, or undefined for any other expression. */
-function isTarget(expr: ExprData, context: MapContext): GraphNode | undefined {
+export function isTarget(expr: ExprData, context: MapContext): GraphNode | undefined {
     const target = expr.$type === 'MemberExpr' && expr.call && expr.member === 'is' && isActor(expr.receiver) ? expr.args?.[0]?.target : undefined;
     const node = target ? context.node(target) : undefined;
     return node && (node.kind === 'Role' || node.kind === 'Actor') ? node : undefined;
@@ -243,7 +243,7 @@ function namedActors(context: MapContext): Set<string> {
     return names;
 }
 
-function split(expr: ExprData, op: '&&' | '||'): ExprData[] {
+export function split(expr: ExprData, op: '&&' | '||'): ExprData[] {
     return expr.$type === 'BinaryExpr' && expr.op === op ? [...split(expr.left!, op), ...split(expr.right!, op)] : [expr];
 }
 
