@@ -131,6 +131,8 @@ const ACTING = new Set(['Action', 'Machine', 'Job', 'Query', 'External', 'Extern
 
 /** The registry task of a node's `does` text, the same for every extension. */
 export function doesTask(node: GraphNode): string | undefined {
+    // A scenario's text describes its example, and its generated test is what checks it.
+    if (node.kind === 'Scenario') return undefined;
     const text = node.data.does;
     if (typeof text !== 'string' || !text.trim()) return undefined;
     const name = node.qn.split('.').pop();

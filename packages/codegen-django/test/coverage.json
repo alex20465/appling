@@ -211,10 +211,10 @@
   },
   {
     "kind": "Scenario",
-    "generated": 2,
-    "partial": 1,
+    "generated": 3,
+    "partial": 0,
     "todo": 0,
-    "tasks": 1
+    "tasks": 0
   },
   {
     "kind": "SetEffect",
@@ -253,9 +253,9 @@
   },
   {
     "kind": "total",
-    "generated": 112,
-    "partial": 25,
+    "generated": 113,
+    "partial": 24,
     "todo": 6,
-    "tasks": 44
+    "tasks": 43
   }
 ]
