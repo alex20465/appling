@@ -88,7 +88,7 @@ function name(expr: ExprData, scope: PythonScope): string | undefined {
         return 'timezone.now()';
     }
     const target = expr.target ? scope.node(expr.target) : undefined;
-    if (target?.kind === 'Field' && scope.node(parentOf(target.qn))?.kind === 'Entity') return scope.self && `${scope.self}.${id}`;
+    if (target?.kind === 'Field' && scope.node(parentOf(target.qn))?.kind === 'Entity') return scope.self && `${scope.self}.${id}${related(target, scope)}`;
     if (target?.kind === 'Param') return id;
     if (target?.kind === 'Tenant') {
         scope.imports.add(`from ${appOf(target.module)}.tenants import ${tenantGetter(target)}`);
@@ -114,7 +114,13 @@ function member(expr: ExprData, scope: PythonScope): string | undefined {
         scope.imports.add('from decimal import Decimal');
         return `Decimal(${item})`;
     }
-    return owner === 'Entity' || owner === 'Actor' ? `${receiver}.${expr.member}` : undefined;
+    return owner === 'Entity' || owner === 'Actor' ? `${receiver}.${expr.member}${related(target, scope)}` : undefined;
+}
+
+/** `.all()` for a list of entities, a `ManyToManyField` whose manager is neither iterable nor sized. */
+function related(field: GraphNode, scope: PythonScope): string {
+    const type = field.data.type as { many?: boolean, decl?: string };
+    return type.many && type.decl && scope.node(type.decl)?.kind === 'Entity' ? '.all()' : '';
 }
 
 function call(expr: ExprData, scope: PythonScope): string | undefined {

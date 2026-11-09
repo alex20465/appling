@@ -46,6 +46,7 @@ Requires `uv` on the PATH. Python and Django (6.1) are installed by uv into the 
 
 | `does` | the docstring of the generated class or function, `help_text` on model fields, and a registry task |
 | rules | a `TestCase` per invariant, policy, transition and action with preconditions in `<app>/tests.py`, one method per case; tests of invariants enforced as check constraints, of entity, action and query policies that read the actor only through `actor.is(...)`, of transitions and of preconditions get bodies (rows from `make_<entity>()` factories in `<app>/factories.py`) where the simulator proves the fixture satisfies the guards, preconditions and invariants; the other cases are skipped and writing them is a registry task |
+| `scenario` | a `TestCase` in `<app>/tests.py` that creates the given rows, signs in the actor, calls the action or use case (an endpoint through its REST route when one is generated) and asserts the `then`: the checks on the reloaded rows, the emitted events, the declared error or `PermissionDenied`. It replaces the precondition and transition tests of what it runs; a scenario the generated code cannot reproduce stays a skipped test and a registry task |
 
 Models with projections or interfaces also get Django REST framework. The project ends with `manage.py makemigrations`, so its migration history starts with the generated models.
 

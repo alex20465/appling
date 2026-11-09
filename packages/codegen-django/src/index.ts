@@ -5,6 +5,7 @@ import { messagesSteps, navigationSteps, pageSteps } from './pages.js';
 import { externalSteps, projectionFieldSteps, projectionSteps, querySteps, useCaseSteps } from './application.js';
 import { actionSteps, errorSteps, eventSteps, jobSteps, machineSteps, transitionSteps } from './behavior.js';
 import { hasKind, task } from './files.js';
+import { scenarioSteps } from './scenario-tests.js';
 import { actorSteps, entityPolicySteps, policySteps, roleSteps, tenantSteps } from './access.js';
 import { externalKeySteps, secretPlaceholders } from './vendors.js';
 import { entitySteps, enumSteps, fieldSteps, installApp, invariantSteps, moduleSteps, valueSteps } from './models.js';
@@ -58,6 +59,7 @@ const extension: CodegenExtension = {
             case 'Role': return roleSteps(node, context);
             case 'Actor': return actorSteps(node, context);
             case 'Tenant': return tenantSteps(node, context);
+            case 'Scenario': return scenarioSteps(node, context);
             default: return undefined;
         }
     }

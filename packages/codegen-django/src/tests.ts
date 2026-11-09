@@ -8,6 +8,8 @@ export interface TestCase {
     name: string;
     /** The body lines, indented for the method; undefined leaves the method skipped as a registry task. */
     body?: string[];
+    /** Why there is no body, added to the registry task. */
+    why?: string;
 }
 
 /**
@@ -20,13 +22,14 @@ export function testSteps(node: GraphNode, rule: string, cases: (string | TestCa
     const code = [
         `class ${name}(TestCase):`,
         `    """${node.qn}: ${rule.replaceAll('"', '\\"')}"""`,
-        ...all.flatMap(c => ['', `    def test_${c.name}(self):`, ...(c.body ?? [`self.skipTest(${JSON.stringify(`registry task: ${node.qn}`)})`]).map(l => `        ${l}`)])
+        ...all.flatMap(c => ['', `    def test_${c.name}(self):`, ...(c.body ?? [`self.skipTest(${JSON.stringify(`registry task: ${node.qn}`)})`]).map(l => l ? `        ${l}` : '')])
     ].join('\n');
     const missing = all.filter(c => !c.body);
+    const why = missing.flatMap(c => c.why ? [c.why] : []);
     return [
         ...steps,
         template(`${appOf(node.module)}/tests.py`, existing => pythonFile(existing, ['from django.test import TestCase', ...imports], code)),
-        ...(missing.length ? [task(`write the test bodies of ${name} in ${appOf(node.module)}/tests.py${missing.length < all.length ? ` (${missing.map(c => `test_${c.name}`).join(', ')})` : ''}`)] : [])
+        ...(missing.length ? [task(`write the test bodies of ${name} in ${appOf(node.module)}/tests.py${missing.length < all.length ? ` (${missing.map(c => `test_${c.name}`).join(', ')})` : ''}${why.length ? `: ${why.join('; ')}` : ''}`)] : [])
     ];
 }
 
@@ -36,6 +39,7 @@ function words(node: GraphNode, context: MapContext): string {
     const pascal = (text: string) => text.split(/[^A-Za-z0-9]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join('');
     if (node.kind === 'Invariant') return owner + pascal(String(node.data.label));
     if (node.kind === 'Policy') return `${owner}${pascal(((node.data.operations ?? ['any']) as string[]).join(' '))}Policy${duplicate(node, context)}`;
+    if (node.kind === 'Scenario') return `${lastOf(node.qn)}Scenario`;
     if (node.kind === 'Transition') return `${owner}${pascal((node.data.from as string[]).join(' '))}To${pascal(node.data.to as string)}`;
     return `${lastOf(node.qn)}Preconditions`;
 }

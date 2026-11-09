@@ -4,6 +4,7 @@ import { annotation, children, documented, importOnReady, pythonFile, task, temp
 import { actionGuard, enforced, guardedCreate } from './access.js';
 import { scope, storedFields } from './models.js';
 import { preconditionTests, transitionTests } from './behavior-tests.js';
+import { covered } from './fixtures.js';
 import { appOf, constantOf, lastOf, parentOf, python, q, snake, wrap, type PythonScope } from './python.js';
 
 interface Code {
@@ -71,11 +72,13 @@ export function actionSteps(action: GraphNode, context: MapContext): Step[] {
         `def ${snake(lastOf(action.qn))}(${params.join(', ')}) -> None:`,
         ...(code.lines.length ? code.lines : ['pass']).map(l => `    ${l}`)
     ].join('\n');
-    const tests = preconditions.length ? preconditionTests(action, context) : [];
+    const tests = preconditions.length && !covered(context).has(action.qn) ? preconditionTests(action, context) : [];
     return [template(`${appOf(action.module)}/actions.py`, existing => pythonFile(existing, code.imports, documented(body, action))), ...code.tasks, ...tests];
 }
 
+/** The tests of a transition, unless a scenario runs its action: then the scenario test replaces them. */
 export function transitionSteps(transition: GraphNode, context: MapContext): Step[] {
+    if (covered(context).has(transition.qn)) return [];
     const trigger = lastOf((transition.data.action ?? transition.data.event) as string);
     const rule = `${(transition.data.from as string[]).join(', ')} -> ${transition.data.to} via ${trigger}${transition.props.guard ? ` when ${transition.props.guard}` : ''}`;
     return transitionTests(transition, rule, context);
