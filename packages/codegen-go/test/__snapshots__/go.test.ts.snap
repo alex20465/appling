@@ -398,7 +398,26 @@ func TestOrderPolicyRead(t *testing.T) {
 }
 
 func TestOrderPolicyCreateDelete(t *testing.T) {
-	t.Skip("registry task: sales.Order.policy[create,delete]")
+	t.Run("allows permitted actors", func(t *testing.T) {
+		actor := access.NewEmployee()
+		order := validOrder()
+		if !CanCreateOrder(actor, order) {
+			t.Error("CanCreateOrder: want true for crm.Employee")
+		}
+		if !CanDeleteOrder(actor, order) {
+			t.Error("CanDeleteOrder: want true for crm.Employee")
+		}
+	})
+	t.Run("denies other actors", func(t *testing.T) {
+		actor := access.NewShopper()
+		order := validOrder()
+		if CanCreateOrder(actor, order) {
+			t.Error("CanCreateOrder: want false for sales.Shopper")
+		}
+		if CanDeleteOrder(actor, order) {
+			t.Error("CanDeleteOrder: want false for sales.Shopper")
+		}
+	})
 }
 
 func TestOrderPolicyUpdate(t *testing.T) {
