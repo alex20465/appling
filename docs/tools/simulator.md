@@ -12,8 +12,9 @@ The simulator evaluates the behavior a model describes against sample data and a
 | What may one actor do? | For every entity operation, action, query, use case and page the verdict and the policies that decide it |
 | Which invariants does an action put at risk? | The invariants of its entity that read a field the action changes, directly or through derived fields |
 | What does running an action do? | Policies, preconditions, the transition taken, the effects, emitted events and violated invariants |
+| Does a scenario hold? | Whether its `then` holds for its given rows, actor and call, and why not |
 
-You reach it through `appling simulate` in the [CLI](cli.md#simulate), the `simulate` tool of the [MCP server](ai.md#model-tools), and the [inspector](ide.md#the-inspector) of Appling Desktop, which shows the answers for the selected action or machine.
+`appling check` runs every [scenario](../language/scenarios.md) through it and reports a failing one as an error. You reach the other questions through `appling simulate` in the [CLI](cli.md#simulate), the `simulate` tool of the [MCP server](ai.md#model-tools), and the [inspector](ide.md#the-inspector) of Appling Desktop, which shows the answers for the selected action or machine.
 
 ## An example
 
@@ -108,6 +109,8 @@ Nothing is open by default: a target that no policy guards along its path is `no
 
 **Running an action.** A run checks, in order: the policies (`no` refuses the run), the preconditions (a false one reports its error), the transition whose `from` state matches and whose guard does not fail, then applies the transition's effects, the state change and the action's effects, records `emit` effects as events, and evaluates the entity's invariants on the result. Derived fields are computed from the record when an expression reads them.
 
+**Running a scenario.** The given rows start with their entity's defaults, empty lists and null optional fields, then take the given values; each must satisfy its entity's invariants. The call runs as the scenario's actor (a role stands for the first actor holding it) with policies checked when there is an actor and the model has policies, or without an actor and without policy checks. An action runs as above and its result replaces the row in place, so every name for that row sees the change. A use case runs its call steps in order, runs an `on` handler when its error occurs, assumes calls to externals and queries succeed, and stops at the first `await`. Rows compare by identity, so `customer == acme` holds for the row bound as `acme` before and after the call. Anything that stays unknown and decides the outcome fails the scenario with a message that names it.
+
 ## Running an action from the MCP server
 
 The `simulate` tool takes `question: "run"`, the `action`, a sample `record`, the `actor` and optionally `actorFields` and `inputs`:
@@ -129,6 +132,9 @@ simulator.actors('shop.Close');
 simulator.access('shop.Customer');
 simulator.risks('shop.Discount');
 simulator.run('shop.Discount', { lines: [{ amount: 5 }], discount: 0 }, { actor: 'shop.Staff' }, { amount: 20 });
+simulator.scenario('shop.CloseOwnCart'); // { passed, failures, outcome, errors, reasons, events, rows }
 ```
+
+`runScenarios(graph)` runs every scenario of a graph, `checkScenarios(models, services)` returns the failures as problems located at the scenario names (what `appling check` prints), `scenarioCall(graph, node)` resolves a scenario's call through its endpoint, and `coveredByScenarios(graph)` lists the actions, use cases and transitions the scenarios cover, which the code generators use to replace their guessed tests.
 
 `@appling/model/simulator` exports the same class without the language dependencies, for the browser. The repo view of Appling Desktop and its browser demo use it this way.

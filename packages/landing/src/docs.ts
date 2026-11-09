@@ -16,6 +16,7 @@ export const SECTIONS = [
       "language/interfaces",
       "language/experience",
       "language/expressions",
+      "language/scenarios",
       "language/migrations",
       "language/validation",
     ],

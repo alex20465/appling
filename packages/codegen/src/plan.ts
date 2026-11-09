@@ -137,8 +137,10 @@ export function doesTask(node: GraphNode): string | undefined {
     return ACTING.has(node.kind) ? `implement what ${name} does: ${text}` : `check that ${name} matches its description: ${text}`;
 }
 
+/** Modules first; scenarios last, as their tests call what every layer generates. */
 function rank(node: GraphNode): number {
-    return node.kind === 'Module' ? 0 : RANK[node.layer];
+    if (node.kind === 'Module') return 0;
+    return node.kind === 'Scenario' ? 7 : RANK[node.layer];
 }
 
 export function mapContext(graph: Graph, name: string, options: Record<string, unknown>): MapContext {

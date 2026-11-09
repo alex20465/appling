@@ -16,7 +16,7 @@ export function relevanceLevel(score: number): RelevanceLevel {
 
 /**
  * How much every module and top level declaration matters to the application, from 0 to 1. The graph gives each
- * declaration a score from the declarations that use it and those it uses, on a log scale against the busiest one. A declared level, its own or the nearest module's, maps that score into the level's range.
+ * declaration a score from the declarations that use it and those it uses (scenarios do not count), on a log scale against the busiest one. A declared level, its own or the nearest module's, maps that score into the level's range.
  * A module scores as its most relevant declaration.
  */
 export function relevance(graph: Graph): Map<string, number> {
@@ -33,7 +33,8 @@ export function relevance(graph: Graph): Map<string, number> {
     const add = (map: Map<string, Set<string>>, key: string, value: string) => map.set(key, (map.get(key) ?? new Set()).add(value));
     for (const edge of graph.edges.filter(e => e.kind !== 'contains')) {
         const [from, to] = [declaration(edge.from), declaration(edge.to)];
-        if (from === to || kinds.get(from) === 'Module' || kinds.get(to) === 'Module') continue;
+        // A scenario is an example of behavior, not part of it, so it makes nothing more relevant.
+        if (from === to || kinds.get(from) === 'Module' || kinds.get(to) === 'Module' || kinds.get(from) === 'Scenario') continue;
         add(dependents, to, from);
         add(dependencies, from, to);
     }

@@ -90,7 +90,14 @@ appling check examples
 2 file(s), 0 error(s)
 ```
 
-`check` prints diagnostics on stdout. It exits with 1 when there is at least one error.
+Once the model has no errors, `check` runs every [scenario](../language/scenarios.md) in the [simulator](simulator.md) and reports each one whose `then` does not hold as an error at the scenario's name:
+
+```
+examples/sales.appling:127:12 error Scenario ClerkCancelsDraft fails: order.status == placed is false.
+2 file(s), 1 error(s)
+```
+
+`check` prints diagnostics on stdout. It exits with 1 when there is at least one error, a failing scenario included. `graph`, `release` and `generate` do not run the scenarios.
 
 ## fmt
 

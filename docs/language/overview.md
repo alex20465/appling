@@ -56,13 +56,13 @@ Identifiers start with a letter or an underscore, followed by letters, digits or
 
 Many keywords are also valid names, so fields such as `state`, `from` or `input` stay legal:
 
-`state`, `input`, `value`, `from`, `to`, `on`, `for`, `step`, `list`, `detail`, `form`, `route`, `run`, `actions`, `fields`, `role`, `event`, `action`, `query`, `page`, `timeout`, `sort`, `when`, `create`, `read`, `update`, `delete`, `per`, `flow`, `actor`, `tenant`, `set`, `op`, `human`, `system`, `service`, `asc`, `desc`, `remove`, `rename`, `retype`, `roles`, `second`, `minute`, `hour`, `link`, `core`, `supporting`, `peripheral`, `default`, `limit`, `messages`, `migration`, `is`, `does`.
+`state`, `input`, `value`, `from`, `to`, `on`, `for`, `step`, `list`, `detail`, `form`, `route`, `run`, `actions`, `fields`, `role`, `event`, `action`, `query`, `page`, `timeout`, `sort`, `when`, `create`, `read`, `update`, `delete`, `per`, `flow`, `actor`, `tenant`, `set`, `op`, `human`, `system`, `service`, `asc`, `desc`, `remove`, `rename`, `retype`, `roles`, `second`, `minute`, `hour`, `link`, `core`, `supporting`, `peripheral`, `default`, `limit`, `messages`, `migration`, `is`, `does`, `setting`, `secret`, `scenario`, `given`, `then`, `fails`, `refused`.
 
 Followed by `:`, such a keyword is always a name, so a field named `state` may follow a field that ends with a modifier: `code: String unique` then `state: Status state`.
 
 Every other keyword is reserved and cannot be a name:
 
-`as`, `atomic`, `auth`, `await`, `consistency`, `cors`, `do`, `effect`, `else`, `emit`, `entity`, `enum`, `errors`, `eventual`, `every`, `export`, `external`, `false`, `in`, `interface`, `invariant`, `job`, `machine`, `module`, `navigation`, `null`, `owned`, `paginate`, `policy`, `projection`, `requires`, `returns`, `transition`, `true`, `unique`, `usecase`, `via`, `where`, and the primitive types `Bool`, `Date`, `DateTime`, `Decimal`, `Duration`, `File`, `Int`, `Money`, `String`, `Text`, `Uuid`.
+`as`, `atomic`, `auth`, `await`, `consistency`, `cors`, `do`, `effect`, `else`, `emit`, `emitted`, `entity`, `enum`, `errors`, `eventual`, `every`, `export`, `external`, `false`, `in`, `interface`, `invariant`, `job`, `machine`, `module`, `navigation`, `null`, `owned`, `paginate`, `policy`, `projection`, `requires`, `returns`, `transition`, `true`, `unique`, `usecase`, `via`, `where`, and the primitive types `Bool`, `Date`, `DateTime`, `Decimal`, `Duration`, `File`, `Int`, `Money`, `String`, `Text`, `Uuid`.
 
 There is no escape syntax for reserved words; pick another name, such as `entries` for `export`.
 
@@ -94,6 +94,8 @@ Each declaration belongs to exactly one layer. The keyword decides the layer: an
 | L4 Interfaces | How programs reach them | `interface <protocol>` with endpoints | [interfaces](interfaces.md) |
 | L5 Experience | What people see | `page` with `list`, `detail`, `form`; `navigation`, `flow`, `messages` | [experience](experience.md) |
 
+A `scenario` sits outside the five layers: it is an example of behavior that may reference anything its module sees, checked by `appling check` and generated as a test. See [scenarios](scenarios.md).
+
 Each concept is defined once, in the layer that owns it, and referenced everywhere else. A rule that must always hold is an `invariant` on the entity (L1); a rule that must hold for one action to run is a `requires` precondition on that action (L2).
 
 ## Reference rules
@@ -123,6 +125,7 @@ flowchart TD
 | L3 Application | L1, L2 |
 | L4 Interfaces | L3, L2 actions, L1 enums and value types |
 | L5 Experience | L3, L2 actions, L1 enums and value types |
+| Scenario | Everything visible to it |
 
 L4 and L5 never reference an entity directly. They reach entity data only through L3 projections. Names inside expressions are not references in this sense; they resolve by position, as described in [expressions](expressions.md).
 
@@ -177,5 +180,6 @@ Other unnamed parts, such as preconditions, sort clauses, use case steps, page c
 | [Interfaces](interfaces.md) | `interface`, endpoints, auth, limits, CORS |
 | [Experience](experience.md) | `page`, `list`, `detail`, `form`, `navigation`, `flow`, `messages` |
 | [Expressions](expressions.md) | The CEL subset, typing, name resolution, builtins |
+| [Scenarios](scenarios.md) | `scenario` with `given`, `as`, `when`, `then`, run by the simulator |
 | [Migrations](migrations.md) | `migration`, `rename`, `retype`, `remove`, release blocks |
 | [Validation](validation.md) | Every rule the validator enforces |

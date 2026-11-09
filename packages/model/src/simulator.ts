@@ -238,7 +238,7 @@ export class Simulator {
             failures.push(`${name} failed: ${why}.`);
         } else {
             if (done.allowed === 'depends') failures.push(`Whether the actor may call ${name} depends on data the scenario does not give.`);
-            for (const undecided of done.undecided) failures.push(`${capitalize(undecided)} of ${name} depends on data the scenario does not give.`);
+            for (const undecided of done.undecided) failures.push(`${name}: ${undecided} depends on data the scenario does not give.`);
             for (const label of done.violated) failures.push(`${name} breaks the invariant "${label}".`);
             const shown = (node.props.checks ?? []) as string[];
             ((data.checks ?? []) as { $type: string, condition?: ExprData, event?: string, assignments?: AssignmentData[] }[]).forEach((check, i) => {
@@ -349,7 +349,7 @@ export class Simulator {
         preconditions.forEach((precondition, i) => {
             const text = (node.props.preconditions as string[])[i];
             const holds = this.evaluate(precondition.condition, scope);
-            if (holds === UNKNOWN) result.undecided.push(`the precondition ${text}`);
+            if (holds === UNKNOWN) result.undecided.push(text);
             if (holds !== false) return;
             result.reasons.push(precondition.error ? last(precondition.error) : text);
             if (precondition.error) result.errors.push(precondition.error);
@@ -591,10 +591,6 @@ function comparable(value: Value): Value {
 
 function isRecord(value: Value | undefined): value is Record {
     return !!value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date);
-}
-
-function capitalize(text: string): string {
-    return text[0].toUpperCase() + text.slice(1);
 }
 
 /** Records compare by a scenario row's `$id`, else by identity field `id` when both have one, otherwise by reference; dates by time. */

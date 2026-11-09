@@ -41,6 +41,11 @@ These are not layers. They apply across all layers.
 - A small, typed, side-effect-free language used for constraints, policies, guards, derived fields, and filters.
 - It has defined semantics, so it can be evaluated by the validator and the simulator.
 
+**Scenarios**
+- A scenario is an example of behavior: given rows, as an actor, when one call (an action, a use case or an endpoint), then checks hold, the call fails with an error, or a policy refuses it.
+- It is a module member outside the five layers and may reference anything its module sees. It owns no concept; it only uses them.
+- The simulator runs every scenario in `appling check`, and a scenario whose `then` does not hold is an error. Every code generation target turns it into a real test, which replaces the tests a generator would otherwise guess for the element it covers.
+
 ### 2.2 Layers
 
 Each concept has exactly one owning layer. Other layers reference it. They never redefine it.
@@ -113,6 +118,7 @@ Allowed references form a directed acyclic graph:
 | L4 Interfaces | L1 (types only), L3, L2 actions |
 | L5 Experience | L1 (types only), L2 actions, L3 |
 | Any layer | Cross-cutting concepts |
+| Scenarios | Everything visible to them |
 
 - L4 and L5 are siblings, and neither references the other.
 - Lower layers never reference higher layers.
@@ -160,6 +166,7 @@ Rules:
 **Behavioral simulation (initial scope):**
 - Evaluates expressions, action preconditions and effects, and state machine transitions against sample data and actors.
 - Answers questions such as "Can an order reach Paid?", "Which actors can trigger Cancel?", and "Which invariants does this action risk violating?"
+- Runs every scenario (2.1) as part of validation: its given rows, its actor and its call, then checks its expected outcome. What a scenario does not give is unknown, and a result that depends on it fails the scenario instead of being guessed.
 
 Production runtime remains out of scope. The simulator is the minimum that makes behavior verifiable.
 

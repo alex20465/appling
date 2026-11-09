@@ -166,6 +166,35 @@ migration One {
 
 See [migrations](migrations.md#the-replay-rule) for how steps are replayed.
 
+## Scenarios
+
+| Rule | Message |
+|---|---|
+| A name is given once per scenario | `"<name>" is already given in this scenario.` |
+| A role after `as` is held by some actor | `No actor holds the role <Role>: declare one with "roles <Role>" or name an actor.` |
+| Actor fields follow an actor, not a role | `Role <Role> has no fields: name an actor after "as" to give "<field>".` |
+| An actor field exists on the actor or its entity | `Actor <Actor> has no field "<field>".` |
+| `when` calls an action or a use case, directly or through an endpoint | `A scenario's when calls an action, a use case or an endpoint of one, not query <Query>.` (or `external operation <Op>`) |
+| An endpoint call names an endpoint of the interface | `Interface <Interface> has no endpoint <VERB> "<path>".` |
+| An endpoint call passes the arguments of the endpoint's target | `<VERB> "<path>" takes <n> argument(s), got <m>.` |
+| `fails <Error>` names an error of the action, or of what the use case calls | `Could not resolve reference to ErrorDecl named '<name>'.` |
+| A scenario's `then` holds when the simulator runs it (`appling check` only, once nothing else fails) | `Scenario <Name> fails: <reason>.`, see [scenarios](scenarios.md#how-check-runs-scenarios) |
+
+Rows, actor fields, call arguments and checks are typed like any expression: a given value fits its field, a check is a `Bool`, and a row names only the rows bound before it.
+
+```appling
+role Clerk
+scenario S {
+  given {
+    a = create Order { }
+    a = create Order { } // "a" is already given in this scenario.
+  }
+  as Clerk // No actor holds the role Clerk: declare one with "roles Clerk" or name an actor.
+  when Open() // A scenario's when calls an action, a use case or an endpoint of one, not query Open.
+  then refused
+}
+```
+
 ## Expressions
 
 The expression typer checks every expression and every call. See [expressions](expressions.md) for the typing rules.
@@ -178,7 +207,7 @@ The expression typer checks every expression and every call. See [expressions](e
 | `tenant` is read only when the workspace declares exactly one tenant | `"tenant" needs exactly one tenant in the workspace, which declares no tenant.` (or `declares <n> tenants`) |
 | An enum value named with its enum exists in that enum | `Enum <Enum> has no value "<name>".` |
 | A field access names a field of the receiver | `<Type> has no field "<field>".` |
-| An assignment in `create` or `emit` names a field of the entity or event | `<Entity or Event> has no field "<name>".` |
+| An assignment in `create`, `emit` or a scenario's `given` or `emitted` names a field of the entity or event | `<Entity or Event> has no field "<name>".` |
 
 ```appling
 entity Note {
@@ -198,7 +227,7 @@ action Finish on Order {
 
 | Rule | Message |
 |---|---|
-| A condition is `Bool` (invariants, policies, preconditions, guards, filters, `filter`/`exists`/`all` bodies) | `A condition must be Bool, not <Type>.` |
+| A condition is `Bool` (invariants, policies, preconditions, guards, filters, scenario checks, `filter`/`exists`/`all` bodies) | `A condition must be Bool, not <Type>.` |
 | A value fits the field or parameter it is assigned to; `null` fits only optional types | `<Type> is not assignable to <Type>.` |
 | A prefix operator applies to its operand (`!` to `Bool`, `-` to numbers and `Duration`) | `Operator "<op>" does not apply to <Type>.` |
 | A binary operator applies to its operands | `Operator "<op>" does not apply to <Type> and <Type>.` |
@@ -244,7 +273,7 @@ entity Note {
 
 | Rule | Message |
 |---|---|
-| A call in a use case passes as many arguments as the target takes: an action on an entity takes the entity and its inputs, optional inputs and parameters may be left out, a query takes none | `<Target> takes <n> argument(s), got <m>.` or `<Target> takes <n> to <m> argument(s), got <k>.` |
+| A call in a use case or a scenario passes as many arguments as the target takes: an action on an entity takes the entity and its inputs, optional inputs and parameters may be left out, a query takes none | `<Target> takes <n> argument(s), got <m>.` or `<Target> takes <n> to <m> argument(s), got <k>.` |
 | Each argument fits its parameter | `<Type> is not assignable to <Type>.` |
 
 ```appling

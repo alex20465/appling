@@ -31,8 +31,10 @@ flowchart LR
 1. The CLI loads every `.appling` file as one workspace and validates it. A model with errors is not generated.
 2. It builds the [semantic graph](../reference/graph.md): one node per element, identified by its qualified name.
 3. For every node, the extension returns the steps that produce it.
-4. The plan orders the steps and records one registry entry per node.
+4. The plan orders the steps by layer (modules first, [scenarios](../language/scenarios.md) last, as their tests call what the layers generate) and records one registry entry per node.
 5. The runner executes the steps into the output folder and writes the registry.
+
+Every extension writes one test per [scenario](../language/scenarios.md), with the scenario's rows, actor, call and expected outcome. Where a scenario covers an action or a use case, its tests replace the tests the extension would otherwise guess from the model for that element and the transitions it triggers.
 
 ## Configure targets
 

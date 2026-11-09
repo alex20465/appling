@@ -52,6 +52,8 @@ models/sales.appling:13:23 error A machine must govern an entity field marked "s
 2 file(s), 1 error(s)
 ```
 
+Once there are no errors, it runs every `scenario` in the simulator and reports each one whose `then` does not hold as an error at its name, such as `Scenario ClerkCancelsDraft fails: order.status == placed is false.`
+
 ### fmt
 
 Rewrites every file into its canonical form:

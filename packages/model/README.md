@@ -82,9 +82,12 @@ simulator.actors('sales.Cancel');              // per actor: 'yes', 'no' or 'dep
 simulator.access('sales.Shopper');            // what one actor may do: entity operations, actions, queries, use cases, pages, each with verdict and deciding policies
 simulator.risks('sales.Discount');             // invariants that read a field the action changes, also through derived fields
 simulator.run('sales.Cancel', { status: 'draft' }, { actor: 'sales.Staff' }, { reason: 'late' });
+simulator.scenario('sales.ClerkCancelsDraft');  // { passed, failures, outcome, errors, reasons, events, rows }
 ```
 
-An action is allowed when its own policies, the `update` policies of its entity and the `create` policies of every entity it creates hold. Nothing is open by default: a target that no policy guards is `no` for every actor. `access` adds policies up along the reference path the same way: a query needs its entity's `read` policies, a use case everything its steps call, a page what its lists and projections show. Expressions are evaluated with three valued logic: anything that needs data that is not given is `UNKNOWN`, which `&&` and `||` short circuit around. `run` checks the policies and preconditions, takes the transition whose state and guard match, applies the effects, records emitted events and reports violated invariants.
+An action is allowed when its own policies, the `update` policies of its entity and the `create` policies of every entity it creates hold. Nothing is open by default: a target that no policy guards is `no` for every actor. `access` adds policies up along the reference path the same way: a query needs its entity's `read` policies, a use case everything its steps call, a page what its lists and projections show. Expressions are evaluated with three valued logic: anything that needs data that is not given is `UNKNOWN`, which `&&` and `||` short circuit around. `run` checks the policies and preconditions, takes the transition whose state and guard match, applies the effects, records emitted events and reports violated invariants. `scenario` creates a scenario's given rows, runs its call (an action, a use case step by step, or an endpoint's target) as its actor and checks its `then`; anything unknown that decides the outcome fails it.
+
+`runScenarios(graph)` runs every scenario, `checkScenarios(models, services)` returns each failure located at the scenario's name, as `appling check` prints it, `scenarioCall(graph, node)` resolves a scenario's call and endpoint, and `coveredByScenarios(graph)` lists the actions, use cases and transitions the scenarios cover.
 
 ## Relevance
 

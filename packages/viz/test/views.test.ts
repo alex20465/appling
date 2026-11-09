@@ -42,16 +42,17 @@ test('the tree starts folded at the seed and unfolds modules, then the lens decl
         'model (2)',
         '  sales (3)',
         '    Entities (1)',
-        '      Order (9)',
+        '      Order (12)',
         '        Actions (2)',
-        '          PlaceOrder (4)',
-        '          Cancel (5)',
+        '          PlaceOrder (6)',
+        '          Cancel (6)',
         '        Use cases (1)',
         '        Machines (1)',
         '        Projections (1)',
         '        Queries (1)',
         '        Events (2)',
         '        Jobs (1)',
+        '        Scenarios (3)',
         '    Enums (1)',
         '    Value types (1)',
         '  crm (1)'
@@ -67,25 +68,28 @@ test('a trail draws only the elements shown one after another, each unfolded whe
         'shop (2)',
         '  sales (3)',
         '    Entities (1)',
-        '      Order (9)',
+        '      Order (12)',
         '        Actions (2)',
-        '          Cancel (5)',
+        '          Cancel (6)',
         '            Use cases (1)',
         '            Machines (1)',
         '            Pages (2)',
         '            Jobs (1)',
+        '            Scenarios (1)',
         '        Use cases (1)',
         '        Machines (1)',
         '        Projections (1)',
         '        Queries (1)',
         '        Events (2)',
         '        Jobs (1)',
+        '        Scenarios (3)',
         '  crm (1)',
-        '    Account (4)',
+        '    Account (7)',
         '      Entities (1)',
         '      Actors (1)',
         '      Projections (1)',
-        '      Tenants (1)'
+        '      Tenants (1)',
+        '      Scenarios (3)'
     ]);
     expect(trailOf(index, { ...DOMAIN, lens: 'behavior' }, ['sales.OrderFlow']).ids).toEqual(['~/sales/#Machine/sales.OrderFlow']);
     expect([lensOf('Machine'), lensOf('Field')]).toEqual(['behavior', undefined]);
@@ -151,14 +155,16 @@ test('relations lift members to declarations and group them by layer', async () 
     const via = (qn: string, direction: 'uses' | 'usedBy') => Object.fromEntries([...relations(index, qn, direction).values()].flat().map(r => [r.qn, r.via]));
     expect(grouped('sales.Order', 'usedBy')).toEqual({
         behavior: ['sales.OrderPlaced', 'sales.PaymentReceived', 'sales.PlaceOrder', 'sales.Cancel', 'sales.OrderFlow', 'sales.ExpireDrafts'],
-        application: ['sales.OpenOrders', 'sales.OrderSummary', 'sales.Checkout']
+        application: ['sales.OpenOrders', 'sales.OrderSummary', 'sales.Checkout'],
+        cross: ['sales.ClerkCancelsDraft', 'sales.EmptyOrderIsRefused', 'sales.OnlyOwnOrders']
     });
     expect(grouped('sales.Order', 'uses')).toEqual({ domain: ['crm.Account', 'sales.Line', 'sales.OrderStatus'], cross: ['crm.Clerk', 'sales.Customer', 'sales.Shopper'] });
     expect(via('sales.Order.placed_at', 'usedBy')).toEqual({ 'sales.PlaceOrder': ['effect[set placed_at]'], 'sales.OpenOrders': [] });
     expect(via('sales.Order', 'uses')['crm.Account']).toEqual(['customer']);
     expect(via('sales.PlaceOrder', 'usedBy')).toMatchObject({ 'sales.OrderFlow': ['transition[draft->placed]'], 'sales.PublicApi': ['endpoint[POST /orders/{id}/place]'] });
     expect(grouped('sales.PlaceOrder', 'usedBy')).toEqual({
-        behavior: ['sales.OrderFlow'], application: ['sales.Checkout'], interface: ['sales.PublicApi'], experience: ['sales.OrderDetail']
+        behavior: ['sales.OrderFlow'], application: ['sales.Checkout'], interface: ['sales.PublicApi'], experience: ['sales.OrderDetail'],
+        cross: ['sales.EmptyOrderIsRefused', 'sales.OnlyOwnOrders']
     });
 });
 
@@ -278,7 +284,7 @@ test('an action card says between which states it moves, who may run it and what
         sections: [
             'States: draft → placed', 'Who: Employee: no; Shopper: depends', 'Requires: requires { lines.size() > 0 } else EmptyOrder',
             'Changes: set placed_at = now; emit OrderPlaced { order = this }', 'Errors: EmptyOrder',
-            'Used by: Checkout [usecase]; PublicApi [interface]; OrderDetail [page]'
+            'Used by: Checkout [usecase]; PublicApi [interface]; OrderDetail [page]; EmptyOrderIsRefused [scenario]; OnlyOwnOrders [scenario]'
         ]
     }]);
 });

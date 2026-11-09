@@ -79,7 +79,7 @@ These five tools read and check the model.
 
 | Tool | Input | Returns |
 |---|---|---|
-| `check` | none | `{ errors }`: one `file:line:column message` per error; an empty list means the model is valid |
+| `check` | none | `{ errors }`: one `file:line:column message` per error; once there are none, one per failing [scenario](../language/scenarios.md), as `appling check` reports it; an empty list means the model is valid |
 | `graph_query` | `qn?`, `kind?`, `module?`, `search?` (all strings) | With `qn`: that [graph node](../reference/graph.md) with `contains`, `refersTo` and `referredBy`. Without: `{ count, elements }`, the nodes filtered by `kind` (such as `Entity`), `module` and a `search` text in the qualified name (case insensitive), at most 200 of them, each with `qn`, `kind` and `layer` |
 | `read_source` | `qn` (string) | `{ source }`: the file name and the element's source text |
 | `edit` | `operation` (object), `dryRun?` (boolean) | `{ ok: true, changed }` with the changed files, or `{ ok: false, errors }`. With `dryRun`, it validates without writing |
