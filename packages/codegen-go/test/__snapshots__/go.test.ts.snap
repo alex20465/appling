@@ -44,6 +44,19 @@ type Actor struct {
 	Tenant *int64 \`json:"tenant"\`
 	// Account is the field account of sales.Shopper, the ID of a crm.Account.
 	Account *int64 \`json:"account"\`
+	// system marks a call the system makes; only System sets it.
+	system bool
+}
+
+// System returns the actor of a call the system makes, such as a job, an event handler or a scenario without
+// an actor: the actions check no policy and no tenant for it. The zero Actor is not the system.
+func System() Actor {
+	return Actor{system: true}
+}
+
+// IsSystem reports whether the call is one the system makes, which the actions do not check.
+func (a Actor) IsSystem() bool {
+	return a.system
 }
 
 // NewEmployee returns the actor crm.Employee with the roles it declares.
@@ -202,7 +215,7 @@ import (
 // PlaceOrder is the action sales.PlaceOrder. It returns the events it emits.
 func PlaceOrder(actor access.Actor, order *Order) ([]any, error) {
 	var events []any
-	if !CanPlaceOrder(actor, order) {
+	if !actor.IsSystem() && !CanPlaceOrder(actor, order) {
 		return nil, fmt.Errorf("%w: PlaceOrder", access.ErrForbidden)
 	}
 	if !(int64(len(order.Lines)) > 0) {
@@ -222,7 +235,7 @@ func PlaceOrder(actor access.Actor, order *Order) ([]any, error) {
 // Cancel is the action sales.Cancel. It returns the events it emits.
 func Cancel(actor access.Actor, order *Order, reason *string) ([]any, error) {
 	var events []any
-	if !CanCancel(actor, order, reason) {
+	if !actor.IsSystem() && !CanCancel(actor, order, reason) {
 		return nil, fmt.Errorf("%w: Cancel", access.ErrForbidden)
 	}
 	switch {
@@ -367,8 +380,6 @@ func CanOpenOrders(actor access.Actor, order *Order) bool {
   "internal/sales/sales_test.go": "package sales
 
 import (
-	"errors"
-	"shop/internal/access"
 	"testing"
 	"time"
 )
@@ -409,48 +420,95 @@ func TestOrderPolicyReadFieldsTotal(t *testing.T) {
 	t.Skip("registry task: sales.Order.policy[read fields total]")
 }
 
-func TestSalesPlaceOrder(t *testing.T) {
-	t.Skip("registry task: sales.PlaceOrder")
-}
-
 func TestPlaceOrderPolicy(t *testing.T) {
 	t.Skip("registry task: sales.PlaceOrder.policy[]")
-}
-
-func TestSalesCancel(t *testing.T) {
-	t.Skip("registry task: sales.Cancel")
 }
 
 func TestCancelPolicy(t *testing.T) {
 	t.Skip("registry task: sales.Cancel.policy[]")
 }
 
-func TestOrderFlowTransitionDraftPlaced(t *testing.T) {
-	t.Skip("registry task: sales.OrderFlow.transition[draft->placed]")
-}
-
 func TestOrderFlowTransitionPlacedPaid(t *testing.T) {
 	t.Skip("registry task: sales.OrderFlow.transition[placed->paid]")
 }
+",
+  "internal/sales/scenarios_test.go": "package sales_test
 
-func TestOrderFlowTransitionDraftPlacedCancelled(t *testing.T) {
-	t.Run("goes from draft to cancelled", func(t *testing.T) {
-		x := validOrder()
-		x.Status = OrderStatusDraft
-		if _, err := Cancel(access.NewEmployee(), x, nil); err != nil {
-			t.Fatalf("Cancel from draft: %v", err)
-		}
-		if x.Status != OrderStatusCancelled {
-			t.Fatalf("Cancel from draft: want cancelled, got %v", x.Status)
-		}
-	})
-	t.Run("refuses paid", func(t *testing.T) {
-		x := validOrder()
-		x.Status = OrderStatusPaid
-		if _, err := Cancel(access.NewEmployee(), x, nil); !errors.Is(err, ErrInvalidTransition) {
-			t.Fatalf("Cancel from paid: want ErrInvalidTransition, got %v", err)
-		}
-	})
+import (
+	"errors"
+	"shop/internal/access"
+	"shop/internal/crm"
+	"shop/internal/sales"
+	"testing"
+	"time"
+)
+
+
+// ptr returns a pointer to a copy of v, for optional fields.
+func ptr[T any](v T) *T { return &v }
+
+// TestScenarioClerkCancelsDraft runs the scenario sales.ClerkCancelsDraft: A clerk cancels a draft order
+func TestScenarioClerkCancelsDraft(t *testing.T) {
+	acme := crm.NewAccount()
+	acme.ID = 1
+	acme.Name = "Acme"
+	acme.Email = "email-1"
+	order := sales.NewOrder()
+	order.ID = 2
+	order.Reference = "A-1"
+	order.Customer = acme
+	order.CreatedAt = time.Now()
+	actor := access.NewEmployee()
+	_, err := sales.Cancel(actor, order, ptr("changed mind"))
+	if err != nil {
+		t.Fatalf("Cancel: %v", err)
+	}
+	if !(order.Status == sales.OrderStatusCancelled) {
+		t.Error("order.status == cancelled is false")
+	}
+}
+
+// TestScenarioEmptyOrderIsRefused runs the scenario sales.EmptyOrderIsRefused.
+// The Go extension generates no HTTP routes, so it calls PlaceOrder, the target of POST /orders/{id}/place in PublicApi, directly.
+func TestScenarioEmptyOrderIsRefused(t *testing.T) {
+	acme := crm.NewAccount()
+	acme.ID = 1
+	acme.Name = "Acme"
+	acme.Email = "email-1"
+	order := sales.NewOrder()
+	order.ID = 2
+	order.Reference = "A-2"
+	order.Customer = acme
+	order.CreatedAt = time.Now()
+	actor := access.NewShopper()
+	actor.Account = ptr(acme.ID)
+	_, err := sales.PlaceOrder(actor, order)
+	if !errors.Is(err, sales.ErrEmptyOrder) {
+		t.Fatalf("PlaceOrder: want sales.ErrEmptyOrder, got %v", err)
+	}
+}
+
+// TestScenarioOnlyOwnOrders runs the scenario sales.OnlyOwnOrders.
+func TestScenarioOnlyOwnOrders(t *testing.T) {
+	acme := crm.NewAccount()
+	acme.ID = 1
+	acme.Name = "Acme"
+	acme.Email = "email-1"
+	globex := crm.NewAccount()
+	globex.ID = 2
+	globex.Name = "Globex"
+	globex.Email = "email-1"
+	order := sales.NewOrder()
+	order.ID = 3
+	order.Reference = "A-3"
+	order.Customer = acme
+	order.CreatedAt = time.Now()
+	actor := access.NewShopper()
+	actor.Account = ptr(globex.ID)
+	_, err := sales.PlaceOrder(actor, order)
+	if !errors.Is(err, access.ErrForbidden) {
+		t.Fatalf("PlaceOrder: want access.ErrForbidden, got %v", err)
+	}
 }
 ",
   "internal/sales/support.go": "package sales

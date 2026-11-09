@@ -116,8 +116,14 @@ function accessCode(context: MapContext, access: GoAccess): string {
         '\tID *int64 `json:"id"`',
         ...(tenant ? [`\t// Tenant is the ID of the ${tenantEntity} the actor acts in (the tenant ${tenant.qn}); nil when it acts across tenants.`, '\tTenant *int64 `json:"tenant"`'] : []),
         ...fields,
+        '\t// system marks a call the system makes; only System sets it.',
+        '\tsystem bool',
         '}'
     ].join('\n'));
+    blocks.push(
+        '// System returns the actor of a call the system makes, such as a job, an event handler or a scenario without\n// an actor: the actions check no policy and no tenant for it. The zero Actor is not the system.\nfunc System() Actor {\n\treturn Actor{system: true}\n}',
+        '// IsSystem reports whether the call is one the system makes, which the actions do not check.\nfunc (a Actor) IsSystem() bool {\n\treturn a.system\n}'
+    );
     for (const actor of actors) {
         const name = access.name(actor.qn);
         const roleList = ((actor.data.roles ?? []) as string[]).map(r => `Role${access.name(r)}`).join(', ');
