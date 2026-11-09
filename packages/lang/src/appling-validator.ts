@@ -1,9 +1,10 @@
 import { AstUtils, WorkspaceCache, type AstNode, type ValidationAcceptor, type ValidationChecks } from 'langium';
 import {
-    isAction, isBinaryExpr, isBoolExpr, isEntity, isExternal, isExternalOperation, isMemberExpr, isNameExpr, isEnum, isMachine, isMigration, isModule, isValueType,
+    isAction, isActor, isBinaryExpr, isBoolExpr, isEntity, isExternal, isRole, isScenario, isExternalOperation, isMemberExpr, isNameExpr, isEnum, isMachine, isMigration, isModule, isValueType,
     type ApplingAstType, type Endpoint, type External, type ExternalKey, type Interface, type Machine, type Migration, type MigrationStep, type Model,
-    type Expr, type Policy, type Projection, type RenameStep, type SetEffect
+    type Expr, type Policy, type Projection, type RenameStep, type Scenario, type SetEffect
 } from './generated/ast.js';
+import { endpointOf, scenarioTarget } from './appling-scenario.js';
 import { namedPaths, projectionSourceEntity } from './appling-scope.js';
 import { ExpressionTyper } from './appling-types.js';
 import { doesTargets } from './appling-does.js';
@@ -17,7 +18,9 @@ export const LAYER_OF: Record<string, Layer> = {
     Event: 'behavior', Action: 'behavior', Machine: 'behavior', Job: 'behavior',
     Query: 'application', Projection: 'application', External: 'application', UseCase: 'application',
     Interface: 'interface',
-    Page: 'experience', Navigation: 'experience', Flow: 'experience', Messages: 'experience'
+    Page: 'experience', Navigation: 'experience', Flow: 'experience', Messages: 'experience',
+    // Outside the five layers: a scenario may reference anything it can see.
+    Scenario: 'cross'
 };
 
 export function registerValidationChecks(services: ApplingServices): void {
@@ -32,7 +35,8 @@ export function registerValidationChecks(services: ApplingServices): void {
         Migration: validator.checkMigration,
         ExternalKey: validator.checkExternalKey,
         External: validator.checkExternalUsed,
-        Interface: validator.checkInterfaceSource
+        Interface: validator.checkInterfaceSource,
+        Scenario: validator.checkScenario
     };
     services.validation.ValidationRegistry.register(checks, validator);
 }
@@ -156,6 +160,32 @@ export class ApplingValidator {
         if (api.endpoints.length === 0) accept('warning', `Webhook interface ${api.name} has no endpoints.`, { node: api, property: 'name' });
     }
 
+    checkScenario(scenario: Scenario, accept: ValidationAcceptor): void {
+        const names = new Set<string>();
+        for (const fixture of scenario.fixtures.filter(f => f.name)) {
+            if (names.has(fixture.name!)) accept('error', `"${fixture.name}" is already given in this scenario.`, { node: fixture, property: 'name' });
+            names.add(fixture.name!);
+        }
+        const persona = scenario.actor?.persona.ref;
+        if (isRole(persona)) {
+            const actors = this.services.shared.workspace.LangiumDocuments.all.flatMap(d => AstUtils.streamAst(d.parseResult.value)).filter(isActor);
+            if (!actors.some(a => a.roles.some(r => r.ref === persona))) {
+                accept('error', `No actor holds the role ${persona.name}: declare one with "roles ${persona.name}" or name an actor.`, { node: scenario.actor!, property: 'persona' });
+            }
+        }
+        if (scenario.endpoint && scenario.endpoint.api.ref && !endpointOf(scenario.endpoint)) {
+            const { api, verb, path } = scenario.endpoint;
+            accept('error', `Interface ${api.ref!.name} has no endpoint ${verb} ${JSON.stringify(path)}.`, { node: scenario.endpoint, property: 'path' });
+            return;
+        }
+        const target = scenarioTarget(scenario);
+        if (target && !isAction(target) && target.$type !== 'UseCase') {
+            const message = `A scenario's when calls an action, a use case or an endpoint of one, not ${target.$type === 'Query' ? 'query' : 'external operation'} ${target.name}.`;
+            if (scenario.call) accept('error', message, { node: scenario.call, property: 'target' });
+            else accept('error', message, { node: scenario.endpoint!, property: 'path' });
+        }
+    }
+
     private externalsInUse(): Set<AstNode> {
         return this.usedExternals.get('used', () => {
             const used = new Set<AstNode>();
@@ -226,6 +256,7 @@ function memberOf(node: AstNode): AstNode | undefined {
 }
 
 function isAllowed(from: AstNode, to: AstNode): boolean {
+    if (isScenario(from)) return true;
     const source = LAYER_OF[from.$type];
     const target = LAYER_OF[to.$type];
     if (source === target || target === 'cross') return true;

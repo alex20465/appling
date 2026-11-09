@@ -4,9 +4,10 @@ import {
 } from 'langium';
 import {
     isAction, isCallStep, isEndpoint, isDetailView, isExport, isExternalOperation, isHandler, isListView,
-    isModule, isQuery, isSetEffect, isSort, isTransition, isMachine,
+    isModule, isQuery, isScenario, isSetEffect, isSort, isTransition, isMachine,
     type Entity, type Model, type Module, type Projection
 } from './generated/ast.js';
+import { scenarioErrors } from './appling-scenario.js';
 
 /**
  * Inside a module, nested elements are also visible by their dotted path (`Order.status`).
@@ -73,6 +74,9 @@ export class ApplingScopeProvider extends DefaultScopeProvider {
         if (isHandler(node)) {
             const target = AstUtils.getContainerOfType(node, isCallStep)?.call.target.ref;
             return isAction(target) || isExternalOperation(target) ? this.createScopeForNodes(target.errors) : EMPTY_SCOPE;
+        }
+        if (isScenario(node) && context.property === 'error') {
+            return this.createScopeForNodes(scenarioErrors(node));
         }
         return super.getScope(context);
     }
