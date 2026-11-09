@@ -3,8 +3,9 @@ import {
     isAction, isActor, isAssignment, isBinaryExpr, isBoolExpr, isCall, isCreateEffect, isEntity, isEnum, isExpr, isExternalOperation,
     isField, isIndexExpr, isInvariant, isJob, isListExpr, isMemberExpr, isNameExpr, isNullExpr, isNumberExpr, isPolicy,
     isPrecondition, isProjectionField, isQuery, isRole, isSetEffect, isStringExpr, isTenant, isTransition, isUnaryExpr, isUseCase,
+    isDeleteEffect, isEffect, isForEffect, isUpdateEffect,
     type Action, type Actor, type Assignment, type BinaryExpr, type Call, type Entity, type Enum, type Event, type Expr,
-    type Field, type MemberExpr, type NameExpr, type Param, type Policy, type Tenant, type Transition, type TypeRef, type ValueType
+    type Field, type MemberExpr, type NameExpr, type Param, type Policy, type Tenant, type Transition, type TypeRef, type UpdateEffect, type ValueType
 } from './generated/ast.js';
 import { projectionSourceEntity, type ApplingScopeProvider } from './appling-scope.js';
 import type { ApplingServices } from './appling-module.js';
@@ -101,6 +102,17 @@ export class ExpressionTyper {
             : `${show(type)} is not assignable to ${show(context.expected)}.`);
     }
 
+    /** The type of an expression in its position, such as the record a relationship path in `update` leads to. */
+    typeOf(root: Expr): Type | undefined {
+        this.check(root);
+        return this.types.get(root);
+    }
+
+    /** The names an effect sees besides those of later effects: its record's fields, the inputs, the loop variables and earlier `as` names. */
+    namesAt(effect: AstNode): string[] {
+        return [...this.effectEnv(effect).keys()];
+    }
+
     checkCall(call: Call): void {
         const target = call.target.ref;
         if (!target) return;
@@ -123,8 +135,12 @@ export class ExpressionTyper {
         if (isJob(owner)) return { env: this.actionEnv(owner.action.ref), ...condition };
         if (isQuery(owner)) return { env: this.entityEnv(owner.entity.ref), ...condition };
         if (isProjectionField(owner)) return { env: this.entityEnv(projectionSourceEntity(owner.$container)) };
-        if (isSetEffect(owner)) return { env: this.effectEnv(owner), expected: owner.field.ref && typeOfRef(owner.field.ref.type) };
+        if (isSetEffect(owner)) {
+            const env = isUpdateEffect(owner.$container) ? this.updateEnv(owner.$container) : this.effectEnv(owner);
+            return { env, expected: owner.field.ref && typeOfRef(owner.field.ref.type) };
+        }
         if (isAssignment(owner)) return { env: this.effectEnv(owner.$container), expected: this.assignmentTarget(owner) };
+        if (isUpdateEffect(owner) || isDeleteEffect(owner)) return { env: this.effectEnv(owner) };
         if (isCall(owner)) {
             const target = owner.target.ref;
             const useCase = AstUtils.getContainerOfType(owner, isUseCase);
@@ -373,11 +389,40 @@ export class ExpressionTyper {
         return this.paramsEnv(owner.params);
     }
 
+    /**
+     * The names inside an effect: those of its action or transition, then the variable of every enclosing `for`
+     * and the `as` name of every earlier `create` in the same or an enclosing effect block.
+     */
     private effectEnv(effect: AstNode): Env {
         const action = AstUtils.getContainerOfType(effect, isAction);
-        if (action) return this.actionEnv(action);
         const transition = AstUtils.getContainerOfType(effect, isTransition);
-        return this.entityEnv(transition && machineEntity(transition));
+        const env = action ? this.actionEnv(action) : this.entityEnv(transition && machineEntity(transition));
+        const chain: AstNode[] = [];
+        for (let node: AstNode | undefined = effect; node && node !== action && node !== transition; node = node.$container) chain.unshift(node);
+        chain.forEach((node, i) => {
+            const block = isEffect(node) ? (node.$container as { effects?: AstNode[] }).effects : undefined;
+            for (const earlier of block?.slice(0, block.indexOf(node)) ?? []) {
+                if (isCreateEffect(earlier) && earlier.variable && earlier.entity.ref) env.set(earlier.variable, { type: { kind: 'decl', decl: earlier.entity.ref } });
+            }
+            if (isForEffect(node) && i < chain.length - 1 && node.collection.ref) {
+                const type = typeOfRef(node.collection.ref.type);
+                env.set(node.variable, { type: type.kind === 'list' ? type.item : ERROR });
+            }
+        });
+        return env;
+    }
+
+    /** Inside `update path { … }`: the names of the effect, with the fields of the updated record in front. */
+    private updateEnv(update: UpdateEffect): Env {
+        const env = this.effectEnv(update);
+        let type = this.types.get(update.target);
+        if (!type) {
+            // Typed here before its own turn: keep its problems for then, so they are reported once.
+            const reported = this.problems.length;
+            type = this.infer(update.target, env);
+            this.problems.length = reported;
+        }
+        return type.kind === 'decl' && isEntity(type.decl) ? this.with(env, type.decl.fields) : env;
     }
 
     private mismatch(expr: BinaryExpr, left: Type, right: Type): Type {

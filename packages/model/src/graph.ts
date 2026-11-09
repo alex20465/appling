@@ -1,7 +1,7 @@
 import { AstUtils, isAstNode, isReference, type AstNode, type Reference, type ReferenceInfo } from 'langium';
 import {
-    ExpressionTyper, LAYER_OF, doesTargets, isCreateEffect, isEnumLiteral, isExport, isExpr, isMemberExpr, show, isEmitEffect, isEndpoint, isInvariant, isPolicy, isSetEffect, isTransition, modulePath, print,
-    type ApplingServices, type Layer, type Model, type Module
+    ExpressionTyper, LAYER_OF, doesTargets, effectEntity, isCreateEffect, isDeleteEffect, isEntity, isForEffect, isNameExpr, isUpdateEffect, isEnumLiteral, isExport, isExpr, isMemberExpr, show, isEmitEffect, isEndpoint, isInvariant, isPolicy, isSetEffect, isTransition, modulePath, print,
+    type ApplingServices, type Entity, type Expr, type Layer, type Model, type Module
 } from '@appling/lang';
 
 import { subAnchors, type GraphAnchor } from './anchors.js';
@@ -89,6 +89,9 @@ function keyOf(node: AstNode): string | undefined {
     if (isSetEffect(node)) return `effect[set ${refText(node.field)}]`;
     if (isCreateEffect(node)) return `effect[create ${refText(node.entity)}]`;
     if (isEmitEffect(node)) return `effect[emit ${refText(node.event)}]`;
+    if (isForEffect(node)) return `effect[for ${node.variable}]`;
+    if (isUpdateEffect(node)) return `effect[update ${lastSegment(node.target)}]`;
+    if (isDeleteEffect(node)) return `effect[delete ${node.self ? 'self' : lastSegment(node.target)}]`;
     return undefined;
 }
 
@@ -257,7 +260,23 @@ function data(node: AstNode, qns: Map<AstNode, string>, typer: ExpressionTyper):
         }
         return result;
     };
-    return fields(node, false);
+    const changed = changedEntity(node, typer);
+    const entity = changed && qns.get(changed);
+    return entity ? { ...fields(node, false), entity } : fields(node, false);
+}
+
+/** The last name of a relationship path such as `item.product`; keys hold no dots, which separate qualified names. */
+function lastSegment(path: Expr | undefined): string {
+    if (isMemberExpr(path)) return path.member;
+    return isNameExpr(path) ? path.name : 'record';
+}
+
+/** For `update` and `delete`: the entity of the record they change, which a relationship path does not name. */
+function changedEntity(node: AstNode, typer: ExpressionTyper): Entity | undefined {
+    if (isDeleteEffect(node) && node.self) return effectEntity(node);
+    if (!isUpdateEffect(node) && !isDeleteEffect(node)) return undefined;
+    const type = node.target && typer.types.get(node.target);
+    return type?.kind === 'decl' && isEntity(type.decl) ? type.decl : undefined;
 }
 
 function refText(ref: Reference): string {

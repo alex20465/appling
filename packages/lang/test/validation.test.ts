@@ -159,3 +159,70 @@ test('tenant needs exactly one tenant in the workspace', async () => {
     expect(await check(`module m { entity A { } entity B { } tenant TA on A tenant TB on B ${ORDER} action Edit on Order { policy { tenant != null } } }`))
         .toContain('"tenant" needs exactly one tenant in the workspace, which declares 2 tenants.');
 });
+
+const CART = `
+  entity Product { stock: Int }
+  entity Item { product: Product  quantity: Int }
+  entity Cart {
+    items: Item[]
+    tags: String[]
+    owner: Product?
+  }`;
+
+test('effects loop over items, update related records, delete and name created rows', async () => {
+    expect(await check(`module m { ${CART} action Checkout on Cart { effect {
+        for item in items {
+            create Item as copy { product = item.product, quantity = item.quantity }
+            update copy.product { set stock = stock - item.quantity }
+            delete item
+        }
+        update owner { set stock = 0 }
+        delete self
+    } } }`)).toEqual([]);
+});
+
+test('for iterates a collection relationship of the entity', async () => {
+    expect(await check(`module m { ${CART} action A on Cart { effect { for tag in tags { } } } }`))
+        .toContain('"for" iterates a collection relationship of Cart, and tags is no list of records.');
+    expect(await check(`module m { ${CART} action A on Cart { effect { for item in missing { } } } }`))
+        .toContain("Could not resolve reference to Field named 'missing'.");
+});
+
+test('a loop variable is visible inside its loop only', async () => {
+    expect(await check(`module m { ${CART} action A on Cart { effect { for item in items { } delete item } } }`))
+        .toContain('Unknown name "item".');
+});
+
+test('an as name is visible after its create only', async () => {
+    expect(await check(`module m { ${CART} action A on Cart { effect { delete copy create Item as copy { quantity = 1 } } } }`))
+        .toContain('Unknown name "copy".');
+});
+
+test('a loop variable or as name does not hide another name', async () => {
+    const message = '"items" is already a name here; pick another one.';
+    expect(await check(`module m { ${CART} action A on Cart { effect { for items in items { } } } }`)).toContain(message);
+    expect(await check(`module m { ${CART} action A on Cart { effect { create Item as items { quantity = 1 } } } }`)).toContain(message);
+    expect(await check(`module m { ${CART} action A on Cart { effect { for item in items { for item in items { } } } } }`))
+        .toContain('"item" is already a name here; pick another one.');
+});
+
+test('update and delete take a relationship path to one record', async () => {
+    const message = (keyword: string, hint = '') => `"${keyword}" takes a relationship path to one record, such as item.product${hint}.`;
+    expect(await check(`module m { ${CART} action A on Cart { effect { update items { set stock = 0 } } } }`))
+        .toContain(message('update', '; for every record of a collection, use "for"'));
+    expect(await check(`module m { ${CART} action A on Cart { effect { delete this } } }`)).toContain(message('delete'));
+    expect(await check(`module m { ${CART} action A on Cart { input { p: Product } effect { delete p } } }`)).toContain(message('delete'));
+    expect(await check(`module m { ${CART} action A on Cart { effect { delete tags } } }`)).toContain(message('delete', '; for every record of a collection, use "for"'));
+});
+
+test('a set inside update names a field of the updated record', async () => {
+    expect(await check(`module m { ${CART} action A on Cart { effect { update owner { set items = [] } } } }`))
+        .toContain("Could not resolve reference to Field named 'items'.");
+    expect(await check(`module m { ${CART} action A on Cart { effect { update owner { set stock = "x" } } } }`))
+        .toContain('String is not assignable to Int.');
+});
+
+test('delete self needs an action on an entity', async () => {
+    expect(await check(`module m { ${CART} action A { effect { delete self } } }`))
+        .toContain('"delete self" needs an action on an entity.');
+});

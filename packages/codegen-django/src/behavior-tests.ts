@@ -67,11 +67,11 @@ export function valid(entity: GraphNode | undefined, record: SimRecord | undefin
     return !entity || children(entity, context, 'Invariant').every(i => holds(i.data.condition as ExprData, context, record));
 }
 
-/** The record after the effects, or undefined when an effect creates rows or depends on something the test does not know. */
+/** The record after the effects, or undefined when an effect creates, changes or deletes other rows or depends on something the test does not know. */
 export function afterEffects(effects: GraphNode[], record: SimRecord, inputs: { [name: string]: Value }, context: MapContext): SimRecord | undefined {
     const after: SimRecord = { ...record };
     for (const effect of effects) {
-        if (effect.kind === 'CreateEffect') return undefined;
+        if (['CreateEffect', 'ForEffect', 'UpdateEffect', 'DeleteEffect'].includes(effect.kind)) return undefined;
         if (effect.kind === 'SetEffect') {
             const value = simulator(context).evaluate(effect.data.value as ExprData, { self: after, inputs });
             if (value === UNKNOWN) return undefined;

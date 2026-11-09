@@ -41,10 +41,11 @@ const canonical = print(document.parseResult.value as Model);
 | `printRange(node)` | The canonical text of one node in its document with the gaps around it: `{ start, end, text }` (`PrintedRange`) |
 | `modulePath(module)` | The dotted path of a module, such as `a.b` |
 | `projectionSourceEntity(projection)` | The entity behind a projection, also when its source is a query |
+| `effectEntity(node)` | The entity of the action or machine an effect belongs to |
 | `ApplingScopeProvider` | The scope provider; `lookup(container, type, name)` resolves a dotted name as a reference would, `lookupElement(container, name)` an element of any kind |
 | `doesNames(node)`, `doesTargets(node, services)` | The `@Name` occurrences of a node's [`does`](../language/descriptions.md) text with their document offsets, and with the element each names |
 | `textBlockValue(raw)`, `printTextBlock(raw, indent, outer)` | The value of a `"""` text block, and its canonical spelling |
-| `ExpressionTyper` | Types expressions: `checkModel(model)` fills `types`, `targets` (the element each name stands for) and `problems` (`Problem[]`) |
+| `ExpressionTyper` | Types expressions: `checkModel(model)` fills `types`, `targets` (the element each name stands for) and `problems` (`Problem[]`); `typeOf(expr)` types one expression in its position, `namesAt(effect)` lists the names an effect sees |
 | `show(type)`, `typeOfRef(ref)` | The display name of a `Type`, such as `Money?`, and the `Type` a `TypeRef` declares |
 | `LAYER_OF`, `Layer` | The layer of every top level declaration type |
 | AST types and guards | `Model`, `Module`, `Entity`, `isEntity` and the rest of the generated AST |
@@ -99,6 +100,7 @@ console.log(result.ok ? result.edits : result.errors);
 | `qualifiedNames(models)` | A map from every element AST node to its qualified name, in document order |
 | `parentElement(node, qns)` | The nearest element containing an AST node |
 | `Graph`, `GraphNode`, `GraphEdge`, `Dependency`, `Level`, `ExprData`, `TypeData` | The graph types, see [Semantic graph](graph.md) |
+| `throughPath(value, entity, path)` | The value of a `set` inside `update <path> { ... }` with every name of a field of the updated entity read through the path, such as `item.product.stock` for `stock` |
 | `applyEdit(sources, operation, { release })` | Applies one edit operation, see [Edit operations](edit-operations.md) |
 | `EditOperation`, `EditResult`, `TextEdit` | The edit types |
 | `writeRelease(root, version, graph)` | Writes `<root>/.appling/releases/<version>.json` and returns its path; throws for an invalid or existing version |

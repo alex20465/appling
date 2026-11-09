@@ -20,7 +20,7 @@ Requires Rust 1.85 or later. The crate name is the project name in snake case.
 | `value`, `event` | a struct with serde derives; events are also variants of the module's `Event` enum |
 | `entity` | a struct with an `id`, `new()` taking the fields without default, a method per derived field, and `validate()` returning the labels of failing invariants |
 | optional fields, entity references, lists | `Option<T>`, `Box<Entity>`, `Vec<T>` |
-| `action` | a function on `&mut` the entity returning `Result<Vec<Event>, Error>`: preconditions return the declared errors, the transition is a `match` on the state with guards, effects change the record, emitted events are returned; a `create` effect builds the record, checks it and hands it to a `create_<entity>` parameter that stores it |
+| `action` | a function on `&mut` the entity returning `Result<Vec<Event>, Error>`: preconditions return the declared errors, the transition is a `match` on the state with guards, effects change the record, emitted events are returned; a `create` effect builds the record, checks it and hands it to a `create_<entity>` parameter that stores it; `for` loops over a collection relationship, and `update` and `delete` effects check the record and hand it to `update_<entity>` and `delete_<entity>` parameters |
 | `Duration` fields | `chrono::TimeDelta`, serialized as nanoseconds through `crate::serde_duration` in `src/lib.rs`, since chrono has no serde support for it |
 | `machine` | for transitions on an event, a function `<machine>_on_<event>(&mut event)` |
 | `errors` | variants of the module's `Error` enum, next to `InvalidTransition` and `Forbidden` |

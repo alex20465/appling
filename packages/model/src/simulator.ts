@@ -1,4 +1,5 @@
 import type { ExprData, Graph, GraphNode, TypeData } from './graph.js';
+import { throughPath } from './effects.js';
 
 /** A value the simulator could not know, such as a field of a record that was not given. Logic treats it as "maybe". */
 export const UNKNOWN: unique symbol = Symbol('unknown');
@@ -28,8 +29,24 @@ export interface RunResult {
     before: Record;
     after?: Record;
     events: { event: string, fields: { [name: string]: Value } }[];
+    /** The records the effects create, update or delete besides the action's own, in the order they ran; UNKNOWN when a path leads to a record that was not given. */
+    writes: Write[];
+    /** True when the action deletes its own record (`delete self`); its invariants are then not checked. */
+    deleted?: boolean;
     violated: string[];
 }
+
+export interface Write {
+    /** The qualified name of the effect. */
+    effect: string;
+    operation: 'create' | 'update' | 'delete';
+    /** The qualified name of the record's entity. */
+    entity: string;
+    /** A copy of the record right after the effect: a created row with its assigned fields, an updated one with its new values. */
+    record: Record | typeof UNKNOWN;
+}
+
+type Scope = { self?: Record, actor?: Actor, inputs?: { [name: string]: Value }, vars?: Map<string, Value> };
 
 /** One thing an actor may try, with the verdict of the policies that guard it. */
 export interface Access {
@@ -136,10 +153,10 @@ export class Simulator {
         const entity = node.data.entity as string | undefined;
         if (!entity) return [];
         const changed = new Set<string>();
-        for (const effect of this.kids(node).filter(k => k.kind === 'SetEffect')) changed.add(effect.data.field as string);
+        for (const effect of this.ownSets(node)) changed.add(effect.data.field as string);
         for (const transition of this.graph.nodes.filter(n => n.kind === 'Transition' && n.data.action === action)) {
             changed.add(this.node(this.parentOf(transition.qn)).data.field as string);
-            for (const effect of this.kids(transition).filter(k => k.kind === 'SetEffect')) changed.add(effect.data.field as string);
+            for (const effect of this.ownSets(transition)) changed.add(effect.data.field as string);
         }
         const reads = (qn: string): Set<string> => {
             const direct = this.graph.edges.filter(e => e.from === qn && e.kind === 'uses').map(e => e.to);
@@ -157,7 +174,7 @@ export class Simulator {
         const node = this.node(action);
         const entity = node.data.entity as string | undefined;
         const before: Record = { ...record, $type: entity };
-        const result: RunResult = { allowed: this.permitted(action, actor, before, inputs), outcome: 'done', reasons: [], before, events: [], violated: [] };
+        const result: RunResult = { allowed: this.permitted(action, actor, before, inputs), outcome: 'done', reasons: [], before, events: [], writes: [], violated: [] };
         if (result.allowed === 'no') return { ...result, outcome: 'refused', reasons: ['no policy allows this actor'] };
         const scope = { self: before, actor, inputs };
         const preconditions = (node.data.preconditions ?? []) as { condition: ExprData, error?: string }[];
@@ -165,18 +182,19 @@ export class Simulator {
             if (this.evaluate(precondition.condition, scope) === false) result.reasons.push(precondition.error ? last(precondition.error) : (node.props.preconditions as string[])[i]);
         });
         if (result.reasons.length) return { ...result, outcome: 'error' };
-        const after: Record = { ...before };
+        // A deep copy, so updates of related records change the copy and not the given data.
+        const after = clone(before) as Record;
         const transitions = this.graph.nodes.filter(n => n.kind === 'Transition' && n.data.action === action);
         if (transitions.length) {
             const field = last(this.node(this.parentOf(transitions[0].qn)).data.field as string);
             const taken = transitions.find(t => (t.data.from as string[]).includes(String(before[field])) && (!t.data.guard || this.evaluate(t.data.guard as ExprData, scope) !== false));
             if (!taken) return { ...result, outcome: 'error', reasons: [`no transition of ${last(this.parentOf(transitions[0].qn))} from ${String(before[field])}`] };
-            for (const effect of this.kids(taken)) this.apply(effect, after, scope, result);
+            this.effects(taken, after, scope, result);
             after[field] = taken.data.to as string;
         }
-        for (const effect of this.kids(node).filter(k => k.kind.endsWith('Effect'))) this.apply(effect, after, scope, result);
+        this.effects(node, after, scope, result);
         result.after = after;
-        if (entity) {
+        if (entity && !result.deleted) {
             for (const invariant of this.kids(this.node(entity), 'Invariant')) {
                 if (this.evaluate(invariant.data.condition as ExprData, { self: after, actor, inputs }) === false) result.violated.push(String(invariant.data.label));
             }
@@ -185,7 +203,7 @@ export class Simulator {
     }
 
     /** Evaluates an expression; anything that depends on data that is not given comes back as UNKNOWN. */
-    evaluate(expr: ExprData, scope: { self?: Record, actor?: Actor, inputs?: { [name: string]: Value }, vars?: Map<string, Value> }): Value {
+    evaluate(expr: ExprData, scope: Scope): Value {
         const sub = (e: ExprData) => this.evaluate(e, scope);
         switch (expr.$type) {
             case 'StringExpr': return String(expr.value);
@@ -228,8 +246,11 @@ export class Simulator {
         switch (node.kind) {
             case 'Action': {
                 const transitions = this.graph.nodes.filter(n => n.kind === 'Transition' && n.data.action === qn);
-                const creates = [node, ...transitions].flatMap(n => this.kids(n, 'CreateEffect')).map(e => e.data.entity as string);
-                return [...own, ...this.entityPolicies(node.data.entity as string | undefined, 'update'), ...[...new Set(creates)].flatMap(e => this.entityPolicies(e, 'create'))];
+                const effects = [node, ...transitions].flatMap(n => this.effectsBelow(n));
+                const along = (kind: string, operation: string) => [...new Set(effects.filter(e => e.kind === kind).map(e => e.data.entity as string | undefined))]
+                    .flatMap(e => this.entityPolicies(e, operation));
+                return [...own, ...this.entityPolicies(node.data.entity as string | undefined, 'update'),
+                    ...along('CreateEffect', 'create'), ...along('UpdateEffect', 'update'), ...along('DeleteEffect', 'delete')];
             }
             case 'Query': return [...own, ...this.entityPolicies(node.data.entity as string, 'read')];
             case 'Entity': return this.entityPolicies(qn, 'read');
@@ -251,16 +272,80 @@ export class Simulator {
         return entity ? this.kids(this.node(entity), 'Policy').filter(p => !fieldsOf(p).length && covers(p, operation)) : [];
     }
 
-    private apply(effect: GraphNode, record: Record, scope: { self?: Record, actor?: Actor, inputs?: { [name: string]: Value } }, result: RunResult): void {
-        if (effect.kind === 'SetEffect') {
-            record[last(effect.data.field as string)] = this.evaluate(effect.data.value as ExprData, { ...scope, self: record });
-            return;
+    /** Runs the effects below an action, transition or loop in order; an `as` name binds the created row for the effects after it. */
+    private effects(owner: GraphNode, record: Record, scope: Scope, result: RunResult): void {
+        let current = scope;
+        for (const effect of this.kids(owner).filter(k => k.kind.endsWith('Effect'))) {
+            const created = this.apply(effect, record, current, result);
+            const variable = effect.data.variable as string | undefined;
+            if (created && variable) current = { ...current, vars: new Map([...(current.vars ?? []), [variable, created]]) };
         }
-        const fields = Object.fromEntries(((effect.data.assignments ?? []) as { name: string, value: ExprData }[]).map(a => [a.name, this.evaluate(a.value, { ...scope, self: record })]));
-        if (effect.kind === 'EmitEffect') result.events.push({ event: effect.data.event as string, fields });
     }
 
-    private binary(expr: ExprData, scope: Parameters<Simulator['evaluate']>[1]): Value {
+    /** Applies one effect to the record; returns the row a `create` made. */
+    private apply(effect: GraphNode, record: Record, scope: Scope, result: RunResult): Record | undefined {
+        const own = { ...scope, self: record };
+        const entity = effect.data.entity as string;
+        switch (effect.kind) {
+            case 'SetEffect':
+                record[last(effect.data.field as string)] = this.evaluate(effect.data.value as ExprData, own);
+                return undefined;
+            case 'ForEffect': {
+                // A collection that was not given runs no iteration.
+                const items = record[last(effect.data.collection as string)];
+                for (const item of Array.isArray(items) ? [...items] : []) {
+                    this.effects(effect, record, { ...scope, vars: new Map([...(scope.vars ?? []), [effect.data.variable as string, item]]) }, result);
+                }
+                return undefined;
+            }
+            case 'UpdateEffect': {
+                const path = effect.data.target as ExprData;
+                const target = this.evaluate(path, own);
+                if (!isRecord(target)) {
+                    if (target !== null) result.writes.push({ effect: effect.qn, operation: 'update', entity, record: UNKNOWN });
+                    return undefined;
+                }
+                // Every value is read before any is written, as one update of the row.
+                const values = this.kids(effect, 'SetEffect').map(set => [last(set.data.field as string), this.evaluate(throughPath(set.data.value as ExprData, entity, path), own)] as const);
+                for (const [field, value] of values) target[field] = value;
+                result.writes.push({ effect: effect.qn, operation: 'update', entity, record: clone(target) as Record });
+                return undefined;
+            }
+            case 'DeleteEffect': {
+                if (effect.data.self) {
+                    result.deleted = true;
+                    result.writes.push({ effect: effect.qn, operation: 'delete', entity, record: clone(record) as Record });
+                    return undefined;
+                }
+                const target = this.evaluate(effect.data.target as ExprData, own);
+                if (target === null) return undefined;
+                if (isRecord(target)) detach(record, target);
+                result.writes.push({ effect: effect.qn, operation: 'delete', entity, record: isRecord(target) ? clone(target) as Record : UNKNOWN });
+                return undefined;
+            }
+        }
+        const fields = Object.fromEntries(((effect.data.assignments ?? []) as { name: string, value: ExprData }[]).map(a => [a.name, this.evaluate(a.value, own)]));
+        if (effect.kind === 'EmitEffect') {
+            result.events.push({ event: effect.data.event as string, fields });
+            return undefined;
+        }
+        if (effect.kind !== 'CreateEffect') return undefined;
+        const created: Record = { $type: entity, ...fields };
+        result.writes.push({ effect: effect.qn, operation: 'create', entity, record: clone(created) as Record });
+        return created;
+    }
+
+    /** The effects below a node at any depth, inside loops and updates too. */
+    private effectsBelow(node: GraphNode): GraphNode[] {
+        return this.kids(node).filter(k => k.kind.endsWith('Effect')).flatMap(e => [e, ...this.effectsBelow(e)]);
+    }
+
+    /** The sets that change the record itself, inside loops too, but not those of an `update` of a related record. */
+    private ownSets(node: GraphNode): GraphNode[] {
+        return this.kids(node).filter(k => k.kind.endsWith('Effect') && k.kind !== 'UpdateEffect').flatMap(e => e.kind === 'SetEffect' ? [e] : this.ownSets(e));
+    }
+
+    private binary(expr: ExprData, scope: Scope): Value {
         const [left, right] = [this.evaluate(expr.left!, scope), this.evaluate(expr.right!, scope)];
         switch (expr.op) {
             case '&&': return left === false || right === false ? false : left === UNKNOWN || right === UNKNOWN ? UNKNOWN : true;
@@ -285,7 +370,7 @@ export class Simulator {
         return UNKNOWN;
     }
 
-    private name(expr: ExprData, scope: Parameters<Simulator['evaluate']>[1]): Value {
+    private name(expr: ExprData, scope: Scope): Value {
         const id = expr.name!;
         if (scope.vars?.has(id)) return scope.vars.get(id)!;
         if (!expr.target) {
@@ -302,7 +387,7 @@ export class Simulator {
     }
 
     /** A field of a null record is null, as the typer makes it optional; an actor's field that neither it nor its entity declares is null too. */
-    private member(receiver: Value, member: string, target: string | undefined, scope: Parameters<Simulator['evaluate']>[1]): Value {
+    private member(receiver: Value, member: string, target: string | undefined, scope: Scope): Value {
         if (receiver === null) return null;
         if (receiver === UNKNOWN || typeof receiver !== 'object' || Array.isArray(receiver) || receiver instanceof Date) return UNKNOWN;
         if (member in receiver) return receiver[member] as Value;
@@ -313,7 +398,7 @@ export class Simulator {
         return UNKNOWN;
     }
 
-    private call(expr: ExprData, scope: Parameters<Simulator['evaluate']>[1]): Value {
+    private call(expr: ExprData, scope: Scope): Value {
         const [arg] = expr.args ?? [];
         if (expr.name === 'duration') {
             const parts = [...String(arg?.value ?? '').matchAll(/(\d+(?:\.\d+)?)(ms|d|h|m|s)/g)];
@@ -332,7 +417,7 @@ export class Simulator {
         return UNKNOWN;
     }
 
-    private method(expr: ExprData, scope: Parameters<Simulator['evaluate']>[1]): Value {
+    private method(expr: ExprData, scope: Scope): Value {
         const args = expr.args ?? [];
         if (expr.member === 'is' && expr.receiver?.name === 'actor' && !expr.receiver.target) {
             if (!scope.actor) return UNKNOWN;
@@ -377,6 +462,40 @@ export class Simulator {
 
     private parentOf(qn: string): string {
         return this.graph.edges.find(e => e.kind === 'contains' && e.to === qn)!.from;
+    }
+}
+
+function isRecord(value: Value | undefined): value is Record {
+    return !!value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date);
+}
+
+/** A copy of nested records and lists; a record reached twice stays one record. */
+function clone(value: Value, copies = new Map<object, Value>()): Value {
+    if (!Array.isArray(value) && !isRecord(value)) return value;
+    if (copies.has(value)) return copies.get(value)!;
+    if (Array.isArray(value)) {
+        const list: Value[] = [];
+        copies.set(value, list);
+        for (const item of value) list.push(clone(item, copies));
+        return list;
+    }
+    const record: Record = {};
+    copies.set(value, record);
+    for (const [key, field] of Object.entries(value)) record[key] = key === '$type' ? field : clone(field as Value, copies);
+    return record;
+}
+
+/** Takes a deleted record out of every list that holds it and empties every field that points to it. */
+function detach(root: Record, deleted: Record, seen = new Set<object>()): void {
+    if (seen.has(root)) return;
+    seen.add(root);
+    for (const [key, value] of Object.entries(root)) {
+        if (value === deleted) root[key] = null;
+        else if (Array.isArray(value)) {
+            const kept = value.filter(item => item !== deleted);
+            if (kept.length !== value.length) root[key] = kept;
+            for (const item of kept) if (isRecord(item)) detach(item, deleted, seen);
+        } else if (isRecord(value as Value)) detach(value as Record, deleted, seen);
     }
 }
 

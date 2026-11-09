@@ -82,6 +82,9 @@ const extension: CodegenExtension = {
             case 'SetEffect':
             case 'CreateEffect':
             case 'EmitEffect':
+            case 'ForEffect':
+            case 'UpdateEffect':
+            case 'DeleteEffect':
             case 'Projection':
             case 'ExternalOperation':
             case 'Endpoint':

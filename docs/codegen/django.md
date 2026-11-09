@@ -128,7 +128,7 @@ An action becomes a function that takes the entity instance first, its inputs as
 
 1. Checks each precondition and raises the declared error, or `ValueError` without one.
 2. Applies the transition of the state machine: the current state and the guard pick the branch, and any other state raises `InvalidTransition`.
-3. Applies the effects: `set` assigns a field, `create` calls `objects.create`, `emit` sends the event's signal after the transaction commits.
+3. Applies the effects: `set` assigns a field, `create` calls `objects.create` (`line = Line.objects.create(...)` with `as line`), `emit` sends the event's signal after the transaction commits, `for item in items` loops over `order.items.all()`, `update item.product { ... }` assigns the fields of `item.product` and saves it (inside `if ... is not None:` for an optional path), `delete item` calls `item.delete()`, and `delete self` deletes the instance last instead of saving it.
 4. Saves the instance when it changed.
 
 ```python
@@ -214,7 +214,7 @@ Invariants, policies, transitions and actions with preconditions get a `TestCase
 
 Test bodies create rows through factories in `<app>/factories.py`, one `make_<entity>(**fields)` per entity: every required stored field without a default gets a sample value (`"<field>-<n>"` for strings, `1` for numbers, `False`, the current date or time, one hour, a new UUID, the first enum literal), and a required reference gets a row from the referenced entity's factory. An entity with a required file, a value type or a cycle of required references has no factory.
 
-A case only gets a body when the Appling simulator proves, on the factory's row, that the invariants hold (for an invariant test, also that the changed row breaks it; a field read only by `has()` may stay null, any other field the condition compares must not be null, because a database check passes on null), that the preconditions and the guard hold (or, for a precondition test, that the earlier preconditions hold and this one fails), and that the effects do not create rows or depend on the actor. Otherwise it stays skipped. In the examples, `PlaceOrder` requires order lines that the factory does not add, so its precondition test runs, while the tests of `draft -> placed` stay tasks. Event transitions are tested only when no job or other machine also handles the event. The actions run without an actor, which skips their policy checks, except in the tests of action policies. The allowed case of an action policy also needs an action that only sets fields: one that moves a state, creates rows or emits an event keeps that case skipped. The allowed case of a query policy needs the query's filter to hold for the factory's row.
+A case only gets a body when the Appling simulator proves, on the factory's row, that the invariants hold (for an invariant test, also that the changed row breaks it; a field read only by `has()` may stay null, any other field the condition compares must not be null, because a database check passes on null), that the preconditions and the guard hold (or, for a precondition test, that the earlier preconditions hold and this one fails), and that the effects do not create, update or delete other rows or depend on the actor. Otherwise it stays skipped. In the examples, `PlaceOrder` requires order lines that the factory does not add, so its precondition test runs, while the tests of `draft -> placed` stay tasks. Event transitions are tested only when no job or other machine also handles the event. The actions run without an actor, which skips their policy checks, except in the tests of action policies. The allowed case of an action policy also needs an action that only sets fields: one that moves a state, creates, updates or deletes rows or emits an event keeps that case skipped. The allowed case of a query policy needs the query's filter to hold for the factory's row.
 
 ### Pages
 
@@ -351,7 +351,7 @@ They are called where the model uses the element:
 
 | Element | Check |
 |---|---|
-| action | first, `can_update_<entity>` of its entity and its own policies; a `create` effect builds the record, checks `can_create_<entity>` and then saves it; a failed check raises `PermissionDenied` |
+| action | first, `can_update_<entity>` of its entity and its own policies; a `create` effect builds the record, checks `can_create_<entity>` and then saves it; `update` and `delete` effects check `can_update_<entity>` or `can_delete_<entity>` of the record they change first; a failed check raises `PermissionDenied` |
 | query | the query function takes `actor=None`, narrows the rows with `readable_<entity>_rows` and filters by its own policies |
 | use case | its own policies first; the steps check theirs |
 | projection | the serializer sets a field the actor may not read to `None` in `to_representation` |

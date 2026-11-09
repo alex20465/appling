@@ -97,7 +97,7 @@ A customer may close a cart only when it is theirs, which depends on the cart's 
 | Target | Policies |
 |---|---|
 | Entity, per operation | The entity's policies that cover the operation and name no fields; a policy with `fields` gives one more entry for those fields, on top of the others |
-| Action | Its own, its entity's policies that cover `update`, and the policies that cover `create` of every entity it creates |
+| Action | Its own, its entity's policies that cover `update`, and the policies that cover `create`, `update` or `delete` of every entity it creates, updates or deletes, inside loops too |
 | Query | Its own, and its entity's policies that cover `read` |
 | Use case | Its own, and those of every action, query, use case and external operation its steps and error handlers call |
 | Page | Those of the queries its lists show and of the projections it shows (a projection needs what its source needs). The actions a page offers are judged on their own |
@@ -108,6 +108,8 @@ Nothing is open by default: a target that no policy guards along its path is `no
 
 **Running an action.** A run checks, in order: the policies (`no` refuses the run), the preconditions (a false one reports its error), the transition whose `from` state matches and whose guard does not fail, then applies the transition's effects, the state change and the action's effects, records `emit` effects as events, and evaluates the entity's invariants on the result. Derived fields are computed from the record when an expression reads them.
 
+The effects run on a copy of the record, nested records included, so the given data stays as it was. A `for` loop runs once per record of the given list, and not at all when the list is not given. Every `create`, `update` and `delete` of another record is listed in `writes`, in the order it ran, with the effect, the operation, the entity and a copy of the record right after the effect; an `update` of a record that was not given has the record `"unknown"`, and one through an empty optional path changes nothing. A deleted record leaves every list and field of the result that held it. `delete self` sets `deleted: true`, and the invariants of a deleted record are not checked.
+
 ## Running an action from the MCP server
 
 The `simulate` tool takes `question: "run"`, the `action`, a sample `record`, the `actor` and optionally `actorFields` and `inputs`:
@@ -116,7 +118,7 @@ The `simulate` tool takes `question: "run"`, the `action`, a sample `record`, th
 { "question": "run", "action": "shop.Discount", "record": { "owner": "ada", "status": "open", "lines": [{ "amount": 5 }], "discount": 0 }, "actor": "shop.Staff", "inputs": { "amount": 20 } }
 ```
 
-The answer lists `allowed`, `outcome` (`done`, `refused` or `error`), the `reasons` when it did not run, the record `before` and `after`, the `events` and the `violated` invariants, here `["total not negative"]`. Values the simulator could not know appear as `"unknown"`.
+The answer lists `allowed`, `outcome` (`done`, `refused` or `error`), the `reasons` when it did not run, the record `before` and `after`, the `events`, the `writes`, `deleted` and the `violated` invariants, here `["total not negative"]`. Values the simulator could not know appear as `"unknown"`.
 
 ## Use it in code
 

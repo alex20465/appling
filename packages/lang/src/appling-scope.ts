@@ -4,9 +4,11 @@ import {
 } from 'langium';
 import {
     isAction, isCallStep, isEndpoint, isDetailView, isExport, isExternalOperation, isHandler, isListView,
-    isModule, isQuery, isSetEffect, isSort, isTransition, isMachine,
-    type Entity, type Model, type Module, type Projection
+    isModule, isQuery, isSetEffect, isSort, isTransition, isMachine, isForEffect, isUpdateEffect, isEntity,
+    type Entity, type Expr, type Model, type Module, type Projection
 } from './generated/ast.js';
+import { ExpressionTyper } from './appling-types.js';
+import type { ApplingServices } from './appling-module.js';
 
 /**
  * Inside a module, nested elements are also visible by their dotted path (`Order.status`).
@@ -46,6 +48,10 @@ export class ApplingScopeComputation extends DefaultScopeComputation {
 
 export class ApplingScopeProvider extends DefaultScopeProvider {
 
+    constructor(private readonly services: ApplingServices) {
+        super(services);
+    }
+
     /** Resolves a dotted name written inside an expression, the way a reference of the given type would. */
     lookup(container: AstNode, type: string, name: string): AstNode | undefined {
         return this.scopeOf(container, type).getElement(name)?.node;
@@ -68,6 +74,11 @@ export class ApplingScopeProvider extends DefaultScopeProvider {
             return this.fieldsOf(AstUtils.getContainerOfType(node, isQuery)?.entity?.ref);
         }
         if (isSetEffect(node)) {
+            // Inside `update path { … }` a set changes the record the path leads to.
+            const update = node.$container;
+            return this.fieldsOf(isUpdateEffect(update) ? updatedEntity(update.target, this.services) : effectEntity(node));
+        }
+        if (isForEffect(node)) {
             return this.fieldsOf(effectEntity(node));
         }
         if (isHandler(node)) {
@@ -101,12 +112,21 @@ export function projectionSourceEntity(projection: Projection): Entity | undefin
     return isQuery(source) ? source.entity.ref : source;
 }
 
-function effectEntity(node: AstNode): Entity | undefined {
+/** The entity of the action or of the machine an effect belongs to. */
+export function effectEntity(node: AstNode): Entity | undefined {
     const action = AstUtils.getContainerOfType(node, isAction);
     if (action) return action.entity?.ref;
     const transition = AstUtils.getContainerOfType(node, isTransition);
     const machine = transition && AstUtils.getContainerOfType(transition, isMachine);
     return machine?.field.ref?.$container as Entity | undefined;
+}
+
+/** The entity of the record a relationship path such as `item.product` leads to, by the type of the path. */
+export function updatedEntity(path: Expr | undefined, services: ApplingServices): Entity | undefined {
+    const found = path && new ExpressionTyper(services).typeOf(path);
+    // For a list, which the validator reports, the sets still resolve against its records.
+    const type = found?.kind === 'list' ? found.item : found;
+    return type?.kind === 'decl' && isEntity(type.decl) ? type.decl : undefined;
 }
 
 export function* namedPaths(node: AstNode, nameOf: (n: AstNode) => string | undefined, prefix = ''): Generator<[string, AstNode]> {

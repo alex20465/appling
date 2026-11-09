@@ -105,7 +105,7 @@ Modules are named `<App>.<Module>`, with nested modules as `<App>.<A>.<B>`; a ty
 
 ### Actions
 
-An action on an entity becomes an update action of its resource with `require_atomic? false`. Its inputs become `argument`s. Preconditions and guards become `validate` lines when they translate to builtin validations. `set` effects become `set_attribute` for constants and `now`, or `atomic_update` with an expression. A transition of the state machine adds `change transition_state(:<state>)`.
+An action on an entity becomes an update action of its resource with `require_atomic? false`; one that deletes its own record (`delete self`) without a transition becomes a destroy action. Its inputs become `argument`s. Preconditions and guards become `validate` lines when they translate to builtin validations. `set` effects become `set_attribute` for constants and `now`, or `atomic_update` with an expression. A transition of the state machine adds `change transition_state(:<state>)`.
 
 ### State machines
 
@@ -440,7 +440,7 @@ Whatever cannot be translated is listed in the [registry](registry.md):
 - many to many relationships, and derived or default fields of value types
 - calculations over lists, and derived fields or defaults that do not translate
 - invariants, preconditions and guards over calculations, relationships or other resources, and guards when an action has several transitions
-- effects that create rows or emit events, and actions with several target states
+- effects that create rows or emit events, loops (`for`), updates and deletes of related records, `delete self` in an action with a transition, and actions with several target states
 - actions with `consistency eventual`, and actions without an entity
 - policies that do not translate, which deny until written, and writes of field policies (see [policies](#policies)), role conditions that do not translate, telling apart actors bound to the same entity, resources that reach the tenant only through relationships, events, externals and use cases
 - jobs on events, and jobs whose filter does not translate

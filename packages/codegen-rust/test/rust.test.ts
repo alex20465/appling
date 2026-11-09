@@ -261,3 +261,52 @@ test('once the model has a policy, what no policy covers is denied, and effects 
     expect(entries['n.Ping'].missing.map(m => m.what)).toContain('emit Noted with its fields item, count, which the model does not give or Rust cannot say');
     expect(entries['n.Record'].missing.map(m => m.what)).toEqual(['write the test n_record']);
 });
+
+const CHECKOUT = `module shop {
+  entity Product { stock: Int }
+  entity Order { total: Int default 0 }
+  entity Item { product: Product  quantity: Int }
+  entity Line { order: Order?  product: Product  quantity: Int }
+  entity Cart {
+    items: Item[]
+    order: Order?
+  }
+  action Checkout on Cart {
+    effect {
+      for item in items {
+        update item.product {
+          set stock = stock - item.quantity
+        }
+        create Line as line { order = order, product = item.product, quantity = item.quantity }
+        delete item
+      }
+      update order { set total = total + 1 }
+      delete self
+    }
+  }
+}`;
+
+test('loops, updates and deletes of related records and created rows by name hand the records to store functions', async () => {
+    const { documents, services } = await buildWorkspace({ 'shop.appling': CHECKOUT });
+    const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), rust, 'shop');
+    const files = new Map<string, string>();
+    for (const { step } of result.steps) if (step.kind === 'template') files.set(step.file, step.write(files.get(step.file)));
+    expect(files.get('src/shop.rs')).toContain([
+        'pub fn checkout(cart: &mut Cart, create_line: &mut dyn FnMut(Line) -> Result<(), Error>, update_product: &mut dyn FnMut(&Product) -> Result<(), Error>, update_order: &mut dyn FnMut(&Order) -> Result<(), Error>, delete_item: &mut dyn FnMut(&Item) -> Result<(), Error>, delete_cart: &mut dyn FnMut(&Cart) -> Result<(), Error>) -> Result<Vec<Event>, Error> {',
+        '    let events = Vec::new();',
+        '    for item in cart.items.iter_mut() {',
+        '        item.product.stock = item.product.stock - item.quantity;',
+        '        update_product(&*item.product)?;',
+        '        let mut line = Line::new(Box::new((*item.product).clone()), item.quantity.clone());',
+        '        line.order = cart.order.clone();',
+        '        create_line(line.clone())?;',
+        '        delete_item(&*item)?;',
+        '    }',
+        '    if let Some(record) = cart.order.as_deref_mut() {',
+        '        record.total = record.total + 1;',
+        '        update_order(&*record)?;',
+        '    }',
+        '    delete_cart(&*cart)?;'
+    ].join('\n'));
+    expect(result.entries.find(e => e.qn === 'shop.Checkout')?.missing.map(m => m.what)).toEqual(['write the test shop_checkout']);
+});

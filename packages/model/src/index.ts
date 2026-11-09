@@ -3,6 +3,7 @@ export * from './edit.js';
 export * from './release.js';
 export * from './files.js';
 export * from './simulator.js';
+export * from './effects.js';
 export * from './references.js';
 export * from './relevance.js';
 export * from './diff.js';

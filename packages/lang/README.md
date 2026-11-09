@@ -89,6 +89,7 @@ actor human Shopper roles Customer {
 - Interfaces and pages reach entity data only through projections.
 - Other modules can only reference what a module lists in `export`, by its module path such as `crm.Account`. Export names are references to the module's members, so rename and find references cover them.
 - Only a `machine` changes a `state` field, and each state field has at most one machine.
+- Action effects `set` fields, `create` records (`as name` for later effects), `emit` events, loop with `for x in <collection relationship>`, change a related record with `update <path> { set ... }` and delete with `delete self` or `delete <path>`; a path starts at a field, a loop variable or an `as` name and leads to one record.
 - Expressions must type check: conditions are Bool, values fit the field they are assigned to, `null` only fits optional fields, and calls in use cases pass the right number and types of arguments (an action on an entity takes the entity first, then its inputs).
 - `migration` steps target elements by their path inside the module, as it was before the step: `rename Order.code -> reference`, `retype Order.total: Decimal -> Money`, `remove Order.legacy`. Renamed and retyped elements must exist, removed ones must not.
 - `@Name` in a `does` text must name a visible element and follow the layer order, except in a module's own description.

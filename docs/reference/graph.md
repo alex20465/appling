@@ -196,6 +196,8 @@ Both hold the element's own properties, without its name and without the element
 
 An enum value named with its enum (`Scope.operator`) appears in `data` as the bare value would, `{ "$type": "NameExpr", "name": "operator", "type": "Scope", "target": "m.Scope.operator" }`, so tools handle both spellings alike.
 
+The `data` of an `update` or `delete` effect also has `entity`, the qualified name of the entity of the record it changes, which its relationship path does not name: `{ "target": { "$type": "MemberExpr", ... }, "entity": "shop.Product" }`, and `{ "self": true, "entity": "shop.Cart" }` for `delete self`. A loop variable or an `as` name in an expression has no `target`.
+
 So an action's precondition shows as `"requires { lines.size() > 0 } else EmptyOrder"` in `props` and as `{ "$type": "Precondition", "condition": { ... }, "error": "sales.PlaceOrder.EmptyOrder" }` in `data`.
 
 ## Node kinds
@@ -233,8 +235,11 @@ Unnamed elements, which get a key instead of a name:
 | `SetEffect` | `effect[set <field>]` | `sales.PlaceOrder.effect[set placed_at]` |
 | `CreateEffect` | `effect[create <entity>]` | `sales.PlaceOrder.effect[create Invoice]` |
 | `EmitEffect` | `effect[emit <event>]` | `sales.OrderFlow.transition[draft->placed].effect[emit OrderPlaced]` |
+| `ForEffect` | `effect[for <variable>]` | `shop.Checkout.effect[for item]` |
+| `UpdateEffect` | `effect[update <last name of the path>]` | `shop.Checkout.effect[for item].effect[update product]` |
+| `DeleteEffect` | `effect[delete self]` or `effect[delete <last name of the path>]` | `shop.Checkout.effect[delete self]` |
 
-Lists keep their separators without spaces, and references in keys are written as in the source. When siblings share a key, the second gets `#2`, the third `#3`, and so on: `policy[read]#2`.
+The effects inside a `for` or an `update` are its children. Keys hold no dots, so `update item.product` is keyed by `product`. Lists keep their separators without spaces, and references in keys are written as in the source. When siblings share a key, the second gets `#2`, the third `#3`, and so on: `policy[read]#2`.
 
 Everything else folds into its element, for example types (`TypeRef`), expressions, preconditions, assignments, sorts, use case steps and handlers, page components (`list`, `detail`, `form`), navigation items, messages and migration steps.
 
@@ -253,6 +258,7 @@ The reference kinds, with the element the edge starts from:
 | `type` | A field, a parameter, or an external operation (its return type) | The enum, value type or entity |
 | `entity` | An action, query or tenant; an actor bound with `is`; a `create` effect | The entity |
 | `field` | A machine; a `set` effect; a query (its sort fields) | The field |
+| `collection` | A `for` effect | The collection relationship it iterates |
 | `fields` | A field policy | The fields it covers |
 | `roles` | An actor | Its roles |
 | `error` | An action (its preconditions); a use case (its error handlers) | The error |

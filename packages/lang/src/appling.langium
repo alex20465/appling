@@ -110,19 +110,32 @@ Precondition:
     'requires' '{' condition=Expr '}' ('else' error=[ErrorDecl:Ident])?;
 
 Effect:
-    SetEffect | CreateEffect | EmitEffect;
+    SetEffect | CreateEffect | EmitEffect | ForEffect | UpdateEffect | DeleteEffect;
 
 SetEffect:
     'set' field=[Field:Ident] '=' value=Expr;
 
+// `as` names the new row for the effects after it.
 CreateEffect:
-    'create' entity=[Entity:QualifiedName] '{' (assignments+=Assignment (',' assignments+=Assignment)*)? '}';
+    'create' entity=[Entity:QualifiedName] ('as' variable=Ident)? '{' (assignments+=Assignment (',' assignments+=Assignment)*)? '}';
 
 EmitEffect:
     'emit' event=[Event:QualifiedName] ('{' (assignments+=Assignment (',' assignments+=Assignment)*)? '}')?;
 
 Assignment:
     name=Ident '=' value=Expr;
+
+// Runs its effects once per row of a collection relationship of the entity, with the row bound to the variable.
+ForEffect:
+    'for' variable=Ident 'in' collection=[Field:Ident] '{' effects+=Effect* '}';
+
+// Changes the related record a relationship path leads to, such as `item.product`.
+UpdateEffect:
+    'update' target=Expr '{' sets+=SetEffect+ '}';
+
+// Deletes the record itself or the related record a relationship path leads to.
+DeleteEffect:
+    'delete' (self?='self' | target=Expr);
 
 Machine:
     'machine' name=Ident 'on' field=[Field:QualifiedName] relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{' transitions+=Transition* '}';

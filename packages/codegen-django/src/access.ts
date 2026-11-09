@@ -273,14 +273,14 @@ function denyUnless(conditions: string[], label: string, imports: Set<string>): 
 }
 
 /** Lines that create a record and check the created entity's `create` policies before saving it. */
-export function guardedCreate(entity: GraphNode, args: string, label: string, context: MapContext, imports: Set<string>): string[] {
+export function guardedCreate(entity: GraphNode, args: string, label: string, context: MapContext, imports: Set<string>, variable = 'created'): string[] {
     const check = policyImport(entity, canName(entity, 'create'), imports);
     imports.add('from django.core.exceptions import PermissionDenied');
     return [
-        `created = ${lastOf(entity.qn)}(${args})`,
-        `if actor is not None and not ${check}(actor, created):`,
+        `${variable} = ${lastOf(entity.qn)}(${args})`,
+        `if actor is not None and not ${check}(actor, ${variable}):`,
         `    raise PermissionDenied(${JSON.stringify(label)})`,
-        'created.save()'
+        `${variable}.save()`
     ];
 }
 

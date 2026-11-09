@@ -467,3 +467,51 @@ test('transition and precondition tests get bodies where the simulator proves th
     // A required file has no sample, so Scan has no factory.
     expect(entries['shop.ScanFlow.transition[open->closed]'].missing.map(m => m.what)).toEqual(['write the test bodies of ScanFlowOpenToClosedTest in shop/tests.py']);
 });
+
+const CHECKOUT = `module shop {
+  entity Product { stock: Int }
+  entity Order { total: Int default 0 }
+  entity Item { product: Product  quantity: Int }
+  entity Line { order: Order?  product: Product  quantity: Int }
+  entity Cart {
+    items: Item[]
+    order: Order?
+    count: Int default 0
+  }
+  event CheckedOut { count: Int }
+  action Checkout on Cart {
+    effect {
+      for item in items {
+        create Line as line { order = order, product = item.product, quantity = item.quantity }
+        update line.product {
+          set stock = stock - line.quantity
+        }
+        set count = count + 1
+        delete item
+      }
+      update order { set total = total + count }
+      emit CheckedOut { count = count }
+      delete self
+    }
+  }
+}`;
+
+test('loops, updates of related records, deletes and created rows by name become ORM calls', async () => {
+    const { files, entries } = await generate({ 'shop.appling': CHECKOUT });
+    expect(files['shop/actions.py']).toContain([
+        '@transaction.atomic',
+        'def checkout(cart: Cart, *, actor=None) -> None:',
+        '    for item in cart.items.all():',
+        '        line = Line.objects.create(order=cart.order, product=item.product, quantity=item.quantity)',
+        '        line.product.stock = line.product.stock - line.quantity',
+        '        line.product.save()',
+        '        cart.count = cart.count + 1',
+        '        item.delete()',
+        '    if cart.order is not None:',
+        '        cart.order.total = cart.order.total + cart.count',
+        '        cart.order.save()',
+        '    transaction.on_commit(lambda: checked_out.send(sender=None, count=cart.count))',
+        '    cart.delete()'
+    ].join('\n'));
+    expect(entries['shop.Checkout'].status).toBe('generated');
+});

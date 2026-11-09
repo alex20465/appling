@@ -88,11 +88,79 @@ A rule that must always be true belongs to the entity as an [invariant](domain.m
 |---|---|
 | `set field = value` | Assigns a field of the action's entity |
 | `create Entity { a = x, b = y }` | Creates a record of an entity, assigning its fields |
+| `create Entity as name { ... }` | The same, and names the new record for the effects after it |
 | `emit Event { a = x }` | Emits an event, assigning its fields; the braces are optional |
+| `for x in items { ... }` | Runs its effects once per record of a collection relationship of the entity, with the record as `x` |
+| `update path { set a = x ... }` | Changes the related record a relationship path such as `item.product` leads to |
+| `delete self` | Deletes the action's own record |
+| `delete path` | Deletes the related record a relationship path leads to |
 
 Each value is an expression typed against the field it is assigned to. In `create` and `emit`, every assigned name must be a field of the entity or event: `Closed has no field "nope".`
 
 A `set` effect cannot change a `state` field. Only a machine transition changes it: `A state field changes only through a machine transition.` A `create` effect may assign a `state` field: it sets the state the new record starts in, such as a quote created as `draft` or `waiting`.
+
+All effects of one action run in order, in one transaction, so a failing effect undoes the others.
+
+#### Loops, related records and deletes
+
+A checkout turns the items of a cart into order lines, takes them out of stock and deletes the cart:
+
+```appling check
+module shop {
+  entity Product {
+    stock: Int
+  }
+
+  entity Order {
+    total: Money default 0
+  }
+
+  entity Line {
+    order: Order
+    product: Product
+    quantity: Int
+  }
+
+  entity Item {
+    product: Product
+    quantity: Int
+  }
+
+  entity Cart {
+    order: Order
+    items: Item[]
+  }
+
+  event CheckedOut {
+    order: Order
+  }
+
+  action Checkout on Cart {
+    effect {
+      for item in items {
+        create Line as line { order = order, product = item.product, quantity = item.quantity }
+        update line.product {
+          set stock = stock - line.quantity
+        }
+        delete item
+      }
+      emit CheckedOut { order = order }
+      delete self
+    }
+  }
+}
+```
+
+- `for x in items` iterates a collection relationship of the action's entity, a field whose type is a list of records (`Item[]`): `"for" iterates a collection relationship of Cart, and tags is no list of records.` The loop variable is visible inside the loop only. Loops nest, but each one iterates a field of the entity.
+- `create ... as name` makes the new record visible by name to the effects after it in the same block, and to the loops and updates inside them.
+- `update path { ... }` and `delete path` take a relationship path to one record: a field of the entity, a loop variable or an `as` name, followed by fields, such as `owner`, `item.product` or `line.order`. A list, `this`, an input or a call is no such path: `"update" takes a relationship path to one record, such as item.product.` For every record of a collection, loop with `for`.
+- Inside `update`, `set` names a field of the updated record, and a bare name stands for a field of that record first (`stock` above is the product's stock); the fields of the action's entity and the loop variables stay visible. An optional path that is empty changes nothing.
+- `delete self` deletes the action's own record and needs an action on an entity: `"delete self" needs an action on an entity.` A delete removes the record for good.
+- A loop variable or an `as` name may not hide a field, an input or another name: `"items" is already a name here; pick another one.`
+
+Like `create`, an `update` or a `delete` adds to what the action needs: the actor also needs the update or delete [policies](access.md) of the entities it changes.
+
+Effects in a machine [transition](#machines) work the same way, on the machine's entity.
 
 ### Errors
 

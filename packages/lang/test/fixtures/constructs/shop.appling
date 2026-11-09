@@ -99,6 +99,17 @@ module shop core {
       set placed_at = when_at
       set discount = discount - 0
       emit OrderPlaced { order = this }
+      for line in lines {
+        create Wishlist as kept { owner = buyer, product = line.product }
+        update line.product {
+          set stock = stock - line.quantity
+        }
+        update kept.product {
+          set stock = stock + 0
+        }
+        delete kept
+        delete line
+      }
     }
     errors EmptyOrder, TooLate
     consistency atomic
@@ -111,6 +122,7 @@ module shop core {
     }
     effect {
       set note = reason
+      delete self
     }
     consistency eventual
   }

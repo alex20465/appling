@@ -1,7 +1,7 @@
 import type { MapContext, Step } from '@appling/codegen';
-import type { ExprData, GraphNode, TypeData } from '@appling/model';
+import { throughPath, type ExprData, type GraphNode, type TypeData } from '@appling/model';
 import { annotation, children, documented, importOnReady, pythonFile, task, template } from './files.js';
-import { actionGuard, enforced, guardedCreate } from './access.js';
+import { actionGuard, canName, enforced, guardedCreate, policyImport } from './access.js';
 import { scope, storedFields } from './models.js';
 import { preconditionTests, transitionTests } from './behavior-tests.js';
 import { appOf, constantOf, lastOf, parentOf, python, q, snake, wrap, type PythonScope } from './python.js';
@@ -14,6 +14,8 @@ interface Code {
     changes?: boolean;
     /** The action the code belongs to, which checks the create policies of what it creates; undefined outside actions. */
     action?: string;
+    /** Whether an effect deletes the instance (`delete self`): it is deleted last and not saved. */
+    deletes?: boolean;
 }
 
 export function errorSteps(error: GraphNode): Step[] {
@@ -50,8 +52,9 @@ export function actionSteps(action: GraphNode, context: MapContext): Step[] {
     });
     const transitions = context.graph.nodes.filter(n => n.kind === 'Transition' && n.data.action === action.qn);
     if (transitions.length && instance) transitionChain(transitions, instance, snake(lastOf(action.qn)), context, pyScope, code);
-    for (const effect of children(action, context).filter(c => c.kind.endsWith('Effect'))) effectLines(effect, instance, context, pyScope, code);
-    if (instance && code.changes) code.lines.push(`${instance}.save()`);
+    effectBlock(action, instance, context, pyScope, code);
+    if (instance && code.deletes) code.lines.push(`${instance}.delete()`);
+    else if (instance && code.changes) code.lines.push(`${instance}.save()`);
     if (code.lines.length === guard.length) code.tasks.push(task(`implement the action ${lastOf(action.qn)}`));
 
     const atomic = action.data.consistency !== 'eventual';
@@ -100,7 +103,8 @@ function transitionChain(transitions: GraphNode[], instance: string, label: stri
         }
         code.lines.push(`${i === 0 ? 'if' : 'elif'} ${condition}:`);
         const branch: Code = { lines: [], imports: code.imports, tasks: code.tasks, action: code.action };
-        for (const effect of children(transition, context)) effectLines(effect, instance, context, pyScope, branch);
+        effectBlock(transition, instance, context, pyScope, branch);
+        if (branch.deletes) code.deletes = true;
         branch.lines.push(`${state} = ${enumName}.${constantOf(transition.data.to as string)}`);
         code.lines.push(...branch.lines.map(l => `    ${l}`));
     });
@@ -108,8 +112,35 @@ function transitionChain(transitions: GraphNode[], instance: string, label: stri
     code.lines.push('else:', `    raise InvalidTransition(${JSON.stringify(label)}, ${state})`);
 }
 
+/** The effects below an action, a transition or a loop in order; an `as` name is a variable for the effects after it. */
+function effectBlock(owner: GraphNode, instance: string | undefined, context: MapContext, pyScope: PythonScope, code: Code): void {
+    let current = pyScope;
+    for (const effect of children(owner, context).filter(c => c.kind.endsWith('Effect'))) {
+        effectLines(effect, instance, context, current, code);
+        const variable = effect.data.variable as string | undefined;
+        if (effect.kind === 'CreateEffect' && variable) current = { ...current, vars: new Set([...(current.vars ?? []), variable]) };
+    }
+}
+
 function effectLines(effect: GraphNode, instance: string | undefined, context: MapContext, pyScope: PythonScope, code: Code): void {
     const value = (expr: unknown) => python(expr as ExprData, pyScope);
+    if (effect.kind === 'ForEffect') {
+        const variable = effect.data.variable as string;
+        if (!instance) {
+            code.tasks.push(task(`apply the effect ${lastOf(effect.qn)}`));
+            return;
+        }
+        const body: Code = { ...code, lines: [] };
+        effectBlock(effect, instance, context, { ...pyScope, vars: new Set([...(pyScope.vars ?? []), variable]) }, body);
+        code.changes ||= body.changes;
+        code.deletes ||= body.deletes;
+        code.lines.push(`for ${variable} in ${instance}.${lastOf(effect.data.collection as string)}.all():`, ...(body.lines.length ? body.lines : ['pass']).map(l => `    ${l}`));
+        return;
+    }
+    if (effect.kind === 'UpdateEffect' || effect.kind === 'DeleteEffect') {
+        recordLines(effect, instance, context, pyScope, code);
+        return;
+    }
     if (effect.kind === 'SetEffect') {
         const v = value(effect.data.value);
         if (instance && v) {
@@ -128,15 +159,62 @@ function effectLines(effect: GraphNode, instance: string | undefined, context: M
     }
     const args = assignments.map(([name, v]) => `${name}=${v}`).join(', ');
     if (effect.kind === 'CreateEffect') {
+        const variable = effect.data.variable as string | undefined;
         code.imports.add(`from ${appOf(target.module)}.models import ${lastOf(target.qn)}`);
-        if (code.action && enforced(context)) code.lines.push(...guardedCreate(target, args, code.action, context, code.imports));
-        else code.lines.push(`${lastOf(target.qn)}.objects.create(${args})`);
+        if (code.action && enforced(context)) code.lines.push(...guardedCreate(target, args, code.action, context, code.imports, variable));
+        else code.lines.push(`${variable ? `${variable} = ` : ''}${lastOf(target.qn)}.objects.create(${args})`);
     } else {
         const signal = snake(lastOf(target.qn));
         code.imports.add(`from ${appOf(target.module)}.events import ${signal}`);
         code.imports.add('from django.db import transaction');
         code.lines.push(`transaction.on_commit(lambda: ${signal}.send(sender=None${args ? `, ${args}` : ''}))`);
     }
+}
+
+/**
+ * `update <path>` sets the fields of the related record and saves it; `delete <path>` deletes it; `delete self`
+ * deletes the instance once the other effects ran. In an action, the actor needs the entity's update or delete
+ * check; an optional path changes nothing when it is empty.
+ */
+function recordLines(effect: GraphNode, instance: string | undefined, context: MapContext, pyScope: PythonScope, code: Code): void {
+    const entity = context.node(effect.data.entity as string);
+    if (effect.data.self) {
+        if (instance && entity) {
+            code.deletes = true;
+            if (code.action && enforced(context)) code.lines.push(...permission(entity, 'delete', instance, code));
+        } else code.tasks.push(task(`apply the effect ${lastOf(effect.qn)}`));
+        return;
+    }
+    const target = effect.data.target as ExprData;
+    const path = python(target, pyScope);
+    const lines: string[] = [];
+    if (effect.kind === 'UpdateEffect') {
+        for (const set of children(effect, context, 'SetEffect')) {
+            const v = entity && python(throughPath(set.data.value as ExprData, entity.qn, target), pyScope);
+            if (!v) break;
+            lines.push(`${path}.${lastOf(set.data.field as string)} = ${v}`);
+        }
+        if (lines.length < children(effect, context, 'SetEffect').length) lines.length = 0;
+    }
+    if (!path || !entity || (effect.kind === 'UpdateEffect' && !lines.length)) {
+        code.tasks.push(task(`apply the effect ${lastOf(effect.qn)}: ${effect.kind === 'UpdateEffect' ? 'update' : 'delete'} ${effect.props.target}`));
+        return;
+    }
+    const operation = effect.kind === 'UpdateEffect' ? 'update' : 'delete';
+    const write = [
+        ...(code.action && enforced(context) ? permission(entity, operation, path, code) : []),
+        ...lines,
+        operation === 'update' ? `${path}.save()` : `${path}.delete()`
+    ];
+    if (target.type.endsWith('?')) code.lines.push(`if ${path} is not None:`, ...write.map(l => `    ${l}`));
+    else code.lines.push(...write);
+}
+
+/** Raises `PermissionDenied` unless the actor may update or delete the record, by its entity's policies. */
+function permission(entity: GraphNode, operation: 'update' | 'delete', record: string, code: Code): string[] {
+    const check = policyImport(entity, canName(entity, operation), code.imports);
+    code.imports.add('from django.core.exceptions import PermissionDenied');
+    return [`if actor is not None and not ${check}(actor, ${record}):`, `    raise PermissionDenied(${JSON.stringify(code.action)})`];
 }
 
 function raiseError(qn: string, context: MapContext, code: Code): string {
@@ -163,7 +241,7 @@ export function machineSteps(machine: GraphNode, context: MapContext): Step[] {
         const code: Code = { lines: [], imports: new Set(['from django.dispatch import receiver']), tasks: [] };
         code.imports.add(`from ${appOf(event.module)}.events import ${snake(lastOf(eventQn))}`);
         transitionChain(transitions, instance, snake(lastOf(eventQn)), context, { ...scope(context, code.imports), self: instance }, code);
-        code.lines.push(`${instance}.save()`);
+        code.lines.push(`${instance}.${code.deletes ? 'delete' : 'save'}()`);
         const name = `${snake(lastOf(machine.qn))}_on_${snake(lastOf(eventQn))}`;
         const body = [`@receiver(${snake(lastOf(eventQn))})`, `def ${name}(sender, ${instance}, **kwargs) -> None:`, ...code.lines.map(l => `    ${l}`)].join('\n');
         steps.push(template(`${appOf(machine.module)}/handlers.py`, existing => pythonFile(existing, code.imports, body)), importOnReady(machine.module, 'handlers'), ...code.tasks);

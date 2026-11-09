@@ -1,10 +1,10 @@
 import { AstUtils, WorkspaceCache, type AstNode, type ValidationAcceptor, type ValidationChecks } from 'langium';
 import {
-    isAction, isBinaryExpr, isBoolExpr, isEntity, isExternal, isExternalOperation, isMemberExpr, isNameExpr, isEnum, isMachine, isMigration, isModule, isValueType,
+    isAction, isBinaryExpr, isBoolExpr, isEntity, isField, isExternal, isExternalOperation, isMemberExpr, isNameExpr, isEnum, isMachine, isMigration, isModule, isValueType,
     type ApplingAstType, type Endpoint, type External, type ExternalKey, type Interface, type Machine, type Migration, type MigrationStep, type Model,
-    type Expr, type Policy, type Projection, type RenameStep, type SetEffect
+    type Expr, type Policy, type Projection, type RenameStep, type SetEffect, type CreateEffect, type DeleteEffect, type ForEffect, type UpdateEffect
 } from './generated/ast.js';
-import { namedPaths, projectionSourceEntity } from './appling-scope.js';
+import { effectEntity, namedPaths, projectionSourceEntity } from './appling-scope.js';
 import { ExpressionTyper } from './appling-types.js';
 import { doesTargets } from './appling-does.js';
 import type { ApplingServices } from './appling-module.js';
@@ -26,6 +26,10 @@ export function registerValidationChecks(services: ApplingServices): void {
         Model: [validator.checkLayerReferences, validator.checkTypes, validator.checkDoesNames],
         Machine: validator.checkMachine,
         SetEffect: validator.checkSetEffect,
+        ForEffect: [validator.checkForEffect, validator.checkEffectBinding],
+        CreateEffect: validator.checkEffectBinding,
+        UpdateEffect: validator.checkRecordPath,
+        DeleteEffect: validator.checkRecordPath,
         Policy: validator.checkPolicyScope,
         Projection: validator.checkProjectionFields,
         Endpoint: validator.checkEndpointShape,
@@ -110,6 +114,38 @@ export class ApplingValidator {
     checkSetEffect(effect: SetEffect, accept: ValidationAcceptor): void {
         if (effect.field.ref?.modifiers.includes('state')) {
             accept('error', 'A state field changes only through a machine transition.', { node: effect, property: 'field' });
+        }
+    }
+
+    checkForEffect(effect: ForEffect, accept: ValidationAcceptor): void {
+        const field = effect.collection.ref;
+        if (field && !(field.type.many && isEntity(field.type.decl?.ref))) {
+            accept('error', `"for" iterates a collection relationship of ${field.$container.name}, and ${field.name} is no list of records.`, { node: effect, property: 'collection' });
+        }
+    }
+
+    /** A loop variable or `as` name may not hide a name the effect already sees. */
+    checkEffectBinding(effect: ForEffect | CreateEffect, accept: ValidationAcceptor): void {
+        if (effect.variable && new ExpressionTyper(this.services).namesAt(effect).includes(effect.variable)) {
+            accept('error', `"${effect.variable}" is already a name here; pick another one.`, { node: effect, property: 'variable' });
+        }
+    }
+
+    /** `update` and `delete` change one record: their own (`delete self`) or one a relationship path leads to. */
+    checkRecordPath(effect: UpdateEffect | DeleteEffect, accept: ValidationAcceptor): void {
+        const keyword = effect.$type === 'UpdateEffect' ? 'update' : 'delete';
+        if (effect.$type === 'DeleteEffect' && effect.self) {
+            if (!effectEntity(effect)) accept('error', '"delete self" needs an action on an entity.', { node: effect, property: 'self' });
+            return;
+        }
+        const target = effect.target!;
+        const typer = new ExpressionTyper(this.services);
+        const type = typer.typeOf(target);
+        if (!type || type.kind === 'error') return;
+        const record = type.kind === 'decl' && isEntity(type.decl);
+        if (!record || !relationshipPath(target, typer)) {
+            const hint = type.kind === 'list' ? '; for every record of a collection, use "for"' : '';
+            accept('error', `"${keyword}" takes a relationship path to one record, such as item.product${hint}.`, { node: effect, property: 'target' });
         }
     }
 
@@ -238,6 +274,14 @@ function isAllowed(from: AstNode, to: AstNode): boolean {
         case 'experience':
             return target === 'application' || isAction(to) || isEnum(to) || isValueType(to);
     }
+}
+
+/** A field, loop variable or `as` name, followed by fields: `item.product`, not `this`, an input or a call. */
+function relationshipPath(expr: Expr, typer: ExpressionTyper): boolean {
+    if (isMemberExpr(expr)) return !expr.call && isField(typer.targets.get(expr)) && relationshipPath(expr.receiver, typer);
+    if (!isNameExpr(expr) || expr.call) return false;
+    const target = typer.targets.get(expr);
+    return target ? isField(target) && isEntity(target.$container) : !['this', 'actor', 'now', 'tenant'].includes(expr.name);
 }
 
 /** `false`, or every `||` branch has a positive `actor.is(...)` among its `&&` conditions. */

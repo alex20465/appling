@@ -32,6 +32,10 @@ The Go module path is the project name: the `name` option, or the output folder'
 | `action` | a function `<Action>(entity, inputs...) ([]any, error)`: preconditions return the declared errors, the state transition returns an error wrapping `ErrInvalidTransition` when the state does not allow it, effects change the record, and emitted events are returned. Once the model has a policy, it takes the actor first and returns an error wrapping `access.ErrForbidden` unless `Can<Action>` holds |
 | `create` effect | the action builds the record with `New<Entity>()` and the given fields, checks `CanCreate<Entity>` once the model has a policy, and hands it to a `create<Entity> func(*Entity) error` parameter, which stores it |
 | `emit` effect | an event struct with the given fields; an event whose required fields the effect does not give is a registry task |
+| `create ... as name` | the same, with the record in the variable `name` for the effects after it |
+| `for` effect | `for _, item := range order.Items { ... }` over the collection relationship |
+| `update` effect | assigns the fields of the record the path leads to (`item.Product.Stock = ...`), checks `CanUpdate<Entity>` once the model has a policy, and hands it to an `update<Entity> func(*Entity) error` parameter; an optional path runs inside `if ... != nil` |
+| `delete` effect | checks `CanDelete<Entity>` once the model has a policy and hands the record (`delete self`: the action's own) to a `delete<Entity> func(*Entity) error` parameter |
 | `machine` | transitions on an event become `<Machine>On<Event>(event) ([]any, error)` |
 | `errors` | `var Err<Name> = errors.New(...)` |
 | `role`, `actor`, `tenant` | the `access` package, see [Access](#access) |
@@ -131,7 +135,7 @@ The tests of the policies stay skipped, with writing their bodies as registry ta
 
 ## What becomes a task
 
-Queries, projections, interfaces, pages, flows, messages, use cases, external systems and jobs: they need storage, HTTP and scheduling decisions that the model leaves open. Queries and use cases still get their `Can...` check. Also derived fields, defaults, preconditions, guards, policies and effects that have no Go translation, such as `actor` outside a policy or a role, a `create` effect that leaves a required field without default unset or runs in a transition on an event, and an `emit` effect that leaves a required field of its event unset. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
+Queries, projections, interfaces, pages, flows, messages, use cases, external systems and jobs: they need storage, HTTP and scheduling decisions that the model leaves open. Queries and use cases still get their `Can...` check. Also derived fields, defaults, preconditions, guards, policies and effects that have no Go translation, such as `actor` outside a policy or a role, a `create`, `update` or `delete` effect that runs in a transition on an event, a `create` effect that leaves a required field without default unset, and an `emit` effect that leaves a required field of its event unset. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
 
 ## Run the generated project
 

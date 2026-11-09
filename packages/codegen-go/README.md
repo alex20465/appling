@@ -21,7 +21,7 @@ Requires Go 1.22 or later. Money and decimals use [shopspring/decimal](https://g
 | `value`, `event` | a struct with JSON tags |
 | `entity` | a struct with an `ID`, `New<Entity>()` with the defaults, a method per derived field, and `Validate()` that checks the invariants |
 | optional fields, entity references, lists | pointers, `*Entity`, slices |
-| `action` | a function on the entity that checks the preconditions (returning the declared errors), takes the state transition (`ErrInvalidTransition` otherwise), applies the effects and returns the emitted events; a `create` effect builds the record, checks it and hands it to a `create<Entity>` parameter that stores it |
+| `action` | a function on the entity that checks the preconditions (returning the declared errors), takes the state transition (`ErrInvalidTransition` otherwise), applies the effects and returns the emitted events; a `create` effect builds the record, checks it and hands it to a `create<Entity>` parameter that stores it; `for` loops over a collection relationship, and `update` and `delete` effects check the record and hand it to `update<Entity>` and `delete<Entity>` parameters |
 | `machine` | for transitions on an event, a function `<Machine>On<Event>(event)` |
 | `errors` | `Err<Name>` variables |
 | `role`, `actor`, `tenant` | the package `internal/access`: `Actor` (type, roles, tenant, the actor fields, records by ID), `Is<Role>(actor)` checks, `New<Actor>()`, and `InTenant` with `TenantID()` on every entity that belongs to the tenant |
