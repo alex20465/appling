@@ -54,6 +54,21 @@ An endpoint that targets a query must name a projection: `An endpoint exposes qu
 
 Picks resolve against the fields of the projection after `as`, including its computed fields.
 
+### Query inputs
+
+An endpoint that targets a query with [inputs](application.md#queries) takes them from the request. A `{name}` in the path names an input; every other input comes from the query string, a list input from repeated parameters.
+
+```appling
+GET "/accounts/{of}/orders" -> OrdersOf as OrderSummary { reference, status, total }
+```
+
+`GET /accounts/7/orders?since=2026-10-01T00:00:00Z` passes the account 7 as `of` and the time as `since`; without `since` it is null. An input that names an entity takes the record's id.
+
+Two rules keep the mapping sound:
+
+- Every path parameter names an input of the query: `Path parameter {id} is not an input of query OpenOrders.`
+- Every input has a type a URL can carry: a primitive other than `File`, an enum, an entity or a list of those. A value type or a file is an error: `Input range of query Q has the type Range, which a URL cannot carry.`
+
 ## Vendors
 
 An interface can name the [external](application.md#settings-and-secrets) a vendor stands behind, in two places:

@@ -78,7 +78,7 @@ Modules are named `<App>.<Module>`, with nested modules as `<App>.<A>.<B>`; a ty
 | `action` without an entity | a task to write a generic action |
 | `machine` | an AshStateMachine section (see [state machines](#state-machines)) |
 | scheduled `job` | an AshOban trigger (see [jobs](#jobs)) |
-| `query` | a read action with `filter`, `sort` and offset pagination; a filter that does not translate becomes `filter expr(false)` plus a task, so the action reads nothing until the filter is written |
+| `query` | a read action with `filter`, `sort` and offset pagination; its inputs become `argument`s (`allow_nil?` for optional ones, the id for an entity) that the filter reads as `^arg(:name)`, and `since == null` becomes `is_nil(^arg(:since))`. A filter that does not translate becomes `filter expr(false)` plus a task, so the action reads nothing until the filter is written |
 | computed projection field | a calculation on the source resource |
 | `interface rest` | AshJsonApi routes and a router served by Bandit (see [JSON:API](#jsonapi)) |
 | `actor` | the record that acts: the resource of its `is` entity, a resource of its own or a struct (see [actors](#actors)) |
@@ -192,7 +192,7 @@ When the model has pages, the project is a [Phoenix](https://phoenixframework.or
 
 | Component | LiveView |
 |---|---|
-| `list` | the query's read action, paginated when the query has a page size, in a `.table` with one column per projection field |
+| `list` | the query's read action, paginated when the query has a page size, in a `.table` with one column per projection field; the query's inputs come from the page's parameters through `Ash.Query.for_read` |
 | `detail` | `Ash.get!` of the record in the route's `:id`, in a `.list` |
 | `form` | an `AshPhoenix.Form` for the action on the record in `:id`, with an input per action input |
 | row and detail actions | a button per action without required inputs, running it and reporting the outcome as a flash |
@@ -206,7 +206,7 @@ Flows, navigation items to pages that need an id, actions with required inputs o
 A REST interface becomes [AshJsonApi](https://hexdocs.pm/ash_json_api) routes. With pages it is served through Phoenix, otherwise through Bandit:
 
 - Each resource with an endpoint gets the `AshJsonApi.Resource` extension and a `json_api` type.
-- The domain gets the `AshJsonApi.Domain` extension and a `base_route "/"` per resource. `GET` on a query becomes an `index` route, with `default_fields` from `picks`. `POST`, `PUT` or `PATCH` on an action of an entity, with `{id}` in the path, becomes a `patch` route; `POST` and `PUT` are served as `PATCH`, which a task notes.
+- The domain gets the `AshJsonApi.Domain` extension and a `base_route "/"` per resource. `GET` on a query becomes an `index` route, with `default_fields` from `picks`; AshJsonApi passes the path parameters and the query string to the read action's arguments. `POST`, `PUT` or `PATCH` on an action of an entity, with `{id}` in the path, becomes a `patch` route; `POST` and `PUT` are served as `PATCH`, which a task notes.
 - With pages, the domains are added to the `<App>Web.AshJsonApiRouter` that the AshJsonApi installer creates, which the Phoenix router forwards under `/api/json`, with Swagger UI at `/api/json/swaggerui`.
 - Without pages, `lib/<app>/api_router.ex` defines `<App>.ApiRouter` with `use AshJsonApi.Router` over the domains and an OpenAPI document at `/open_api`, and the application starts `{Bandit, plug: <App>.ApiRouter, port: 4000}`.
 

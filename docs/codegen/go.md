@@ -110,7 +110,7 @@ Each policy becomes an unexported function in its module's `policies.go`, such a
 |---|---|
 | `entity` | `Can<Op><Entity>(actor, record)` for `Read`, `Create`, `Update` and `Delete`, false for an operation no policy grants; `Can<Op><Entity><Field>` for the fields a field policy narrows. A record in the tenant also needs `InTenant` |
 | `action` | `Can<Action>(actor, record, inputs...)`: the update check of its entity and the action's own policies, false when there is neither; the action calls it first. An action without an entity that creates records and has no policy of its own checks `CanCreate<Entity>` on each record instead |
-| `query` | `Can<Query>(actor, record)`: the read check of its entity and the query's own policies, for the storage layer to apply per record |
+| `query` | `Can<Query>(actor, record, inputs...)`: the read check of its entity and the query's own policies, for the storage layer to apply per record |
 | `usecase` | `Can<UseCase>(actor, params...)` from its own policies; the actions it runs check themselves |
 
 Once the model has any policy, an operation that no policy covers is denied, the same rule as the [Django extension](django.md): an entity without policies gets checks that all return false, so its actions are forbidden too. A model without policies generates no checks, and its actions take no actor; only a [tenant](../language/access.md) then guards the actions on records in the tenant. Transitions on an event run without an actor and check nothing. A policy whose condition has no Go translation returns false, so it grants nothing until you write it; the registry lists it as a task.
@@ -131,7 +131,7 @@ The tests of the policies stay skipped, with writing their bodies as registry ta
 
 ## What becomes a task
 
-Queries, projections, interfaces, pages, flows, messages, use cases, external systems and jobs: they need storage, HTTP and scheduling decisions that the model leaves open. Queries and use cases still get their `Can...` check. Also derived fields, defaults, preconditions, guards, policies and effects that have no Go translation, such as `actor` outside a policy or a role, a `create` effect that leaves a required field without default unset or runs in a transition on an event, and an `emit` effect that leaves a required field of its event unset. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
+Queries, projections, interfaces, pages, flows, messages, use cases, external systems and jobs: they need storage, HTTP and scheduling decisions that the model leaves open. Queries and use cases still get their `Can...` check, and a query whose filter translates gets `In<Query>(record, inputs...) bool` in `queries.go`, which says whether a record belongs to its results, so the storage layer can apply it. Also derived fields, defaults, preconditions, guards, policies and effects that have no Go translation, such as `actor` outside a policy or a role, a `create` effect that leaves a required field without default unset or runs in a transition on an event, and an `emit` effect that leaves a required field of its event unset. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
 
 ## Run the generated project
 
