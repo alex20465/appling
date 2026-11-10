@@ -214,16 +214,16 @@ function movesFrom(from: string, transition: GraphNode, plan: TransitionPlan, en
     return invariants.every(i => holds(i, context, after));
 }
 
-function enforcedInvariants(entity: GraphNode, context: MapContext): GraphNode[] {
+export function enforcedInvariants(entity: GraphNode, context: MapContext): GraphNode[] {
     return context.children(entity.qn).filter(n => n.kind === 'Invariant' && check(n, context));
 }
 
-function holds(invariant: GraphNode, context: MapContext, self: SimRecord): boolean {
+export function holds(invariant: GraphNode, context: MapContext, self: SimRecord): boolean {
     return simulator(context).evaluate(invariant.data.condition as ExprData, { self }) === true;
 }
 
 /** A sample value of a required attribute without a default; undefined when there is none, such as for a file. */
-function sample(name: string, type: TypeData, context: MapContext): Sample | undefined {
+export function sample(name: string, type: TypeData, context: MapContext): Sample | undefined {
     if (type.decl) {
         const decl = context.node(type.decl)!;
         const first = decl.kind === 'Enum' ? context.children(decl.qn)[0] : undefined;
@@ -261,7 +261,7 @@ function candidates(type: TypeData, context: MapContext): Sample[] {
 }
 
 /** The qualified names the expression compares; a name only tested by `has()` is left out, its nil is meant. */
-function targets(expr: unknown, found: Set<string> = new Set()): Set<string> {
+export function targets(expr: unknown, found: Set<string> = new Set()): Set<string> {
     if (Array.isArray(expr)) {
         for (const item of expr) targets(item, found);
     } else if (expr && typeof expr === 'object') {

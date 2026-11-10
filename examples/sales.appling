@@ -132,4 +132,38 @@ module sales {
   messages en {
     OrderSummary.total = "Total"
   }
+
+  // Scenarios: checked by the simulator in `appling check`, generated as tests
+  scenario ClerkCancelsDraft does "A clerk cancels a draft order" {
+    given {
+      acme = create crm.Account { name = "Acme" }
+      order = create Order { reference = "A-1", customer = acme }
+    }
+    as crm.Clerk
+    when Cancel(order, "changed mind")
+    then {
+      order.status == cancelled
+    }
+  }
+
+  scenario EmptyOrderIsRefused {
+    given {
+      acme = create crm.Account { name = "Acme" }
+      order = create Order { reference = "A-2", customer = acme }
+    }
+    as Shopper { account = acme }
+    when PlaceOrder(order)
+    then fails EmptyOrder
+  }
+
+  scenario OnlyOwnOrders {
+    given {
+      acme = create crm.Account { name = "Acme" }
+      globex = create crm.Account { name = "Globex" }
+      order = create Order { reference = "A-3", customer = acme }
+    }
+    as Shopper { account = globex }
+    when PlaceOrder(order)
+    then refused
+  }
 }

@@ -271,3 +271,26 @@ function onActor(expr: ExprData): ExprData {
     for (const key of ['args', 'items'] as const) if (expr[key]) mapped[key] = expr[key].map(onActor);
     return mapped;
 }
+
+/** Whether a policy becomes an Ash policy with its own checks, not one that forbids until a person writes it. */
+export function policyTranslates(policy: GraphNode, context: MapContext): boolean {
+    const owner = context.node(parentOf(policy.qn))!;
+    const fields = (policy.data.fields ?? []) as string[];
+    return !!policyTarget(owner, (policy.data.operations ?? []) as string[], fields, context)
+        && !!checkLines(policy.data.condition as ExprData, context, fields.length > 0);
+}
+
+/**
+ * Whether the checks a condition names with `actor.is` answer for a record of `home` as the model does: no role
+ * check of the home leaves its condition to a task, also for the roles that role conditions name in turn.
+ */
+export function checksAnswer(condition: ExprData | undefined, home: ActorHome, context: MapContext, seen = new Set<string>()): boolean {
+    if (!condition) return true;
+    const named = isTarget(condition, context);
+    if (named?.kind === 'Role' && !seen.has(named.qn)) {
+        seen.add(named.qn);
+        if (rolesOf(home).includes(named.qn) && roleClause(named, home, context) === 'unknown') return false;
+        if (!checksAnswer(named.data.condition as ExprData | undefined, home, context, seen)) return false;
+    }
+    return children(condition).every(c => checksAnswer(c, home, context, seen));
+}

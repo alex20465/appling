@@ -9,3 +9,4 @@ export * from './relevance.js';
 export * from './diff.js';
 export * from './implementation.js';
 export * from './anchors.js';
+export * from './scenarios.js';

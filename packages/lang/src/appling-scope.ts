@@ -4,10 +4,11 @@ import {
 } from 'langium';
 import {
     isAction, isCallStep, isEndpoint, isDetailView, isExport, isExternalOperation, isHandler, isListView,
-    isModule, isQuery, isSetEffect, isSort, isTransition, isMachine, isForEffect, isUpdateEffect, isEntity,
+    isModule, isQuery, isScenario, isSetEffect, isSort, isTransition, isMachine, isForEffect, isUpdateEffect, isEntity,
     type Entity, type Expr, type Model, type Module, type Projection
 } from './generated/ast.js';
 import { ExpressionTyper } from './appling-types.js';
+import { scenarioErrors } from './appling-scenario.js';
 import type { ApplingServices } from './appling-module.js';
 
 /**
@@ -84,6 +85,9 @@ export class ApplingScopeProvider extends DefaultScopeProvider {
         if (isHandler(node)) {
             const target = AstUtils.getContainerOfType(node, isCallStep)?.call.target.ref;
             return isAction(target) || isExternalOperation(target) ? this.createScopeForNodes(target.errors) : EMPTY_SCOPE;
+        }
+        if (isScenario(node) && context.property === 'error') {
+            return this.createScopeForNodes(scenarioErrors(node));
         }
         return super.getScope(context);
     }

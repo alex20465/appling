@@ -119,6 +119,8 @@ Names in expressions are not references. They resolve by the position of the exp
 | Use case `policy` | The use case's parameters | `Bool` |
 | Role condition | Only `actor`, `tenant` and `now` | `Bool` |
 | Call arguments in `step`, `on ... do`, `await ... do` | The use case's parameters | The parameter type at that position |
+| Scenario `given` values | The rows bound before it in the same `given` | The assigned field's type |
+| Scenario `as` field values, `when` arguments, `then` checks and `emitted` values | Every row the `given` binds | The field or parameter type; a check is `Bool` |
 
 An action without `on <Entity>` has no `this` and no entity fields, only its inputs.
 

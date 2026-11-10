@@ -246,7 +246,7 @@ function accessCode(context: MapContext, access: RustAccess): string {
     return `${blocks.join('\n\n')}\n`;
 }
 
-function roleCondition(role: GraphNode, context: MapContext, access: RustAccess): string | undefined {
+export function roleCondition(role: GraphNode, context: MapContext, access: RustAccess = accessOf(context)): string | undefined {
     const scope: RustScope = { node: context.node, module: access.module, actor: 'actor', access };
     return rustExpr(role.data.condition as ExprData, scope);
 }

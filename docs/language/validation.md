@@ -68,29 +68,6 @@ See [descriptions](descriptions.md#naming-elements).
 | Every state in a transition is a value of the field's enum | `"<state>" is not a value of <Enum>.` |
 | A `set` effect never changes a `state` field | `A state field changes only through a machine transition.` |
 
-```appling
-enum Status {
-  open
-  done
-}
-entity Order {
-  status: Status state
-  kind: Status
-}
-action Close on Order {
-}
-action Reopen on Order {
-  effect {
-    set status = open // A state field changes only through a machine transition.
-  }
-}
-machine KindFlow on Order.kind { // A machine must govern an entity field marked "state" with an enum type.
-}
-machine Flow on Order.status {
-  transition open -> closed via Close // "closed" is not a value of Status.
-}
-```
-
 ## Effects
 
 | Rule | Message |
@@ -102,32 +79,6 @@ machine Flow on Order.status {
 
 A loop variable is visible inside its loop and an `as` name after its `create` only; elsewhere they are `Unknown name "<name>".` A `set` inside `update` names a field of the updated record, or `Could not resolve reference to Field named '<field>'.`
 
-```appling
-entity Product {
-  stock: Int
-}
-entity Cart {
-  items: Product[]
-  tags: String[]
-}
-action Clear on Cart {
-  effect {
-    for tag in tags { // "for" iterates a collection relationship of Cart, and tags is no list of records.
-    }
-    for items in items { // "items" is already a name here; pick another one.
-    }
-    update items { // "update" takes a relationship path to one record, such as item.product; for every record of a collection, use "for".
-      set stock = 0
-    }
-  }
-}
-action Reset {
-  effect {
-    delete self // "delete self" needs an action on an entity.
-  }
-}
-```
-
 ## Policies
 
 | Rule | Message |
@@ -135,18 +86,6 @@ action Reset {
 | Operations and `fields` appear only on entity policies | `Operations and fields narrow entity policies only.` |
 | Every `\|\|` branch of a policy grants by role (warning) | `A policy grants by role: every "\|\|" branch needs actor.is(Role), or write { false }.` |
 | A role condition reads only `actor`, `tenant` and `now` | `A role condition reads only actor, tenant and now, not "<name>".` |
-
-```appling
-action Edit on Order {
-  policy read { true } // Operations and fields narrow entity policies only.
-}
-
-action Close on Order {
-  policy { true } // A policy grants by role: every "||" branch needs actor.is(Role), or write { false }.
-}
-
-role Clerk { status == open } // A role condition reads only actor, tenant and now, not "status".
-```
 
 ## Projections and endpoints
 
@@ -157,25 +96,6 @@ role Clerk { status == open } // A role condition reads only actor, tenant and n
 | A query input does not have the name of a field of the query's entity | `Input <name> of query <Query> hides the field <name> of <Entity>; rename the input.` |
 | Every `{name}` in the path of a query endpoint names an input of the query | `Path parameter {<name>} is not an input of query <Query>.` |
 | The inputs of a query endpoint have types a URL can carry: no value type, no `File` | `Input <name> of query <Query> has the type <Type>, which a URL cannot carry.` |
-
-```appling
-projection Summary from Order {
-  missing // Order has no field "missing". Use "missing = <expression>" for a computed field.
-}
-query All from Order {
-}
-query Within from Order {
-  input {
-    note: String // Input note of query Within hides the field note of Order; rename the input.
-    range: Range
-  }
-}
-interface rest Api {
-  GET "/orders" -> All // An endpoint exposes query results only through a projection: add "as <Projection>".
-  GET "/orders/{id}" -> Within as Summary // Path parameter {id} is not an input of query Within.
-  // and: Input range of query Within has the type Range, which a URL cannot carry.
-}
-```
 
 ## Externals and vendors
 
@@ -214,6 +134,19 @@ migration One {
 
 See [migrations](migrations.md#the-replay-rule) for how steps are replayed.
 
+## Scenarios
+
+| Rule | Message |
+|---|---|
+| A name is given once per scenario | `"<name>" is already given in this scenario.` |
+| A role after `as` is held by some actor | `No actor holds the role <Role>: declare one with "roles <Role>" or name an actor.` |
+| Actor fields follow an actor, not a role | `Role <Role> has no fields: name an actor after "as" to give "<field>".` |
+| An actor field exists on the actor or its entity | `Actor <Actor> has no field "<field>".` |
+| `when` calls an action or a use case | `A scenario's when calls an action or a use case, not query <Query>.` (or `external operation <Op>`) |
+| `fails <Error>` names an error of the action, or of what the use case calls | `Could not resolve reference to ErrorDecl named '<name>'.` |
+| A scenario's `then` holds when the simulator runs it (`appling check` only, once nothing else fails) | `Scenario <Name> fails: <reason>.`, see [scenarios](scenarios.md#how-check-runs-scenarios) |
+
+
 ## Expressions
 
 The expression typer checks every expression and every call. See [expressions](expressions.md) for the typing rules.
@@ -226,41 +159,17 @@ The expression typer checks every expression and every call. See [expressions](e
 | `tenant` is read only when the workspace declares exactly one tenant | `"tenant" needs exactly one tenant in the workspace, which declares no tenant.` (or `declares <n> tenants`) |
 | An enum value named with its enum exists in that enum | `Enum <Enum> has no value "<name>".` |
 | A field access names a field of the receiver | `<Type> has no field "<field>".` |
-| An assignment in `create` or `emit` names a field of the entity or event | `<Entity or Event> has no field "<name>".` |
-
-```appling
-entity Note {
-  o: Order
-  invariant "a" { missing } // Unknown name "missing".
-  invariant "b" { o.nope == 1 } // Order has no field "nope".
-  invariant "c" { o.status != OrderStatus.gone } // Enum OrderStatus has no value "gone".
-}
-action Finish on Order {
-  effect {
-    emit Closed { nope = this } // Closed has no field "nope".
-  }
-}
-```
+| An assignment in `create`, `emit` or a scenario's `given` or `emitted` names a field of the entity or event | `<Entity or Event> has no field "<name>".` |
 
 ### Types
 
 | Rule | Message |
 |---|---|
-| A condition is `Bool` (invariants, policies, preconditions, guards, filters, `filter`/`exists`/`all` bodies) | `A condition must be Bool, not <Type>.` |
+| A condition is `Bool` (invariants, policies, preconditions, guards, filters, scenario checks, `filter`/`exists`/`all` bodies) | `A condition must be Bool, not <Type>.` |
 | A value fits the field or parameter it is assigned to; `null` fits only optional types | `<Type> is not assignable to <Type>.` |
 | A prefix operator applies to its operand (`!` to `Bool`, `-` to numbers and `Duration`) | `Operator "<op>" does not apply to <Type>.` |
 | A binary operator applies to its operands | `Operator "<op>" does not apply to <Type> and <Type>.` |
 | An index applies to a list with an `Int` | `<Type> cannot be indexed by <Type>.` |
-
-```appling
-entity Note {
-  count: Int default "zero" // String is not assignable to Int.
-  other: Int default null // null is not assignable to Int.
-  invariant "a" { 1 + 2 } // A condition must be Bool, not Int.
-  invariant "b" { "a" > 1 } // Operator ">" does not apply to String and Int.
-  invariant "c" { !1 } // Operator "!" does not apply to Int.
-}
-```
 
 ### Functions and methods
 
@@ -276,38 +185,12 @@ entity Note {
 | `actor.is` takes exactly one name | `actor.is() takes one role or actor name.` |
 | The name in `actor.is` is a visible role or actor | `"<name>" is not a role or actor.` |
 
-```appling
-entity Note {
-  n: Int
-  l: Int[]
-  d: Duration = duration(1) // duration() takes a String, not Int.
-  invariant "a" { nope(1) } // Unknown function "nope".
-  invariant "b" { n.upper() } // Int has no method "upper" for these arguments.
-  invariant "c" { l.exists(1) } // exists() takes a variable name and an expression.
-  policy read { actor.is(Nobody) } // "Nobody" is not a role or actor.
-}
-```
-
 ### Calls
 
 | Rule | Message |
 |---|---|
-| A call in a use case passes as many arguments as the target takes: an action on an entity takes the entity and its inputs, a query takes its inputs, optional inputs and parameters may be left out | `<Target> takes <n> argument(s), got <m>.` or `<Target> takes <n> to <m> argument(s), got <k>.` |
+| A call in a use case or a scenario passes as many arguments as the target takes: an action on an entity takes the entity and its inputs, a query takes its inputs, optional inputs and parameters may be left out | `<Target> takes <n> argument(s), got <m>.` or `<Target> takes <n> to <m> argument(s), got <k>.` |
 | Each argument fits its parameter | `<Type> is not assignable to <Type>.` |
-
-```appling
-action Close on Order {
-  input {
-    reason: String?
-  }
-}
-usecase A (o: Order) {
-  step Close() // Close takes 1 to 2 argument(s), got 0.
-}
-usecase B (o: Order) {
-  step Close(o, 5) // Int is not assignable to String?.
-}
-```
 
 ## Not checked
 

@@ -1,6 +1,6 @@
 import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
-import { Simulator, throughPath, UNKNOWN, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
-import { accessFile, accessOf, accessSteps, actorFieldType, tenantOf, tenantPaths } from './access.js';
+import { coveredByScenarios, scenarioCall, Simulator, throughPath, UNKNOWN, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
+import { accessFile, accessOf, accessSteps, actorFields, actorFieldType, tenantOf, tenantPaths } from './access.js';
 import { camel, enumConstant, goExpr, goTerm, pascal, PRIMITIVES, qualify, type GoScope } from './golang.js';
 
 const DECIMAL = 'github.com/shopspring/decimal';
@@ -38,7 +38,8 @@ const extension: CodegenExtension = {
                 return accessSteps(node, context);
             case 'Action': return actionSteps(node, context);
             case 'Machine': return machineSteps(node, context);
-            case 'Transition': return transitionTestSteps(node, context);
+            case 'Transition': return covered(context).has(node.qn) ? [] : transitionTestSteps(node, context);
+            case 'Scenario': return scenarioSteps(node, context);
             case 'EnumLiteral':
             case 'Param':
             case 'SetEffect':
@@ -151,6 +152,12 @@ function validation(invariant: GraphNode, context: MapContext): string | undefin
  * checks the current state, effects change the record, and emitted events are returned.
  */
 function actionSteps(action: GraphNode, context: MapContext): Step[] {
+    const { step, tasks } = actionCode(action, context);
+    return [step, ...guardSteps(action, context), ...tasks, ...(covered(context).has(action.qn) ? [] : testSteps(action, context))];
+}
+
+/** The generated function of an action, the tasks for what it leaves out, and what it takes besides the record and the inputs. */
+function actionCode(action: GraphNode, context: MapContext): { step: Step, tasks: Step[], takesActor: boolean, creates: GraphNode[] } {
     const imports = new Set<string>();
     const entity = action.data.entity ? context.node(action.data.entity as string) : undefined;
     const self = entity ? camel(last(entity.qn)) : undefined;
@@ -160,7 +167,7 @@ function actionSteps(action: GraphNode, context: MapContext): Step[] {
     const guard = guardOf(action, context);
     if (guard) {
         imports.add('fmt');
-        body.push(`if !${guard.name}(${['actor', ...guard.args].join(', ')}) {`, `\treturn nil, fmt.Errorf("%w: ${last(action.qn)}", ${accessIn(scope, 'ErrForbidden')})`, '}');
+        body.push(`if !actor.IsSystem() && !${guard.name}(${['actor', ...guard.args].join(', ')}) {`, `\treturn nil, fmt.Errorf("%w: ${last(action.qn)}", ${accessIn(scope, 'ErrForbidden')})`, '}');
     }
     ((action.data.preconditions ?? []) as { condition: ExprData, error?: string }[]).forEach((precondition, i) => {
         const condition = goExpr(precondition.condition, scope);
@@ -178,15 +185,16 @@ function actionSteps(action: GraphNode, context: MapContext): Step[] {
     if (transitions.length && self) body.push(...transitionSwitch(transitions, self, last(action.qn), scope, context, tasks, creating));
     body.push(...effectBlock(action, self, scope, context, tasks, creating));
     body.push('return events, nil');
+    const takesActor = !!guard || enforced(context);
     const params = [
-        ...(guard || enforced(context) ? [`actor ${accessIn(scope, 'Actor')}`] : []),
+        ...(takesActor ? [`actor ${accessIn(scope, 'Actor')}`] : []),
         ...(entity ? [`${self} ${typeOf({ $type: 'TypeRef', decl: entity.qn } as TypeData, scope)}`] : []),
         ...context.children(action.qn).filter(c => c.kind === 'Param').map(p => `${camel(last(p.qn))} ${typeOf(p.data.type as TypeData, scope)}`),
         ...stores(creating).map(([name, e]) => `${name} func(${typeOf({ $type: 'TypeRef', decl: e.qn } as TypeData, scope)}) error`)
     ];
     const stored = stores(creating).length ? ` The records it creates, updates or deletes go to the store functions, which write them.` : '';
     const code = [`// ${last(action.qn)} is the action ${action.qn}. It returns the events it emits.${stored}`, `func ${last(action.qn)}(${params.join(', ')}) ([]any, error) {`, ...body.map(l => `\t${l}`), '}'].join('\n');
-    return [goFile(action.module, 'actions.go', context, imports, code), ...guardSteps(action, context), ...tasks, ...testSteps(action, context)];
+    return { step: goFile(action.module, 'actions.go', context, imports, code), tasks, takesActor, creates: stores(creating).map(([, e]) => e) };
 }
 
 /**
@@ -491,7 +499,7 @@ function recordLines(effect: GraphNode, self: string | undefined, scope: GoScope
     }
     (operation === 'update' ? creating.updates : creating.deletes).set(entity.qn, entity);
     const check = enforced(context) ? [
-        `if !${entity.module === effect.module ? '' : `${qualifyModule(entity.module, scope)}.`}Can${pascal(operation)}${last(entity.qn)}(actor, ${path}) {`,
+        `if !actor.IsSystem() && !${entity.module === effect.module ? '' : `${qualifyModule(entity.module, scope)}.`}Can${pascal(operation)}${last(entity.qn)}(actor, ${path}) {`,
         `\treturn nil, fmt.Errorf("%w: ${creating.action}", ${accessIn(scope, 'ErrForbidden')})`,
         '}'
     ] : [];
@@ -525,7 +533,7 @@ function createLines(effect: GraphNode, entity: GraphNode, scope: GoScope, conte
     const name = qualify(entity, scope);
     const constructor = name.includes('.') ? name.replace(/\.(\w+)$/, '.New$1') : `New${name}`;
     const check = enforced(context) ? [
-        `if !${entity.module === effect.module ? '' : `${qualifyModule(entity.module, scope)}.`}CanCreate${last(entity.qn)}(actor, ${record}) {`,
+        `if !actor.IsSystem() && !${entity.module === effect.module ? '' : `${qualifyModule(entity.module, scope)}.`}CanCreate${last(entity.qn)}(actor, ${record}) {`,
         `\treturn nil, fmt.Errorf("%w: ${creating.action}", ${accessIn(scope, 'ErrForbidden')})`,
         '}'
     ] : [];
@@ -554,7 +562,8 @@ function assigned(field: GraphNode, expr: ExprData, scope: GoScope): string | un
     if (term.null) return type.optional || type.many || entity ? 'nil' : undefined;
     if (term.empty && type.many) return `${typeOf(type, scope)}{}`;
     if (entity || type.many) return term.raw;
-    if (type.optional) return term.pointer ? term.raw : `ptr(${coerce(term.value, field)})`;
+    // An untyped constant would make `ptr` return *int.
+    if (type.optional) return term.pointer ? term.raw : `ptr${type.primitive === 'Int' ? '[int64]' : ''}(${coerce(term.value, field)})`;
     return coerce(term.value, field);
 }
 
@@ -920,10 +929,13 @@ function goScope(node: GraphNode, context: MapContext, imports: Set<string>): Go
     return { node: context.node, pkg: pkgOf(node.module || node.qn), imports, importOf: module => importPath(module, context), access: accessOf(context) };
 }
 
-/** Adds a block to a Go file of a module's package, merging its imports; gofmt formats the result at the end. */
-function goFile(module: string, file: string, context: MapContext, imports: Set<string>, block: string): Step {
-    const pkg = pkgOf(module);
-    const own = importPath(module, context);
+/**
+ * Adds a block to a Go file of a module's package, merging its imports; gofmt formats the result at the end. An
+ * external test file belongs to the package `<pkg>_test`, which imports the module's package like any other.
+ */
+function goFile(module: string, file: string, context: MapContext, imports: Set<string>, block: string, external = false): Step {
+    const pkg = external ? `${pkgOf(module)}_test` : pkgOf(module);
+    const own = external ? undefined : importPath(module, context);
     return {
         kind: 'template', file: `${dirOf(module)}/${file}`, write: existing => {
             const text = existing ?? `package ${pkg}\n`;
@@ -971,4 +983,222 @@ function task(what: string): Step {
 /** A registry task the model leaves to the code by design (`docs/concept.md` section 8): it does not lower the coverage. */
 function leftToCode(what: string): Step {
     return { kind: 'task', what, leftToCode: true };
+}
+
+const coverage = new WeakMap<Graph, Set<string>>();
+
+/** The actions, use cases and transitions the scenarios run; their guessed tests give way to the scenario tests. */
+function covered(context: MapContext): Set<string> {
+    let found = coverage.get(context.graph);
+    if (!found) coverage.set(context.graph, found = coveredByScenarios(context.graph));
+    return found;
+}
+
+interface AssignmentData { name: string, value: ExprData }
+interface FixtureData { name?: string, entity: string, assignments?: AssignmentData[] }
+interface CheckData { $type: string, condition?: ExprData, event?: string, assignments?: AssignmentData[] }
+
+/** Why a scenario has no generated test; it becomes the task of the skipped test. */
+class Unsupported extends Error {}
+
+/** Names a scenario test declares or reads itself, which a binding must not shadow. */
+const GO_NAMES = new Set([
+    'break', 'case', 'chan', 'const', 'continue', 'default', 'defer', 'else', 'fallthrough', 'for', 'func', 'go', 'goto', 'if', 'import',
+    'interface', 'map', 'package', 'range', 'return', 'select', 'struct', 'switch', 'type', 'var',
+    'any', 'append', 'bool', 'error', 'false', 'int64', 'len', 'make', 'new', 'nil', 'string', 'true',
+    't', 'err', 'events', 'event', 'got', 'ok', 'actor', 'ptr', 'decimal', 'errors', 'slices', 'strings', 'regexp', 'testing', 'time'
+]);
+
+/**
+ * A scenario becomes `TestScenario<Name>` in its module's test file: the given rows built with `New<Entity>`, an
+ * ID each, the given values and a sample for every other required field; the actor built with `access.New<Actor>`
+ * and its given fields (`access.System()` when the scenario has none, which the actions do not check); one call of
+ * the action; and the assertions of `then`. Without a test it stays a skipped test with a registry task.
+ */
+function scenarioSteps(scenario: GraphNode, context: MapContext): Step[] {
+    const name = `TestScenario${pascal(last(scenario.qn))}`;
+    const file = 'scenarios_test.go';
+    const imports = new Set(['testing']);
+    try {
+        const lines = scenarioTest(scenario, context, imports);
+        const does = scenario.data.does ? `: ${String(scenario.data.does).trim().replace(/\s+/g, ' ')}` : '.';
+        const comment = [`// ${name} runs the scenario ${scenario.qn}${does}`];
+        const helper = goFile(scenario.module, file, context, new Set(), '// ptr returns a pointer to a copy of v, for optional fields.\nfunc ptr[T any](v T) *T { return &v }', true) as Extract<Step, { kind: 'template' }>;
+        return [
+            { ...helper, write: existing => existing?.includes('\nfunc ptr[') ? existing : helper.write(existing) },
+            goFile(scenario.module, file, context, imports, [...comment, `func ${name}(t *testing.T) {`, ...lines.map(l => `\t${l}`), '}'].join('\n'), true)
+        ];
+    } catch (error) {
+        if (!(error instanceof Unsupported)) throw error;
+        const code = `func ${name}(t *testing.T) {\n\tt.Skip(${JSON.stringify(`registry task: ${scenario.qn}`)})\n}`;
+        return [goFile(scenario.module, file, context, new Set(['testing']), code, true), task(`write the test ${name}: ${error.message}`)];
+    }
+}
+
+function scenarioTest(scenario: GraphNode, context: MapContext, imports: Set<string>): string[] {
+    const data = scenario.data;
+    let result: ReturnType<Simulator['scenario']>;
+    try {
+        result = simulator(context).scenario(scenario.qn);
+    } catch (error) {
+        throw new Unsupported(`the simulator cannot run the scenario: ${(error as Error).message}`);
+    }
+    if (!result.passed) throw new Unsupported(`the simulator does not pass the scenario: ${result.failures.join(' ')}`);
+    const call = scenarioCall(scenario);
+    const target = context.node(call.target);
+    if (!target) throw new Unsupported('the scenario calls nothing the extension knows');
+    if (target.kind !== 'Action') throw new Unsupported(`${last(target.qn)} is a ${target.kind === 'UseCase' ? 'use case' : target.kind.toLowerCase()}, which the Go extension leaves to you`);
+    const code = actionCode(target, context);
+    if (code.tasks.length) throw new Unsupported(`${last(target.qn)} is not fully generated (${code.tasks.map(t => t.kind === 'task' ? t.what : '').join('; ')})`);
+    // The test is in the external package `<pkg>_test`, so every name of the module's package is qualified.
+    const scope: GoScope = { ...goScope(scenario, context, imports), pkg: `${pkgOf(scenario.module)}_test`, vars: new Map(), rename: new Map() };
+    const fixtures = (data.fixtures ?? []) as FixtureData[];
+    const reserved = new Set([...GO_NAMES, accessOf(context).pkg, ...context.graph.nodes.filter(n => n.kind === 'Module').map(n => pkgOf(n.qn))]);
+    const lines: string[] = [];
+
+    // given: the rows, built as the simulator builds them, each with its own ID so records compare by identity.
+    fixtures.forEach((fixture, i) => {
+        const entity = context.node(fixture.entity)!;
+        let variable = fixture.name ? (reserved.has(fixture.name) ? `${fixture.name}Row` : fixture.name) : `row${i + 1}`;
+        while (!fixture.name && fixtures.some(f => f.name === variable)) variable = `${variable}_`;
+        const constructor = qualify(entity, scope).replace(/(\w+)$/, 'New$1');
+        lines.push(`${variable} := ${constructor}()`, `${variable}.ID = ${i + 1}`);
+        const given = new Map((fixture.assignments ?? []).map(a => [a.name, a.value]));
+        for (const field of fieldsOf(entity, context).filter(f => !f.data.derived)) {
+            const type = field.data.type as TypeData;
+            const fieldName = last(field.qn);
+            const expr = given.get(fieldName);
+            if (expr) {
+                const value = valueOf(type, expr, scope);
+                if (!value) throw new Unsupported(`the value of ${fieldName} in ${variable} has no Go translation`);
+                lines.push(`${variable}.${pascal(fieldName)} = ${value}`);
+            } else if (field.data.default) {
+                if (!defaultValue(field, { ...scope, imports: new Set(), self: 'x' })) throw new Unsupported(`New${last(entity.qn)} does not set the default of ${fieldName}`);
+            } else if (!type.optional && !type.many) {
+                const sample = goSample(fieldName, type, scope, context);
+                if (sample) lines.push(`${variable}.${pascal(fieldName)} = ${sample.go}`);
+            }
+        }
+        if (fixture.name) {
+            scope.vars!.set(fixture.name, 'other');
+            if (variable !== fixture.name) scope.rename!.set(fixture.name, variable);
+        }
+    });
+
+    // as: the declared actor, or the first one carrying the role, with the given fields.
+    const persona = data.actor as { persona: string, assignments?: AssignmentData[] } | undefined;
+    if (persona) {
+        const named = context.node(persona.persona)!;
+        const actor = named.kind === 'Role' ? context.graph.nodes.find(n => n.kind === 'Actor' && ((n.data.roles ?? []) as string[]).includes(named.qn)) : named;
+        if (!actor) throw new Unsupported(`no declared actor carries the role ${last(named.qn)}`);
+        lines.push(`actor := ${accessIn(scope, `New${accessOf(context).name(actor.qn)}`)}()`);
+        for (const assignment of persona.assignments ?? []) {
+            const field = actorFields(context).find(f => last(f.qn) === assignment.name);
+            if (!field || !actorFieldType(field, context, new Set())) throw new Unsupported(`the actor field ${assignment.name} has no form in the access package`);
+            const type = field.data.type as TypeData;
+            const term = goTerm(assignment.value, scope);
+            if (!term || type.many) throw new Unsupported(`the value of the actor field ${assignment.name} has no Go translation`);
+            if (term.null) continue;
+            const value = type.decl ? `ptr(${term.value}.ID)` : valueOf({ ...type, optional: true }, assignment.value, scope);
+            lines.push(`actor.${pascal(assignment.name)} = ${value}`);
+        }
+        if (!code.takesActor) lines.push('_ = actor');
+        scope.actor = 'actor';
+        if (code.takesActor && enforced(context)) checkedPolicies(target, code.creates, context);
+    }
+
+    // when: the action, with the record first, then the inputs and a create function per created entity that stores nothing.
+    const entity = target.data.entity ? context.node(target.data.entity as string) : undefined;
+    const given = [...call.args];
+    const args: string[] = [];
+    if (code.takesActor) args.push(persona ? 'actor' : `${accessIn(scope, 'System')}()`);
+    if (entity) {
+        const record = given.shift();
+        const value = record && valueOf({ $type: 'TypeRef', decl: entity.qn } as TypeData, record, scope);
+        if (!value) throw new Unsupported(`the record passed to ${last(target.qn)} has no Go translation`);
+        args.push(value);
+    }
+    for (const param of context.children(target.qn).filter(c => c.kind === 'Param')) {
+        const type = param.data.type as TypeData;
+        const expr = given.shift();
+        const value = expr ? valueOf(type, expr, scope) : type.optional || type.many ? 'nil' : undefined;
+        if (!value) throw new Unsupported(`the input ${last(param.qn)} of ${last(target.qn)} has no Go translation`);
+        args.push(value);
+    }
+    for (const created of code.creates) args.push(`func(${typeOf({ $type: 'TypeRef', decl: created.qn } as TypeData, scope)}) error { return nil }`);
+    const label = last(target.qn);
+    const checks = (data.checks ?? []) as CheckData[];
+    const emits = !data.fails && !data.refused && checks.some(c => c.$type === 'Emitted');
+    lines.push(`${emits ? 'events' : '_'}, err := ${qualify(target, scope)}(${args.join(', ')})`);
+
+    // then: the error, the refusal, or the checks on the rows (changed in place) and the emitted events.
+    if (data.refused) {
+        imports.add('errors');
+        const forbidden = accessIn(scope, 'ErrForbidden');
+        lines.push(`if !errors.Is(err, ${forbidden}) {`, `\tt.Fatalf("${label}: want ${forbidden}, got %v", err)`, '}');
+    } else if (data.fails) {
+        const error = data.error ? context.node(data.error as string) : undefined;
+        if (error || code.takesActor) imports.add('errors');
+        if (error) {
+            const name = `${qualifyModule(error.module, scope)}.${errorName(error)}`;
+            lines.push(`if !errors.Is(err, ${name}) {`, `\tt.Fatalf("${label}: want ${name}, got %v", err)`, '}');
+        } else if (code.takesActor) {
+            lines.push(`if err == nil || errors.Is(err, ${accessIn(scope, 'ErrForbidden')}) {`, `\tt.Fatalf("${label}: want an error, got %v", err)`, '}');
+        } else {
+            lines.push('if err == nil {', `\tt.Fatalf("${label}: want an error, got none")`, '}');
+        }
+    } else {
+        lines.push('if err != nil {', `\tt.Fatalf("${label}: %v", err)`, '}');
+        const shown = (scenario.props.checks ?? []) as string[];
+        checks.forEach((check, i) => lines.push(...checkLines(check, shown[i], scope, context)));
+    }
+    return lines;
+}
+
+/** An expectation as an `if` on the rows, an emitted event as a search through the events the action returns. */
+function checkLines(check: CheckData, shown: string, scope: GoScope, context: MapContext): string[] {
+    if (check.$type === 'Expectation') {
+        const condition = goExpr(check.condition!, scope);
+        if (!condition) throw new Unsupported(`the check ${shown} has no Go translation`);
+        return [`if !(${condition}) {`, `\tt.Error(${JSON.stringify(`${shown} is false`)})`, '}'];
+    }
+    const event = context.node(check.event!)!;
+    const compared = (check.assignments ?? []).map(a => {
+        const field = fieldsOf(event, context).find(f => last(f.qn) === a.name)!;
+        const type = field.data.type as TypeData;
+        if (type.many || (type.decl && context.node(type.decl)?.kind === 'ValueType')) throw new Unsupported(`the field ${a.name} of ${last(event.qn)} does not compare in Go`);
+        const left = { $type: 'MemberExpr', receiver: { $type: 'NameExpr', name: 'got', type: last(event.qn) }, member: a.name, target: field.qn, type: `${type.primitive ?? last(type.decl!)}${type.optional ? '?' : ''}` };
+        const same = goExpr({ $type: 'BinaryExpr', op: '==', left, right: a.value, type: 'Bool' } as unknown as ExprData, { ...scope, vars: new Map([...scope.vars ?? [], ['got', 'other']]) });
+        if (!same) throw new Unsupported(`the field ${a.name} of ${last(event.qn)} in ${shown} has no Go translation`);
+        return same;
+    });
+    scope.imports.add('slices');
+    return [
+        'if !slices.ContainsFunc(events, func(event any) bool {',
+        `\t${compared.length ? 'got' : '_'}, ok := event.(${qualify(event, scope)})`,
+        `\treturn ${['ok', ...compared.map(c => `(${c})`)].join(' && ')}`,
+        '}) {',
+        `\tt.Error(${JSON.stringify(`${shown} did not happen`)})`,
+        '}'
+    ];
+}
+
+/** A value in Go for a field or an input of the type: lists of records or values as slice literals, the rest as `assigned` says it. */
+function valueOf(type: TypeData, expr: ExprData, scope: GoScope): string | undefined {
+    if (type.many && expr.$type === 'ListExpr' && expr.items?.length) {
+        const items = expr.items.map(item => valueOf({ ...type, many: false, optional: false }, item, scope));
+        return items.every(i => i) ? `${typeOf(type, scope)}{${items.join(', ')}}` : undefined;
+    }
+    return assigned({ data: { type } } as unknown as GraphNode, expr, scope);
+}
+
+/** Every policy the simulator weighs for the actor must be one Go checks the same way, and every role condition one Go says. */
+function checkedPolicies(action: GraphNode, creates: GraphNode[], context: MapContext): void {
+    const entity = action.data.entity as string | undefined;
+    const dry = { ...goScope(action, context, new Set()), self: entity && camel(last(entity)), actor: 'actor' };
+    const policies = [action.qn, ...(entity ? [entity] : []), ...creates.map(c => c.qn)].flatMap(qn => context.children(qn)).filter(c => c.kind === 'Policy');
+    const untranslated = policies.find(p => !goExpr(p.data.condition as ExprData, dry));
+    if (untranslated) throw new Unsupported(`the policy ${untranslated.qn} has no Go translation`);
+    const role = context.graph.nodes.find(n => n.kind === 'Role' && accessSteps(n, context).some(s => s.kind === 'task'));
+    if (role) throw new Unsupported(`the condition of the role ${last(role.qn)} has no Go translation`);
 }

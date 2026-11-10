@@ -651,12 +651,18 @@ class OrderSummary(serializers.ModelSerializer):
 {% endfor %}
 {% endblock %}
 ",
-  "sales/tests.py": "from django.test import TestCase
+  "sales/tests.py": "from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.core.exceptions import PermissionDenied
+from django.test import TestCase
+from django.utils import timezone
+from crm.models import Account
 from sales.actions import cancel, place_order
 from sales.enums import OrderStatus
 from sales.errors import EmptyOrder, InvalidTransition
 from sales.events import payment_received
 from sales.factories import make_order
+from sales.models import Order
 
 
 class OrderTotalNeverNegativeTest(TestCase):
@@ -709,15 +715,6 @@ class OrderReadPolicy2Test(TestCase):
         self.skipTest("registry task: sales.Order.policy[read fields total]")
 
 
-class PlaceOrderPreconditionsTest(TestCase):
-    """sales.PlaceOrder: requires { lines.size() > 0 } else EmptyOrder"""
-
-    def test_precondition_1_is_enforced(self):
-        order = make_order()
-        with self.assertRaises(EmptyOrder):
-            place_order(order)
-
-
 class PlaceOrderAnyPolicyTest(TestCase):
     """sales.PlaceOrder.policy[]: actor.is(Customer) && customer == actor.account"""
 
@@ -736,16 +733,6 @@ class CancelAnyPolicyTest(TestCase):
 
     def test_denies_other_actors(self):
         self.skipTest("registry task: sales.Cancel.policy[]")
-
-
-class OrderFlowDraftToPlacedTest(TestCase):
-    """sales.OrderFlow.transition[draft->placed]: draft -> placed via PlaceOrder"""
-
-    def test_moves_from_allowed_states(self):
-        self.skipTest("registry task: sales.OrderFlow.transition[draft->placed]")
-
-    def test_refuses_other_states(self):
-        self.skipTest("registry task: sales.OrderFlow.transition[draft->placed]")
 
 
 class OrderFlowPlacedToPaidTest(TestCase):
@@ -767,23 +754,42 @@ class OrderFlowPlacedToPaidTest(TestCase):
                     payment_received.send(sender=None, order=order)
 
 
-class OrderFlowDraftPlacedToCancelledTest(TestCase):
-    """sales.OrderFlow.transition[draft,placed->cancelled]: draft, placed -> cancelled via Cancel when !has(paid_at)"""
+class ClerkCancelsDraftScenarioTest(TestCase):
+    """sales.ClerkCancelsDraft: when Cancel(order, \\"changed mind\\") then order.status == cancelled"""
 
-    def test_moves_from_allowed_states(self):
-        for state in (OrderStatus.DRAFT, OrderStatus.PLACED):
-            with self.subTest(state=state):
-                order = make_order(status=state)
-                cancel(order)
-                order.refresh_from_db()
-                self.assertEqual(order.status, OrderStatus.CANCELLED)
+    def test_clerk_cancels_draft(self):
+        acme = Account.objects.create(name="Acme", email="email-1")
+        order = Order.objects.create(reference="A-1", customer=acme, created_at=timezone.now())
+        actor = get_user_model().objects.create(username="actor")
+        actor.groups.add(Group.objects.get_or_create(name="Employee")[0])
+        cancel(order, reason="changed mind", actor=actor)
+        order.refresh_from_db()
+        self.assertEqual(order.status, OrderStatus.CANCELLED)
 
-    def test_refuses_other_states(self):
-        for state in (OrderStatus.PAID, OrderStatus.CANCELLED):
-            with self.subTest(state=state):
-                order = make_order(status=state)
-                with self.assertRaises(InvalidTransition):
-                    cancel(order)
+
+class EmptyOrderIsRefusedScenarioTest(TestCase):
+    """sales.EmptyOrderIsRefused: when PlaceOrder(order) then fails EmptyOrder"""
+
+    def test_empty_order_is_refused(self):
+        acme = Account.objects.create(name="Acme", email="email-1")
+        order = Order.objects.create(reference="A-2", customer=acme, created_at=timezone.now())
+        actor = get_user_model().objects.create(username="actor", account=acme)
+        actor.groups.add(Group.objects.get_or_create(name="Shopper")[0])
+        with self.assertRaises(EmptyOrder):
+            place_order(order, actor=actor)
+
+
+class OnlyOwnOrdersScenarioTest(TestCase):
+    """sales.OnlyOwnOrders: when PlaceOrder(order) then refused"""
+
+    def test_only_own_orders(self):
+        acme = Account.objects.create(name="Acme", email="email-1")
+        globex = Account.objects.create(name="Globex", email="email-2")
+        order = Order.objects.create(reference="A-3", customer=acme, created_at=timezone.now())
+        actor = get_user_model().objects.create(username="actor", account=globex)
+        actor.groups.add(Group.objects.get_or_create(name="Shopper")[0])
+        with self.assertRaises(PermissionDenied):
+            place_order(order, actor=actor)
 ",
   "sales/urls.py": "from django.urls import path
 from sales import pages

@@ -29,7 +29,7 @@ The Go module path is the project name: the `name` option, or the output folder'
 | `value`, `event` | a struct with JSON tags |
 | `entity` | a struct with an `ID int64`, `New<Entity>()` setting the defaults, one method per derived field, and `Validate() error` checking the invariants |
 | field types | `string`, `int64`, `bool`, `decimal.Decimal`, `time.Time`, `time.Duration`; enums and value types by name, entities as `*Entity`, lists as slices, optional fields as pointers |
-| `action` | a function `<Action>(entity, inputs...) ([]any, error)`: preconditions return the declared errors, the state transition returns an error wrapping `ErrInvalidTransition` when the state does not allow it, effects change the record, and emitted events are returned. Once the model has a policy, it takes the actor first and returns an error wrapping `access.ErrForbidden` unless `Can<Action>` holds |
+| `action` | a function `<Action>(entity, inputs...) ([]any, error)`: preconditions return the declared errors, the state transition returns an error wrapping `ErrInvalidTransition` when the state does not allow it, effects change the record, and emitted events are returned. Once the model has a policy, it takes the actor first and returns an error wrapping `access.ErrForbidden` unless the actor is `access.System()` or `Can<Action>` holds |
 | `create` effect | the action builds the record with `New<Entity>()` and the given fields, checks `CanCreate<Entity>` once the model has a policy, and hands it to a `create<Entity> func(*Entity) error` parameter, which stores it |
 | `emit` effect | an event struct with the given fields; an event whose required fields the effect does not give is a registry task |
 | `create ... as name` | the same, with the record in the variable `name` for the effects after it |
@@ -41,8 +41,9 @@ The Go module path is the project name: the `name` option, or the output folder'
 | `role`, `actor`, `tenant` | the `access` package, see [Access](#access) |
 | `policy` | a function per policy and the `Can...` checks in `policies.go`, see [Policies](#policies) |
 | invariants | a test in `<module>_test.go` per invariant that `Validate` checks: `valid<Entity>()` (`New<Entity>()` plus a sample value for every other required field) passes `Validate`, and the same record with one field set to a value the simulator proves to break the invariant fails with its label. Without such a value the violation case stays skipped as a registry task |
-| transitions | a test in `<module>_test.go` per transition an action runs: `valid<Entity>()` in a `from` state goes to the `to` state through the action, and the action refuses a state no transition of it leaves with `ErrInvalidTransition`. Once the model has a policy, the test passes the first declared actor (`access.New<Actor>()`) the simulator proves the policies let run the action. The test stays skipped as a registry task when the simulator cannot prove that the preconditions and the guard hold for the record and the sample inputs, when an earlier transition of the action could take the record, when a policy involved has no Go translation, when no actor is proven allowed, or when the action, the entity and the machine are in different modules; so do transitions on an event |
-| policies, preconditions | skipped tests in `<module>_test.go` |
+| transitions | unless a [scenario](#scenarios) calls the action, a test in `<module>_test.go` per transition an action runs: `valid<Entity>()` in a `from` state goes to the `to` state through the action, and the action refuses a state no transition of it leaves with `ErrInvalidTransition`. Once the model has a policy, the test passes the first declared actor (`access.New<Actor>()`) the simulator proves the policies let run the action. The test stays skipped as a registry task when the simulator cannot prove that the preconditions and the guard hold for the record and the sample inputs, when an earlier transition of the action could take the record, when a policy involved has no Go translation, when no actor is proven allowed, or when the action, the entity and the machine are in different modules; so do transitions on an event |
+| policies, preconditions | skipped tests in `<module>_test.go`; an action a scenario calls gets none |
+| `scenario` | a test in `scenarios_test.go`, see [Scenarios](#scenarios) |
 
 Expressions are translated with their types: decimals use `Add`, `GreaterThanOrEqual` and friends, times use `Before`, `After` and `Add`, `sum(lines.map(l, l.amount))` becomes a loop, and `has(field)` checks the pointer.
 
@@ -75,7 +76,7 @@ func (o *Order) Total() decimal.Decimal {
 // PlaceOrder is the action sales.PlaceOrder. It returns the events it emits.
 func PlaceOrder(actor access.Actor, order *Order) ([]any, error) {
 	var events []any
-	if !CanPlaceOrder(actor, order) {
+	if !actor.IsSystem() && !CanPlaceOrder(actor, order) {
 		return nil, fmt.Errorf("%w: PlaceOrder", access.ErrForbidden)
 	}
 	if !(int64(len(order.Lines)) > 0) {
@@ -101,6 +102,7 @@ func PlaceOrder(actor access.Actor, order *Order) ([]any, error) {
 |---|---|
 | `role` | a `Role` constant (`RoleClerk`) and `Is<Role>(actor Actor) bool`: the actor carries the role and the role's condition holds |
 | `actor` | an `ActorType` constant (`ActorShopper`) and `New<Actor>()`, an `Actor` with the declared roles |
+| a call the system makes | `System()`, an `Actor` whose calls the actions do not check (no policy, no tenant), for jobs, event handlers and scenarios without `as`; `IsSystem()` reports it, and the zero `Actor` is not the system |
 | actor fields, fields of the `is` entity | fields of `Actor`, pointers that are nil for actors without them; records as `*int64` IDs |
 | `tenant` | `Actor.Tenant`, the ID of the tenant's entity, the `Tenanted` interface and `InTenant(actor, record)`; every entity that reaches the tenant's entity through single references gets `TenantID() (int64, bool)` |
 
@@ -117,7 +119,7 @@ Each policy becomes an unexported function in its module's `policies.go`, such a
 | `query` | `Can<Query>(actor, record, inputs...)`: the read check of its entity and the query's own policies, for the storage layer to apply per record |
 | `usecase` | `Can<UseCase>(actor, params...)` from its own policies; the actions it runs check themselves |
 
-Once the model has any policy, an operation that no policy covers is denied, the same rule as the [Django extension](django.md): an entity without policies gets checks that all return false, so its actions are forbidden too. A model without policies generates no checks, and its actions take no actor; only a [tenant](../language/access.md) then guards the actions on records in the tenant. Transitions on an event run without an actor and check nothing. A policy whose condition has no Go translation returns false, so it grants nothing until you write it; the registry lists it as a task.
+Once the model has any policy, an operation that no policy covers is denied, the same rule as the [Django extension](django.md): an entity without policies gets checks that all return false, so its actions are forbidden too. A model without policies generates no checks, and its actions take no actor; only a [tenant](../language/access.md) then guards the actions on records in the tenant. Transitions on an event run without an actor and check nothing, and so does an action called with `access.System()`. A policy whose condition has no Go translation returns false, so it grants nothing until you write it; the registry lists it as a task.
 
 ```go
 // CanPlaceOrder reports whether the actor may run sales.PlaceOrder, including the update check of sales.Order.
@@ -132,6 +134,49 @@ func placeOrderPolicy(actor access.Actor, order *Order) bool {
 ```
 
 The tests of the policies stay skipped, with writing their bodies as registry tasks.
+
+## Scenarios
+
+Each [scenario](../language/scenarios.md) becomes a test `TestScenario<Name>` in `internal/<module>/scenarios_test.go`. The file belongs to the external test package `<module>_test`, so it can import every package the scenario needs without an import cycle, and names from the module are qualified (`sales.NewOrder()`).
+
+| Scenario | Go |
+|---|---|
+| `given` row | `New<Entity>()`, which sets the defaults, then `ID` set to the row's position (1, 2, ...) so records compare by identity, the given values, and a sample value for every other required field (`"<field>-1"`, `1`, the first enum value, `time.Now()`). References hold the row (`order.Customer = acme`), entity lists are slices (`[]*shop.Line{line}`). A row without a name is a variable `row<N>` |
+| `as` | `access.New<Actor>()`, for a role the first declared actor carrying it, with the given actor fields (`actor.Account = ptr(acme.ID)`, records by ID). Without `as`, an action that takes an actor gets `access.System()`, which checks no policy, as the simulator does |
+| `when` an action | one call with the record first, then the inputs in order (missing optional inputs are `nil`) and a `create<Entity>` function that stores nothing per entity the action creates. |
+| `then { ... }` | the call must not fail; each expectation becomes `if !(...) { t.Error(...) }` over the rows, which the action changes in place (there is no storage to reload from) |
+| `emitted E { ... }` | a search with `slices.ContainsFunc` through the events the action returns for an `E` with the given field values |
+| `then fails E` | `errors.Is(err, Err<E>)`; `fails` alone asserts an error that is not `access.ErrForbidden` |
+| `then refused` | `errors.Is(err, access.ErrForbidden)` |
+
+This is the test of `ClerkCancelsDraft` in the [example](../../examples/sales.appling):
+
+```go
+// TestScenarioClerkCancelsDraft runs the scenario sales.ClerkCancelsDraft: A clerk cancels a draft order
+func TestScenarioClerkCancelsDraft(t *testing.T) {
+	acme := crm.NewAccount()
+	acme.ID = 1
+	acme.Name = "Acme"
+	acme.Email = "email-1"
+	order := sales.NewOrder()
+	order.ID = 2
+	order.Reference = "A-1"
+	order.Customer = acme
+	order.CreatedAt = time.Now()
+	actor := access.NewEmployee()
+	_, err := sales.Cancel(actor, order, ptr("changed mind"))
+	if err != nil {
+		t.Fatalf("Cancel: %v", err)
+	}
+	if !(order.Status == sales.OrderStatusCancelled) {
+		t.Error("order.status == cancelled is false")
+	}
+}
+```
+
+The scenario tests replace the guessed tests of what they cover: an action a scenario calls (directly or through an endpoint) gets no skipped precondition test, and its transitions get no transition test, so their registry entries carry no test task.
+
+A scenario stays a skipped test with a registry task on its entry when the simulator does not pass it, when it calls a use case (the extension generates none), when the action leaves a registry task (a precondition, guard or effect without Go translation), when a policy the actor goes through or a role condition has no Go translation, when a default of a given row's entity is not set by `New<Entity>()`, or when a value, an expectation or an event field has no Go translation (lists and value types do not compare with `==`).
 
 ## What becomes a task
 

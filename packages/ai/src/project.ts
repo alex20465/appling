@@ -5,7 +5,7 @@ import { AstUtils, URI } from 'langium';
 import { buildSources, type Model, type Workspace } from '@appling/lang';
 import { readConfig, readRegistry, workspaceImplementation, writeRegistry, type Registry, type RegistryEntry, type Status } from '@appling/codegen';
 import {
-    applyEdit, buildGraph, findApplingFiles, latestRelease, qualifiedNames, readReleases, recordReferences, resolveReferences,
+    applyEdit, buildGraph, checkScenarios, findApplingFiles, latestRelease, qualifiedNames, readReleases, recordReferences, resolveReferences,
     type CodeReference, type EditOperation, type EditResult, type Graph, type ResolvedReference
 } from '@appling/model';
 
@@ -27,10 +27,13 @@ export class Project {
         return Object.fromEntries(findApplingFiles(this.root).map(f => [URI.file(f).toString(), readFileSync(f, 'utf8')]));
     }
 
+    /** The errors of the model, as `appling check` reports them: once there are none, the failing scenarios. */
     async check(sources = this.sources()): Promise<string[]> {
-        const { documents } = await buildSources(sources);
-        return documents.flatMap(doc => (doc.diagnostics ?? []).filter(d => d.severity === 1).map(d =>
+        const { documents, services } = await buildSources(sources);
+        const errors = documents.flatMap(doc => (doc.diagnostics ?? []).filter(d => d.severity === 1).map(d =>
             `${relative(this.root, doc.uri.fsPath)}:${d.range.start.line + 1}:${d.range.start.character + 1} ${typeof d.message === 'string' ? d.message : d.message.value}`));
+        if (errors.length) return errors;
+        return checkScenarios(models(documents), services).map(p => `${relative(this.root, URI.parse(p.uri).fsPath)}:${p.range.start.line + 1}:${p.range.start.character + 1} ${p.message}`);
     }
 
     async graph(sources = this.sources()): Promise<Graph> {

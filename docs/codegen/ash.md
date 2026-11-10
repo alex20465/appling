@@ -87,6 +87,7 @@ Modules are named `<App>.<Module>`, with nested modules as `<App>.<A>.<B>`; a ty
 | `event`, `external`, `usecase` | tasks: an Ash notifier, a client module or generic actions, a Reactor or generic action |
 | `setting`, `secret` of an external | a `config` line in `config/runtime.exs` read from the environment and a line in `.env.example` (see [settings and secrets](#settings-and-secrets)) |
 | `interface webhook` | tasks: register each endpoint at the vendor, receive it and verify its signature |
+| `scenario` | an ExUnit test in `test/<app>/<module>/scenarios_test.exs` (see [scenarios](#scenarios)) |
 
 ### Types
 
@@ -271,6 +272,37 @@ end
 
 A case without such an actor stays skipped. So do field policies and the policies of resources partitioned by a tenant.
 
+### Scenarios
+
+Each [scenario](../language/scenarios.md) becomes one test in the module's scenario test file, `test/<app>/<module>/scenarios_test.exs`. The module is `<App>.<Module>.ScenariosTest`; it is not async and checks out a database sandbox (`Ecto.Adapters.SQL.Sandbox.start_owner!`) for each test, so `mix test` needs the PostgreSQL server of the repo configuration.
+
+| Scenario | Test |
+|---|---|
+| `given` row | `Ash.Seed.seed!(<Resource>, %{...})`, which writes the row without actions, validations or policies and sets the attribute defaults. The given values come first, then a sample for every required attribute the scenario does not give (`"<attribute>-<row>"` for strings, the row number for a unique integer, a map of samples for a value type, otherwise the samples of the invariant tests), and `[]` for lists. A relationship is the related row's id (`customer_id: acme.id`), so it names an earlier row. A row of a partitioned resource is seeded with `tenant:` |
+| binding name | a variable holding the seeded row |
+| `as` | the actor: a role means the first actor that holds it. A resource actor is seeded with its field values, samples and its declared `roles`; a struct actor is `%<Module>{...}` with its roles |
+| `when` | `Ash.update(row, %{inputs}, action: :<action>, actor: actor)` on the update action of the action, with the row's tenant; without `as`, `authorize?: false`, as a system calls it. |
+| `then { ... }` | `assert {:ok, _}`, then every row the checks read is read back with `Ash.reload!` (loading the calculations they name), and each check becomes an `assert`: attributes, relationships compared by id, enum values as atoms, decimals through `Decimal.compare` |
+| `then fails E` | `assert {:error, error}` and that the error message contains the name of `E`, the message of the precondition's validation |
+| `then fails` | `assert {:error, _}` |
+| `then refused` | `assert {:error, %Ash.Error.Forbidden{}}` |
+
+```elixir
+# A clerk cancels a draft order
+test "scenario ClerkCancelsDraft" do
+  acme = Ash.Seed.seed!(Shop.Crm.Account, %{name: "Acme", email: "email-1"})
+  order = Ash.Seed.seed!(Shop.Sales.Order, %{reference: "A-1", customer_id: acme.id, lines: [], created_at: DateTime.utc_now()}, tenant: acme.id)
+  actor = Ash.Seed.seed!(Shop.Crm.Employee, %{roles: [:clerk]})
+  assert {:ok, _} = Ash.update(order, %{reason: "changed mind"}, action: :cancel, actor: actor, tenant: acme.id)
+  order = Ash.reload!(order, authorize?: false)
+  assert order.status == :cancelled
+end
+```
+
+A scenario only gets a body when the generated project does what the model says, which the extension checks with the Appling simulator: the precondition and guard validations of the action and the state check of AshStateMachine must pass on the given rows (fail, for `then fails`, where the precondition of `E` must translate and be false), the translated invariants must hold after the call without reading a field the action sets, and for a call with an actor every policy that guards it must translate, as must the role checks it names. For `then { ... }`, every `set` of the action must translate too. Ash checks the policies only after the validations, so a refused scenario also needs the validations to pass. Every other scenario stays a skipped test, and writing it is a task of its registry entry that says why, for example a call to a use case or an action without an entity, a given row with a list of entities, a required relationship the scenario does not give, an `emitted` check (events are tasks), or a check that does not translate.
+
+Scenario tests replace the guessed tests of what they cover: an action that a scenario's `when` runs gets no precondition tests, and the transitions it triggers get no transition tests, so their registry entries gain no task for them.
+
 
 ## Actors
 
@@ -446,6 +478,7 @@ Whatever cannot be translated is listed in the [registry](registry.md):
 - jobs on events, and jobs whose filter does not translate
 - authentication, rate limits and CORS of interfaces, and endpoints that do not fit the route patterns
 - flows, and interfaces with a protocol other than `rest`
+- scenarios whose test the generated project cannot pass yet (see [scenarios](#scenarios))
 
 ## Run the generated project
 

@@ -165,7 +165,7 @@ A module is `cross`. A top level declaration gets the layer of its keyword:
 
 | Layer | Kinds |
 |---|---|
-| `cross` | `Module`, `Role`, `Actor`, `Tenant`, `Migration` |
+| `cross` | `Module`, `Role`, `Actor`, `Tenant`, `Migration`, `Scenario` |
 | `domain` | `Enum`, `ValueType`, `Entity` |
 | `behavior` | `Event`, `Action`, `Machine`, `Job` |
 | `application` | `Query`, `Projection`, `External`, `UseCase` |
@@ -223,6 +223,7 @@ Named elements:
 | `Interface` | `interface` |
 | `Page`, `Navigation`, `Flow`, `Messages` | `page`, `navigation`, `flow`, `messages` |
 | `Migration` | `migration` |
+| `Scenario` | [`scenario`](../language/scenarios.md); its given rows (`Fixture`), actor (`ScenarioActor`), call (`Call`) and checks (`Expectation`, `Emitted`) fold into its `data`, with `fails`, `error` and `refused` for the other forms of `then` |
 
 Unnamed elements, which get a key instead of a name:
 
@@ -256,16 +257,17 @@ The reference kinds, with the element the edge starts from:
 | Kind | From | To |
 |---|---|---|
 | `type` | A field, a parameter, or an external operation (its return type) | The enum, value type or entity |
-| `entity` | An action, query or tenant; an actor bound with `is`; a `create` effect | The entity |
+| `entity` | An action, query or tenant; an actor bound with `is`; a `create` effect; a scenario (its given rows) | The entity |
 | `field` | A machine; a `set` effect; a query (its sort fields) | The field |
 | `collection` | A `for` effect | The collection relationship it iterates |
 | `fields` | A field policy | The fields it covers |
 | `roles` | An actor | Its roles |
-| `error` | An action (its preconditions); a use case (its error handlers) | The error |
-| `event` | A transition or job; an `emit` effect; a use case (its `await` steps) | The event |
+| `error` | An action (its preconditions); a use case (its error handlers); a scenario (`then fails`) | The error |
+| `event` | A transition or job; an `emit` effect; a use case (its `await` steps); a scenario (its `emitted` checks) | The event |
 | `action` | A transition or job | The action it runs |
 | `actions` | A page (its `list` and `detail` components) | The actions offered |
-| `target` | A use case (its calls); an endpoint | The action, query, use case or external operation |
+| `target` | A use case (its calls); an endpoint; a scenario (its `when` call) | The action, query, use case or external operation |
+| `persona` | A scenario (its `as`) | The actor or role |
 | `source` | A projection | Its entity or query |
 | `projection` | An endpoint; a page (its components) | The projection |
 | `picks` | An endpoint; a page (its components) | The picked projection fields |

@@ -1,10 +1,10 @@
 [
   {
     "kind": "Action",
-    "generated": 0,
-    "partial": 3,
+    "generated": 2,
+    "partial": 1,
     "todo": 0,
-    "tasks": 4,
+    "tasks": 2,
     "left": 1
   },
   {
@@ -25,7 +25,7 @@
   },
   {
     "kind": "DeleteEffect",
-    "generated": 3,
+    "generated": 2,
     "partial": 0,
     "todo": 0,
     "tasks": 0,
@@ -256,6 +256,14 @@
     "left": 0
   },
   {
+    "kind": "Scenario",
+    "generated": 2,
+    "partial": 1,
+    "todo": 0,
+    "tasks": 1,
+    "left": 0
+  },
+  {
     "kind": "SetEffect",
     "generated": 5,
     "partial": 0,
@@ -273,10 +281,10 @@
   },
   {
     "kind": "Transition",
-    "generated": 0,
-    "partial": 3,
+    "generated": 2,
+    "partial": 1,
     "todo": 0,
-    "tasks": 3,
+    "tasks": 1,
     "left": 0
   },
   {
@@ -305,10 +313,10 @@
   },
   {
     "kind": "total",
-    "generated": 116,
-    "partial": 17,
+    "generated": 121,
+    "partial": 14,
     "todo": 18,
-    "tasks": 36,
+    "tasks": 33,
     "left": 6
   }
 ]

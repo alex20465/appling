@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import type { Model } from '@appling/lang';
 import { plan } from '@appling/codegen';
 import { buildGraph } from '@appling/model';
-import { buildWorkspace, examples } from '../../lang/test/workspace.js';
+import { buildWorkspace, constructs, examples } from '../../lang/test/workspace.js';
 import django from '../src/index.js';
 
 /** Applies the template steps to the files `startproject` and `startapp` would create, without running commands. */
@@ -31,7 +31,11 @@ test('examples generate apps, enums, value types and models', async () => {
     expect(entries['sales.Order.total'].status).toBe('generated');
     expect(entries['sales.PlaceOrder'].status).toBe('generated');
     expect(entries['sales.PlaceOrder'].missing).toEqual([]);
-    expect(entries['sales.OrderFlow.transition[draft->placed]'].missing.map(m => m.what)).toEqual(['write the test bodies of OrderFlowDraftToPlacedTest in sales/tests.py']);
+    // Scenarios run PlaceOrder and Cancel: their tests replace the guessed transition and precondition tests.
+    expect(entries['sales.OrderFlow.transition[draft->placed]'].status).toBe('generated');
+    expect(files['sales/tests.py']).not.toContain('class PlaceOrderPreconditionsTest');
+    expect(files['sales/tests.py']).not.toContain('class OrderFlowDraftToPlacedTest');
+    expect(entries['sales.EmptyOrderIsRefused'].status).toBe('generated');
     expect(entries['sales.OrderFlow.transition[placed->paid]'].status).toBe('generated');
     expect(entries['sales.Checkout'].missing.map(m => m.what)).toEqual(['continue Checkout when PaymentReceived happens, or after 24h with the timeout call; the steps from here on are not generated']);
     expect(entries['sales.ExpireDrafts'].missing.map(m => m.what)).toEqual(['schedule "python manage.py expire_drafts" with cron "0 3 * * *"']);
@@ -570,4 +574,66 @@ test('loops, updates of related records, deletes and created rows by name become
         '    cart.delete()'
     ].join('\n'));
     expect(entries['shop.Checkout'].status).toBe('generated');
+});
+
+test('scenarios become tests with their rows, actor, call and checks, replacing the guessed tests of what they run', async () => {
+    const { files, entries } = await generate(constructs());
+    const tests = files['shop/tests.py'];
+    expect(tests).toContain([
+        '    def test_place_full_order(self):',
+        '        acme = Company.objects.create(name="Acme")',
+        '        ada = Person.objects.create(username="ada", name="Ada", company=acme)',
+        '        pen = Product.objects.create(sku="pen", title="Pen", price=Decimal("2"), weight=Decimal("0.1"), token=uuid4(), tags=[])',
+        '        line = Line.objects.create(product=pen, quantity=3)',
+        '        order = Order.objects.create(reference="A-1", buyer=ada)',
+        '        order.lines.set([line])'
+    ].join('\n'));
+    expect(tests).toContain([
+        '        with self.captureOnCommitCallbacks(execute=True):',
+        '            place_order(order, when_at=timezone.now())',
+        '        order.refresh_from_db()',
+        '        self.assertEqual(order.status, Status.PLACED)',
+        '        self.assertEqual(order.total, 6)',
+        '        self.assertTrue(any(fields.get("order") == order for fields in order_placed_sent), "OrderPlaced was not emitted with order as given")',
+        '        self.assertTrue(order_placed_sent, "OrderPlaced was not emitted")'
+    ].join('\n'));
+    // No REST view exposes a use case, so the endpoint's target is called directly, with a mock per external.
+    expect(tests).toContain('            checkout(order, payments=Mock(spec=Payments))');
+    expect(tests).toContain([
+        '        actor = Person.objects.create(username="actor", name="name-4", company=acme, nickname="ada")',
+        '        actor.groups.add(Group.objects.get_or_create(name="Shopper")[0])',
+        '        with self.assertRaises(PermissionDenied):',
+        '            cancel(order, reason="changed", actor=actor)'
+    ].join('\n'));
+    // A list of entities is a many to many relation, read through `.all()`.
+    expect(files['shop/models.py']).toContain('        return sum([l.amount for l in self.lines.all()])');
+    expect(entries['shop.EmptyCheckout'].missing).toEqual([]);
+    expect(entries['shop.ShopperCannotCancel'].missing).toEqual([]);
+    expect(entries['shop.OrderFlow.transition[draft->placed]'].missing).toEqual([]);
+    expect(entries['shop.OrderFlow.transition[placed->paid]'].missing.length).toBe(1);
+});
+
+test('a scenario the generated code cannot reproduce stays a skipped test with a task saying why', async () => {
+    const { files, entries } = await generate({
+        'docs.appling': `module docs {
+            entity Doc {
+                title: String
+                scan: File
+            }
+            action Archive on Doc {
+                effect { set title = "archived" }
+            }
+            scenario ArchiveDoc {
+                given {
+                    doc = create Doc { title = "a" }
+                }
+                when Archive(doc)
+                then {
+                    doc.title == "archived"
+                }
+            }
+        }`
+    });
+    expect(files['docs/tests.py']).toContain('        self.skipTest("registry task: docs.ArchiveDoc")');
+    expect(entries['docs.ArchiveDoc'].missing.map(m => m.what)).toEqual(['write the test bodies of ArchiveDocScenarioTest in docs/tests.py: there is no sample value for Doc.scan']);
 });

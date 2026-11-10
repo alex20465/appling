@@ -9,7 +9,7 @@ import {
     BASELINE, checkPrerequisites, coverage, coverageMarkdown, coverageReport, coverageTable, describe, loadExtension, mergeGeneration, pendingChanges, plan, planMigrations, readApplied, readConfig, readRegistry,
     recordWritten, runMigrations, runPlan, type Plan, type PlannedInput, type Written
 } from '@appling/codegen';
-import { buildGraph, dependencies, findApplingFiles, resolveReferences, Simulator, writeRelease, type Graph, type ResolvedReference } from '@appling/model';
+import { buildGraph, checkScenarios, dependencies, findApplingFiles, resolveReferences, Simulator, writeRelease, type Graph, type ResolvedReference } from '@appling/model';
 import { init } from './init.js';
 
 const USAGE = [
@@ -42,7 +42,14 @@ async function main([command, ...args]: string[]): Promise<number> {
     if (command === 'generate') return generate(documents, Appling, mode, json);
     if (command === 'simulate') return simulate(documents, Appling, question);
     if (command === 'refs') return refs(documents, Appling, question[0]);
-    const errors = report(documents, console.log);
+    let errors = report(documents, console.log);
+    // Scenarios run in the simulator once the model itself has no errors.
+    if (!errors) {
+        for (const problem of checkScenarios(documents.map(doc => doc.parseResult.value as Model), Appling)) {
+            errors++;
+            console.log(`${relative('.', URI.parse(problem.uri).fsPath)}:${problem.range.start.line + 1}:${problem.range.start.character + 1} error ${problem.message}`);
+        }
+    }
     console.log(`${documents.length} file(s), ${errors} error(s)`);
     return errors ? 1 : 0;
 }

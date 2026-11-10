@@ -48,6 +48,7 @@ const canonical = print(document.parseResult.value as Model);
 | `ExpressionTyper` | Types expressions: `checkModel(model)` fills `types`, `targets` (the element each name stands for) and `problems` (`Problem[]`); `typeOf(expr)` types one expression in its position, `namesAt(effect)` lists the names an effect sees |
 | `show(type)`, `typeOfRef(ref)` | The display name of a `Type`, such as `Money?`, and the `Type` a `TypeRef` declares |
 | `LAYER_OF`, `Layer` | The layer of every top level declaration type |
+| `scenarioTarget(scenario)`, `scenarioErrors(scenario)`, `scenarioActor(scenario, actors)` | What a scenario's `when` runs, the errors it may fail with and the actor it runs as |
 | AST types and guards | `Model`, `Module`, `Entity`, `isEntity` and the rest of the generated AST |
 
 ## Language server: @appling/lang/lsp
@@ -124,6 +125,9 @@ console.log(result.ok ? result.edits : result.errors);
 | `withRemoved(before, after, diff)` | The graph after with the removed elements of a diff put back under their parents, with their edges, so a canvas can draw them where they were |
 | `migrationRenames(before, after)` | The function that maps a qualified name of the graph before to its name after through the new migration steps; undefined for a removed one |
 | `GraphDiff`, `ElementChange`, `ChangeStatus` | The diff types |
+| `Simulator`, `UNKNOWN` | The [simulator](../tools/simulator.md): `reach`, `actors`, `access`, `risks`, `run`, `evaluate`, and `scenario(qn)`, which runs one [scenario](../language/scenarios.md) and returns a `ScenarioResult` (`passed`, `failures`, `outcome`, `errors`, `reasons`, `events`, `rows`) |
+| `runScenarios(graph)`, `checkScenarios(models, services)` | Every scenario's result, and the failures as `ScenarioProblem`s (`scenario`, `uri`, `range` of its name, `message`), as `appling check` reports them |
+| `scenarioCall(node)`, `coveredByScenarios(graph)` | What a scenario's `when` runs (`target`, `args`), and the actions, use cases and transitions the scenarios cover |
 | `findApplingFiles(path)` | The `.appling` files at a path, searching folders recursively and skipping hidden folders and `node_modules` |
 
 `@appling/model/graph`, `@appling/model/edit`, `@appling/model/simulator`, `@appling/model/relevance`, `@appling/model/diff` and `@appling/model/implementation` export the graph, the edit operations, the simulator, the relevance functions, the model diff and the implementation states without the file system functions of the rest of the package, so a browser bundle can import them.

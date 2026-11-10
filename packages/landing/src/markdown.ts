@@ -4,7 +4,7 @@ import type { Code, Link, Root } from "mdast";
 import type { VFile } from "vfile";
 import { buildSources, errorsOf, type Model } from "@appling/lang";
 import monarch from "@appling/lang/monarch";
-import { buildGraph, type Graph } from "@appling/model";
+import { buildGraph, checkScenarios, type Graph } from "@appling/model";
 import { GITHUB_URL } from "./links";
 
 // Layer colors of the landing's layer stack (Layers.astro), cross cutting as a plain node
@@ -89,13 +89,12 @@ export function remarkDocs({ root }: { root: string }) {
 
     for (const node of examples) {
       const workspace = await buildSources({ "file:///example.appling": node.value });
-      const errors = errorsOf(workspace);
+      const models = workspace.documents.map((doc) => doc.parseResult.value as Model);
+      let errors = errorsOf(workspace);
+      if (!errors.length) errors = checkScenarios(models, workspace.services).map((p) => `${p.range.start.line + 1}:${p.range.start.character + 1} ${p.message}`);
       if (errors.length) throw new Error(`${file.path}:${node.position?.start.line}: the Appling example has errors:\n${errors.join("\n")}`);
       if (!/\bgraph\b/.test(node.meta ?? "")) continue;
-      const graph = buildGraph(
-        workspace.documents.map((doc) => doc.parseResult.value as Model),
-        workspace.services,
-      );
+      const graph = buildGraph(models, workspace.services);
       visit(tree, "code", (code, index, parent) => {
         if (code === node) parent!.children.splice(index! + 1, 0, { type: "html", value: graphFigure(graph) });
       });

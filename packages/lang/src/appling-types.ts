@@ -3,9 +3,9 @@ import {
     isAction, isActor, isAssignment, isBinaryExpr, isBoolExpr, isCall, isCreateEffect, isEntity, isEnum, isExpr, isExternalOperation,
     isField, isIndexExpr, isInvariant, isJob, isListExpr, isMemberExpr, isNameExpr, isNullExpr, isNumberExpr, isPolicy,
     isPrecondition, isProjectionField, isQuery, isRole, isSetEffect, isStringExpr, isTenant, isTransition, isUnaryExpr, isUseCase,
-    isDeleteEffect, isEffect, isForEffect, isUpdateEffect,
+    isDeleteEffect, isEffect, isForEffect, isUpdateEffect, isExpectation, isFixture, isScenario, isScenarioActor,
     type Action, type Actor, type Assignment, type BinaryExpr, type Call, type Entity, type Enum, type Event, type Expr,
-    type Field, type MemberExpr, type NameExpr, type Param, type Policy, type Query, type Tenant, type Transition, type TypeRef, type UpdateEffect, type ValueType
+    type Field, type Fixture, type MemberExpr, type NameExpr, type Param, type Policy, type Query, type Role, type Scenario, type Tenant, type Transition, type TypeRef, type UpdateEffect, type ValueType
 } from './generated/ast.js';
 import { projectionSourceEntity, type ApplingScopeProvider } from './appling-scope.js';
 import type { ApplingServices } from './appling-module.js';
@@ -139,12 +139,18 @@ export class ExpressionTyper {
             const env = isUpdateEffect(owner.$container) ? this.updateEnv(owner.$container) : this.effectEnv(owner);
             return { env, expected: owner.field.ref && typeOfRef(owner.field.ref.type) };
         }
-        if (isAssignment(owner)) return { env: this.effectEnv(owner.$container), expected: this.assignmentTarget(owner) };
+        if (isAssignment(owner)) {
+            const scenario = AstUtils.getContainerOfType(owner, isScenario);
+            const env = scenario ? this.scenarioEnv(scenario, isFixture(owner.$container) ? owner.$container : undefined) : this.effectEnv(owner.$container);
+            return { env, expected: this.assignmentTarget(owner) };
+        }
+        if (isExpectation(owner)) return { env: this.scenarioEnv(owner.$container), ...condition };
         if (isUpdateEffect(owner) || isDeleteEffect(owner)) return { env: this.effectEnv(owner) };
         if (isCall(owner)) {
             const target = owner.target.ref;
+            const scenario = isScenario(owner.$container) ? owner.$container : undefined;
             const useCase = AstUtils.getContainerOfType(owner, isUseCase);
-            return { env: this.paramsEnv(useCase?.params ?? []), expected: target && signature(target).params[owner.args.indexOf(root)] };
+            return { env: scenario ? this.scenarioEnv(scenario) : this.paramsEnv(useCase?.params ?? []), expected: target && signature(target).params[owner.args.indexOf(root)] };
         }
         return undefined;
     }
@@ -340,7 +346,8 @@ export class ExpressionTyper {
 
     private assignmentTarget(assignment: Assignment): Type | undefined {
         const effect = assignment.$container;
-        const owner: Entity | Event | undefined = isCreateEffect(effect) ? effect.entity.ref : effect.event.ref;
+        if (isScenarioActor(effect)) return this.actorFieldTarget(assignment, effect.persona.ref);
+        const owner: Entity | Event | undefined = isCreateEffect(effect) || isFixture(effect) ? effect.entity.ref : effect.event.ref;
         if (!owner) return undefined;
         const field = owner.fields.find(f => f.name === assignment.name);
         if (!field) {
@@ -349,6 +356,33 @@ export class ExpressionTyper {
         }
         this.targets.set(assignment, field);
         return typeOfRef(field.type);
+    }
+
+    /** A field of the actor a scenario runs as, its own or one of the entity it is bound to. */
+    private actorFieldTarget(assignment: Assignment, persona: Actor | Role | undefined): Type | undefined {
+        if (!persona) return undefined;
+        if (isRole(persona)) {
+            this.problem(assignment, `Role ${persona.name} has no fields: name an actor after "as" to give "${assignment.name}".`, 'name');
+            return undefined;
+        }
+        const field = actorFields(persona).find(f => f.name === assignment.name);
+        if (!field) {
+            this.problem(assignment, `Actor ${persona.name} has no field "${assignment.name}".`, 'name');
+            return undefined;
+        }
+        this.targets.set(assignment, field);
+        return typeOfRef(field.type);
+    }
+
+    /** The rows a scenario's given block binds, each typed as its entity; inside a row, only the rows before it. */
+    private scenarioEnv(scenario: Scenario, before?: Fixture): Env {
+        const env = this.base();
+        const fixtures = before ? scenario.fixtures.slice(0, scenario.fixtures.indexOf(before)) : scenario.fixtures;
+        for (const fixture of fixtures) {
+            const entity = fixture.entity.ref;
+            if (fixture.name) env.set(fixture.name, { type: entity ? { kind: 'decl', decl: entity } : ERROR, target: fixture });
+        }
+        return env;
     }
 
     private base(): Env {

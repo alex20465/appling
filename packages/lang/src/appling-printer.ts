@@ -10,9 +10,9 @@ import { printTextBlock } from './appling-does.js';
 const INDENT = '  ';
 const BLOCKS = new Set([
     'Module', 'Actor', 'Enum', 'ValueType', 'Entity', 'Event', 'Action', 'Machine', 'Query', 'Projection',
-    'External', 'UseCase', 'Interface', 'Page', 'Navigation', 'NavItem', 'Messages', 'Migration', 'ForEffect', 'UpdateEffect'
+    'External', 'UseCase', 'Interface', 'Page', 'Navigation', 'NavItem', 'Messages', 'Migration', 'ForEffect', 'UpdateEffect', 'Scenario'
 ]);
-const CLAUSES = new Set(['input', 'effect', 'errors', 'consistency', 'where', 'sort', 'paginate', 'auth', 'limit', 'cors']);
+const CLAUSES = new Set(['input', 'effect', 'errors', 'consistency', 'where', 'sort', 'paginate', 'auth', 'limit', 'cors', 'given', 'when', 'then']);
 const INLINE_BRACES_AFTER = new Set(['where']);
 const CALLS = new Set(['NameExpr', 'MemberExpr', 'Call']);
 const NO_SPACE_BEFORE = new Set([',', ')', ']', '.', ':', '?']);

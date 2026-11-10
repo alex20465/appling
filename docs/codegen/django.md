@@ -78,6 +78,7 @@ The app of a module is its qualified name with dots replaced by underscores: the
 | `navigation` | the menu of `<app>/templates/<app>/base.html` |
 | `messages` | labels in `<app>/messages.py`, used for the columns and fields of pages |
 | `flow` | not generated; a `todo` entry in the [registry](registry.md) |
+| `scenario` | a test class in `<app>/tests.py` (see [scenarios](#scenarios)) |
 
 ### Fields
 
@@ -96,7 +97,7 @@ The app of a module is its qualified name with dots replaced by underscores: the
 | `Uuid` | `UUIDField()` |
 | an enum | `CharField(max_length=..., choices=<Enum>.choices)` |
 | an entity | `ForeignKey("<app>.<Entity>", on_delete=...)`: `CASCADE` when the field is `owned`, otherwise `PROTECT` |
-| a list of entities | `ManyToManyField("<app>.<Entity>")` |
+| a list of entities | `ManyToManyField("<app>.<Entity>")`; expressions read it as `<field>.all()` |
 | a value type or any other list | `JSONField(encoder=DjangoJSONEncoder)` with `default=dict` or `default=list` |
 
 | Modifier | Django |
@@ -215,6 +216,40 @@ Invariants, policies, transitions and actions with preconditions get a `TestCase
 Test bodies create rows through factories in `<app>/factories.py`, one `make_<entity>(**fields)` per entity: every required stored field without a default gets a sample value (`"<field>-<n>"` for strings, `1` for numbers, `False`, the current date or time, one hour, a new UUID, the first enum literal), and a required reference gets a row from the referenced entity's factory. An entity with a required file, a value type or a cycle of required references has no factory.
 
 A case only gets a body when the Appling simulator proves, on the factory's row, that the invariants hold (for an invariant test, also that the changed row breaks it; a field read only by `has()` may stay null, any other field the condition compares must not be null, because a database check passes on null), that the preconditions and the guard hold (or, for a precondition test, that the earlier preconditions hold and this one fails), and that the effects do not create, update or delete other rows or depend on the actor. Otherwise it stays skipped. In the examples, `PlaceOrder` requires order lines that the factory does not add, so its precondition test runs, while the tests of `draft -> placed` stay tasks. Event transitions are tested only when no job or other machine also handles the event. The actions run without an actor, which skips their policy checks, except in the tests of action policies. The allowed case of an action policy also needs an action that only sets fields: one that moves a state, creates, updates or deletes rows or emits an event keeps that case skipped. The allowed case of a query policy needs the query's filter to hold for the factory's row.
+
+An action or use case that a [scenario](../language/scenarios.md) runs gets no precondition tests, and the transitions that action triggers get no transition tests: the scenario test replaces these guessed tests, so their registry entries gain no tasks for them. Policy tests stay, as they check every declared actor.
+
+### Scenarios
+
+Each scenario becomes a `<Scenario>ScenarioTest` class in the `tests.py` of its module, with one method `test_<scenario>` that reproduces what the simulator runs in `appling check`:
+
+| Scenario | Test |
+|---|---|
+| `given` row | `<Entity>.objects.create(...)` with the given values, bound to a local variable of the binding's name; a list of entities (`lines = [line]`) is set on the `ManyToManyField` after the create. Required fields the scenario does not give get samples (`"<field>-<n>"` for strings, `n` for unique numbers, else the [factory](#tests) samples), required references a row from the referenced entity's factory; defaults, lists, value types and optional fields keep the model's default. A row of the user model gets a `username` (the binding name) |
+| `as` | a user named `actor` in the group of the declared actor (for a role, the first actor holding it, as in the simulator), with the given actor fields; a row of the bound entity when actors are bound with `is`, otherwise `get_user_model()` |
+| `when` an action or use case | the function from `actions.py` or `usecases.py`, the row first, inputs as keywords, `actor=actor` when there is an `as`; a use case gets a `Mock(spec=<External>)` for each external system it calls |
+| `then { ... }` | each binding the checks read is reloaded with `refresh_from_db()`; an `==` or `!=` check becomes `assertEqual` or `assertNotEqual`, any other check `assertTrue`, with the expression translated to Python and the bindings as local variables. `emitted E { ... }` records the event's signal with a receiver, runs the call inside `captureOnCommitCallbacks(execute=True)` (actions send their events on commit) and asserts a sent event with the given field values. Through the route, it first asserts status 204 |
+| `then fails E` | `assertRaises(E)` |
+| `then fails` | `assertRaises(Exception)`, and that it is not `PermissionDenied` when policies are enforced |
+| `then refused` | `assertRaises(PermissionDenied)` |
+
+For `ClerkCancelsDraft` of the examples, this gives:
+
+```python
+class ClerkCancelsDraftScenarioTest(TestCase):
+    """sales.ClerkCancelsDraft: when Cancel(order, \"changed mind\") then order.status == cancelled"""
+
+    def test_clerk_cancels_draft(self):
+        acme = Account.objects.create(name="Acme", email="email-1")
+        order = Order.objects.create(reference="A-1", customer=acme, created_at=timezone.now())
+        actor = get_user_model().objects.create(username="actor")
+        actor.groups.add(Group.objects.get_or_create(name="Employee")[0])
+        cancel(order, reason="changed mind", actor=actor)
+        order.refresh_from_db()
+        self.assertEqual(order.status, OrderStatus.CANCELLED)
+```
+
+A scenario test is only written when it can pass: the scenario passes in the simulator, the action or use case it calls (and every action that use case calls) has no registry task other than eventual consistency, an `await` or its guessed tests, every policy on the way has a Python condition, and every given value, argument and check translates to Python. Otherwise the method is skipped, and the task of the scenario's entry says why, such as `write the test bodies of ArchiveDocScenarioTest in docs/tests.py: there is no sample value for Doc.scan`.
 
 ### Pages
 
@@ -394,6 +429,7 @@ Whatever cannot be translated is listed in the [registry](registry.md):
 - authentication and CORS of interfaces, and endpoints that do not fit the view patterns
 - computed projection fields that are not a path over entity fields
 - row actions that need inputs, details and forms on pages without `{id}` in the route, navigation items to such pages, and flows
+- scenarios that call incomplete code or give values without a Python translation or a sample (see [scenarios](#scenarios))
 - the tenant of a request when the user model has no field of the tenant's entity, actor fields when actors are bound to several entities, and interfaces with a protocol other than `rest`
 
 ## Run the generated project

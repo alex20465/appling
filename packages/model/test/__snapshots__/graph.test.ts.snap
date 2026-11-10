@@ -211,6 +211,21 @@ exports[`graph of examples 1`] = `
       "to": "sales.en",
     },
     {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.ClerkCancelsDraft",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.EmptyOrderIsRefused",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.OnlyOwnOrders",
+    },
+    {
       "from": "sales.Shopper",
       "kind": "contains",
       "to": "sales.Shopper.account",
@@ -711,6 +726,71 @@ exports[`graph of examples 1`] = `
       "to": "sales.OrderDetail",
     },
     {
+      "from": "sales.ClerkCancelsDraft",
+      "kind": "entity",
+      "to": "crm.Account",
+    },
+    {
+      "from": "sales.ClerkCancelsDraft",
+      "kind": "entity",
+      "to": "sales.Order",
+    },
+    {
+      "from": "sales.ClerkCancelsDraft",
+      "kind": "persona",
+      "to": "crm.Clerk",
+    },
+    {
+      "from": "sales.ClerkCancelsDraft",
+      "kind": "target",
+      "to": "sales.Cancel",
+    },
+    {
+      "from": "sales.EmptyOrderIsRefused",
+      "kind": "error",
+      "to": "sales.PlaceOrder.EmptyOrder",
+    },
+    {
+      "from": "sales.EmptyOrderIsRefused",
+      "kind": "entity",
+      "to": "crm.Account",
+    },
+    {
+      "from": "sales.EmptyOrderIsRefused",
+      "kind": "entity",
+      "to": "sales.Order",
+    },
+    {
+      "from": "sales.EmptyOrderIsRefused",
+      "kind": "persona",
+      "to": "sales.Shopper",
+    },
+    {
+      "from": "sales.EmptyOrderIsRefused",
+      "kind": "target",
+      "to": "sales.PlaceOrder",
+    },
+    {
+      "from": "sales.OnlyOwnOrders",
+      "kind": "entity",
+      "to": "crm.Account",
+    },
+    {
+      "from": "sales.OnlyOwnOrders",
+      "kind": "entity",
+      "to": "sales.Order",
+    },
+    {
+      "from": "sales.OnlyOwnOrders",
+      "kind": "persona",
+      "to": "sales.Shopper",
+    },
+    {
+      "from": "sales.OnlyOwnOrders",
+      "kind": "target",
+      "to": "sales.PlaceOrder",
+    },
+    {
       "from": "crm.Account.policy[read]",
       "kind": "uses",
       "to": "crm.Clerk",
@@ -924,6 +1004,71 @@ exports[`graph of examples 1`] = `
       "from": "sales.Checkout",
       "kind": "uses",
       "to": "sales.Order.total",
+    },
+    {
+      "from": "sales.ClerkCancelsDraft",
+      "kind": "uses",
+      "to": "crm.Account.name",
+    },
+    {
+      "from": "sales.ClerkCancelsDraft",
+      "kind": "uses",
+      "to": "sales.Order.reference",
+    },
+    {
+      "from": "sales.ClerkCancelsDraft",
+      "kind": "uses",
+      "to": "sales.Order.customer",
+    },
+    {
+      "from": "sales.ClerkCancelsDraft",
+      "kind": "uses",
+      "to": "sales.Order.status",
+    },
+    {
+      "from": "sales.ClerkCancelsDraft",
+      "kind": "uses",
+      "to": "sales.OrderStatus.cancelled",
+    },
+    {
+      "from": "sales.EmptyOrderIsRefused",
+      "kind": "uses",
+      "to": "crm.Account.name",
+    },
+    {
+      "from": "sales.EmptyOrderIsRefused",
+      "kind": "uses",
+      "to": "sales.Order.reference",
+    },
+    {
+      "from": "sales.EmptyOrderIsRefused",
+      "kind": "uses",
+      "to": "sales.Order.customer",
+    },
+    {
+      "from": "sales.EmptyOrderIsRefused",
+      "kind": "uses",
+      "to": "sales.Shopper.account",
+    },
+    {
+      "from": "sales.OnlyOwnOrders",
+      "kind": "uses",
+      "to": "crm.Account.name",
+    },
+    {
+      "from": "sales.OnlyOwnOrders",
+      "kind": "uses",
+      "to": "sales.Order.reference",
+    },
+    {
+      "from": "sales.OnlyOwnOrders",
+      "kind": "uses",
+      "to": "sales.Order.customer",
+    },
+    {
+      "from": "sales.OnlyOwnOrders",
+      "kind": "uses",
+      "to": "sales.Shopper.account",
     },
   ],
   "nodes": [
@@ -2886,6 +3031,312 @@ exports[`graph of examples 1`] = `
         ],
       },
       "qn": "sales.en",
+    },
+    {
+      "data": {
+        "actor": {
+          "$type": "ScenarioActor",
+          "persona": "crm.Clerk",
+        },
+        "call": {
+          "$type": "Call",
+          "args": [
+            {
+              "$type": "NameExpr",
+              "name": "order",
+              "type": "Order",
+            },
+            {
+              "$type": "StringExpr",
+              "type": "String",
+              "value": "changed mind",
+            },
+          ],
+          "target": "sales.Cancel",
+        },
+        "checks": [
+          {
+            "$type": "Expectation",
+            "condition": {
+              "$type": "BinaryExpr",
+              "left": {
+                "$type": "MemberExpr",
+                "member": "status",
+                "receiver": {
+                  "$type": "NameExpr",
+                  "name": "order",
+                  "type": "Order",
+                },
+                "target": "sales.Order.status",
+                "type": "OrderStatus",
+              },
+              "op": "==",
+              "right": {
+                "$type": "NameExpr",
+                "name": "cancelled",
+                "target": "sales.OrderStatus.cancelled",
+                "type": "OrderStatus",
+              },
+              "type": "Bool",
+            },
+          },
+        ],
+        "does": "A clerk cancels a draft order",
+        "fixtures": [
+          {
+            "$type": "Fixture",
+            "assignments": [
+              {
+                "$type": "Assignment",
+                "name": "name",
+                "value": {
+                  "$type": "StringExpr",
+                  "type": "String",
+                  "value": "Acme",
+                },
+              },
+            ],
+            "entity": "crm.Account",
+            "name": "acme",
+          },
+          {
+            "$type": "Fixture",
+            "assignments": [
+              {
+                "$type": "Assignment",
+                "name": "reference",
+                "value": {
+                  "$type": "StringExpr",
+                  "type": "String",
+                  "value": "A-1",
+                },
+              },
+              {
+                "$type": "Assignment",
+                "name": "customer",
+                "value": {
+                  "$type": "NameExpr",
+                  "name": "acme",
+                  "type": "Account",
+                },
+              },
+            ],
+            "entity": "sales.Order",
+            "name": "order",
+          },
+        ],
+      },
+      "kind": "Scenario",
+      "layer": "cross",
+      "level": "medium",
+      "module": "sales",
+      "props": {
+        "actor": "as crm.Clerk",
+        "call": "Cancel(order, "changed mind")",
+        "checks": [
+          "order.status == cancelled",
+        ],
+        "does": "A clerk cancels a draft order",
+        "fixtures": [
+          "acme = create crm.Account { name = "Acme" }",
+          "order = create Order { reference = "A-1", customer = acme }",
+        ],
+      },
+      "qn": "sales.ClerkCancelsDraft",
+    },
+    {
+      "data": {
+        "actor": {
+          "$type": "ScenarioActor",
+          "assignments": [
+            {
+              "$type": "Assignment",
+              "name": "account",
+              "value": {
+                "$type": "NameExpr",
+                "name": "acme",
+                "type": "Account",
+              },
+            },
+          ],
+          "persona": "sales.Shopper",
+        },
+        "call": {
+          "$type": "Call",
+          "args": [
+            {
+              "$type": "NameExpr",
+              "name": "order",
+              "type": "Order",
+            },
+          ],
+          "target": "sales.PlaceOrder",
+        },
+        "error": "sales.PlaceOrder.EmptyOrder",
+        "fails": true,
+        "fixtures": [
+          {
+            "$type": "Fixture",
+            "assignments": [
+              {
+                "$type": "Assignment",
+                "name": "name",
+                "value": {
+                  "$type": "StringExpr",
+                  "type": "String",
+                  "value": "Acme",
+                },
+              },
+            ],
+            "entity": "crm.Account",
+            "name": "acme",
+          },
+          {
+            "$type": "Fixture",
+            "assignments": [
+              {
+                "$type": "Assignment",
+                "name": "reference",
+                "value": {
+                  "$type": "StringExpr",
+                  "type": "String",
+                  "value": "A-2",
+                },
+              },
+              {
+                "$type": "Assignment",
+                "name": "customer",
+                "value": {
+                  "$type": "NameExpr",
+                  "name": "acme",
+                  "type": "Account",
+                },
+              },
+            ],
+            "entity": "sales.Order",
+            "name": "order",
+          },
+        ],
+      },
+      "kind": "Scenario",
+      "layer": "cross",
+      "level": "medium",
+      "module": "sales",
+      "props": {
+        "actor": "as Shopper { account = acme }",
+        "call": "PlaceOrder(order)",
+        "fails": true,
+        "fixtures": [
+          "acme = create crm.Account { name = "Acme" }",
+          "order = create Order { reference = "A-2", customer = acme }",
+        ],
+      },
+      "qn": "sales.EmptyOrderIsRefused",
+    },
+    {
+      "data": {
+        "actor": {
+          "$type": "ScenarioActor",
+          "assignments": [
+            {
+              "$type": "Assignment",
+              "name": "account",
+              "value": {
+                "$type": "NameExpr",
+                "name": "globex",
+                "type": "Account",
+              },
+            },
+          ],
+          "persona": "sales.Shopper",
+        },
+        "call": {
+          "$type": "Call",
+          "args": [
+            {
+              "$type": "NameExpr",
+              "name": "order",
+              "type": "Order",
+            },
+          ],
+          "target": "sales.PlaceOrder",
+        },
+        "fixtures": [
+          {
+            "$type": "Fixture",
+            "assignments": [
+              {
+                "$type": "Assignment",
+                "name": "name",
+                "value": {
+                  "$type": "StringExpr",
+                  "type": "String",
+                  "value": "Acme",
+                },
+              },
+            ],
+            "entity": "crm.Account",
+            "name": "acme",
+          },
+          {
+            "$type": "Fixture",
+            "assignments": [
+              {
+                "$type": "Assignment",
+                "name": "name",
+                "value": {
+                  "$type": "StringExpr",
+                  "type": "String",
+                  "value": "Globex",
+                },
+              },
+            ],
+            "entity": "crm.Account",
+            "name": "globex",
+          },
+          {
+            "$type": "Fixture",
+            "assignments": [
+              {
+                "$type": "Assignment",
+                "name": "reference",
+                "value": {
+                  "$type": "StringExpr",
+                  "type": "String",
+                  "value": "A-3",
+                },
+              },
+              {
+                "$type": "Assignment",
+                "name": "customer",
+                "value": {
+                  "$type": "NameExpr",
+                  "name": "acme",
+                  "type": "Account",
+                },
+              },
+            ],
+            "entity": "sales.Order",
+            "name": "order",
+          },
+        ],
+        "refused": true,
+      },
+      "kind": "Scenario",
+      "layer": "cross",
+      "level": "medium",
+      "module": "sales",
+      "props": {
+        "actor": "as Shopper { account = globex }",
+        "call": "PlaceOrder(order)",
+        "fixtures": [
+          "acme = create crm.Account { name = "Acme" }",
+          "globex = create crm.Account { name = "Globex" }",
+          "order = create Order { reference = "A-3", customer = acme }",
+        ],
+        "refused": true,
+      },
+      "qn": "sales.OnlyOwnOrders",
     },
   ],
 }

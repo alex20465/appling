@@ -1,5 +1,5 @@
 import type { MapContext, Step } from '@appling/codegen';
-import { Simulator, UNKNOWN, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
+import { Simulator, UNKNOWN, coveredByScenarios, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
 import { children, pythonFile, template } from './files.js';
 import { userEntity } from './models.js';
 import { appOf, constantOf, lastOf, snake } from './python.js';
@@ -26,6 +26,18 @@ const simulators = new WeakMap<Graph, Simulator>();
 export function simulator(context: MapContext): Simulator {
     let found = simulators.get(context.graph);
     if (!found) simulators.set(context.graph, found = new Simulator(context.graph));
+    return found;
+}
+
+const covers = new WeakMap<Graph, Set<string>>();
+
+/**
+ * The actions, use cases and transitions a scenario's `when` runs. Their guessed tests (preconditions,
+ * transitions) are not generated: the scenario tests replace them.
+ */
+export function covered(context: MapContext): Set<string> {
+    let found = covers.get(context.graph);
+    if (!found) covers.set(context.graph, found = coveredByScenarios(context.graph));
     return found;
 }
 

@@ -51,6 +51,25 @@ module sales {
 | L3 Application | `query`, `projection`, `external` (with `op`, `setting` and `secret` keys), `usecase` |
 | L4 Interfaces | `interface <protocol>` with endpoints; `auth <scheme> from <External>` and `interface webhook <Name> from <External>` name the vendor |
 | L5 Experience | `page` with `list`, `detail`, `form`; `navigation`, `flow`, `messages` |
+| Outside the layers | `scenario` with `given`, `as`, `when`, `then`: an example of behavior that may reference anything its module sees |
+
+A scenario gives rows, an actor and one call to an action or a use case, and says how it ends:
+
+```
+scenario ClerkCancelsDraft {
+  given {
+    acme = create crm.Account { name = "Acme" }
+    order = create Order { reference = "A-1", customer = acme }
+  }
+  as crm.Clerk
+  when Cancel(order, "changed mind")
+  then {
+    order.status == cancelled
+  }
+}
+```
+
+`then fails <Error>` expects a declared error, `then fails` any error, `then refused` a refusal by a policy; checks are Bool expressions over the rows and `emitted <Event> { field = value }`. `appling check` runs the scenarios in the simulator of `@appling/model`.
 
 A module or declaration may state its relevance to the business before its opening brace: `core`, `supporting` or `peripheral` (`entity Quote core { ... }`, `module observability peripheral { ... }`). A module's level applies to its members unless they state their own.
 
@@ -94,6 +113,7 @@ actor human Shopper roles Customer {
 - Expressions must type check: conditions are Bool, values fit the field they are assigned to, `null` only fits optional fields, and calls in use cases pass the right number and types of arguments (an action on an entity takes the entity first, then its inputs; a query takes its inputs).
 - `migration` steps target elements by their path inside the module, as it was before the step: `rename Order.code -> reference`, `retype Order.total: Decimal -> Money`, `remove Order.legacy`. Renamed and retyped elements must exist, removed ones must not.
 - `@Name` in a `does` text must name a visible element and follow the layer order, except in a module's own description.
+- A scenario binds each given name once, names an actor or a role some actor holds after `as` (actor fields only after an actor), calls an action or a use case (directly or through an endpoint of the interface, with the target's arguments), and `fails` only with an error of what it calls.
 
 ## API
 
@@ -120,6 +140,7 @@ const canonical = print(model);
 | `errorsOf(workspace)` | The error messages of a built workspace |
 | `modulePath(module)` | The dotted path of a module, such as `a.b` |
 | `LAYER_OF` | The layer of every top level declaration type |
+| `scenarioTarget(scenario)`, `scenarioErrors(scenario)`, `scenarioActor(scenario, actors)` | What a scenario's `when` runs, the errors it may fail with and the actor it runs as |
 | `ExpressionTyper` | Types expressions (`checkModel(model)`) and records `types`, `targets` (the element each name in an expression stands for) and `problems` |
 | `show(type)`, `typeOfRef(ref)` | The display name of a type, and the type a `TypeRef` declares |
 | `ApplingScopeProvider` | The scope provider; `lookup(container, type, name)` resolves a dotted name as a reference would, `lookupElement(container, name)` an element of any kind |

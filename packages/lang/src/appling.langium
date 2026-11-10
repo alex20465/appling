@@ -20,7 +20,7 @@ Member:
     | Query | Projection | External | UseCase
     | Interface
     | Page | Navigation | Flow | Messages
-    | Migration;
+    | Migration | Scenario;
 
 // The condition says when an actor counts as the role; it reads only actor, tenant and now.
 Role:
@@ -275,6 +275,36 @@ MigrationStep:
     | {infer RetypeStep} 'retype' target=QualifiedName ':' oldType=TypeRef '->' newType=TypeRef
     | {infer RemoveStep} 'remove' target=QualifiedName;
 
+// Scenarios, outside the five layers: an example of behavior that `appling check` runs in the simulator
+// and every target generates as a test. Given rows, as an actor, when one call, then what holds.
+
+Scenario:
+    'scenario' name=Ident relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{'
+        ('given' '{' fixtures+=Fixture* '}')?
+        actor=ScenarioActor?
+        'when' call=Call
+        'then' (fails?='fails' error=[ErrorDecl:Ident]? | refused?='refused' | '{' checks+=Check* '}')
+    '}';
+
+// A row the scenario starts with; the name binds it for later rows, the call and the checks.
+Fixture:
+    (name=Ident '=')? 'create' entity=[Entity:QualifiedName] '{' (assignments+=Assignment (',' assignments+=Assignment)*)? '}';
+
+// The actor the call runs as, a declared actor or a role one of them holds, with values for its fields.
+ScenarioActor:
+    'as' persona=[Persona:QualifiedName] ('{' (assignments+=Assignment (',' assignments+=Assignment)*)? '}')?;
+
+type Persona = Actor | Role;
+
+Check:
+    Expectation | Emitted;
+
+Expectation:
+    condition=Expr;
+
+Emitted:
+    'emitted' event=[Event:QualifiedName] ('{' (assignments+=Assignment (',' assignments+=Assignment)*)? '}')?;
+
 // Expressions: a CEL subset
 
 Expr:
@@ -327,7 +357,7 @@ Ident returns string:
     | 'flow' | 'actor' | 'tenant' | 'set' | 'op' | 'human' | 'system' | 'service' | 'asc'
     | 'desc' | 'remove' | 'rename' | 'retype' | 'roles' | 'second' | 'minute' | 'hour' | 'link'
     | 'core' | 'supporting' | 'peripheral' | 'default' | 'limit' | 'messages' | 'migration' | 'is' | 'does'
-    | 'setting' | 'secret';
+    | 'setting' | 'secret' | 'scenario' | 'given' | 'then' | 'fails' | 'refused';
 
 hidden terminal WS: /\s+/;
 terminal ID: /[_a-zA-Z][\w]*/;

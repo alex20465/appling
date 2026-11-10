@@ -108,7 +108,6 @@ module shop core {
           set stock = stock + 0
         }
         delete kept
-        delete line
       }
     }
     errors EmptyOrder, TooLate
@@ -244,6 +243,46 @@ module shop core {
   messages en supporting {
     OrderView.total = "Total"
     Status.draft = "Draft"
+  }
+
+  // Scenarios
+  scenario PlaceFullOrder core does "A full draft order is placed and announced" {
+    given {
+      acme = create party.Company { name = "Acme" }
+      ada = create party.Person { name = "Ada", company = acme }
+      pen = create Product { sku = "pen", title = "Pen", price = 2, weight = 0.1, tags = [] }
+      line = create Line { product = pen, quantity = 3 }
+      order = create Order { reference = "A-1", buyer = ada, lines = [line] }
+      create Product { sku = "ink", title = "Ink", price = 5, weight = 0.2, tags = ["refill"] }
+    }
+    when PlaceOrder(order, now)
+    then {
+      order.status == placed
+      order.total == 6
+      emitted OrderPlaced { order = order }
+      emitted OrderPlaced
+    }
+  }
+
+  scenario EmptyCheckout {
+    given {
+      acme = create party.Company { name = "Acme" }
+      ada = create party.Person { name = "Ada", company = acme }
+      order = create Order { reference = "A-2", buyer = ada }
+    }
+    when Checkout(order)
+    then fails EmptyOrder
+  }
+
+  scenario ShopperCannotCancel supporting {
+    given {
+      acme = create party.Company { name = "Acme" }
+      ada = create party.Person { name = "Ada", company = acme }
+      order = create Order { reference = "A-3", buyer = ada }
+    }
+    as Shopper { nickname = "ada", company = acme }
+    when Cancel(order, "changed")
+    then refused
   }
 
   migration v2 {

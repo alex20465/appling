@@ -11,6 +11,8 @@ export type Value = string | number | boolean | null | Date | Value[] | Record |
 export interface Record {
     [field: string]: Value | string | undefined;
     $type?: string;
+    /** The identity of a scenario's given row, so it equals its own copies before and after a call. */
+    $id?: string;
 }
 
 export interface Actor {
@@ -47,6 +49,40 @@ export interface Write {
 }
 
 type Scope = { self?: Record, actor?: Actor, inputs?: { [name: string]: Value }, vars?: Map<string, Value> };
+
+/** What running a scenario showed: whether its `then` holds, and why not. */
+export interface ScenarioResult {
+    scenario: string;
+    passed: boolean;
+    /** Why the scenario fails, one sentence each; empty when it passes. */
+    failures: string[];
+    /** How the call ended: it ran, a policy refused it, or it failed with an error. */
+    outcome: 'done' | 'refused' | 'error';
+    /** The qualified names of the declared errors the call failed with. */
+    errors: string[];
+    /** Why the call did not run, as `RunResult.reasons`. */
+    reasons: string[];
+    events: { event: string, fields: { [name: string]: Value } }[];
+    /** The given rows by binding name, as they are after the call. */
+    rows: { [name: string]: Record };
+}
+
+/** A scenario's `given` row, `as` and `when` inside `GraphNode.data`. */
+interface FixtureData { name?: string, entity: string, assignments?: AssignmentData[] }
+interface AssignmentData { name: string, value: ExprData }
+interface CallData { target: string, args?: ExprData[] }
+interface StepData { $type: string, call?: CallData, handlers?: { error: string, call: CallData }[] }
+
+/** The run of an action or use case inside a scenario: the errors by qualified name and what stayed unknown. */
+interface Performed {
+    outcome: 'done' | 'refused' | 'error';
+    allowed: Verdict;
+    reasons: string[];
+    errors: string[];
+    events: RunResult['events'];
+    violated: string[];
+    undecided: string[];
+}
 
 /** One thing an actor may try, with the verdict of the policies that guard it. */
 export interface Access {
@@ -171,15 +207,162 @@ export class Simulator {
 
     /** Runs an action on a record as an actor: policies, preconditions, the state transition, effects, then the invariants. */
     run(action: string, record: Record, actor: Actor, inputs: { [name: string]: Value } = {}): RunResult {
+        const { errors: _errors, undecided: _undecided, ...result } = this.execute(action, record, actor, inputs, true);
+        return result;
+    }
+
+    /**
+     * Runs a scenario: creates its given rows (defaults, then the values it gives), runs its `when` call as its
+     * actor, and checks its `then`. A row breaking an invariant, a call that ends otherwise than expected, and a
+     * check that is false or depends on data the scenario does not give each make it fail. Policies are checked
+     * only for a call with an actor and when the model has policies, as the generated code does.
+     */
+    scenario(qn: string): ScenarioResult {
+        const node = this.node(qn);
+        const data = node.data;
+        const failures: string[] = [];
+        const vars = new Map<string, Value>();
+        const rows: { [name: string]: Record } = {};
+        ((data.fixtures ?? []) as FixtureData[]).forEach((fixture, i) => {
+            const record = this.fixture(fixture, vars, `${qn}#${i + 1}`);
+            const shown = fixture.name ?? `the ${last(fixture.entity)} row`;
+            for (const invariant of this.kids(this.node(fixture.entity), 'Invariant')) {
+                if (this.evaluate(invariant.data.condition as ExprData, { self: record, vars }) === false) failures.push(`${shown} breaks the invariant "${String(invariant.data.label)}" of ${last(fixture.entity)}.`);
+            }
+            if (fixture.name) {
+                vars.set(fixture.name, record);
+                rows[fixture.name] = record;
+            }
+        });
+        const persona = data.actor as { persona: string, assignments?: AssignmentData[] } | undefined;
+        const actor = persona && this.persona(persona, vars);
+        const call = data.call as CallData;
+        const target = call.target;
+        const args = (call.args ?? []).map(a => this.evaluate(a, { actor, vars }));
+        const done = this.perform(target, args, actor, this.graph.nodes.some(n => n.kind === 'Policy'));
+        const name = last(target);
+        const why = done.reasons.join('; ');
+        if (data.refused) {
+            if (done.outcome !== 'refused') failures.push(done.allowed === 'depends' ? `Whether the actor may call ${name} depends on data the scenario does not give.` : `${name} was not refused.`);
+        } else if (data.fails) {
+            const error = data.error as string | undefined;
+            if (done.outcome === 'refused') failures.push(`${name} was refused: no policy allows the actor.`);
+            else if (done.outcome === 'done') failures.push(done.undecided.length ? `${name} did not fail; ${done.undecided.join(', ')} depends on data the scenario does not give.` : `${name} did not fail.`);
+            else if (error && !done.errors.includes(error)) failures.push(`${name} failed with ${why}, not ${last(error)}.`);
+        } else if (done.outcome === 'refused') {
+            failures.push(`${name} was refused: no policy allows the actor.`);
+        } else if (done.outcome === 'error') {
+            failures.push(`${name} failed: ${why}.`);
+        } else {
+            if (done.allowed === 'depends') failures.push(`Whether the actor may call ${name} depends on data the scenario does not give.`);
+            for (const undecided of done.undecided) failures.push(`${name}: ${undecided} depends on data the scenario does not give.`);
+            for (const label of done.violated) failures.push(`${name} breaks the invariant "${label}".`);
+            const shown = (node.props.checks ?? []) as string[];
+            ((data.checks ?? []) as { $type: string, condition?: ExprData, event?: string, assignments?: AssignmentData[] }[]).forEach((check, i) => {
+                if (check.$type === 'Expectation') {
+                    const value = this.evaluate(check.condition!, { actor, vars });
+                    if (value === UNKNOWN) failures.push(`${shown[i]} depends on data the scenario does not give.`);
+                    else if (value !== true) failures.push(`${shown[i]} is false.`);
+                    return;
+                }
+                const expected = (check.assignments ?? []).map(a => [a.name, this.evaluate(a.value, { actor, vars })] as const);
+                const emitted = done.events.filter(e => e.event === check.event);
+                if (!emitted.some(e => expected.every(([field, value]) => equal(e.fields[field] ?? UNKNOWN, value)))) {
+                    failures.push(emitted.length ? `${last(check.event!)} was emitted, but not with ${expected.map(([f]) => f).join(', ')} as given.` : `${last(check.event!)} was not emitted.`);
+                }
+            });
+        }
+        return { scenario: qn, passed: failures.length === 0, failures, outcome: done.outcome, errors: done.errors, reasons: done.reasons, events: done.events, rows };
+    }
+
+    /** A given row: the defaults of its entity, empty lists, null for optional fields, then the values the scenario gives. */
+    private fixture(fixture: FixtureData, vars: Map<string, Value>, id: string): Record {
+        const record: Record = { $type: fixture.entity, $id: id };
+        for (const field of this.kids(this.node(fixture.entity), 'Field')) {
+            const type = field.data.type as TypeData;
+            if (field.data.derived) continue;
+            const name = last(field.qn);
+            if (field.data.default) record[name] = this.evaluate(field.data.default as ExprData, { self: record, vars });
+            else if (type.many) record[name] = [];
+            else if (type.optional) record[name] = null;
+        }
+        for (const assignment of fixture.assignments ?? []) record[assignment.name] = this.evaluate(assignment.value, { vars });
+        return record;
+    }
+
+    /** The actor a scenario runs as; a role stands for the first declared actor that holds it. */
+    private persona(persona: { persona: string, assignments?: AssignmentData[] }, vars: Map<string, Value>): Actor {
+        const named = this.node(persona.persona);
+        const actor = named.kind === 'Role'
+            ? this.graph.nodes.find(n => n.kind === 'Actor' && ((n.data.roles ?? []) as string[]).includes(named.qn))?.qn ?? named.qn
+            : named.qn;
+        const fields = Object.fromEntries((persona.assignments ?? []).map(a => [a.name, this.evaluate(a.value, { vars })]));
+        return { actor, fields };
+    }
+
+    /** Runs an action or a use case with evaluated arguments; the rows it changes are updated in place. */
+    private perform(target: string, args: Value[], actor: Actor | undefined, guarded: boolean, seen = new Set<string>()): Performed {
+        const node = this.node(target);
+        const params = this.kids(node, 'Param');
+        if (node.kind === 'Action') {
+            const entity = node.data.entity as string | undefined;
+            const record = entity ? args[0] : undefined;
+            const inputs = Object.fromEntries(params.map((p, i) => [last(p.qn), args[i + (entity ? 1 : 0)] ?? null]));
+            const row = isRecord(record) ? record : undefined;
+            if (entity && !row) return { outcome: 'error', allowed: 'yes', reasons: [`the first argument of ${last(target)} is not a ${last(entity)} row`], errors: [], events: [], violated: [], undecided: [] };
+            const { after, before: _before, ...result } = this.execute(target, row ?? {}, actor, inputs, guarded && actor !== undefined);
+            if (after && row) Object.assign(row, after);
+            return result;
+        }
+        const performed: Performed = { outcome: 'done', allowed: 'yes', reasons: [], errors: [], events: [], violated: [], undecided: [] };
+        if (node.kind !== 'UseCase' || seen.has(target)) return performed;
+        if (guarded && actor) {
+            performed.allowed = this.verdict(this.kids(node, 'Policy'), actor, undefined, {});
+            if (performed.allowed === 'no' && this.kids(node, 'Policy').length) return { ...performed, outcome: 'refused', reasons: ['no policy allows this actor'] };
+            if (!this.kids(node, 'Policy').length) performed.allowed = 'yes';
+        }
+        const vars = new Map(params.map((p, i) => [last(p.qn), args[i] ?? null]));
+        const step = (call: CallData): Performed => {
+            const values = (call.args ?? []).map(a => this.evaluate(a, { actor, vars }));
+            return this.perform(call.target, values, actor, guarded, new Set([...seen, target]));
+        };
+        const merge = (from: Performed) => {
+            performed.events.push(...from.events);
+            performed.violated.push(...from.violated);
+            performed.undecided.push(...from.undecided);
+            if (from.allowed === 'depends') performed.allowed = 'depends';
+        };
+        // The run stops at the first await: what follows waits for an event.
+        for (const s of (node.data.steps ?? []) as StepData[]) {
+            if (s.$type !== 'CallStep' || !s.call) break;
+            let result = step(s.call);
+            merge(result);
+            const handler = result.outcome === 'error' ? (s.handlers ?? []).find(h => result.errors.includes(h.error)) : undefined;
+            if (handler) {
+                result = step(handler.call);
+                merge(result);
+            }
+            if (result.outcome !== 'done') return { ...performed, outcome: result.outcome, reasons: result.reasons, errors: result.errors };
+        }
+        return performed;
+    }
+
+    private execute(action: string, record: Record, actor: Actor | undefined, inputs: { [name: string]: Value }, guarded: boolean): RunResult & { errors: string[], undecided: string[] } {
         const node = this.node(action);
         const entity = node.data.entity as string | undefined;
         const before: Record = { ...record, $type: entity };
-        const result: RunResult = { allowed: this.permitted(action, actor, before, inputs), outcome: 'done', reasons: [], before, events: [], writes: [], violated: [] };
+        const allowed: Verdict = guarded ? this.permitted(action, actor!, before, inputs) : 'yes';
+        const result: RunResult & { errors: string[], undecided: string[] } = { allowed, outcome: 'done', reasons: [], before, events: [], writes: [], violated: [], errors: [], undecided: [] };
         if (result.allowed === 'no') return { ...result, outcome: 'refused', reasons: ['no policy allows this actor'] };
         const scope = { self: before, actor, inputs };
         const preconditions = (node.data.preconditions ?? []) as { condition: ExprData, error?: string }[];
         preconditions.forEach((precondition, i) => {
-            if (this.evaluate(precondition.condition, scope) === false) result.reasons.push(precondition.error ? last(precondition.error) : (node.props.preconditions as string[])[i]);
+            const text = (node.props.preconditions as string[])[i];
+            const holds = this.evaluate(precondition.condition, scope);
+            if (holds === UNKNOWN) result.undecided.push(text);
+            if (holds !== false) return;
+            result.reasons.push(precondition.error ? last(precondition.error) : text);
+            if (precondition.error) result.errors.push(precondition.error);
         });
         if (result.reasons.length) return { ...result, outcome: 'error' };
         // A deep copy, so updates of related records change the copy and not the given data.
@@ -189,17 +372,17 @@ export class Simulator {
             const field = last(this.node(this.parentOf(transitions[0].qn)).data.field as string);
             const taken = transitions.find(t => (t.data.from as string[]).includes(String(before[field])) && (!t.data.guard || this.evaluate(t.data.guard as ExprData, scope) !== false));
             if (!taken) return { ...result, outcome: 'error', reasons: [`no transition of ${last(this.parentOf(transitions[0].qn))} from ${String(before[field])}`] };
+            if (taken.data.guard && this.evaluate(taken.data.guard as ExprData, scope) === UNKNOWN) result.undecided.push(`the guard ${String(taken.props.guard)}`);
             this.effects(taken, after, scope, result);
             after[field] = taken.data.to as string;
         }
         this.effects(node, after, scope, result);
-        result.after = after;
         if (entity && !result.deleted) {
             for (const invariant of this.kids(this.node(entity), 'Invariant')) {
                 if (this.evaluate(invariant.data.condition as ExprData, { self: after, actor, inputs }) === false) result.violated.push(String(invariant.data.label));
             }
         }
-        return result;
+        return { ...result, after };
     }
 
     /**
@@ -530,11 +713,28 @@ function comparable(value: Value): Value {
     return typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value) ? Number(value) : value;
 }
 
-/** Records compare by identity field `id` when both have one, otherwise by reference; dates by time. */
+/** Records compare by a scenario row's `$id`, else by identity field `id` when both have one, otherwise by reference; dates by time. */
 function equal(a: Value, b: Value): boolean {
     if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
-    if (a && b && typeof a === 'object' && typeof b === 'object' && !Array.isArray(a) && !Array.isArray(b) && !(a instanceof Date) && !(b instanceof Date)) {
+    if (isRecord(a) && isRecord(b)) {
+        if ('$id' in a && '$id' in b) return a.$id === b.$id;
         return 'id' in a && 'id' in b ? a.id === b.id : a === b;
     }
     return a === b;
+}
+
+/** What a scenario's `when` runs: the action or use case and the arguments. */
+export function scenarioCall(scenario: GraphNode): { target: string, args: ExprData[] } {
+    const call = scenario.data.call as { target: string, args?: ExprData[] };
+    return { target: call.target, args: call.args ?? [] };
+}
+
+/**
+ * The elements the scenarios of a graph cover: every action and use case a `when` runs, and the transitions those
+ * actions trigger. Generated tests replace guessed ones for these.
+ */
+export function coveredByScenarios(graph: Graph): Set<string> {
+    const covered = new Set(graph.nodes.filter(n => n.kind === 'Scenario').map(n => scenarioCall(n).target));
+    for (const transition of graph.nodes.filter(n => n.kind === 'Transition' && covered.has(n.data.action as string))) covered.add(transition.qn);
+    return covered;
 }

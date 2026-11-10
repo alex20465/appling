@@ -199,7 +199,7 @@ export function djangoField(field: GraphNode, context: MapContext, imports: Set<
     return call(PRIMITIVES[type.primitive!]);
 }
 
-function defaultValue(field: GraphNode, context: MapContext, imports: Set<string>): string | undefined {
+export function defaultValue(field: GraphNode, context: MapContext, imports: Set<string>): string | undefined {
     const expr = field.data.default as ExprData | undefined;
     if (!expr) return undefined;
     if (expr.$type === 'NameExpr' && expr.name === 'now' && !expr.target) {

@@ -74,7 +74,7 @@ export interface Dependency {
 const NAMED = new Set([
     'Module', 'Role', 'Actor', 'Tenant', 'Enum', 'EnumLiteral', 'ValueType', 'Entity', 'Field', 'Event', 'Action',
     'Param', 'ErrorDecl', 'Machine', 'Job', 'Query', 'Projection', 'ProjectionField', 'External', 'ExternalKey', 'ExternalOperation',
-    'UseCase', 'Interface', 'Page', 'Navigation', 'Flow', 'Messages', 'Migration'
+    'UseCase', 'Interface', 'Page', 'Navigation', 'Flow', 'Messages', 'Migration', 'Scenario'
 ]);
 
 /** The key of an unnamed element, derived from its content (concept.md section 4). Undefined for other nodes. */

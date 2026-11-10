@@ -412,26 +412,42 @@ end
   @tag skip: "registry task: sales.Order.policy[read fields total]"
   test "policy[read fields total] denies other actors"
 
-  @tag skip: "registry task: sales.PlaceOrder"
-  test "action place_order precondition 1 is enforced"
-
-  @tag skip: "registry task: sales.OrderFlow.transition[draft->placed]"
-  test "transition draft -> placed moves from allowed states"
-
-  @tag skip: "registry task: sales.OrderFlow.transition[draft->placed]"
-  test "transition draft -> placed refuses other states"
-
   @tag skip: "registry task: sales.OrderFlow.transition[placed->paid]"
   test "transition placed -> paid moves from allowed states"
 
   @tag skip: "registry task: sales.OrderFlow.transition[placed->paid]"
   test "transition placed -> paid refuses other states"
+end
+",
+  "test/shop/sales/scenarios_test.exs": "defmodule Shop.Sales.ScenariosTest do
+  use ExUnit.Case, async: false
 
-  @tag skip: "registry task: sales.OrderFlow.transition[draft,placed->cancelled]"
-  test "transition draft, placed -> cancelled moves from allowed states"
+  setup do
+    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Shop.Repo, shared: true)
+    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+    :ok
+  end
 
-  @tag skip: "registry task: sales.OrderFlow.transition[draft,placed->cancelled]"
-  test "transition draft, placed -> cancelled refuses other states"
+  # A clerk cancels a draft order
+  test "scenario ClerkCancelsDraft" do
+    acme = Ash.Seed.seed!(Shop.Crm.Account, %{name: "Acme", email: "email-1"})
+    order = Ash.Seed.seed!(Shop.Sales.Order, %{reference: "A-1", customer_id: acme.id, lines: [], created_at: DateTime.utc_now()}, tenant: acme.id)
+    actor = Ash.Seed.seed!(Shop.Crm.Employee, %{roles: [:clerk]})
+    assert {:ok, _} = Ash.update(order, %{reason: "changed mind"}, action: :cancel, actor: actor, tenant: acme.id)
+    order = Ash.reload!(order, authorize?: false)
+    assert order.status == :cancelled
+  end
+
+  @tag skip: "registry task: sales.EmptyOrderIsRefused"
+  test "scenario EmptyOrderIsRefused"
+
+  test "scenario OnlyOwnOrders" do
+    acme = Ash.Seed.seed!(Shop.Crm.Account, %{name: "Acme", email: "email-1"})
+    globex = Ash.Seed.seed!(Shop.Crm.Account, %{name: "Globex", email: "email-2"})
+    order = Ash.Seed.seed!(Shop.Sales.Order, %{reference: "A-3", customer_id: acme.id, lines: [], created_at: DateTime.utc_now()}, tenant: acme.id)
+    actor = Ash.Seed.seed!(Shop.Sales.Shopper, %{account_id: globex.id, roles: [:customer]})
+    assert {:error, %Ash.Error.Forbidden{}} = Ash.update(order, %{}, action: :place_order, actor: actor, tenant: acme.id)
+  end
 end
 ",
 }
@@ -454,10 +470,10 @@ exports[`examples plan domains, enums, embedded resources, resources and relatio
   "sales.Order.policy[read fields total]: test/shop/sales/order_test.exs",
   "crm.Employee: mix ash.gen.resource Shop.Crm.Employee --domain Shop.Crm --default-actions read,create,update,destroy --uuid-primary-key id --attribute roles:atom:array --extend postgres --timestamps --yes",
   "sales.Shopper: mix ash.gen.resource Shop.Sales.Shopper --domain Shop.Sales --default-actions read,create,update,destroy --uuid-primary-key id --attribute roles:atom:array --extend postgres --timestamps --yes",
-  "sales.PlaceOrder: test/shop/sales/order_test.exs",
-  "sales.OrderFlow.transition[draft->placed]: test/shop/sales/order_test.exs",
   "sales.OrderFlow.transition[placed->paid]: test/shop/sales/order_test.exs",
-  "sales.OrderFlow.transition[draft,placed->cancelled]: test/shop/sales/order_test.exs",
+  "sales.ClerkCancelsDraft: test/shop/sales/scenarios_test.exs",
+  "sales.EmptyOrderIsRefused: test/shop/sales/scenarios_test.exs",
+  "sales.OnlyOwnOrders: test/shop/sales/scenarios_test.exs",
   "sales.Order.customer: mix ash.gen.resource Shop.Sales.Order --relationship belongs_to:customer:Shop.Crm.Account:required --yes",
   "sales.Shopper.account: mix ash.gen.resource Shop.Sales.Shopper --relationship belongs_to:account:Shop.Crm.Account:required --yes",
   "crm.Account: lib/shop/crm/account.ex",
@@ -491,4 +507,55 @@ exports[`examples plan domains, enums, embedded resources, resources and relatio
   "sales.OrderDetail: lib/shop_web/router.ex",
   "(project): mix ash.codegen initial_resources",
 ]
+`;
+
+exports[`scenarios become ExUnit tests that seed the given rows, run the action as the actor and assert the outcome 1`] = `
+"defmodule Shop.Shop.ScenariosTest do
+  use ExUnit.Case, async: false
+
+  setup do
+    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Shop.Repo, shared: true)
+    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+    :ok
+  end
+
+  # A clerk closes an item
+  test "scenario Closes" do
+    acme = Ash.Seed.seed!(Shop.Shop.Customer, %{name: "Acme"})
+    item = Ash.Seed.seed!(Shop.Shop.Item, %{code: "a", customer_id: acme.id, price: Decimal.new("2"), count: 1, address: %{street: "street-2"}}, tenant: acme.id)
+    Ash.Seed.seed!(Shop.Shop.Customer, %{name: "Other"})
+    actor = Ash.Seed.seed!(Shop.Shop.Staff, %{roles: [:clerk]})
+    assert {:ok, _} = Ash.update(item, %{reason: "done"}, action: :close, actor: actor, tenant: acme.id)
+    item = Ash.reload!(item, authorize?: false)
+    assert item.status == :done
+    assert Decimal.compare(item.price, Decimal.new("2")) in [:gt, :eq]
+    assert item.customer_id == acme.id
+    assert (not is_nil(item.note)) and (item.count != 0)
+  end
+
+  test "scenario EmptyFails" do
+    acme = Ash.Seed.seed!(Shop.Shop.Customer, %{name: "Acme"})
+    item = Ash.Seed.seed!(Shop.Shop.Item, %{code: "b", customer_id: acme.id, price: Decimal.new("2"), count: 0, address: %{street: "street-2"}}, tenant: acme.id)
+    actor = %Shop.Shop.Robot{roles: [:clerk]}
+    assert {:error, error} = Ash.update(item, %{}, action: :close, actor: actor, tenant: acme.id)
+    assert Exception.message(error) =~ "Empty"
+  end
+
+  test "scenario ClosedFails" do
+    acme = Ash.Seed.seed!(Shop.Shop.Customer, %{name: "Acme"})
+    item = Ash.Seed.seed!(Shop.Shop.Item, %{code: "c", customer_id: acme.id, status: :done, price: Decimal.new("2"), count: 1, address: %{street: "street-2"}}, tenant: acme.id)
+    assert {:error, _} = Ash.update(item, %{}, action: :close, authorize?: false, tenant: acme.id)
+  end
+
+  test "scenario GuestRefused" do
+    acme = Ash.Seed.seed!(Shop.Shop.Customer, %{name: "Acme"})
+    item = Ash.Seed.seed!(Shop.Shop.Item, %{code: "d", customer_id: acme.id, price: Decimal.new("2"), count: 1, address: %{street: "street-2"}}, tenant: acme.id)
+    actor = Ash.Seed.seed!(Shop.Shop.Guest, %{roles: []})
+    assert {:error, %Ash.Error.Forbidden{}} = Ash.update(item, %{}, action: :close, actor: actor, tenant: acme.id)
+  end
+
+  @tag skip: "registry task: shop.Batched"
+  test "scenario Batched"
+end
+"
 `;

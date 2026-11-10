@@ -244,3 +244,48 @@ test('delete self needs an action on an entity', async () => {
     expect(await check(`module m { ${CART} action A { effect { delete self } } }`))
         .toContain('"delete self" needs an action on an entity.');
 });
+
+const SCENARIO = `
+  role Clerk
+  ${ORDER}
+  action Note on Order { input { text: String } errors Blank }
+  query Open from Order { }
+  interface rest Api { POST "/orders/{id}/close" -> Close  GET "/orders" -> Open as View }
+  projection View from Order { note }`;
+
+test('a scenario binds each given name once', async () => {
+    expect(await check(`module m { ${SCENARIO} scenario S { given { a = create Order { } a = create Order { } } when Close(a) then { a.status == done } } }`))
+        .toContain('"a" is already given in this scenario.');
+});
+
+test('a scenario names an actor or a role some actor holds', async () => {
+    expect(await check(`module m { ${SCENARIO} scenario S { given { a = create Order { } } as Clerk when Close(a) then refused } }`))
+        .toContain('No actor holds the role Clerk: declare one with "roles Clerk" or name an actor.');
+});
+
+test('a scenario gives actor fields only to an actor', async () => {
+    expect(await check(`module m { ${SCENARIO} actor human Staff roles Clerk scenario S { given { a = create Order { } } as Clerk { name = "x" } when Close(a) then refused } }`))
+        .toContain('Role Clerk has no fields: name an actor after "as" to give "name".');
+    expect(await check(`module m { ${SCENARIO} actor human Staff roles Clerk scenario S { given { a = create Order { } } as Staff { name = "x" } when Close(a) then refused } }`))
+        .toContain('Actor Staff has no field "name".');
+});
+
+test('a scenario calls an action or a use case', async () => {
+    expect(await check(`module m { ${SCENARIO} scenario S { when Open() then { true } } }`))
+        .toContain("A scenario's when calls an action or a use case, not query Open.");
+});
+
+test('scenario rows, calls and checks are typed', async () => {
+    const result = await check(`module m { ${SCENARIO} scenario S { given { a = create Order { status = 1, missing = 2, note = b } b = create Order { } } when Note(a, 3) then { a.note } } }`);
+    expect(result).toContain('Int is not assignable to Status.');
+    expect(result).toContain('Order has no field "missing".');
+    expect(result).toContain('Unknown name "b".');
+    expect(result).toContain('Int is not assignable to String.');
+    expect(result).toContain('A condition must be Bool, not String.');
+});
+
+test('a scenario fails with an error of what it calls', async () => {
+    expect(await check(`module m { ${SCENARIO} scenario S { given { a = create Order { } } when Close(a) then fails Blank } }`))
+        .toContain("Could not resolve reference to ErrorDecl named 'Blank'.");
+    expect(await check(`module m { ${SCENARIO} scenario S { given { a = create Order { } } when Note(a, "x") then fails Blank } }`)).toEqual([]);
+});

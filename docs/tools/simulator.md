@@ -12,8 +12,9 @@ The simulator evaluates the behavior a model describes against sample data and a
 | What may one actor do? | For every entity operation, action, query, use case and page the verdict and the policies that decide it |
 | Which invariants does an action put at risk? | The invariants of its entity that read a field the action changes, directly or through derived fields |
 | What does running an action do? | Policies, preconditions, the transition taken, the effects, emitted events and violated invariants |
+| Does a scenario hold? | Whether its `then` holds for its given rows, actor and call, and why not |
 
-You reach it through `appling simulate` in the [CLI](cli.md#simulate), the `simulate` tool of the [MCP server](ai.md#model-tools), and the [inspector](ide.md#the-inspector) of Appling Desktop, which shows the answers for the selected action or machine.
+`appling check` runs every [scenario](../language/scenarios.md) through it and reports a failing one as an error. You reach the other questions through `appling simulate` in the [CLI](cli.md#simulate), the `simulate` tool of the [MCP server](ai.md#model-tools), and the [inspector](ide.md#the-inspector) of Appling Desktop, which shows the answers for the selected action or machine.
 
 ## An example
 
@@ -117,6 +118,8 @@ Nothing is open by default: a target that no policy guards along its path is `no
 
 The effects run on a copy of the record, nested records included, so the given data stays as it was. A `for` loop runs once per record of the given list, and not at all when the list is not given. Every `create`, `update` and `delete` of another record is listed in `writes`, in the order it ran, with the effect, the operation, the entity and a copy of the record right after the effect; an `update` of a record that was not given has the record `"unknown"`, and one through an empty optional path changes nothing. A deleted record leaves every list and field of the result that held it. `delete self` sets `deleted: true`, and the invariants of a deleted record are not checked.
 
+**Running a scenario.** The given rows start with their entity's defaults, empty lists and null optional fields, then take the given values; each must satisfy its entity's invariants. The call runs as the scenario's actor (a role stands for the first actor holding it) with policies checked when there is an actor and the model has policies, or without an actor and without policy checks. An action runs as above and its result replaces the row in place, so every name for that row sees the change. A use case runs its call steps in order, runs an `on` handler when its error occurs, assumes calls to externals and queries succeed, and stops at the first `await`. Rows compare by identity, so `customer == acme` holds for the row bound as `acme` before and after the call. Anything that stays unknown and decides the outcome fails the scenario with a message that names it.
+
 ## Running an action from the MCP server
 
 The `simulate` tool takes `question: "run"`, the `action`, a sample `record`, the `actor` and optionally `actorFields` and `inputs`:
@@ -139,8 +142,11 @@ simulator.access('shop.Customer');
 simulator.risks('shop.Discount');
 simulator.run('shop.Discount', { lines: [{ amount: 5 }], discount: 0 }, { actor: 'shop.Staff' }, { amount: 20 });
 simulator.matches('shop.CartsOf', { owner: 'ann', status: 'open' }, { actor: 'shop.Staff' }, { who: 'ann' });
+simulator.scenario('shop.CloseOwnCart'); // { passed, failures, outcome, errors, reasons, events, rows }
 ```
 
 `matches(query, record, actor, inputs)` says whether a record is among the results of a query for the given [inputs](../language/application.md#queries): `true`, `false`, or `UNKNOWN` when the filter needs data that is not given. An optional input left out is null. It applies the filter only; what the actor may read is the question of `access`.
+
+`runScenarios(graph)` runs every scenario of a graph, `checkScenarios(models, services)` returns the failures as problems located at the scenario names (what `appling check` prints), `scenarioCall(node)` gives a scenario's call, and `coveredByScenarios(graph)` lists the actions, use cases and transitions the scenarios cover, which the code generators use to replace their guessed tests.
 
 `@appling/model/simulator` exports the same class without the language dependencies, for the browser. The repo view of Appling Desktop and its browser demo use it this way.

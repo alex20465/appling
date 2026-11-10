@@ -29,6 +29,8 @@ export interface GoScope {
     /** The Go package the code is written in, to qualify names from other modules. */
     pkg: string;
     vars?: Map<string, Kind>;
+    /** The Go variable of a name in `vars` when it differs from the name, such as `typeRow` for `type`. */
+    rename?: Map<string, string>;
     imports: Set<string>;
     /** The Go import path of a module, such as `shop/internal/crm`. */
     importOf(module: string): string;
@@ -140,7 +142,7 @@ function binary(expr: ExprData, scope: GoScope): Go | undefined {
 
 function name(expr: ExprData, scope: GoScope): Go | undefined {
     const id = expr.name!;
-    if (scope.vars?.has(id)) return { code: id, kind: scope.vars.get(id)! };
+    if (scope.vars?.has(id)) return { code: scope.rename?.get(id) ?? id, kind: scope.vars.get(id)! };
     if (isActor(expr, scope)) return scope.actor ? { code: `${scope.actor}.ID`, kind: 'id', pointer: true } : undefined;
     if (expr.target && scope.node(expr.target)?.kind === 'Tenant') return scope.actor ? { code: `${scope.actor}.Tenant`, kind: 'id', pointer: true } : undefined;
     if (!expr.target) {
