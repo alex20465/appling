@@ -37,6 +37,28 @@ node packages/desktop/out/bin.js examples                           # Appling De
 
 The language tests import `src/` directly and only need `langium generate`. Every other package's tests import `@appling/*` through the packages' `out/` exports, so rebuild an upstream package before testing a downstream one.
 
+## Make shortcuts
+
+The `Makefile` at the root turns every script of the repo into a target. It reads them on each run, so a new script needs no edit there:
+
+```sh
+make                                         # lists every target
+make build                                   # a script of the root package.json
+make packages/vscode/host:link               # a script of a package's package.json
+make scripts/ci/codegen-e2e ARGS=django      # a .mjs or .sh file under scripts/, without the extension
+make check ARGS=examples                     # ARGS goes to the script
+make link/cli                                # a package's commands into ~/.local/bin (BIN_DIR=... for another folder)
+make unlink/cli                              # removes them again
+```
+
+`make link/<package>` exists for every package with a `bin` or a `host:link` script. Each command becomes a small launcher that runs the built file in the repo, so a rebuild takes effect at once; build the package first. The VS Code extension (`make link/vscode`) runs its `host:link` instead. A command that already exists and was not linked this way stays untouched.
+
+For Tab completion, source `scripts/make-completion.bash` from `~/.bashrc`. It completes the targets with their colons, which the make completion of bash-completion cuts off, and hands over to that completion outside the repo:
+
+```sh
+source ~/Dev/appling/scripts/make-completion.bash
+```
+
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs on every pull request and every push to `main`. Each step is a plain command, so you can run it the same way locally:

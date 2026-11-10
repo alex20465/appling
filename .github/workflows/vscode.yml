@@ -1,0 +1,61 @@
+name: VS Code extension
+
+# Builds the VS Code extension (packages/vscode) with every package it bundles and uploads `appling.vsix` as an
+# artifact. The extension is plain JavaScript, so one vsix runs on every platform.
+
+on:
+  pull_request:
+    paths:
+      - "packages/**"
+      - "!packages/landing/**"
+      - "!packages/desktop/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/vscode.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/**"
+      - "!packages/landing/**"
+      - "!packages/desktop/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/vscode.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vscode-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build the extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - name: Cloning
+        uses: actions/checkout@v4
+
+      - name: Use pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The upstream packages first, then the bundle and `vsce package` into packages/vscode/out/appling.vsix
+      - run: pnpm --filter appling-vscode... build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appling-vscode-${{ github.sha }}
+          path: packages/vscode/out/appling.vsix
+          if-no-files-found: error
