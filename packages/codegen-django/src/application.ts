@@ -125,6 +125,16 @@ interface Call {
 
 /** A use case becomes a function that calls its steps in order and handles the declared errors. */
 export function useCaseSteps(useCase: GraphNode, context: MapContext): Step[] {
+    const { imports, code, tasks } = useCaseCode(useCase, context);
+    return [template(`${appOf(useCase.module)}/usecases.py`, existing => pythonFile(existing, imports, code)), ...tasks];
+}
+
+/** The externals a use case function takes as keyword arguments, named `snake(external)`, in signature order. */
+export function useCaseExternals(useCase: GraphNode, context: MapContext): GraphNode[] {
+    return useCaseCode(useCase, context).externals;
+}
+
+function useCaseCode(useCase: GraphNode, context: MapContext): { imports: Set<string>, code: string, tasks: Step[], externals: GraphNode[] } {
     const imports = new Set<string>();
     const tasks: Step[] = [];
     const params = children(useCase, context, 'Param');
@@ -165,7 +175,7 @@ export function useCaseSteps(useCase: GraphNode, context: MapContext): Step[] {
     ];
     lines.unshift(...useCaseGuard(useCase, context, pyScope));
     const code = [`def ${snake(lastOf(useCase.qn))}(${signature.join(', ')}) -> None:`, ...docstring(useCase, '    '), ...(lines.length ? lines : ['pass']).map(l => `    ${l}`)].join('\n');
-    return [template(`${appOf(useCase.module)}/usecases.py`, existing => pythonFile(existing, imports, code)), ...tasks];
+    return { imports, code, tasks, externals: [...externals] };
 }
 
 function callCode(call: Call, context: MapContext, pyScope: PythonScope, externals: Set<GraphNode>): string | undefined {
