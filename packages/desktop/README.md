@@ -112,7 +112,7 @@ Every window has the rail and the switcher. The first window is the main window:
 - **Text diffs.** **text diff** in the IDE's Review tab opens Code OSS's diff editor in the code view (opening and starting it when needed): the file at the chosen commit, through the built in git extension's `git:` URIs, against the working tree, at the element's line. A deleted file opens at the commit alone. Where there is no code view (macOS, Windows) the Review tab shows the diff itself.
 - **Open in VS Code.** **Repo › Open File in VS Code** opens the file last in focus (in the code view or selected on the canvas) at its line in VS Code; **Repo › Open Repo in VS Code** and the rail's context menu open the repo. They use the `code` command from the PATH (on macOS also from the app bundle).
 
-Each instance listens on its own port on 127.0.0.1 and requires its own connection token, which only the proxy knows; the proxy admits only the code views, by a cookie with a secret of the running app.
+Each instance listens on its own port on 127.0.0.1 and requires its own connection token, which only the proxy and that repo's code view know (the proxy hands it to the view as a cookie of the repo's path, because Code OSS checks it in its websocket handshake); the proxy admits only the code views, by a cookie with a secret of the running app.
 
 ## Terminals
 
