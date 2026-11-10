@@ -505,3 +505,38 @@ test('entity policies get Ash.can? tests for actors that their actor.is checks d
     expect(entries['ops.Ticket.policy[create,delete]'].missing).toEqual([]);
     expect(entries['ops.Ticket.policy[update]'].missing.map(m => m.what)).toContain('write the tests "policy[update]" in test/shop/ops/ticket_test.exs ("policy[update] allows permitted actors")');
 });
+
+test('query inputs become read action arguments, taken from the route and the page parameters', async () => {
+    const result = await planFor({
+        'shop.appling': `module shop {
+            entity Customer { name: String }
+            entity Order {
+                customer: Customer
+                placed: Date?
+            }
+            query OrdersOf from Order {
+                input {
+                    of: Customer
+                    since: Date?
+                }
+                where { customer == of && (since == null || placed >= since) }
+            }
+            projection OrderView from Order { placed }
+            interface rest Api { GET "/customers/{of}/orders" -> OrdersOf as OrderView }
+            page Orders route "/orders" { list OrdersOf as OrderView }
+        }`
+    });
+    const write = (file: string, text?: string) => result.steps.reduce<string | undefined>((current, { step }) => step.kind === 'template' && step.file === file ? step.write(current) : current, text);
+    expect(write('lib/shop/shop/order.ex', 'defmodule Shop.Shop.Order do\n  use Ash.Resource\nend\n')).toContain([
+        '    read :orders_of do',
+        '      argument :of, :uuid, allow_nil?: false',
+        '      argument :since, :date, allow_nil?: true',
+        '      filter expr((customer_id == ^arg(:of)) and (is_nil(^arg(:since)) or (placed >= ^arg(:since))))',
+        '    end'
+    ].join('\n'));
+    expect(write('lib/shop/shop.ex', 'defmodule Shop.Shop do\n  use Ash.Domain\nend\n')).toContain('index :orders_of, route: "/customers/:of/orders"');
+    const live = write('lib/shop_web/live/orders_live.ex')!;
+    expect(live).toContain('  def mount(params, _session, socket) do\n    {:ok, socket |> assign(:page_title, "Orders") |> assign(:params, params) |> load()}');
+    expect(live).toContain('|> assign(:list_1, Ash.read!(Ash.Query.for_read(Shop.Shop.Order, :orders_of, Map.take(socket.assigns.params, ["of", "since"]))))');
+    expect(Object.fromEntries(result.entries.map(e => [e.qn, e]))['shop.OrdersOf'].missing).toEqual([]);
+});

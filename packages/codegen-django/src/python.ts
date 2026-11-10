@@ -13,6 +13,8 @@ export interface PythonScope {
 const OPERATORS: Record<string, string> = { '&&': 'and', '||': 'or' };
 const LOOKUPS: Record<string, string> = { '==': '', '<': '__lt', '<=': '__lte', '>': '__gt', '>=': '__gte' };
 const FLIPPED: Record<string, string> = { '<': '>', '<=': '>=', '>': '<', '>=': '<=', '==': '==', '!=': '!=' };
+const ALL_ROWS = 'models.Q(pk__isnull=False)';
+const NO_ROWS = 'models.Q(pk__in=[])';
 const DURATION_UNITS: Record<string, string> = { d: 'days', h: 'hours', m: 'minutes', s: 'seconds', ms: 'milliseconds' };
 
 /** Translates an expression to Python, or returns undefined when it uses something without a Python counterpart, such as `actor`. */
@@ -47,9 +49,27 @@ export function python(expr: ExprData, scope: PythonScope): string | undefined {
  * values may also be expressions that do not depend on the row, such as `now - duration("720h")`.
  */
 export function q(expr: ExprData, stored: Set<string>, node: (qn: string) => GraphNode | undefined, scope?: PythonScope): string | undefined {
+    const row = rowQ(expr, stored, node, scope);
+    if (row || !scope) return row;
+    // A condition that reads no field of the row, such as `since == null` over a query input, is all rows or none.
+    const constant = python(expr, { ...scope, self: undefined });
+    return constant && `${ALL_ROWS} if ${constant} else ${NO_ROWS}`;
+}
+
+function rowQ(expr: ExprData, stored: Set<string>, node: (qn: string) => GraphNode | undefined, scope?: PythonScope): string | undefined {
     const literal = (e: ExprData) => literalOf(e, node) ?? (scope && python(e, { ...scope, self: undefined }));
     const field = (e: ExprData | undefined) => e?.$type === 'NameExpr' && !e.call && e.target && stored.has(e.target) ? e.name : undefined;
     if (expr.$type === 'BinaryExpr' && (expr.op === '&&' || expr.op === '||')) {
+        // A side that reads no field of the row, such as `since == null`, decides in Python first, so the other side
+        // is only built when it matters: `placed_at >= since` as a lookup fails while since is None.
+        const fixed = (e: ExprData) => scope && python(e, { ...scope, self: undefined });
+        const [leftFixed, rightFixed] = [fixed(expr.left!), fixed(expr.right!)];
+        if ((leftFixed === undefined) !== (rightFixed === undefined)) {
+            const rest = q(leftFixed === undefined ? expr.left! : expr.right!, stored, node, scope);
+            const decided = leftFixed ?? rightFixed;
+            const other = rest?.includes(' if ') ? `(${rest})` : rest;
+            return other && (expr.op === '||' ? `${ALL_ROWS} if ${decided} else ${other}` : `${other} if ${decided} else ${NO_ROWS}`);
+        }
         const [left, right] = [q(expr.left!, stored, node, scope), q(expr.right!, stored, node, scope)];
         return left && right && `(${left}) ${expr.op === '&&' ? '&' : '|'} (${right})`;
     }

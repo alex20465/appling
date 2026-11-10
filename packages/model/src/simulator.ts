@@ -184,6 +184,18 @@ export class Simulator {
         return result;
     }
 
+    /**
+     * Whether a record is among the results of a query for the given inputs, by the query's filter alone (the read
+     * policies are `access`). An optional input left out is null; UNKNOWN when the answer depends on data not given.
+     */
+    matches(query: string, record: Record, actor: Actor, inputs: { [name: string]: Value } = {}): boolean | typeof UNKNOWN {
+        const node = this.node(query);
+        if (!node.data.filter) return true;
+        const optional = this.kids(node, 'Param').filter(p => (p.data.type as TypeData).optional).map(p => [last(p.qn), null]);
+        const value = this.evaluate(node.data.filter as ExprData, { self: { ...record, $type: node.data.entity as string }, actor, inputs: { ...Object.fromEntries(optional), ...inputs } });
+        return value === UNKNOWN ? UNKNOWN : value === true;
+    }
+
     /** Evaluates an expression; anything that depends on data that is not given comes back as UNKNOWN. */
     evaluate(expr: ExprData, scope: { self?: Record, actor?: Actor, inputs?: { [name: string]: Value }, vars?: Map<string, Value> }): Value {
         const sub = (e: ExprData) => this.evaluate(e, scope);

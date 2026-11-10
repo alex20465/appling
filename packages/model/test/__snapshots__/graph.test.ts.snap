@@ -163,6 +163,11 @@ exports[`graph of examples 1`] = `
     {
       "from": "sales",
       "kind": "contains",
+      "to": "sales.OrdersOf",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
       "to": "sales.OrderSummary",
     },
     {
@@ -466,6 +471,31 @@ exports[`graph of examples 1`] = `
       "to": "sales.Order.placed_at",
     },
     {
+      "from": "sales.OrdersOf",
+      "kind": "contains",
+      "to": "sales.OrdersOf.of",
+    },
+    {
+      "from": "sales.OrdersOf",
+      "kind": "contains",
+      "to": "sales.OrdersOf.since",
+    },
+    {
+      "from": "sales.OrdersOf",
+      "kind": "entity",
+      "to": "sales.Order",
+    },
+    {
+      "from": "sales.OrdersOf",
+      "kind": "field",
+      "to": "sales.Order.placed_at",
+    },
+    {
+      "from": "sales.OrdersOf.of",
+      "kind": "type",
+      "to": "crm.Account",
+    },
+    {
       "from": "sales.OrderSummary",
       "kind": "contains",
       "to": "sales.OrderSummary.reference",
@@ -548,6 +578,11 @@ exports[`graph of examples 1`] = `
     {
       "from": "sales.PublicApi",
       "kind": "contains",
+      "to": "sales.PublicApi.endpoint[GET /accounts/{of}/orders]",
+    },
+    {
+      "from": "sales.PublicApi",
+      "kind": "contains",
       "to": "sales.PublicApi.endpoint[POST /orders/{id}/place]",
     },
     {
@@ -572,6 +607,31 @@ exports[`graph of examples 1`] = `
     },
     {
       "from": "sales.PublicApi.endpoint[GET /orders]",
+      "kind": "picks",
+      "to": "sales.OrderSummary.total",
+    },
+    {
+      "from": "sales.PublicApi.endpoint[GET /accounts/{of}/orders]",
+      "kind": "target",
+      "to": "sales.OrdersOf",
+    },
+    {
+      "from": "sales.PublicApi.endpoint[GET /accounts/{of}/orders]",
+      "kind": "projection",
+      "to": "sales.OrderSummary",
+    },
+    {
+      "from": "sales.PublicApi.endpoint[GET /accounts/{of}/orders]",
+      "kind": "picks",
+      "to": "sales.OrderSummary.reference",
+    },
+    {
+      "from": "sales.PublicApi.endpoint[GET /accounts/{of}/orders]",
+      "kind": "picks",
+      "to": "sales.OrderSummary.status",
+    },
+    {
+      "from": "sales.PublicApi.endpoint[GET /accounts/{of}/orders]",
       "kind": "picks",
       "to": "sales.OrderSummary.total",
     },
@@ -824,6 +884,26 @@ exports[`graph of examples 1`] = `
       "from": "sales.OpenOrders",
       "kind": "uses",
       "to": "sales.OrderStatus.paid",
+    },
+    {
+      "from": "sales.OrdersOf",
+      "kind": "uses",
+      "to": "sales.Order.customer",
+    },
+    {
+      "from": "sales.OrdersOf",
+      "kind": "uses",
+      "to": "sales.OrdersOf.of",
+    },
+    {
+      "from": "sales.OrdersOf",
+      "kind": "uses",
+      "to": "sales.OrdersOf.since",
+    },
+    {
+      "from": "sales.OrdersOf",
+      "kind": "uses",
+      "to": "sales.Order.placed_at",
     },
     {
       "from": "sales.OrderSummary.customer_name",
@@ -2279,6 +2359,121 @@ exports[`graph of examples 1`] = `
     },
     {
       "data": {
+        "entity": "sales.Order",
+        "filter": {
+          "$type": "BinaryExpr",
+          "left": {
+            "$type": "BinaryExpr",
+            "left": {
+              "$type": "NameExpr",
+              "name": "customer",
+              "target": "sales.Order.customer",
+              "type": "Account",
+            },
+            "op": "==",
+            "right": {
+              "$type": "NameExpr",
+              "name": "of",
+              "target": "sales.OrdersOf.of",
+              "type": "Account",
+            },
+            "type": "Bool",
+          },
+          "op": "&&",
+          "right": {
+            "$type": "BinaryExpr",
+            "left": {
+              "$type": "BinaryExpr",
+              "left": {
+                "$type": "NameExpr",
+                "name": "since",
+                "target": "sales.OrdersOf.since",
+                "type": "DateTime?",
+              },
+              "op": "==",
+              "right": {
+                "$type": "NullExpr",
+                "type": "null",
+              },
+              "type": "Bool",
+            },
+            "op": "||",
+            "right": {
+              "$type": "BinaryExpr",
+              "left": {
+                "$type": "NameExpr",
+                "name": "placed_at",
+                "target": "sales.Order.placed_at",
+                "type": "DateTime?",
+              },
+              "op": ">=",
+              "right": {
+                "$type": "NameExpr",
+                "name": "since",
+                "target": "sales.OrdersOf.since",
+                "type": "DateTime?",
+              },
+              "type": "Bool",
+            },
+            "type": "Bool",
+          },
+          "type": "Bool",
+        },
+        "sorts": [
+          {
+            "$type": "Sort",
+            "direction": "desc",
+            "field": "sales.Order.placed_at",
+          },
+        ],
+      },
+      "kind": "Query",
+      "layer": "application",
+      "level": "medium",
+      "module": "sales",
+      "props": {
+        "filter": "customer == of && (since == null || placed_at >= since)",
+        "sorts": [
+          "placed_at desc",
+        ],
+      },
+      "qn": "sales.OrdersOf",
+    },
+    {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "decl": "crm.Account",
+        },
+      },
+      "kind": "Param",
+      "layer": "application",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "type": "crm.Account",
+      },
+      "qn": "sales.OrdersOf.of",
+    },
+    {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "optional": true,
+          "primitive": "DateTime",
+        },
+      },
+      "kind": "Param",
+      "layer": "application",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "type": "DateTime?",
+      },
+      "qn": "sales.OrdersOf.since",
+    },
+    {
+      "data": {
         "source": "sales.Order",
       },
       "kind": "Projection",
@@ -2534,6 +2729,28 @@ exports[`graph of examples 1`] = `
         "verb": "GET",
       },
       "qn": "sales.PublicApi.endpoint[GET /orders]",
+    },
+    {
+      "data": {
+        "path": "/accounts/{of}/orders",
+        "picks": [
+          "sales.OrderSummary.reference",
+          "sales.OrderSummary.status",
+          "sales.OrderSummary.total",
+        ],
+        "projection": "sales.OrderSummary",
+        "target": "sales.OrdersOf",
+        "verb": "GET",
+      },
+      "kind": "Endpoint",
+      "layer": "interface",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "path": "/accounts/{of}/orders",
+        "verb": "GET",
+      },
+      "qn": "sales.PublicApi.endpoint[GET /accounts/{of}/orders]",
     },
     {
       "data": {

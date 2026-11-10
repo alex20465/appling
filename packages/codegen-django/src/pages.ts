@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { pageSizeName, queryCall, queryCode, sourcePath } from './application.js';
+import { inputLines, pageSizeName, queryCall, queryCode, sourcePath } from './application.js';
 import { canName, enforced, fieldGuards, policyImport } from './access.js';
 import { children, includeStep, pythonFile, routesStep, task, template } from './files.js';
 import { appOf, lastOf, snake } from './python.js';
@@ -40,15 +40,19 @@ export function pageSteps(page: GraphNode, context: MapContext): Step[] {
         const buttons = `[${actions.map(a => `{"label": ${JSON.stringify(lastOf(a.qn))}, "url": "/_actions/${app}/${snake(lastOf(a.qn))}/"}`).join(', ')}]`;
         if (component.$type === 'ListView') {
             const query = context.node(component.query!)!;
-            if (!queryCode(query, context, new Set())) {
+            // The query's inputs come from the query string of the page.
+            const inputs = inputLines(query, ['request.GET'], 'raise BadRequest(inputs.errors)', context, imports);
+            if (!queryCode(query, context, new Set()) || !inputs) {
                 tasks.push(task(`list ${lastOf(query.qn)} on ${lastOf(page.qn)}`));
                 continue;
             }
+            if (inputs.length) imports.add('from django.core.exceptions import BadRequest');
             const columns = fields(component.projection!, component.picks, context, tasks, 'row', imports);
             imports.add(`from ${appOf(query.module)}.queries import ${snake(lastOf(query.qn))}${query.data.pageSize ? `, ${pageSizeName(query)}` : ''}`);
             if (query.data.pageSize) imports.add('from django.core.paginator import Paginator');
             lines.push(
-                `rows = ${queryCall(query, 'request.user', context)}`,
+                ...inputs,
+                `rows = ${queryCall(query, 'request.user', context, inputs.length ? ['**inputs.validated_data'] : [])}`,
                 ...(query.data.pageSize ? [`rows = Paginator(rows, ${pageSizeName(query)}).get_page(request.GET.get("page"))`] : []),
                 'components.append({',
                 '    "kind": "list",',

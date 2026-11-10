@@ -212,7 +212,7 @@ Named elements:
 | `ValueType` | `value` |
 | `Entity`, `Field` | `entity` and the fields of entities, value types, events and actors |
 | `Event` | `event` |
-| `Action`, `Param`, `ErrorDecl` | `action`, its inputs (and the parameters of use cases and external operations), and declared errors |
+| `Action`, `Param`, `ErrorDecl` | `action`, its inputs (and the inputs of queries, the parameters of use cases and external operations), and declared errors |
 | `Machine`, `Job` | `machine`, `job` |
 | `Query` | `query` |
 | `Projection`, `ProjectionField` | `projection` and its fields |

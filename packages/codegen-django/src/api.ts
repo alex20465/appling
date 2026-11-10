@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { GraphNode } from '@appling/model';
-import { pageSizeName, queryCall, queryCode } from './application.js';
+import { inputLines, pageSizeName, queryCall, queryCode } from './application.js';
 import { children, includeStep, pythonFile, routesStep, task, template } from './files.js';
 import { appOf, lastOf, snake } from './python.js';
 import { vendorTasks } from './vendors.js';
@@ -48,6 +48,9 @@ function endpointView(endpoint: GraphNode, name: string, throttle: string | unde
     const throttles = throttle ? [`    throttle_classes = [${throttle}]`] : [];
     if (verb === 'GET' && target.kind === 'Query' && endpoint.data.projection) {
         if (!queryCode(target, context, new Set())) return undefined;
+        // The inputs come from the path and the query string; parameters that do not parse answer 400.
+        const inputs = inputLines(target, ['self.request.query_params', 'self.kwargs'], undefined, context, imports);
+        if (!inputs) return undefined;
         const projection = context.node(endpoint.data.projection as string)!;
         const picks = ((endpoint.data.picks ?? []) as string[]).map(p => JSON.stringify(lastOf(p)));
         imports.add('from rest_framework import generics');
@@ -71,7 +74,8 @@ function endpointView(endpoint: GraphNode, name: string, throttle: string | unde
             ...throttles,
             '',
             '    def get_queryset(self):',
-            `        return ${queryCall(target, 'self.request.user', context)}`
+            ...inputs.map(l => `        ${l}`),
+            `        return ${queryCall(target, 'self.request.user', context, inputs.length ? ['**inputs.validated_data'] : [])}`
         );
         return { name, code: lines.join('\n') };
     }

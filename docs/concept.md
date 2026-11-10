@@ -74,7 +74,7 @@ Rule of placement: something that must always be true belongs in Layer 1 as an i
 
 Describes how domain capabilities are organized for practical use.
 
-- **Queries:** filtered, sorted, paginated access to entities. They inherit entity policies.
+- **Queries:** filtered, sorted, paginated access to entities. They inherit entity policies. A query may declare typed **inputs** like an action's (`input { of: Customer, since: Date? }`); its filter and policies read them, use case calls pass them in order, and an interface takes them from the request (the path for `{name}` parameters, the query string for the rest). An optional input is null when it is not given, and the filter says itself what null means (`since == null || placed_at >= since`).
 - **Projections** (renamed from "views of data"): shaped read models over entities and queries. This is the **only** place where a shape may diverge from the entity, for example API versions or DTOs.
 - **Use cases:** the single process concept. A use case orchestrates actions, queries, and events into an application-level operation, and may be long-running.
 - External systems: consumed integrations declared as dependencies with typed operations.
@@ -85,7 +85,7 @@ Describes how domain capabilities are organized for practical use.
 Describes how application capabilities are exposed to non-human or programmatic consumers.
 
 - REST APIs, GraphQL schemas, MCP interfaces, webhooks, other protocols
-- Mapping from endpoints to use cases, queries, actions, and projections
+- Mapping from endpoints to use cases, queries, actions, and projections. A query endpoint takes the query's inputs from the request: each `{name}` in its path names an input, the other inputs come from the query string.
 - Transport-specific policies: auth scheme, rate limits, CORS. These may only add restrictions.
 
 Web routes for human-facing pages are owned by Layer 5, not Layer 4.

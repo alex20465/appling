@@ -4,7 +4,7 @@ import {
     isField, isIndexExpr, isInvariant, isJob, isListExpr, isMemberExpr, isNameExpr, isNullExpr, isNumberExpr, isPolicy,
     isPrecondition, isProjectionField, isQuery, isRole, isSetEffect, isStringExpr, isTenant, isTransition, isUnaryExpr, isUseCase,
     type Action, type Actor, type Assignment, type BinaryExpr, type Call, type Entity, type Enum, type Event, type Expr,
-    type Field, type MemberExpr, type NameExpr, type Param, type Policy, type Tenant, type Transition, type TypeRef, type ValueType
+    type Field, type MemberExpr, type NameExpr, type Param, type Policy, type Query, type Tenant, type Transition, type TypeRef, type ValueType
 } from './generated/ast.js';
 import { projectionSourceEntity, type ApplingScopeProvider } from './appling-scope.js';
 import type { ApplingServices } from './appling-module.js';
@@ -121,7 +121,7 @@ export class ExpressionTyper {
         if (isPrecondition(owner)) return { env: this.actionEnv(owner.$container), ...condition };
         if (isTransition(owner)) return { env: this.entityEnv(machineEntity(owner)), ...condition };
         if (isJob(owner)) return { env: this.actionEnv(owner.action.ref), ...condition };
-        if (isQuery(owner)) return { env: this.entityEnv(owner.entity.ref), ...condition };
+        if (isQuery(owner)) return { env: this.queryEnv(owner), ...condition };
         if (isProjectionField(owner)) return { env: this.entityEnv(projectionSourceEntity(owner.$container)) };
         if (isSetEffect(owner)) return { env: this.effectEnv(owner), expected: owner.field.ref && typeOfRef(owner.field.ref.type) };
         if (isAssignment(owner)) return { env: this.effectEnv(owner.$container), expected: this.assignmentTarget(owner) };
@@ -361,6 +361,11 @@ export class ExpressionTyper {
         return this.with(this.entityEnv(action?.entity?.ref), action?.inputs ?? []);
     }
 
+    /** A query's filter and policies read the entity's fields and the query's inputs, which shadow fields of the same name. */
+    private queryEnv(query: Query): Env {
+        return this.with(this.entityEnv(query.entity.ref), query.inputs);
+    }
+
     private paramsEnv(params: Param[]): Env {
         return this.with(this.base(), params);
     }
@@ -369,7 +374,7 @@ export class ExpressionTyper {
         const owner = policy.$container;
         if (isEntity(owner)) return this.entityEnv(owner);
         if (isAction(owner)) return this.actionEnv(owner);
-        if (isQuery(owner)) return this.entityEnv(owner.entity.ref);
+        if (isQuery(owner)) return this.queryEnv(owner);
         return this.paramsEnv(owner.params);
     }
 
@@ -467,7 +472,7 @@ function signature(target: NonNullable<Call['target']['ref']>): Signature {
         return { params: [...entity, ...params(target.inputs)], required: required(target.inputs, entity.length) };
     }
     if (isExternalOperation(target) || isUseCase(target)) return { params: params(target.params), required: required(target.params) };
-    return { params: [], required: 0 };
+    return { params: params(target.inputs), required: required(target.inputs) };
 }
 
 /** An actor's own fields and those of the entity it is bound to. */

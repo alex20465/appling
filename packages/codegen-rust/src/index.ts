@@ -51,9 +51,9 @@ const extension: CodegenExtension = {
             case 'ProjectionField':
             case 'Endpoint':
                 return [];
-            case 'Query':
+            case 'Query': return [...guardSteps(node, context), ...queryFilterSteps(node, context), task(`implement the query ${last(node.qn)} on top of the generated domain module, with the storage, HTTP and scheduling crates of your choice`)];
             case 'UseCase':
-                return [...guardSteps(node, context), task(`implement the ${node.kind.toLowerCase()} ${last(node.qn)} on top of the generated domain module, with the storage, HTTP and scheduling crates of your choice`)];
+                return [...guardSteps(node, context), task(`implement the use case ${last(node.qn)} on top of the generated domain module, with the storage, HTTP and scheduling crates of your choice`)];
             case 'Job':
             case 'Projection':
             case 'External':
@@ -256,6 +256,31 @@ function actionSteps(action: GraphNode, context: MapContext): Step[] {
     return [append(action.module, code), ...guardSteps(action, context), ...tasks, ...testSteps(action)];
 }
 
+/**
+ * `in_<query>`: whether a record is among the query's results for its inputs, by the filter. Loading, sorting and
+ * paging stay with the storage, the query's task; nothing when the filter does not translate.
+ */
+function queryFilterSteps(query: GraphNode, context: MapContext): Step[] {
+    if (!query.data.filter) return [];
+    const entity = context.node(query.data.entity as string)!;
+    const self = snake(last(entity.qn));
+    const scope = { ...rustScope(query, context), self };
+    const condition = rustExpr(query.data.filter as ExprData, scope);
+    if (!condition) return [];
+    const used = (name: string) => new RegExp(`\\b${name}\\b`).test(condition) ? name : `_${name}`;
+    const inputs = context.children(query.qn).filter(c => c.kind === 'Param');
+    const params = [
+        `${used(self)}: &${qualify(entity, scope)}`,
+        ...inputs.map(p => `${used(last(p.qn))}: ${borrowed(p, context) ? `&${qualify(context.node((p.data.type as TypeData).decl!)!, scope)}` : typeOf(p.data.type as TypeData, scope)}`)
+    ];
+    return [append(query.module, [
+        `/// Whether a record is among the results of the query ${query.qn}${inputs.length ? ' for the inputs' : ''}.`,
+        `pub fn in_${snake(last(query.qn))}(${params.join(', ')}) -> bool {`,
+        `    ${condition}`,
+        '}'
+    ].join('\n'))];
+}
+
 /** What the policy checks of an element receive besides the actor: the record they guard and the inputs. */
 interface Guard {
     /** The guarded record's entity: the entity itself, or the entity of the action or query. */
@@ -280,7 +305,7 @@ function guardOf(owner: GraphNode, context: MapContext): Guard | undefined {
         ? owner.kind === 'Entity' || owner.kind === 'Query' || (owner.kind === 'Action' && (!!entity || !creates(owner, context)))
         : owner.kind === 'Action' && !!entity && tenantPaths(context).has(entity.qn));
     if (!applies) return undefined;
-    const params = owner.kind === 'Action' || owner.kind === 'UseCase' ? context.children(owner.qn).filter(c => c.kind === 'Param') : [];
+    const params = owner.kind === 'Action' || owner.kind === 'UseCase' || owner.kind === 'Query' ? context.children(owner.qn).filter(c => c.kind === 'Param') : [];
     return { entity, params, name: `can_${snake(last(owner.qn))}` };
 }
 
