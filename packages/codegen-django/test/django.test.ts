@@ -375,6 +375,47 @@ test('action and query policies over actor kinds get active tests', async () => 
     expect(missing('Unseen')).toEqual([expect.stringMatching(/\(test_allows_permitted_actors\)$/)]);
 });
 
+test('a use case policy over actor kinds gets an active denied test', async () => {
+    const { files, entries } = await generate({
+        'shop.appling': `module shop {
+            role Clerk
+            actor human Employee roles Clerk
+            actor human Guest
+            entity Order {
+                total: Money
+            }
+            external Payments {
+                op Refund (amount: Money)
+            }
+            usecase Settle (order: Order, note: String) {
+                step Payments.Refund(order.total)
+                policy { actor.is(Clerk) }
+            }
+            usecase Audit (order: Order) {
+                policy { actor.account == order }
+            }
+        }`
+    });
+    const tests = files['shop/tests.py'];
+    expect(tests).toContain('from shop.usecases import settle');
+    expect(tests).toContain([
+        'class SettleAnyPolicyTest(TestCase):',
+        '    """shop.Settle.policy[]: actor.is(Clerk)"""',
+        '',
+        '    def test_allows_permitted_actors(self):',
+        '        self.skipTest("registry task: shop.Settle.policy[]")',
+        '',
+        '    def test_denies_other_actors(self):',
+        '        user = get_user_model().objects.create(username="tester")',
+        '        user.groups.add(Group.objects.get_or_create(name="Guest")[0])',
+        '        with self.assertRaises(PermissionDenied):',
+        '            settle(order=make_order(), note="note", actor=user, payments=None)'
+    ].join('\n'));
+    const missing = (owner: string) => Object.values(entries).filter(e => e.kind === 'Policy' && e.qn.startsWith(`shop.${owner}.`)).flatMap(e => e.missing.map(m => m.what));
+    expect(missing('Settle')).toEqual([expect.stringMatching(/\(test_allows_permitted_actors\)$/)]);
+    expect(missing('Audit')).toContain('write the test bodies of AuditAnyPolicyTest in shop/tests.py');
+});
+
 test('a model without policies keeps open queries and actions', async () => {
     const { files } = await generate({ 'shop.appling': 'module shop {\n role Clerk\n entity Order {\n note: String?\n }\n action Touch on Order {\n effect { set note = "seen" }\n }\n query All from Order {\n }\n}' });
     expect(files['shop/policies.py']).toBeUndefined();

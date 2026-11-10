@@ -1,7 +1,7 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, Record as SimRecord } from '@appling/model';
 import { canName, policyCondition, policyImport } from './access.js';
-import { queryCode } from './application.js';
+import { queryCode, useCaseExternals } from './application.js';
 import { afterEffects, call, preconditionsHold, setup, valid } from './behavior-tests.js';
 import { children } from './files.js';
 import { factory, holds, simulator, type Factory } from './fixtures.js';
@@ -17,7 +17,8 @@ const GROUP = 'from django.contrib.auth.models import Group';
  * The tests of a policy whose condition reads the actor only through `actor.is(...)`: a user in the group of an
  * actor that the simulator proves gets through every check of the guarded element, and one it proves this policy
  * keeps out. A policy on a whole entity is checked against `can_<operation>_<entity>` on the factory row, one on an
- * action by calling the action, one on a query by looking for the factory row in its result. A case stays a
+ * action by calling the action, one on a query by looking for the factory row in its result, one on a use case by
+ * expecting `PermissionDenied` before its first step (its allowed case stays a task). A case stays a
  * registry task when a condition on the way reads more of the actor than `actor.is(...)`, a role it names has a
  * condition, a fixture is missing, or no declared actor gets a certain verdict.
  */
@@ -25,6 +26,7 @@ export function policyTests(policy: GraphNode, context: MapContext): Step[] {
     const owner = context.node(parentOf(policy.qn));
     if (owner?.kind === 'Action') return actionPolicyTests(policy, owner, context);
     if (owner?.kind === 'Query') return queryPolicyTests(policy, owner, context);
+    if (owner?.kind === 'UseCase') return useCasePolicyTests(policy, owner, context);
     const rule = String(policy.props.condition);
     const fallback = () => testSteps(policy, rule, CASES, context);
     if (owner?.kind !== 'Entity' || ((policy.data.fields ?? []) as string[]).length) return fallback();
@@ -123,6 +125,30 @@ function queryPolicyTests(policy: GraphNode, query: GraphNode, context: MapConte
     ];
     if (tests.every(t => !t.body)) return fallback();
     return testSteps(policy, rule, tests, context, imports, [...made.steps, ...user.steps]);
+}
+
+/**
+ * The tests of a use case's policy. The use case checks its own policies before its first step, so an actor this
+ * policy keeps out gets `PermissionDenied` without any step running; the externals it takes are passed as `None`.
+ * The allowed case runs the steps and stays a registry task.
+ */
+function useCasePolicyTests(policy: GraphNode, useCase: GraphNode, context: MapContext): Step[] {
+    const rule = String(policy.props.condition);
+    const fallback = () => testSteps(policy, rule, CASES, context);
+    if (!checkable(policy, context)) return fallback();
+    const run = setup(useCase, context);
+    const user = userFactory(context);
+    if (!run || !user) return fallback();
+    const denied = actorsOf(context).find(actor => verdict(policy, actor, {}, context) === false);
+    if (!denied) return fallback();
+    const imports = new Set([...run.imports, ...user.imports, GROUP, 'from django.core.exceptions import PermissionDenied']);
+    const externals = useCaseExternals(useCase, context).map(e => `${snake(lastOf(e.qn))}=None`);
+    const fire = call(useCase, run, [`actor=${user.variable}`, ...externals]);
+    const tests: TestCase[] = [
+        { name: CASES[0] },
+        { name: CASES[1], body: [...signIn(user, denied), 'with self.assertRaises(PermissionDenied):', `    ${fire}`] }
+    ];
+    return testSteps(policy, rule, tests, context, imports, [...run.steps, ...user.steps]);
 }
 
 /** The policies of an entity that cover whole rows (no `fields`). */

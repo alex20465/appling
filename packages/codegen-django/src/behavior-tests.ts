@@ -17,9 +17,13 @@ export interface Setup {
     steps: Step[];
 }
 
-/** The factory of the action's entity and a sample for every required input; undefined when a fixture is missing. */
+/**
+ * The factory of the action's entity and a sample for every required input; undefined when a fixture is missing.
+ * A use case takes the same inputs and is imported from `usecases`.
+ */
 export function setup(action: GraphNode, context: MapContext): Setup | undefined {
-    const imports = new Set<string>([`from ${appOf(action.module)}.actions import ${snake(lastOf(action.qn))}`]);
+    const file = action.kind === 'UseCase' ? 'usecases' : 'actions';
+    const imports = new Set<string>([`from ${appOf(action.module)}.${file} import ${snake(lastOf(action.qn))}`]);
     const steps: Step[] = [];
     const result: Setup = { args: [], inputs: {}, imports, steps };
     if (action.data.entity) {

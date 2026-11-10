@@ -196,6 +196,11 @@ export function useCaseSteps(useCase: GraphNode, context: MapContext): Step[] {
     return [template(`${appOf(useCase.module)}/usecases.py`, existing => pythonFile(existing, imports, code)), ...tasks];
 }
 
+/** The externals a use case function takes as keyword arguments, named `snake(external)`, in signature order. */
+export function useCaseExternals(useCase: GraphNode, context: MapContext): GraphNode[] {
+    return useCaseCode(useCase, context).externals;
+}
+
 /**
  * The function of a use case, its imports, the tasks for what it leaves out, and the externals it takes as
  * keyword arguments (one per external system whose operations its steps call).
