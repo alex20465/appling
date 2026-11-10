@@ -446,8 +446,20 @@ mod tests {
     #[ignore = "registry task: sales.Order.policy[read]"]
     fn order_policy_read() {}
     #[test]
-    #[ignore = "registry task: sales.Order.policy[create,delete]"]
-    fn order_policy_create_delete() {}
+    fn order_policy_create_delete_allows_permitted_actors() {
+        let actor = crate::access::Actor::employee();
+        let order = valid_order();
+        assert!(can_create_order(&actor, &order), "can_create_order: want true for crm.Employee");
+        assert!(can_delete_order(&actor, &order), "can_delete_order: want true for crm.Employee");
+    }
+
+    #[test]
+    fn order_policy_create_delete_denies_other_actors() {
+        let actor = crate::access::Actor::shopper();
+        let order = valid_order();
+        assert!(!can_create_order(&actor, &order), "can_create_order: want false for sales.Shopper");
+        assert!(!can_delete_order(&actor, &order), "can_delete_order: want false for sales.Shopper");
+    }
     #[test]
     #[ignore = "registry task: sales.Order.policy[update]"]
     fn order_policy_update() {}

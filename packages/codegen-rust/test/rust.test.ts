@@ -465,3 +465,37 @@ test('a scenario Rust cannot run as the simulator does stays an ignored test wit
     expect(entries['shop.EmptyCheckout'].missing.map(m => m.what)).toEqual(['write the test scenario_empty_checkout: the use case Checkout has no generated function to call']);
     expect(entries['shop.ShopperCannotCancel'].status).toBe('generated');
 });
+
+const POLICIES = `module p {
+  role Clerk
+  actor human Staff roles Clerk
+  actor human Visitor
+  entity Item {
+    name: String
+    policy read, update { actor.is(Clerk) }
+    policy delete { actor.is(Staff) && name != "" }
+    policy create { actor.is(Visitor) || actor.is(Staff) }
+  }
+  entity Note {
+    text: String
+    policy { actor.name == "x" }
+  }
+}`;
+
+test('policies on a whole entity get tests over can_<op>_<entity> with the actors the simulator proves', async () => {
+    const { documents, services } = await buildWorkspace({ 'p.appling': POLICIES });
+    const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), rust, 'app');
+    const files = new Map<string, string>();
+    for (const { step } of result.steps) if (step.kind === 'template') files.set(step.file, step.write(files.get(step.file)));
+    const module = files.get('src/p.rs')!;
+    expect(module).toContain('    #[test]\n    fn item_policy_read_update_allows_permitted_actors() {\n        let actor = crate::access::Actor::staff();\n        let item = valid_item();\n        assert!(can_read_item(&actor, &item), "can_read_item: want true for p.Staff");\n        assert!(can_update_item(&actor, &item), "can_update_item: want true for p.Staff");\n    }');
+    expect(module).toContain('    fn item_policy_read_update_denies_other_actors() {\n        let actor = crate::access::Actor::visitor();\n        let item = valid_item();\n        assert!(!can_read_item(&actor, &item), "can_read_item: want false for p.Visitor");');
+    expect(module).toContain('    #[ignore = "registry task: p.Item.policy[create]"]\n    fn item_policy_create_denies_other_actors() {}');
+    expect(module.match(/fn valid_item\(\)/g)).toHaveLength(1);
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['p.Item.policy[read,update]'].missing).toEqual([]);
+    // Every declared actor passes the create policy, so nobody is denied.
+    expect(entries['p.Item.policy[create]'].missing.map(m => m.what)).toEqual(['write the test item_policy_create_denies_other_actors']);
+    // actor.name is an actor field Actor::<actor>() leaves empty: the test stays ignored.
+    expect(entries['p.Note.policy[]'].missing.map(m => m.what)).toContain('write the test note_policy');
+});
