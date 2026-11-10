@@ -90,7 +90,7 @@ export const MODEL_TOOLS = {
         run: async (context, input) => ({ source: await context.project.source(input.qn, context.sources()) ?? `No element ${input.qn}.` })
     }),
     simulate: define({
-        description: 'Ask the simulator about behavior instead of guessing. reach: the shortest path of transitions from the initial state of a machine to a state. actors: for every actor whether it may trigger an action (yes, no, or depends on the data). risks: the invariants an action may violate through the fields it changes. run: run an action on a sample record as an actor, with inputs, and see policies, preconditions, the transition, effects, events and violated invariants.',
+        description: 'Ask the simulator about behavior instead of guessing. reach: the shortest path of transitions from the initial state of a machine to a state. actors: for every actor whether it may trigger an action (yes, no, or depends on the data). risks: the invariants an action may violate through the fields it changes. run: run an action on a sample record as an actor, with inputs, and see policies, preconditions, the transition, effects, events, the records it creates, updates or deletes (writes) and violated invariants.',
         input: {
             question: z.enum(['reach', 'actors', 'risks', 'run']),
             machine: z.string().optional().describe('reach: qualified name of the machine'),

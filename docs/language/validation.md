@@ -91,6 +91,43 @@ machine Flow on Order.status {
 }
 ```
 
+## Effects
+
+| Rule | Message |
+|---|---|
+| `for` iterates a field of the entity whose type is a list of records | `"for" iterates a collection relationship of <Entity>, and <field> is no list of records.` |
+| `update` and `delete` take a field, loop variable or `as` name followed by fields, leading to one record | `"update" takes a relationship path to one record, such as item.product.` (with `; for every record of a collection, use "for"` for a list) |
+| `delete self` needs an action on an entity | `"delete self" needs an action on an entity.` |
+| A loop variable or `as` name hides no other name | `"<name>" is already a name here; pick another one.` |
+
+A loop variable is visible inside its loop and an `as` name after its `create` only; elsewhere they are `Unknown name "<name>".` A `set` inside `update` names a field of the updated record, or `Could not resolve reference to Field named '<field>'.`
+
+```appling
+entity Product {
+  stock: Int
+}
+entity Cart {
+  items: Product[]
+  tags: String[]
+}
+action Clear on Cart {
+  effect {
+    for tag in tags { // "for" iterates a collection relationship of Cart, and tags is no list of records.
+    }
+    for items in items { // "items" is already a name here; pick another one.
+    }
+    update items { // "update" takes a relationship path to one record, such as item.product; for every record of a collection, use "for".
+      set stock = 0
+    }
+  }
+}
+action Reset {
+  effect {
+    delete self // "delete self" needs an action on an entity.
+  }
+}
+```
+
 ## Policies
 
 | Rule | Message |

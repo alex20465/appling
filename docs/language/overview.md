@@ -62,7 +62,7 @@ Followed by `:`, such a keyword is always a name, so a field named `state` may f
 
 Every other keyword is reserved and cannot be a name:
 
-`as`, `atomic`, `auth`, `await`, `consistency`, `cors`, `do`, `effect`, `else`, `emit`, `entity`, `enum`, `errors`, `eventual`, `every`, `export`, `external`, `false`, `in`, `interface`, `invariant`, `job`, `machine`, `module`, `navigation`, `null`, `owned`, `paginate`, `policy`, `projection`, `requires`, `returns`, `transition`, `true`, `unique`, `usecase`, `via`, `where`, and the primitive types `Bool`, `Date`, `DateTime`, `Decimal`, `Duration`, `File`, `Int`, `Money`, `String`, `Text`, `Uuid`.
+`as`, `atomic`, `auth`, `await`, `consistency`, `cors`, `do`, `effect`, `else`, `emit`, `entity`, `enum`, `errors`, `eventual`, `every`, `export`, `external`, `false`, `in`, `interface`, `invariant`, `job`, `machine`, `module`, `navigation`, `null`, `owned`, `paginate`, `policy`, `projection`, `requires`, `returns`, `self`, `transition`, `true`, `unique`, `usecase`, `via`, `where`, and the primitive types `Bool`, `Date`, `DateTime`, `Decimal`, `Duration`, `File`, `Int`, `Money`, `String`, `Text`, `Uuid`.
 
 There is no escape syntax for reserved words; pick another name, such as `entries` for `export`.
 

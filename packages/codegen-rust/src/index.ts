@@ -1,5 +1,5 @@
 import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
-import { Simulator, UNKNOWN, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
+import { Simulator, throughPath, UNKNOWN, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
 import { accessFile, accessOf, accessSteps, actorFieldType, durationAttribute, durationSteps, libStep, PRIMITIVES, tenantOf, tenantPaths } from './access.js';
 import { enumVariant, pascal, qualify, rustExpr, rustTerm, snake, type RustScope } from './rust.js';
 
@@ -47,6 +47,9 @@ const extension: CodegenExtension = {
             case 'SetEffect':
             case 'CreateEffect':
             case 'EmitEffect':
+            case 'ForEffect':
+            case 'UpdateEffect':
+            case 'DeleteEffect':
             case 'ExternalOperation':
             case 'ProjectionField':
             case 'Endpoint':
@@ -236,18 +239,18 @@ function actionSteps(action: GraphNode, context: MapContext): Step[] {
         body.push(`if !(${condition}) {`, `    return Err(${error});`, '}');
     });
     const transitions = context.graph.nodes.filter(n => n.kind === 'Transition' && n.data.action === action.qn);
-    const creating: Creating = { action: last(action.qn), entities: new Map() };
+    const creating = storing(action);
     if (transitions.length && self) body.push(...transitionMatch(transitions, self, last(action.qn), scope, context, tasks, creating));
-    for (const effect of context.children(action.qn).filter(c => c.kind.endsWith('Effect'))) body.push(...effectLines(effect, self, scope, context, tasks, creating));
+    body.push(...effectBlock(action, self, scope, context, tasks, creating));
     const emits = body.some(l => l.includes('events.push('));
     const params = context.children(action.qn).filter(c => c.kind === 'Param').map(p => {
         const used = body.some(l => new RegExp(`\\b${last(p.qn)}\\b`).test(l));
         return `${used ? '' : '_'}${last(p.qn)}: ${typeOf(p.data.type as TypeData, scope)}`;
     });
     const actor = guard || enforced(context) ? [`${body.some(l => /\bactor\b/.test(l)) ? '' : '_'}actor: &${accessPath(scope, 'Actor')}`] : [];
-    const stores = [...creating.entities.values()].map(e => `create_${snake(last(e.qn))}: &mut dyn FnMut(${qualify(e, scope)}) -> Result<(), Error>`);
+    const stores = storeFunctions(creating).map(([name, e, verb]) => `${name}: &mut dyn FnMut(${verb === 'create' ? '' : '&'}${qualify(e, scope)}) -> Result<(), Error>`);
     const code = [
-        `/// The action ${action.qn}. It returns the events it emits.${stores.length ? ' The records it creates go to the create functions, which store them.' : ''}`,
+        `/// The action ${action.qn}. It returns the events it emits.${stores.length ? ' The records it creates, updates or deletes go to the store functions, which write them.' : ''}`,
         `pub fn ${snake(last(action.qn))}(${[...actor, ...(entity ? [`${self}: &mut ${qualify(entity, scope)}`] : []), ...params, ...stores].join(', ')}) -> Result<Vec<Event>, Error> {`,
         `    let ${emits ? 'mut ' : ''}events = Vec::new();`,
         ...body.map(l => `    ${l}`),
@@ -445,20 +448,49 @@ function transitionMatch(transitions: GraphNode[], self: string, label: string, 
             else tasks.push(task(`check the guard ${transition.props.guard} of ${last(transition.qn)}`));
         }
         lines.push(`    ${pattern} => {`);
-        for (const effect of context.children(transition.qn)) lines.push(...effectLines(effect, self, scope, context, tasks, creating).map(l => `        ${l}`));
+        lines.push(...effectBlock(transition, self, scope, context, tasks, creating).map(l => `        ${l}`));
         lines.push(`        ${state} = ${enumVariant(context.node(`${enumNode.qn}.${transition.data.to}`)!, scope)};`, '    }');
     }
     lines.push(`    _ => return Err(Error::InvalidTransition { action: ${JSON.stringify(label)}, from: format!("{:?}", ${state}) }),`, '}');
     return lines;
 }
 
-/** The records an action creates: each created entity becomes a `create_<entity>` function parameter that stores one. */
+/**
+ * The records an action writes besides its own: each created, updated or deleted entity becomes a `create_<entity>`,
+ * `update_<entity>` or `delete_<entity>` function parameter that stores the change.
+ */
 interface Creating {
     action: string;
     entities: Map<string, GraphNode>;
+    updates: Map<string, GraphNode>;
+    deletes: Map<string, GraphNode>;
+}
+
+function storing(action: GraphNode): Creating {
+    return { action: last(action.qn), entities: new Map(), updates: new Map(), deletes: new Map() };
+}
+
+/** The store functions an action takes, in order: creates, updates, deletes. */
+function storeFunctions(creating: Creating): [string, GraphNode, 'create' | 'update' | 'delete'][] {
+    return ([['create', creating.entities], ['update', creating.updates], ['delete', creating.deletes]] as const)
+        .flatMap(([verb, map]) => [...map.values()].map(e => [`${verb}_${snake(last(e.qn))}`, e, verb] as [string, GraphNode, 'create' | 'update' | 'delete']));
+}
+
+/** The effects below an action, a transition or a loop in order; an `as` name is a variable for the effects after it. */
+function effectBlock(owner: GraphNode, self: string | undefined, scope: RustScope, context: MapContext, tasks: Step[], creating?: Creating): string[] {
+    const lines: string[] = [];
+    let current = scope;
+    for (const effect of context.children(owner.qn).filter(c => c.kind.endsWith('Effect'))) {
+        lines.push(...effectLines(effect, self, current, context, tasks, creating));
+        const variable = effect.data.variable as string | undefined;
+        if (effect.kind === 'CreateEffect' && variable) current = { ...current, vars: new Map([...(current.vars ?? []), [variable, 'other']]) };
+    }
+    return lines;
 }
 
 function effectLines(effect: GraphNode, self: string | undefined, scope: RustScope, context: MapContext, tasks: Step[], creating?: Creating): string[] {
+    if (effect.kind === 'ForEffect') return loopLines(effect, self, scope, context, tasks, creating);
+    if (effect.kind === 'UpdateEffect' || effect.kind === 'DeleteEffect') return recordLines(effect, self, scope, context, tasks, creating);
     if (effect.kind === 'SetEffect') {
         const field = context.node(effect.data.field as string)!;
         const value = self && assigned(field, effect.data.value as ExprData, scope);
@@ -502,6 +534,77 @@ function effectLines(effect: GraphNode, self: string | undefined, scope: RustSco
 }
 
 /**
+ * `for x in items` loops over the record's list, by `iter_mut()` when an `update` changes a record the loop
+ * variable leads to. A loop that would also borrow the whole record (a method call on it) becomes a task.
+ */
+function loopLines(effect: GraphNode, self: string | undefined, scope: RustScope, context: MapContext, tasks: Step[], creating?: Creating): string[] {
+    const variable = effect.data.variable as string;
+    const inner = { ...scope, vars: new Map([...(scope.vars ?? []), [variable, 'other' as const]]) };
+    // A dry run decides whether the loop is kept before it registers stores and tasks.
+    const draft = self ? effectBlock(effect, self, inner, context, [], creating && { ...creating, entities: new Map(), updates: new Map(), deletes: new Map() }) : [];
+    const mutates = context.children(effect.qn).some(c => c.kind === 'UpdateEffect' && rootOf(c.data.target as ExprData) === variable);
+    if (!self || (mutates && new RegExp(`\\b${self}\\.\\w+\\(`).test(draft.join('\n')))) {
+        tasks.push(task(`apply the effect ${last(effect.qn)}`));
+        return [];
+    }
+    const body = effectBlock(effect, self, inner, context, tasks, creating);
+    const used = body.some(l => new RegExp(`\\b${variable}\\b`).test(l));
+    return [`for ${used ? variable : '_'} in ${self}.${last(effect.data.collection as string)}.${mutates ? 'iter_mut' : 'iter'}() {`, ...body.map(l => `    ${l}`), '}'];
+}
+
+/** The first name of a relationship path, such as `item` in `item.product`. */
+function rootOf(path: ExprData | undefined): string | undefined {
+    return path?.$type === 'MemberExpr' ? rootOf(path.receiver) : path?.name;
+}
+
+/**
+ * `update <path>` sets the fields of the related record and hands it to `update_<entity>`, `delete <path>` and
+ * `delete self` hand it to `delete_<entity>`; once the model has policies, the actor needs the entity's update
+ * or delete check first. An optional record at the end of the path is changed through `if let`; a path through
+ * an optional record in the middle, or code outside an action, becomes a task.
+ */
+function recordLines(effect: GraphNode, self: string | undefined, scope: RustScope, context: MapContext, tasks: Step[], creating?: Creating): string[] {
+    const entity = context.node(effect.data.entity as string);
+    const operation = effect.kind === 'UpdateEffect' ? 'update' : 'delete';
+    const target = effect.data.target as ExprData | undefined;
+    const optional = !!target?.type.endsWith('?');
+    const through = target && hopsOf(target).slice(0, -1).some(h => h.type.endsWith('?'));
+    // An optional record is bound to `record`, so the sets read and write it through that name.
+    const path: ExprData | undefined = optional ? { $type: 'NameExpr', name: 'record', type: target!.type.slice(0, -1) } : target;
+    const inner = optional ? { ...scope, vars: new Map([...(scope.vars ?? []), ['record', 'other' as const]]) } : scope;
+    const code = effect.data.self ? self : path && rustTerm(path, inner)?.raw;
+    const outer = optional ? rustTerm(target!, scope)?.raw : code;
+    const sets: string[] = [];
+    const wanted = operation === 'update' ? context.children(effect.qn).filter(c => c.kind === 'SetEffect') : [];
+    for (const set of wanted) {
+        const field = context.node(set.data.field as string)!;
+        const value = entity && assigned(field, throughPath(set.data.value as ExprData, entity.qn, path!), inner);
+        if (!value) break;
+        sets.push(`${code}.${last(field.qn)} = ${value};`);
+    }
+    if (!creating || !entity || !code || !outer || through || sets.length < wanted.length) {
+        tasks.push(task(`apply the effect ${last(effect.qn)}: ${operation} ${effect.data.self ? 'self' : effect.props.target}, for example through your storage layer`));
+        return [];
+    }
+    (operation === 'update' ? creating.updates : creating.deletes).set(entity.qn, entity);
+    // An `as` name holds the record itself; everything else is a reference or a box to dereference.
+    const named = !optional && target?.$type === 'NameExpr' && !target.target && !effect.qn.includes(`.effect[for ${target.name}].`);
+    const record = named ? `&${code}` : `&*${code}`;
+    const check = enforced(context) ? [
+        `if !${entity.module === effect.module ? '' : `crate::${entity.module.replaceAll('.', '::')}::`}can_${operation}_${snake(last(entity.qn))}(actor, ${record}) {`,
+        `    return Err(Error::Forbidden { action: ${JSON.stringify(creating.action)} });`,
+        '}'
+    ] : [];
+    const write = [...check, ...sets, `${operation}_${snake(last(entity.qn))}(${record})?;`];
+    return optional ? [`if let Some(record) = ${outer}.as_deref_mut() {`, ...write.map(l => `    ${l}`), '}'] : write;
+}
+
+/** The names and fields along a path, outermost first: `item`, then `item.product`. */
+function hopsOf(path: ExprData): ExprData[] {
+    return path.$type === 'MemberExpr' ? [...hopsOf(path.receiver!), path] : [path];
+}
+
+/**
  * A create effect in an action: a block that builds the record with `<Entity>::new` and the given fields, checks
  * `can_create_<entity>` once the model has policies, and hands the record to `create_<entity>`. Undefined when a
  * required field without default is not given or a value does not translate.
@@ -516,26 +619,35 @@ function createLines(effect: GraphNode, entity: GraphNode, scope: RustScope, con
         if (!value) return undefined;
         args.push(value);
     }
+    // A named row stays a variable for the effects after it, so the store gets a copy; an unnamed one lives in its own block.
+    const variable = effect.data.variable as string | undefined;
+    const record = variable ?? 'created';
     const sets: string[] = [];
     for (const field of fieldsOf(entity, context).filter(f => !f.data.derived && !required.includes(f))) {
         const expr = given.get(last(field.qn));
         if (!expr) continue;
         const value = assigned(field, expr, scope);
         if (!value) return undefined;
-        sets.push(`created.${last(field.qn)} = ${value};`);
+        sets.push(`${record}.${last(field.qn)} = ${value};`);
     }
     const check = enforced(context) ? [
-        `if !${entity.module === effect.module ? '' : `crate::${entity.module.replaceAll('.', '::')}::`}can_create_${snake(last(entity.qn))}(actor, &created) {`,
+        `if !${entity.module === effect.module ? '' : `crate::${entity.module.replaceAll('.', '::')}::`}can_create_${snake(last(entity.qn))}(actor, &${record}) {`,
         `    return Err(Error::Forbidden { action: ${JSON.stringify(creating.action)} });`,
         '}'
     ] : [];
     creating.entities.set(entity.qn, entity);
-    return ['{', ...[`let ${sets.length ? 'mut ' : ''}created = ${qualify(entity, scope)}::new(${args.join(', ')});`, ...sets, ...check, `create_${snake(last(entity.qn))}(created)?;`].map(l => `    ${l}`), '}'];
+    const code = [
+        `let ${sets.length || variable ? 'mut ' : ''}${record} = ${qualify(entity, scope)}::new(${args.join(', ')});`,
+        ...sets, ...check,
+        `create_${snake(last(entity.qn))}(${variable ? `${record}.clone()` : record})?;`
+    ];
+    return variable ? code : ['{', ...code.map(l => `    ${l}`), '}'];
 }
 
 /** Whether an effect runs in an action, which takes the actor, rather than in a transition on an event. */
 function runByActor(effect: GraphNode, context: MapContext): boolean {
-    const owner = context.node(effect.qn.slice(0, effect.qn.lastIndexOf('.effect[')));
+    let owner = context.node(effect.qn.slice(0, effect.qn.lastIndexOf('.effect[')));
+    while (owner?.kind.endsWith('Effect')) owner = context.node(owner.qn.slice(0, owner.qn.lastIndexOf('.effect[')));
     return owner?.kind === 'Action' || (owner?.kind === 'Transition' && !!owner.data.action);
 }
 
@@ -697,10 +809,14 @@ function transitionTest(transition: GraphNode, context: MapContext) {
     const self = snake(last(entity.qn));
     const dry: RustScope = { ...rustScope(action, context), self };
     const takesActor = !!guardOf(action, context) || enforced(context);
+    // The store functions the action takes, found the way actionSteps finds them; the test stores nothing.
+    const creating = storing(action);
+    transitionMatch(transitions, self, last(action.qn), dry, context, [], creating);
+    effectBlock(action, self, dry, context, [], creating);
     if (takesActor) {
         // Every policy the simulator weighs must be one Rust checks, or Rust denies where the simulator allows.
-        const created = [action, ...transitions].flatMap(n => context.children(n.qn)).filter(c => c.kind === 'CreateEffect').map(c => c.data.entity as string);
-        const policies = [action.qn, entity.qn, ...created].flatMap(qn => context.children(qn)).filter(c => c.kind === 'Policy');
+        const written = storeFunctions(creating).map(([, e]) => e.qn);
+        const policies = [action.qn, entity.qn, ...written].flatMap(qn => context.children(qn)).filter(c => c.kind === 'Policy');
         if (!policies.every(p => rustExpr(p.data.condition as ExprData, { ...dry, actor: 'actor' }))) return undefined;
     }
     const args: string[] = [];
@@ -711,11 +827,7 @@ function transitionTest(transition: GraphNode, context: MapContext) {
         args.push(sample.rust);
         inputs[last(param.qn)] = sample.value;
     }
-    // The create functions the action takes, found the way actionSteps finds them; the test stores nothing.
-    const creating: Creating = { action: last(action.qn), entities: new Map() };
-    transitionMatch(transitions, self, last(action.qn), dry, context, [], creating);
-    for (const effect of context.children(action.qn).filter(c => c.kind.endsWith('Effect'))) effectLines(effect, self, dry, context, [], creating);
-    for (const created of creating.entities.values()) args.push(`&mut |_: ${qualify(created, scope)}| Ok(())`);
+    for (const [, stored, verb] of storeFunctions(creating)) args.push(`&mut |_: ${verb === 'create' ? '' : '&'}${qualify(stored, scope)}| Ok(())`);
     const field = context.node(machine.data.field as string)!;
     if ((field.data.type as TypeData).optional) return undefined;
     const enumNode = context.node((field.data.type as TypeData).decl!)!;

@@ -17,7 +17,15 @@
   },
   {
     "kind": "CreateEffect",
-    "generated": 1,
+    "generated": 2,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0,
+    "left": 0
+  },
+  {
+    "kind": "DeleteEffect",
+    "generated": 3,
     "partial": 0,
     "todo": 0,
     "tasks": 0,
@@ -117,6 +125,14 @@
     "partial": 0,
     "todo": 1,
     "tasks": 1,
+    "left": 0
+  },
+  {
+    "kind": "ForEffect",
+    "generated": 1,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0,
     "left": 0
   },
   {
@@ -241,7 +257,7 @@
   },
   {
     "kind": "SetEffect",
-    "generated": 3,
+    "generated": 5,
     "partial": 0,
     "todo": 0,
     "tasks": 0,
@@ -264,6 +280,14 @@
     "left": 0
   },
   {
+    "kind": "UpdateEffect",
+    "generated": 2,
+    "partial": 0,
+    "todo": 0,
+    "tasks": 0,
+    "left": 0
+  },
+  {
     "kind": "UseCase",
     "generated": 0,
     "partial": 2,
@@ -281,7 +305,7 @@
   },
   {
     "kind": "total",
-    "generated": 117,
+    "generated": 126,
     "partial": 20,
     "todo": 5,
     "tasks": 36,

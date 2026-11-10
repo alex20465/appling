@@ -209,3 +209,75 @@ test('a query matches a record by its filter over the inputs, an optional input 
     expect(sim.matches('sales.OrdersOf', order, shopper, { of: account(1), since: new Date('2026-10-20T00:00:00Z') })).toBe(false);
     expect(sim.matches('sales.OrdersOf', order, shopper)).toBe(UNKNOWN);
 });
+
+const CHECKOUT = `module shop {
+  entity Product { stock: Int }
+  entity Order { total: Int default 0 }
+  entity Item { product: Product  quantity: Int }
+  entity Line { order: Order?  product: Product  quantity: Int }
+  entity Cart {
+    items: Item[]
+    order: Order?
+    count: Int default 0
+
+    policy { true }
+  }
+  event CheckedOut { cart: Cart }
+  action Checkout on Cart {
+    effect {
+      for item in items {
+        create Line as line { order = order, product = item.product, quantity = item.quantity }
+        update line.product {
+          set stock = stock - line.quantity
+        }
+        set count = count + 1
+        delete item
+      }
+      delete self
+      emit CheckedOut { cart = this }
+    }
+  }
+}`;
+
+test('running an action loops over a collection, creates named rows, updates related records and deletes', async () => {
+    const sim = await simulator({ 'shop.appling': CHECKOUT });
+    const pen = { id: 1, stock: 10 };
+    const cart = { id: 7, count: 0, order: null, items: [{ id: 2, product: pen, quantity: 3 }, { id: 3, product: pen, quantity: 2 }] };
+    const result = sim.run('shop.Checkout', cart, { actor: 'shop.Nobody' });
+    expect(result.outcome).toBe('done');
+    expect(result.writes.map(w => [w.operation, w.entity, w.effect.slice('shop.Checkout.'.length)])).toEqual([
+        ['create', 'shop.Line', 'effect[for item].effect[create Line]'],
+        ['update', 'shop.Product', 'effect[for item].effect[update product]'],
+        ['delete', 'shop.Item', 'effect[for item].effect[delete item]'],
+        ['create', 'shop.Line', 'effect[for item].effect[create Line]'],
+        ['update', 'shop.Product', 'effect[for item].effect[update product]'],
+        ['delete', 'shop.Item', 'effect[for item].effect[delete item]'],
+        ['delete', 'shop.Cart', 'effect[delete self]']
+    ]);
+    expect(result.writes[0].record).toEqual({ $type: 'shop.Line', order: null, product: { id: 1, stock: 10 }, quantity: 3 });
+    expect(result.writes[4].record).toEqual({ id: 1, stock: 5 });
+    expect(result.after).toMatchObject({ count: 2, items: [] });
+    expect(result.deleted).toBe(true);
+    expect(result.events).toHaveLength(1);
+    // The given data stays as it was.
+    expect(pen.stock).toBe(10);
+    expect(cart.items).toHaveLength(2);
+});
+
+test('a collection that is not given runs no iteration, and an update of a record that is not given is unknown', async () => {
+    const sim = await simulator({ 'shop.appling': CHECKOUT.replace('delete self', 'update order { set total = 1 }') });
+    const result = sim.run('shop.Checkout', { id: 7 }, { actor: 'shop.Nobody' });
+    expect(result.writes).toEqual([{ effect: 'shop.Checkout.effect[update order]', operation: 'update', entity: 'shop.Order', record: UNKNOWN }]);
+    expect(result.deleted).toBeUndefined();
+});
+
+test('an action needs the update policies of what it updates and the delete policies of what it deletes', async () => {
+    const sim = await simulator({ 'shop.appling': CHECKOUT
+        .replace('entity Product { stock: Int }', 'entity Product { stock: Int  policy update { false } }')
+        .replace('entity Item { product: Product  quantity: Int }', 'entity Item { product: Product  quantity: Int  policy delete { actor.is(Clerk) } }')
+        .replace('module shop {', 'module shop {\n  role Clerk\n  actor human Person roles Clerk') });
+    expect(sim.access('shop.Person').find(a => a.target === 'shop.Checkout')?.policies).toEqual([
+        'shop.Cart.policy[]', 'shop.Product.policy[update]', 'shop.Item.policy[delete]'
+    ]);
+    expect(sim.actors('shop.Checkout')).toEqual([{ actor: 'shop.Person', verdict: 'no' }]);
+});

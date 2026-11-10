@@ -108,7 +108,9 @@ Names in expressions are not references. They resolve by the position of the exp
 | `invariant` | The entity's fields, `this` | `Bool` |
 | Entity `policy` | The entity's fields, `this` | `Bool` |
 | Action `policy`, `requires` | The fields of the action's entity, `this`, the action's inputs | `Bool` |
-| `effect` in an action: `set`, `create`, `emit` values | The fields of the action's entity, `this`, the action's inputs | The assigned field's type |
+| `effect` in an action: `set`, `create`, `emit` values | The fields of the action's entity, `this`, the action's inputs, the variables of the enclosing `for` loops and the `as` names of earlier `create` effects | The assigned field's type |
+| `update` and `delete` paths | As for effect values | A record |
+| `set` inside `update path { ... }` | The fields of the updated record first, then everything an effect value sees | The assigned field's type |
 | Transition `when` | The fields of the machine's entity, `this` | `Bool` |
 | Transition `effect` values | The fields of the machine's entity, `this` | The assigned field's type |
 | Job `where` | The fields of the run action's entity, `this`, the run action's inputs | `Bool` |

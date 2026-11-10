@@ -62,6 +62,7 @@ Describes what exists.
 Describes what can happen to the data and how it changes.
 
 - Actions: CRUD and custom, each with input, **preconditions**, effects, and declared errors.
+- Effects: `set` a field of the record, `create` a record (`as name` names it for the effects after it), `emit` an event, `for x in <collection relationship>` to repeat effects per related record, `update <relationship path> { set ... }` to change a related record, and `delete self` or `delete <relationship path>`. A loop iterates only collection relationships of the action's entity; paths start at a field, a loop variable or an `as` name and lead to one record. All effects of one action run in one transaction. `delete` removes the record for good; archiving instead belongs to the data lifecycle.
 - State machines: own the transitions over a Layer 1 state field. Each transition has guards and effects, and is triggered by actions or events.
 - Events (domain events emitted by actions or transitions)
 - Jobs: asynchronous or scheduled execution of actions
@@ -124,7 +125,7 @@ Allowed references form a directed acyclic graph:
 
 **Bottom-up inheritance with monotonic narrowing:** Higher layers inherit definitions, constraints, and policies from lower layers. They may only narrow them, by exposing fewer fields or applying stricter policies. They may never widen them. Intentional divergence of shape happens only through Layer 3 projections.
 
-**Local policies:** Access policies are defined next to the concepts they protect: entities, actions, queries, and use cases. The effective policy at any point is the conjunction of all policies along the reference path: an action on an entity needs the entity's `update` policies whatever it does, a `create` the created entity's `create` policies, a query its entity's `read` policies. Nothing is open by default: a policy grants by role (`actor.is(Role)`, with conditions), and a role that no policy names may do nothing.
+**Local policies:** Access policies are defined next to the concepts they protect: entities, actions, queries, and use cases. The effective policy at any point is the conjunction of all policies along the reference path: an action on an entity needs the entity's `update` policies whatever it does, a `create` the created entity's `create` policies, an `update` or `delete` of a related record that entity's `update` or `delete` policies, a query its entity's `read` policies. Nothing is open by default: a policy grants by role (`actor.is(Role)`, with conditions), and a role that no policy names may do nothing.
 
 **Explicit exposure:** Interfaces, navigation, pages, and module exports are intentionally declared, never derived from the mere existence of entities.
 

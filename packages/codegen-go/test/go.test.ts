@@ -193,3 +193,62 @@ test('once the model has a policy, what no policy covers is denied, and effects 
     expect(entries['n.Ping'].missing.map(m => m.what)).toContain('emit Noted with its fields item, count, which the model does not give or Go cannot say');
     expect(entries['n.Record'].missing.map(m => m.what)).toEqual(['write the test TestNRecord']);
 });
+
+const CHECKOUT = `module shop {
+  entity Product { stock: Int }
+  entity Order { total: Int default 0 }
+  entity Item { product: Product  quantity: Int }
+  entity Line { order: Order?  product: Product  quantity: Int }
+  entity Cart {
+    items: Item[]
+    order: Order?
+  }
+  action Checkout on Cart {
+    effect {
+      for item in items {
+        create Line as line { order = order, product = item.product, quantity = item.quantity }
+        update line.product {
+          set stock = stock - line.quantity
+        }
+        delete item
+      }
+      update order { set total = total + 1 }
+      delete self
+    }
+  }
+}`;
+
+test('loops, updates and deletes of related records and created rows by name hand the records to store functions', async () => {
+    const { documents, services } = await buildWorkspace({ 'shop.appling': CHECKOUT });
+    const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), go, 'shop');
+    const files = new Map<string, string>();
+    for (const { step } of result.steps) if (step.kind === 'template') files.set(step.file, step.write(files.get(step.file)));
+    expect(files.get('internal/shop/actions.go')).toContain([
+        'func Checkout(cart *Cart, createLine func(*Line) error, updateProduct func(*Product) error, updateOrder func(*Order) error, deleteItem func(*Item) error, deleteCart func(*Cart) error) ([]any, error) {',
+        '\tvar events []any',
+        '\tfor _, item := range cart.Items {',
+        '\t\tline := NewLine()',
+        '\t\tline.Order = cart.Order',
+        '\t\tline.Product = item.Product',
+        '\t\tline.Quantity = item.Quantity',
+        '\t\tif err := createLine(line); err != nil {',
+        '\t\t\treturn nil, err',
+        '\t\t}',
+        '\t\tline.Product.Stock = line.Product.Stock - line.Quantity',
+        '\t\tif err := updateProduct(line.Product); err != nil {',
+        '\t\t\treturn nil, err',
+        '\t\t}',
+        '\t\tif err := deleteItem(item); err != nil {',
+        '\t\t\treturn nil, err',
+        '\t\t}',
+        '\t}',
+        '\tif cart.Order != nil {',
+        '\t\tcart.Order.Total = (*cart.Order).Total + 1',
+        '\t\tif err := updateOrder(cart.Order); err != nil {',
+        '\t\t\treturn nil, err',
+        '\t\t}',
+        '\t}',
+        '\tif err := deleteCart(cart); err != nil {'
+    ].join('\n'));
+    expect(result.entries.find(e => e.qn === 'shop.Checkout')?.missing.map(m => m.what)).toEqual(['write the test TestShopCheckout']);
+});

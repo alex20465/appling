@@ -6,12 +6,17 @@ import { enforced } from './roles.js';
 import { testSteps } from './tests.js';
 import { attributeType, children, fileOf, patch, snake, storedAttributes, task, typeModule } from './naming.js';
 
-/** An action on an entity becomes an update action of its resource: arguments, precondition validations, changes and its state transition. */
+/**
+ * An action on an entity becomes an update action of its resource: arguments, precondition validations, changes and
+ * its state transition. An action that deletes its record (`delete self`) without a transition becomes a destroy action.
+ */
 export function actionSteps(action: GraphNode, context: MapContext): Step[] {
     const entity = action.data.entity ? context.node(action.data.entity as string) : undefined;
     if (!entity) return [task(`implement ${lastOf(action.qn)} as a generic action`)];
     const tasks: Step[] = [];
-    const lines: string[] = [`update :${snake(lastOf(action.qn))} do`, '  require_atomic? false'];
+    const transitions = context.graph.nodes.filter(n => n.kind === 'Transition' && n.data.action === action.qn);
+    const destroy = !transitions.length && children(action, context).find(c => c.kind === 'DeleteEffect' && c.data.self);
+    const lines: string[] = [`${destroy ? 'destroy' : 'update'} :${snake(lastOf(action.qn))} do`, '  require_atomic? false'];
     for (const input of children(action, context, 'Param')) {
         const type = input.data.type as TypeData;
         lines.push(`  argument :${lastOf(input.qn)}, ${type.many ? `{:array, ${attributeType(type, context, true)}}` : attributeType(type, context, true)}, allow_nil?: ${type.optional ? 'true' : 'false'}`);
@@ -24,17 +29,16 @@ export function actionSteps(action: GraphNode, context: MapContext): Step[] {
         if (rule) lines.push(`  validate ${rule}, message: ${JSON.stringify(message)}`);
         else tasks.push(task(`check the precondition ${(action.props.preconditions as string[])[i]} in ${lastOf(action.qn)}`));
     });
-    const transitions = context.graph.nodes.filter(n => n.kind === 'Transition' && n.data.action === action.qn);
     for (const transition of transitions.filter(t => t.data.guard)) {
         const rule = validation(transition.data.guard as ExprData, stored, context.node);
         if (rule && transitions.length === 1) lines.push(`  validate ${rule}, message: "invalid transition"`);
         else tasks.push(task(`check the guard ${transition.props.guard} of ${lastOf(transition.qn)}`));
     }
-    const effects = [...children(action, context), ...transitions.flatMap(t => children(t, context))].filter(c => c.kind.endsWith('Effect'));
+    const effects = [...children(action, context), ...transitions.flatMap(t => children(t, context))].filter(c => c.kind.endsWith('Effect') && c !== destroy);
     for (const effect of effects) {
         const change = effectChange(effect, context);
         if (change) lines.push(`  change ${change}`);
-        else tasks.push(task(`apply the effect ${lastOf(effect.qn)} in ${lastOf(action.qn)}, for example with an Ash notifier or a change`));
+        else tasks.push(task(`apply the effect ${lastOf(effect.qn)} in ${lastOf(action.qn)}, for example with ${effect.kind === 'EmitEffect' || effect.kind === 'SetEffect' ? 'an Ash notifier or a change' : 'an after_action change that writes the related records'}`));
     }
     const targets = [...new Set(transitions.map(t => t.data.to as string))];
     if (targets.length === 1) lines.push(`  change transition_state(:${targets[0]})`);

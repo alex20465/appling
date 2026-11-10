@@ -25,7 +25,7 @@ Requires `uv` on the PATH. Python and Django (6.1) are installed by uv into the 
 | `unique`, `?`, `default` | `unique=True`, `null=True, blank=True`, `default=` |
 | derived field | a `@property` with the expression translated to Python |
 | `invariant` | `CheckConstraint` in `Meta.constraints` when it compares stored fields with constants or other fields |
-| `action` | a function in `<app>/actions.py`, atomic unless `consistency eventual`: preconditions raise the declared errors, transitions of the state machine check the current state and guard, effects set fields, create rows and send events after commit |
+| `action` | a function in `<app>/actions.py`, atomic unless `consistency eventual`: preconditions raise the declared errors, transitions of the state machine check the current state and guard, effects set fields, create rows (`as name` keeps them in a variable), send events after commit, loop over collection relationships, update and save related records and delete records |
 | `errors` | exception classes in `<app>/errors.py`, with `InvalidTransition` for state machines |
 | `event` | a Django `Signal` in `<app>/events.py` |
 | `machine` | transitions triggered by an event become signal receivers in `<app>/handlers.py`, connected in `AppConfig.ready` |
