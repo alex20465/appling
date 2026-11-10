@@ -1,7 +1,7 @@
 [
   {
     "kind": "Action",
-    "generated": 1,
+    "generated": 2,
     "partial": 2,
     "todo": 0,
     "tasks": 3
@@ -211,7 +211,7 @@
   },
   {
     "kind": "SetEffect",
-    "generated": 3,
+    "generated": 4,
     "partial": 0,
     "todo": 0,
     "tasks": 0
@@ -246,7 +246,7 @@
   },
   {
     "kind": "total",
-    "generated": 108,
+    "generated": 110,
     "partial": 26,
     "todo": 6,
     "tasks": 46

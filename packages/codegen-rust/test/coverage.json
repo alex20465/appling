@@ -2,9 +2,9 @@
   {
     "kind": "Action",
     "generated": 0,
-    "partial": 3,
+    "partial": 4,
     "todo": 0,
-    "tasks": 5
+    "tasks": 6
   },
   {
     "kind": "Actor",
@@ -211,7 +211,7 @@
   },
   {
     "kind": "SetEffect",
-    "generated": 3,
+    "generated": 4,
     "partial": 0,
     "todo": 0,
     "tasks": 0
@@ -246,9 +246,9 @@
   },
   {
     "kind": "total",
-    "generated": 102,
-    "partial": 20,
+    "generated": 103,
+    "partial": 21,
     "todo": 18,
-    "tasks": 41
+    "tasks": 42
   }
 ]

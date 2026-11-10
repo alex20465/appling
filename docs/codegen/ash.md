@@ -257,7 +257,20 @@ test "transition draft -> placed refuses other states" do
 end
 ```
 
-`moves from allowed states` only gets a body when the simulator proves the action's preconditions and guards true on that record, and the translated invariants true after the transition, with no effect setting a field they read. An action whose transitions lead to more than one state (picking the target is a task), an action on another entity, a required argument without a sample value (a record, a value type, a file) and a resource without a sample input keep both tests skipped; a state machine where every state leads on keeps `refuses other states` skipped. Precondition tests stay skipped.
+`moves from allowed states` only gets a body when the simulator proves the action's preconditions and guards true on that record, and the translated invariants true after the transition, with no effect setting a field they read. An action whose transitions lead to more than one state (picking the target is a task), an action on another entity, a required argument without a sample value (a record, a value type, a file) and a resource without a sample input keep both tests skipped; a state machine where every state leads on keeps `refuses other states` skipped.
+
+An action's preconditions get one test each, `<n> is enforced`, on the same record struct, in the first state the action's transitions leave, with a changeset for the action's update action. The action validates its preconditions when the changeset is built, so the test refutes the changeset and asserts an error carrying the precondition's message (its error name, else its text).
+
+```elixir
+test "action cancel precondition 1 is enforced" do
+  record = struct!(Shop.Shop.Order, %{code: "code-1", total: 0, status: :draft})
+  changeset = Ash.Changeset.for_update(record, :cancel, %{}, authorize?: false)
+  refute changeset.valid?
+  assert Enum.any?(changeset.errors, &(Map.get(&1, :message) == "requires { has(note) }"))
+end
+```
+
+A precondition only gets a body when it becomes a validation and the simulator proves the earlier preconditions true and this one false on that record, with every attribute the condition compares set. A precondition the sample record satisfies, one over the action's inputs, a required argument without a sample value and a resource without a sample input keep the test skipped.
 
 A policy on a whole entity gets test bodies that ask its authorizer with `Ash.can?` for the resource's default action of each operation it covers other than reads (`create`, `update`, `destroy`), with `maybe_is: false`. Reads are left out: Ash allows a read and filters its records, so `Ash.can?` without records answers true for every actor, and a policy on reads only keeps its tests skipped. The actor is a struct: a record of the actor's resource with the actor's own roles, or the struct of a system or service actor. This needs no database as long as the checks that decide are `actor.is(...)` checks, which are `Ash.Policy.SimpleCheck`s. The generator walks the policy's checks in Ash's order (`authorize_if` stops when its check holds, `forbid_unless` stops when it fails), and an actor is tested only when the walk ends before an `expr` check or a role with a condition, and the simulator gives the same verdict. `allows permitted actors` asserts every operation that this policy and every other policy of the entity on that operation let the actor do. `denies other actors` refutes every operation of the policy for an actor it keeps out.
 

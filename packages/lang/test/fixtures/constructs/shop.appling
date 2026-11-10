@@ -115,6 +115,13 @@ module shop core {
     consistency eventual
   }
 
+  action Sell on Product {
+    requires { stock > 0 }
+    effect {
+      set stock = stock - 1
+    }
+  }
+
   action Restock {
     input {
       product: Product
