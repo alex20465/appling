@@ -72,6 +72,8 @@ source ~/Dev/appling/scripts/make-completion.bash
 
 No test starts Electron, and pnpm does not run Electron's download script, so the runner never fetches the Electron binary. `packages/desktop/test/remote-integration.test.ts` runs against a real sshd and a docker container and skips each one without it. The Ubuntu runner has docker, and the job installs `openssh-server` when sshd is missing, so CI runs both remote transports.
 
+The `VS Code extension` workflow (`.github/workflows/vscode.yml`) runs `pnpm --filter appling-vscode... build` on pull requests and pushes to `main` that touch `packages/` (except `landing` and `desktop`) or the lockfile, and on demand. It uploads `packages/vscode/out/appling.vsix` as an artifact, which installs on every platform.
+
 ### Codegen coverage report
 
 ```sh

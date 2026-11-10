@@ -9,3 +9,4 @@ packages/ai/language/
 packages/desktop/app/
 packages/desktop/release/
 .e2e/
+.claude/worktrees/
