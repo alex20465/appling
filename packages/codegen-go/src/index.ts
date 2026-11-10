@@ -31,7 +31,7 @@ const extension: CodegenExtension = {
             case 'ErrorDecl': return [goFile(node.module, 'errors.go', context, new Set(['errors']), `// ${errorName(node)} is the declared error ${node.qn}.\nvar ${errorName(node)} = errors.New(${JSON.stringify(last(node.qn))})`)];
             case 'Field': return fieldSteps(node, context);
             case 'Invariant': return [...(validation(node, context) ? [] : [task(`check the invariant "${node.data.label}" in Validate: ${node.props.condition}`)]), ...invariantTestSteps(node, context)];
-            case 'Policy': return [...policySteps(node, context), ...testSteps(node, context)];
+            case 'Policy': return [...policySteps(node, context), ...policyTestSteps(node, context)];
             case 'Role':
             case 'Actor':
             case 'Tenant':
@@ -596,6 +596,81 @@ function testSteps(node: GraphNode, context: MapContext): Step[] {
     const name = testName(node);
     const code = `func ${name}(t *testing.T) {\n\tt.Skip(${JSON.stringify(`registry task: ${node.qn}`)})\n}`;
     return [goFile(node.module, `${pkgOf(node.module)}_test.go`, context, new Set(['testing']), code), task(`write the test ${name}`)];
+}
+
+const POLICY_CASES = ['allows permitted actors', 'denies other actors'];
+
+/**
+ * The test of a policy on a whole entity whose condition reads the actor only through `actor.is(...)`: the
+ * entity's valid record and `access.New<Actor>()` of a declared actor go to `Can<Op><Entity>`. `allows permitted
+ * actors` takes the first actor the simulator proves this policy lets through and asserts every operation whose
+ * whole record policies all read the actor that way and grant it; `denies other actors` takes the first actor the
+ * simulator proves this policy keeps out and refutes every operation it covers (the checks combine with `&&`).
+ * A case without such an actor stays skipped as a task; field policies, policies on other elements and a condition
+ * that reads more of the actor or that Go cannot say keep the whole test skipped.
+ */
+function policyTestSteps(policy: GraphNode, context: MapContext): Step[] {
+    const entity = context.node(parentOf(policy.qn));
+    if (entity?.kind !== 'Entity' || ((policy.data.fields ?? []) as string[]).length) return testSteps(policy, context);
+    const wholes = policiesOf(entity, context).filter(p => !((p.data.fields ?? []) as string[]).length);
+    const record = camel(last(entity.qn));
+    const dry: GoScope = { ...goScope(entity, context, new Set()), self: record, actor: 'actor' };
+    const checkable = (p: GraphNode) => onlyActorKinds(p.data.condition as ExprData, context) && !!goExpr(p.data.condition as ExprData, dry);
+    if (!checkable(policy)) return testSteps(policy, context);
+    const valid = validRecord(entity, context);
+    if (!valid) return testSteps(policy, context);
+    const imports = new Set(['testing']);
+    const scope = goScope(policy, context, imports);
+    const sim = simulator(context);
+    const verdict = (p: GraphNode, actor: GraphNode) => sim.evaluate(p.data.condition as ExprData, { self: valid.record, actor: { actor: actor.qn, fields: {} } });
+    const operations = OPERATIONS.filter(op => covers(policy, op));
+    const actors = context.graph.nodes.filter(n => n.kind === 'Actor');
+    const allowed = actors.map(actor => ({ actor, operations: operations.filter(op => wholes.filter(p => covers(p, op)).every(p => checkable(p) && verdict(p, actor) === true)) }))
+        .find(a => verdict(policy, a.actor) === true && a.operations.length);
+    const deniedActor = actors.find(actor => verdict(policy, actor) === false);
+    const denied = deniedActor && { actor: deniedActor, operations };
+    if (!allowed && !denied) return testSteps(policy, context);
+    const name = testName(policy);
+    const entityName = last(entity.qn);
+    const body = (label: string, found: { actor: GraphNode, operations: string[] } | undefined, want: boolean) => [
+        `\tt.Run(${JSON.stringify(label)}, func(t *testing.T) {`,
+        ...(found ? [
+            `\t\tactor := ${accessIn(scope, `New${accessOf(context).name(found.actor.qn)}`)}()`,
+            `\t\t${record} := ${valid.name}()`,
+            ...found.operations.flatMap(op => {
+                const check = `Can${pascal(op)}${entityName}`;
+                return [
+                    `\t\tif ${want ? '!' : ''}${check}(actor, ${record}) {`,
+                    `\t\t\tt.Error(${JSON.stringify(`${check}: want ${want} for ${found.actor.qn}`)})`,
+                    '\t\t}'
+                ];
+            })
+        ] : [`\t\tt.Skip(${JSON.stringify(`registry task: ${policy.qn}`)})`]),
+        '\t})'
+    ];
+    const code = [`func ${name}(t *testing.T) {`, ...body(POLICY_CASES[0], allowed, true), ...body(POLICY_CASES[1], denied, false), '}'].join('\n');
+    const missing = [allowed ? undefined : POLICY_CASES[0], denied ? undefined : POLICY_CASES[1]].filter(c => c !== undefined);
+    return [
+        valid.step,
+        goFile(policy.module, `${pkgOf(policy.module)}_test.go`, context, imports, code),
+        ...missing.map(c => task(`write the ${c} case of the test ${name}`))
+    ];
+}
+
+/**
+ * Whether the condition reads the actor only through `actor.is(X)` with an X whose verdict needs no actor field
+ * (an actor, or a role without a condition), and not the tenant, so `access.New<Actor>()` has the simulated verdict.
+ */
+function onlyActorKinds(expr: ExprData | undefined, context: MapContext): boolean {
+    if (!expr) return true;
+    if (expr.$type === 'MemberExpr' && expr.member === 'is' && expr.call && expr.receiver?.$type === 'NameExpr' && expr.receiver.name === 'actor' && !expr.receiver.target) {
+        const target = expr.args?.[0]?.target;
+        const node = target ? context.node(target) : undefined;
+        return node?.kind === 'Actor' || node?.kind === 'Role' && !node.data.condition;
+    }
+    if (expr.$type === 'NameExpr' && (expr.name === 'actor' || expr.name === 'tenant') && !expr.target) return false;
+    const parts = [expr.left, expr.right, expr.operand, expr.receiver, expr.index, ...(expr.args ?? []), ...(expr.items ?? [])];
+    return parts.every(p => onlyActorKinds(p, context));
 }
 
 function testName(node: GraphNode): string {

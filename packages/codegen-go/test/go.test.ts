@@ -345,3 +345,37 @@ test('scenarios become tests of the generated action, which replace the guessed 
     expect(entries['s.Flow.transition[open->closed]'].status).toBe('generated');
     expect(files.get('internal/s/s_test.go') ?? '').not.toContain('TestFlowTransition');
 });
+
+const POLICIES = `module p {
+  role Clerk
+  actor human Staff roles Clerk
+  actor human Visitor
+  entity Item {
+    name: String
+    policy read, update { actor.is(Clerk) }
+    policy delete { actor.is(Staff) && name != "" }
+    policy create { actor.is(Visitor) || actor.is(Staff) }
+  }
+  entity Note {
+    text: String
+    policy { actor.name == "x" }
+  }
+}`;
+
+test('policies on a whole entity get test bodies over Can<Op><Entity> with the actors the simulator proves', async () => {
+    const { documents, services } = await buildWorkspace({ 'p.appling': POLICIES });
+    const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), go, 'app');
+    const files = new Map<string, string>();
+    for (const { step } of result.steps) if (step.kind === 'template') files.set(step.file, step.write(files.get(step.file)));
+    const tests = files.get('internal/p/p_test.go')!;
+    expect(tests).toContain('func TestItemPolicyReadUpdate(t *testing.T) {\n\tt.Run("allows permitted actors", func(t *testing.T) {\n\t\tactor := access.NewStaff()\n\t\titem := validItem()\n\t\tif !CanReadItem(actor, item) {\n\t\t\tt.Error("CanReadItem: want true for p.Staff")\n\t\t}\n\t\tif !CanUpdateItem(actor, item) {');
+    expect(tests).toContain('\tt.Run("denies other actors", func(t *testing.T) {\n\t\tactor := access.NewVisitor()\n\t\titem := validItem()\n\t\tif CanReadItem(actor, item) {');
+    expect(tests).toContain('func validItem() *Item {');
+    expect(tests).toContain('"app/internal/access"');
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['p.Item.policy[read,update]'].missing).toEqual([]);
+    // Every declared actor passes the create policy, so nobody is denied.
+    expect(entries['p.Item.policy[create]'].missing.map(m => m.what)).toEqual(['write the denies other actors case of the test TestItemPolicyCreate']);
+    // actor.name is an actor field New<Actor> leaves nil: the test stays skipped.
+    expect(entries['p.Note.policy[]'].missing.map(m => m.what)).toContain('write the test TestNotePolicy');
+});
