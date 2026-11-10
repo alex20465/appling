@@ -33,6 +33,8 @@ In both, the extension shows how far each model line is implemented (a gutter ma
 ```sh
 pnpm --filter "appling-vscode..." build   # the upstream packages, then scripts/bundle.mjs into out/ and out/appling.vsix
 code --install-extension out/appling.vsix
+pnpm host:link     # end to end testing: symlinks this folder into VS Code, Insiders and VSCodium (reload the window after a rebuild)
+pnpm host:unlink   # removes the link again
 ```
 
 `scripts/bundle.mjs` bundles the extension and the language server (CommonJS), the IDE server with its generation worker, client and the AI package's skills (`out/ide/`), the `appling` command line (`out/cli/`), the agents' command hook and the icon.

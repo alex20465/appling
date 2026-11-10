@@ -607,7 +607,9 @@
   },
   "scripts": {
     "build": "node scripts/bundle.mjs && vsce package --no-dependencies --out out/appling.vsix",
-    "package": "vsce package --no-dependencies --out out/appling.vsix"
+    "package": "vsce package --no-dependencies --out out/appling.vsix",
+    "host:link": "node scripts/link.mjs",
+    "host:unlink": "node scripts/link.mjs --remove"
   },
   "devDependencies": {
     "@appling/ai": "workspace:*",

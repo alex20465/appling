@@ -16,6 +16,16 @@ pnpm --filter "appling-vscode..." build
 code --install-extension packages/vscode/out/appling.vsix
 ```
 
+For end to end testing, link the package into your editors instead. Each rebuild then runs after **Developer: Reload Window**:
+
+```sh
+pnpm --filter appling-vscode host:link     # VS Code, Insiders and VSCodium, those that exist
+pnpm --filter appling-vscode host:unlink
+node packages/vscode/scripts/link.mjs ~/.vscode/extensions   # one extensions folder
+```
+
+`host:link` replaces an installed copy of the extension with a symlink to `packages/vscode` and registers it in the editor's `extensions.json`. `host:unlink` removes the link, so install the vsix again afterwards to keep the extension.
+
 The extension starts when the workspace contains a `.appling` file or an `appling.config.json`, when you open a `.appling` file, or when you open its view.
 
 ## The Appling view
