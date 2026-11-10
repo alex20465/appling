@@ -61,6 +61,24 @@ test('query endpoint goes through a projection', async () => {
         .toContain('An endpoint exposes query results only through a projection: add "as <Projection>".');
 });
 
+test('query input does not hide a field of the entity', async () => {
+    expect(await check(`module m { ${ORDER} query Q from Order { input { note: String } } }`))
+        .toContain('Input note of query Q hides the field note of Order; rename the input.');
+});
+
+test('path parameter of a query endpoint names an input', async () => {
+    const api = (path: string) => `module m { ${ORDER} query Q from Order { input { kind_of: Status } where { kind == kind_of } } projection P from Order { note } interface rest Api { GET "${path}" -> Q as P } }`;
+    expect(await check(api('/orders/{kind_of}'))).toEqual([]);
+    expect(await check(api('/orders/{id}'))).toContain('Path parameter {id} is not an input of query Q.');
+});
+
+test('query endpoint inputs fit into a URL', async () => {
+    expect(await check(`module m { ${ORDER} value Range { low: Int } query Q from Order { input { range: Range } } projection P from Order { note } interface rest Api { GET "/orders" -> Q as P } }`))
+        .toContain('Input range of query Q has the type Range, which a URL cannot carry.');
+    expect(await check(`module m { ${ORDER} query Q from Order { input { scan: File } } projection P from Order { note } interface rest Api { GET "/orders" -> Q as P } }`))
+        .toContain('Input scan of query Q has the type File, which a URL cannot carry.');
+});
+
 test('migration renames an existing element', async () => {
     expect(await check(`module m { ${ORDER} migration One { rename Order.missing -> other } }`))
         .toContain('Module m has no element Order.other.');

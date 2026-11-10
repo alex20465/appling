@@ -51,9 +51,9 @@ const extension: CodegenExtension = {
             case 'ProjectionField':
             case 'Endpoint':
                 return [];
-            case 'Query':
+            case 'Query': return [...guardSteps(node, context), ...queryFilterSteps(node, context), task(`implement the query ${last(node.qn)} on top of the generated domain package, with the storage, HTTP and scheduling libraries of your choice`)];
             case 'UseCase':
-                return [...guardSteps(node, context), task(`implement the ${node.kind.toLowerCase()} ${last(node.qn)} on top of the generated domain package, with the storage, HTTP and scheduling libraries of your choice`)];
+                return [...guardSteps(node, context), task(`implement the use case ${last(node.qn)} on top of the generated domain package, with the storage, HTTP and scheduling libraries of your choice`)];
             case 'Job':
             case 'Projection':
             case 'External':
@@ -188,6 +188,31 @@ function actionSteps(action: GraphNode, context: MapContext): Step[] {
     return [goFile(action.module, 'actions.go', context, imports, code), ...guardSteps(action, context), ...tasks, ...testSteps(action, context)];
 }
 
+/**
+ * `In<Query>` in the module's `queries.go`: whether a record is among the query's results for its inputs, by the
+ * filter. Loading, sorting and paging stay with the storage, the query's task; nothing when the filter does not translate.
+ */
+function queryFilterSteps(query: GraphNode, context: MapContext): Step[] {
+    if (!query.data.filter) return [];
+    const imports = new Set<string>();
+    const entity = context.node(query.data.entity as string)!;
+    const self = camel(last(entity.qn));
+    const scope = { ...goScope(query, context, imports), self };
+    const condition = goExpr(query.data.filter as ExprData, scope);
+    if (!condition) return [];
+    const params = [
+        `${self} ${typeOf({ $type: 'TypeRef', decl: entity.qn } as TypeData, scope)}`,
+        ...context.children(query.qn).filter(c => c.kind === 'Param').map(p => `${camel(last(p.qn))} ${typeOf(p.data.type as TypeData, scope)}`)
+    ];
+    const code = [
+        `// In${last(query.qn)} reports whether a record is among the results of the query ${query.qn}${params.length > 1 ? ' for the inputs' : ''}.`,
+        `func In${last(query.qn)}(${params.join(', ')}) bool {`,
+        `\treturn ${condition}`,
+        '}'
+    ].join('\n');
+    return [goFile(query.module, 'queries.go', context, imports, code)];
+}
+
 /** What the policy checks of an element receive besides the actor: the record they guard and the inputs. */
 interface Guard {
     /** The guarded record's entity: the entity itself, or the entity of the action or query. */
@@ -214,7 +239,7 @@ function guardOf(owner: GraphNode, context: MapContext): Guard | undefined {
         ? owner.kind === 'Entity' || owner.kind === 'Query' || (owner.kind === 'Action' && (!!entity || !creates(owner, context)))
         : owner.kind === 'Action' && !!entity && tenantPaths(context).has(entity.qn));
     if (!applies) return undefined;
-    const params = owner.kind === 'Action' || owner.kind === 'UseCase' ? context.children(owner.qn).filter(c => c.kind === 'Param') : [];
+    const params = owner.kind === 'Action' || owner.kind === 'UseCase' || owner.kind === 'Query' ? context.children(owner.qn).filter(c => c.kind === 'Param') : [];
     return { entity, params, args: [...(entity ? [camel(last(entity.qn))] : []), ...params.map(p => camel(last(p.qn)))], name: `Can${last(owner.qn)}` };
 }
 

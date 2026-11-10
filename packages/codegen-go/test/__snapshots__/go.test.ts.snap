@@ -291,6 +291,8 @@ func OrderFlowOnPaymentReceived(event PaymentReceived) ([]any, error) {
 
 import (
 	"shop/internal/access"
+	"shop/internal/crm"
+	"time"
 )
 
 
@@ -362,6 +364,30 @@ func cancelPolicy(actor access.Actor, order *Order, reason *string) bool {
 // CanOpenOrders reports whether the actor may read a record through sales.OpenOrders, including the read check of sales.Order.
 func CanOpenOrders(actor access.Actor, order *Order) bool {
 	return CanReadOrder(actor, order)
+}
+
+// CanOrdersOf reports whether the actor may read a record through sales.OrdersOf, including the read check of sales.Order.
+func CanOrdersOf(actor access.Actor, order *Order, of *crm.Account, since *time.Time) bool {
+	return CanReadOrder(actor, order)
+}
+",
+  "internal/sales/queries.go": "package sales
+
+import (
+	"shop/internal/crm"
+	"slices"
+	"time"
+)
+
+
+// InOpenOrders reports whether a record is among the results of the query sales.OpenOrders.
+func InOpenOrders(order *Order) bool {
+	return slices.Contains([]OrderStatus{OrderStatusPlaced, OrderStatusPaid}, order.Status)
+}
+
+// InOrdersOf reports whether a record is among the results of the query sales.OrdersOf for the inputs.
+func InOrdersOf(order *Order, of *crm.Account, since *time.Time) bool {
+	return (order.Customer.ID == of.ID) && ((since == nil) || (!(*order.PlacedAt).Before((*since))))
 }
 ",
   "internal/sales/sales_test.go": "package sales

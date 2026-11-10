@@ -468,6 +468,62 @@ test('transition and precondition tests get bodies where the simulator proves th
     expect(entries['shop.ScanFlow.transition[open->closed]'].missing.map(m => m.what)).toEqual(['write the test bodies of ScanFlowOpenToClosedTest in shop/tests.py']);
 });
 
+const QUERY_INPUTS = `module shop {
+    enum Status { open done }
+    entity Customer { name: String }
+    entity Order {
+        customer: Customer
+        status: Status
+        placed: Date?
+    }
+    query OrdersOf from Order {
+        input {
+            since: Date?
+            of: Customer
+            states: Status[]?
+        }
+        where { customer == of && (since == null || placed >= since) }
+    }
+    projection OrderView from Order { status }
+    usecase Show (c: Customer) { step OrdersOf(null, c) }
+    interface rest Api { GET "/customers/{of}/orders" -> OrdersOf as OrderView }
+    page Orders route "/orders" { list OrdersOf as OrderView }
+}`;
+
+test('query inputs become parameters, read from the path and the query string by a serializer', async () => {
+    const { files, entries } = await generate({ 'shop.appling': QUERY_INPUTS });
+    expect(entries['shop.OrdersOf'].missing).toEqual([]);
+    // Required inputs come first so optional ones can default to None; the null case decides before the lookup is built.
+    expect(files['shop/queries.py']).toContain([
+        'def orders_of(of: Customer, since: date | None = None, states: list[Status] | None = None):',
+        '    return Order.objects.filter((models.Q(customer=of)) & (models.Q(pk__isnull=False) if since is None else models.Q(placed__gte=since)))'
+    ].join('\n'));
+    expect(files['shop/serializers.py']).toContain([
+        'class OrdersOfInput(serializers.Serializer):',
+        '    """The inputs of OrdersOf, read from URL parameters."""',
+        '    since = serializers.DateField(required=False, allow_null=True)',
+        '    of = serializers.PrimaryKeyRelatedField(queryset=Customer.objects.all())',
+        '    states = serializers.ListField(child=serializers.ChoiceField(choices=Status.choices), required=False, allow_null=True)'
+    ].join('\n'));
+    expect(files['shop/api.py']).toContain([
+        '    def get_queryset(self):',
+        '        params = self.request.query_params.copy()',
+        '        params.update(self.kwargs)',
+        '        inputs = OrdersOfInput(data=params)',
+        '        inputs.is_valid(raise_exception=True)',
+        '        return orders_of(**inputs.validated_data)'
+    ].join('\n'));
+    expect(files['shop/api_urls.py']).toContain('path("customers/<str:of>/orders", api.ApiOrdersOf.as_view())');
+    // Calls pass every input by name, in the declared order of the arguments.
+    expect(files['shop/usecases.py']).toContain('    orders_of(since=None, of=c)');
+    expect(files['shop/pages.py']).toContain([
+        '    inputs = OrdersOfInput(data=request.GET)',
+        '    if not inputs.is_valid():',
+        '        raise BadRequest(inputs.errors)',
+        '    rows = orders_of(**inputs.validated_data)'
+    ].join('\n'));
+});
+
 const CHECKOUT = `module shop {
   entity Product { stock: Int }
   entity Order { total: Int default 0 }

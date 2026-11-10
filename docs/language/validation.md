@@ -154,6 +154,9 @@ role Clerk { status == open } // A role condition reads only actor, tenant and n
 |---|---|
 | A picked projection field exists on the source entity | `<Entity> has no field "<name>". Use "<name> = <expression>" for a computed field.` |
 | An endpoint that targets a query names a projection | `An endpoint exposes query results only through a projection: add "as <Projection>".` |
+| A query input does not have the name of a field of the query's entity | `Input <name> of query <Query> hides the field <name> of <Entity>; rename the input.` |
+| Every `{name}` in the path of a query endpoint names an input of the query | `Path parameter {<name>} is not an input of query <Query>.` |
+| The inputs of a query endpoint have types a URL can carry: no value type, no `File` | `Input <name> of query <Query> has the type <Type>, which a URL cannot carry.` |
 
 ```appling
 projection Summary from Order {
@@ -161,8 +164,16 @@ projection Summary from Order {
 }
 query All from Order {
 }
+query Within from Order {
+  input {
+    note: String // Input note of query Within hides the field note of Order; rename the input.
+    range: Range
+  }
+}
 interface rest Api {
   GET "/orders" -> All // An endpoint exposes query results only through a projection: add "as <Projection>".
+  GET "/orders/{id}" -> Within as Summary // Path parameter {id} is not an input of query Within.
+  // and: Input range of query Within has the type Range, which a URL cannot carry.
 }
 ```
 
@@ -281,7 +292,7 @@ entity Note {
 
 | Rule | Message |
 |---|---|
-| A call in a use case passes as many arguments as the target takes: an action on an entity takes the entity and its inputs, optional inputs and parameters may be left out, a query takes none | `<Target> takes <n> argument(s), got <m>.` or `<Target> takes <n> to <m> argument(s), got <k>.` |
+| A call in a use case passes as many arguments as the target takes: an action on an entity takes the entity and its inputs, a query takes its inputs, optional inputs and parameters may be left out | `<Target> takes <n> argument(s), got <m>.` or `<Target> takes <n> to <m> argument(s), got <k>.` |
 | Each argument fits its parameter | `<Type> is not assignable to <Type>.` |
 
 ```appling

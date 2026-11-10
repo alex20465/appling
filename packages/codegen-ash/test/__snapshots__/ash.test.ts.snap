@@ -80,6 +80,7 @@ end
     routes do
       base_route "/", Shop.Sales.Order do
         index :open_orders, route: "/orders", default_fields: [:reference, :status, :total]
+        index :orders_of, route: "/accounts/:of/orders", default_fields: [:reference, :status, :total]
         patch :place_order, route: "/orders/:id/place"
       end
     end
@@ -134,6 +135,13 @@ end
       filter expr(status in [:placed, :paid])
       prepare build(sort: [placed_at: :desc])
       pagination offset?: true, default_limit: 50, required?: false
+    end
+
+    read :orders_of do
+      argument :of, :uuid, allow_nil?: false
+      argument :since, :utc_datetime_usec, allow_nil?: true
+      filter expr((customer_id == ^arg(:of)) and (is_nil(^arg(:since)) or (placed_at >= ^arg(:since))))
+      prepare build(sort: [placed_at: :desc])
     end
   end
 
@@ -472,6 +480,7 @@ exports[`examples plan domains, enums, embedded resources, resources and relatio
   "sales.ExpireDrafts: lib/shop/sales/order.ex",
   "sales.ExpireDrafts: config/config.exs",
   "sales.OpenOrders: lib/shop/sales/order.ex",
+  "sales.OrdersOf: lib/shop/sales/order.ex",
   "sales.OrderSummary.customer_name: lib/shop/sales/order.ex",
   "sales.PublicApi: lib/shop/sales/order.ex",
   "sales.PublicApi: lib/shop/sales.ex",

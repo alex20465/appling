@@ -64,6 +64,13 @@ module shop {
   machine Flow on Cart.status {
     transition open -> closed via Close
   }
+
+  query CartsOf from Cart {
+    input {
+      who: String
+    }
+    where { owner == who && status == open }
+  }
 }
 ```
 
@@ -131,6 +138,9 @@ simulator.actors('shop.Close');
 simulator.access('shop.Customer');
 simulator.risks('shop.Discount');
 simulator.run('shop.Discount', { lines: [{ amount: 5 }], discount: 0 }, { actor: 'shop.Staff' }, { amount: 20 });
+simulator.matches('shop.CartsOf', { owner: 'ann', status: 'open' }, { actor: 'shop.Staff' }, { who: 'ann' });
 ```
+
+`matches(query, record, actor, inputs)` says whether a record is among the results of a query for the given [inputs](../language/application.md#queries): `true`, `false`, or `UNKNOWN` when the filter needs data that is not given. An optional input left out is null. It applies the filter only; what the actor may read is the question of `access`.
 
 `@appling/model/simulator` exports the same class without the language dependencies, for the browser. The repo view of Appling Desktop and its browser demo use it this way.

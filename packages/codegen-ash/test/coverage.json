@@ -4,7 +4,7 @@
     "generated": 0,
     "partial": 2,
     "todo": 1,
-    "tasks": 11
+    "tasks": 9
   },
   {
     "kind": "Actor",
@@ -15,14 +15,7 @@
   },
   {
     "kind": "CreateEffect",
-    "generated": 2,
-    "partial": 0,
-    "todo": 0,
-    "tasks": 0
-  },
-  {
-    "kind": "DeleteEffect",
-    "generated": 3,
+    "generated": 1,
     "partial": 0,
     "todo": 0,
     "tasks": 0
@@ -112,13 +105,6 @@
     "tasks": 1
   },
   {
-    "kind": "ForEffect",
-    "generated": 1,
-    "partial": 0,
-    "todo": 0,
-    "tasks": 0
-  },
-  {
     "kind": "Interface",
     "generated": 0,
     "partial": 1,
@@ -183,7 +169,7 @@
   },
   {
     "kind": "Param",
-    "generated": 10,
+    "generated": 12,
     "partial": 0,
     "todo": 0,
     "tasks": 0
@@ -225,7 +211,7 @@
   },
   {
     "kind": "SetEffect",
-    "generated": 5,
+    "generated": 3,
     "partial": 0,
     "todo": 0,
     "tasks": 0
@@ -245,13 +231,6 @@
     "tasks": 3
   },
   {
-    "kind": "UpdateEffect",
-    "generated": 2,
-    "partial": 0,
-    "todo": 0,
-    "tasks": 0
-  },
-  {
     "kind": "UseCase",
     "generated": 0,
     "partial": 0,
@@ -267,9 +246,9 @@
   },
   {
     "kind": "total",
-    "generated": 109,
+    "generated": 102,
     "partial": 22,
     "todo": 18,
-    "tasks": 62
+    "tasks": 60
   }
 ]

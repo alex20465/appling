@@ -30,7 +30,7 @@ Requires `uv` on the PATH. Python and Django (6.1) are installed by uv into the 
 | `event` | a Django `Signal` in `<app>/events.py` |
 | `machine` | transitions triggered by an event become signal receivers in `<app>/handlers.py`, connected in `AppConfig.ready` |
 | `job` | scheduled: a `django.tasks` task in `<app>/jobs.py` plus a management command for the scheduler; on an event: a signal receiver |
-| `query` | a function in `<app>/queries.py` returning a queryset with filter and ordering, and the page size |
+| `query` | a function in `<app>/queries.py` returning a queryset with filter and ordering, and the page size; its inputs are parameters, and a `<Query>Input` serializer reads them from URL parameters for endpoints and pages |
 | `projection` | a REST framework `ModelSerializer` in `<app>/serializers.py`; computed fields that follow references become `source` paths |
 | `external` | a `typing.Protocol` in `<app>/externals.py` that use cases receive as a parameter |
 | `setting`, `secret` | `<EXTERNAL>_<KEY>` in `config/settings.py`, read from the environment (a missing `secret` stops the app with `ImproperlyConfigured`), and a line in `.env.example` |

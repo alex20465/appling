@@ -58,7 +58,7 @@ Where the structure leaves something unclear, an element may add a plain text no
 
 Expressions inside `{ ... }` use a subset of [CEL](https://cel.dev): `&&`, `||`, `!`, comparisons, `in`, arithmetic, member access, calls and list literals.
 
-Expressions are typed. Names resolve against their position: the fields of the entity (and `this`) in invariants, entity policies, defaults and derived fields, plus the inputs inside actions, the machine's entity in guards, the query entity in `where`, the source in projections, the parameters in use cases. Everywhere, `actor` is the current actor, `now` is the current DateTime and `tenant` is the entity of the single declared tenant. A bare enum value such as `draft` takes its type from the other side of a comparison or from the field it is assigned to, and wins over a field of the same name there; `Status.draft` names it with its enum.
+Expressions are typed. Names resolve against their position: the fields of the entity (and `this`) in invariants, entity policies, defaults and derived fields, plus the inputs inside actions, the machine's entity in guards, the query entity and the query's inputs in `where`, the source in projections, the parameters in use cases. Everywhere, `actor` is the current actor, `now` is the current DateTime and `tenant` is the entity of the single declared tenant. A bare enum value such as `draft` takes its type from the other side of a comparison or from the field it is assigned to, and wins over a field of the same name there; `Status.draft` names it with its enum.
 
 | Builtin | Type |
 |---|---|
@@ -87,10 +87,11 @@ actor human Shopper roles Customer {
 
 - The keyword decides the layer. References follow the layer order: lower layers never reference higher ones, and interfaces and pages never reference each other.
 - Interfaces and pages reach entity data only through projections.
+- A query's `input { ... }` names may not hide fields of its entity. A query endpoint takes the inputs from the request: every `{name}` in its path names an input, and the inputs have types a URL can carry (no value types, no `File`).
 - Other modules can only reference what a module lists in `export`, by its module path such as `crm.Account`. Export names are references to the module's members, so rename and find references cover them.
 - Only a `machine` changes a `state` field, and each state field has at most one machine.
 - Action effects `set` fields, `create` records (`as name` for later effects), `emit` events, loop with `for x in <collection relationship>`, change a related record with `update <path> { set ... }` and delete with `delete self` or `delete <path>`; a path starts at a field, a loop variable or an `as` name and leads to one record.
-- Expressions must type check: conditions are Bool, values fit the field they are assigned to, `null` only fits optional fields, and calls in use cases pass the right number and types of arguments (an action on an entity takes the entity first, then its inputs).
+- Expressions must type check: conditions are Bool, values fit the field they are assigned to, `null` only fits optional fields, and calls in use cases pass the right number and types of arguments (an action on an entity takes the entity first, then its inputs; a query takes its inputs).
 - `migration` steps target elements by their path inside the module, as it was before the step: `rename Order.code -> reference`, `retype Order.total: Decimal -> Money`, `remove Order.legacy`. Renamed and retyped elements must exist, removed ones must not.
 - `@Name` in a `does` text must name a visible element and follow the layer order, except in a module's own description.
 

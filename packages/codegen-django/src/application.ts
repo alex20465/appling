@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { annotation, children, docstring, pythonFile, task, template } from './files.js';
+import { annotation, children, docstring, hasKind, pythonFile, task, template } from './files.js';
 import { enforced, fieldGuards, policyImport, queryGuard, useCaseGuard } from './access.js';
 import { scope, storedFields } from './models.js';
 import { appOf, lastOf, parentOf, python, q, snake, type PythonScope } from './python.js';
@@ -16,17 +16,79 @@ export function queryCode(query: GraphNode, context: MapContext, imports: Set<st
     const rows = `${lastOf(entity.qn)}.objects${filter ? `.filter(${filter})` : '.all()'}${sorts.length ? `.order_by(${sorts.join(', ')})` : ''}`;
     const guard = queryGuard(query, context, imports);
     const body = guard.length ? [`rows = ${rows}`, ...guard, ...(guard.at(-1) === 'return rows.none()' ? [] : ['return rows'])] : [`return ${rows}`];
+    // Required inputs first, so optional ones can default to None; callers pass every input by name.
+    const inputs = children(query, context, 'Param').sort((a, b) => Number(optional(a)) - Number(optional(b)))
+        .map(p => `${lastOf(p.qn)}: ${annotation(p.data.type as TypeData, context, imports)}${optional(p) ? ' = None' : ''}`);
     return [
         ...(query.data.pageSize ? [`${pageSizeName(query)} = ${query.data.pageSize}`, '', ''] : []),
-        `def ${snake(lastOf(query.qn))}(${guard.length ? 'actor=None' : ''}):`,
+        `def ${snake(lastOf(query.qn))}(${[...inputs, ...(guard.length ? ['actor=None'] : [])].join(', ')}):`,
         ...docstring(query, '    '),
         ...body.map(l => `    ${l}`)
     ].join('\n');
 }
 
-/** A call of a query function, passing the actor when the query checks policies. */
-export function queryCall(query: GraphNode, actor: string, context: MapContext): string {
-    return `${snake(lastOf(query.qn))}(${enforced(context) ? `actor=${actor}` : ''})`;
+/** A call of a query function with its inputs (`name=value` or `**inputs`), passing the actor when the query checks policies. */
+export function queryCall(query: GraphNode, actor: string, context: MapContext, inputs: string[] = []): string {
+    return `${snake(lastOf(query.qn))}(${[...inputs, ...(enforced(context) ? [`actor=${actor}`] : [])].join(', ')})`;
+}
+
+const INPUT_FIELDS: Record<string, [string, ...string[]]> = {
+    String: ['CharField'], Text: ['CharField'], Uuid: ['UUIDField'], Int: ['IntegerField'],
+    Decimal: ['DecimalField', 'max_digits=19', 'decimal_places=4'], Money: ['DecimalField', 'max_digits=19', 'decimal_places=2'],
+    Bool: ['BooleanField'], Date: ['DateField'], DateTime: ['DateTimeField'], Duration: ['DurationField']
+};
+
+/** The name of the serializer that reads a query's inputs from URL parameters. */
+export function inputSerializerName(query: GraphNode): string {
+    return `${lastOf(query.qn)}Input`;
+}
+
+/**
+ * A REST framework serializer that parses a query's inputs from URL parameters (the path and the query string):
+ * entities by primary key, enums by value, lists from repeated parameters. Undefined when an input has a type a
+ * URL cannot carry, a value type or a File.
+ */
+export function inputSerializer(query: GraphNode, context: MapContext, imports: Set<string>): string | undefined {
+    const lines: string[] = [];
+    for (const input of children(query, context, 'Param')) {
+        const type = input.data.type as TypeData;
+        const decl = type.decl ? context.node(type.decl) : undefined;
+        let field: [string, ...string[]] | undefined;
+        if (type.primitive) field = INPUT_FIELDS[type.primitive];
+        else if (decl?.kind === 'Entity') {
+            imports.add(`from ${appOf(decl.module)}.models import ${lastOf(decl.qn)}`);
+            field = ['PrimaryKeyRelatedField', `queryset=${lastOf(decl.qn)}.objects.all()`];
+        } else if (decl?.kind === 'Enum') {
+            imports.add(`from ${appOf(decl.module)}.enums import ${lastOf(decl.qn)}`);
+            field = ['ChoiceField', `choices=${lastOf(decl.qn)}.choices`];
+        }
+        if (!field) return undefined;
+        const call = ([name, ...args]: string[]) => `serializers.${name}(${args.join(', ')})`;
+        const options = type.optional ? ['required=False', 'allow_null=True'] : [];
+        lines.push(`    ${lastOf(input.qn)} = ${call(type.many ? ['ListField', `child=${call(field)}`, ...options] : [...field, ...options])}`);
+    }
+    imports.add('from rest_framework import serializers');
+    return [`class ${inputSerializerName(query)}(serializers.Serializer):`, `    """The inputs of ${lastOf(query.qn)}, read from URL parameters."""`, ...lines].join('\n');
+}
+
+/**
+ * The lines that read a query's inputs from URL parameters into `inputs`, for a call with `**inputs.validated_data`;
+ * `invalid` is the statement that answers parameters that do not parse. Undefined when the inputs cannot be read.
+ */
+export function inputLines(query: GraphNode, params: string[], invalid: string | undefined, context: MapContext, imports: Set<string>): string[] | undefined {
+    if (!children(query, context, 'Param').length) return [];
+    if (!inputSerializer(query, context, new Set())) return undefined;
+    imports.add(`from ${appOf(query.module)}.serializers import ${inputSerializerName(query)}`);
+    const [first, ...more] = params;
+    return [
+        ...(more.length ? [`params = ${first}.copy()`, ...more.map(p => `params.update(${p})`)] : []),
+        `inputs = ${inputSerializerName(query)}(data=${more.length ? 'params' : first})`,
+        ...(invalid ? ['if not inputs.is_valid():', `    ${invalid}`] : ['inputs.is_valid(raise_exception=True)'])
+    ];
+}
+
+function optional(input: GraphNode): boolean {
+    return !!(input.data.type as TypeData).optional;
 }
 
 export function pageSizeName(query: GraphNode): string {
@@ -37,7 +99,12 @@ export function querySteps(query: GraphNode, context: MapContext): Step[] {
     const imports = new Set<string>();
     const code = queryCode(query, context, imports);
     if (!code) return [task(`implement the query ${lastOf(query.qn)} where ${query.props.filter}`)];
-    return [template(`${appOf(query.module)}/queries.py`, existing => pythonFile(existing, imports, code))];
+    const steps = [template(`${appOf(query.module)}/queries.py`, existing => pythonFile(existing, imports, code))];
+    // Endpoints and pages read the inputs from URL parameters; both need the REST framework, which projections bring.
+    const serializerImports = new Set<string>();
+    const serializer = children(query, context, 'Param').length && hasKind(context, 'Projection') ? inputSerializer(query, context, serializerImports) : undefined;
+    if (serializer) steps.push(template(`${appOf(query.module)}/serializers.py`, existing => pythonFile(existing, serializerImports, serializer)));
+    return steps;
 }
 
 /** A projection becomes a REST framework model serializer; computed fields that follow references become `source` paths. */
@@ -187,7 +254,8 @@ function callCode(call: Call, context: MapContext, pyScope: PythonScope, externa
     }
     if (target.kind === 'Query') {
         pyScope.imports.add(`from ${appOf(target.module)}.queries import ${name}`);
-        return queryCall(target, 'actor', context);
+        const inputs = children(target, context, 'Param').map(p => lastOf(p.qn));
+        return queryCall(target, 'actor', context, args.map((a, i) => `${inputs[i]}=${a}`));
     }
     return undefined;
 }

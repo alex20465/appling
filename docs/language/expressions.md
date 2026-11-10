@@ -114,7 +114,7 @@ Names in expressions are not references. They resolve by the position of the exp
 | Transition `when` | The fields of the machine's entity, `this` | `Bool` |
 | Transition `effect` values | The fields of the machine's entity, `this` | The assigned field's type |
 | Job `where` | The fields of the run action's entity, `this`, the run action's inputs | `Bool` |
-| Query `where`, query `policy` | The fields of the query's entity, `this` | `Bool` |
+| Query `where`, query `policy` | The fields of the query's entity, `this`, the query's inputs | `Bool` |
 | Projection computed field | The fields of the source entity (the query's entity for a query source), `this` | Any |
 | Use case `policy` | The use case's parameters | `Bool` |
 | Role condition | Only `actor`, `tenant` and `now` | `Bool` |

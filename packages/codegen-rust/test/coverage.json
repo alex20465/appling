@@ -183,7 +183,7 @@
   },
   {
     "kind": "Param",
-    "generated": 10,
+    "generated": 12,
     "partial": 0,
     "todo": 0,
     "tasks": 0
@@ -267,7 +267,7 @@
   },
   {
     "kind": "total",
-    "generated": 111,
+    "generated": 113,
     "partial": 20,
     "todo": 18,
     "tasks": 41

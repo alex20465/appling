@@ -2,7 +2,7 @@ import { AstUtils, WorkspaceCache, type AstNode, type ValidationAcceptor, type V
 import {
     isAction, isBinaryExpr, isBoolExpr, isEntity, isField, isExternal, isExternalOperation, isMemberExpr, isNameExpr, isEnum, isMachine, isMigration, isModule, isValueType,
     type ApplingAstType, type Endpoint, type External, type ExternalKey, type Interface, type Machine, type Migration, type MigrationStep, type Model,
-    type Expr, type Policy, type Projection, type RenameStep, type SetEffect, type CreateEffect, type DeleteEffect, type ForEffect, type UpdateEffect
+    type Expr, type Policy, type Projection, type Query, type RenameStep, type SetEffect, type CreateEffect, type DeleteEffect, type ForEffect, type UpdateEffect
 } from './generated/ast.js';
 import { effectEntity, namedPaths, projectionSourceEntity } from './appling-scope.js';
 import { ExpressionTyper } from './appling-types.js';
@@ -32,7 +32,8 @@ export function registerValidationChecks(services: ApplingServices): void {
         DeleteEffect: validator.checkRecordPath,
         Policy: validator.checkPolicyScope,
         Projection: validator.checkProjectionFields,
-        Endpoint: validator.checkEndpointShape,
+        Endpoint: [validator.checkEndpointShape, validator.checkQueryEndpoint],
+        Query: validator.checkQueryInputs,
         Migration: validator.checkMigration,
         ExternalKey: validator.checkExternalKey,
         External: validator.checkExternalUsed,
@@ -170,6 +171,35 @@ export class ApplingValidator {
     checkEndpointShape(endpoint: Endpoint, accept: ValidationAcceptor): void {
         if (endpoint.target.ref?.$type === 'Query' && !endpoint.projection) {
             accept('error', 'An endpoint exposes query results only through a projection: add "as <Projection>".', { node: endpoint, property: 'target' });
+        }
+    }
+
+    /** An input named like a field of the query's entity would hide that field inside the query. */
+    checkQueryInputs(query: Query, accept: ValidationAcceptor): void {
+        const entity = query.entity.ref;
+        if (!entity) return;
+        for (const input of query.inputs.filter(i => entity.fields.some(f => f.name === i.name))) {
+            accept('error', `Input ${input.name} of query ${query.name} hides the field ${input.name} of ${entity.name}; rename the input.`, { node: input, property: 'name' });
+        }
+    }
+
+    /**
+     * A query endpoint takes the query's inputs from its path (`{name}`) and the query string, so every path
+     * parameter names an input, and every input has a type a URL can carry: a primitive other than File, an enum,
+     * an entity (by its id), or a list of those.
+     */
+    checkQueryEndpoint(endpoint: Endpoint, accept: ValidationAcceptor): void {
+        const query = endpoint.target.ref;
+        if (query?.$type !== 'Query') return;
+        const inputs = new Set(query.inputs.map(i => i.name));
+        for (const [, name] of endpoint.path.matchAll(/\{(\w+)\}/g)) {
+            if (!inputs.has(name)) accept('error', `Path parameter {${name}} is not an input of query ${query.name}.`, { node: endpoint, property: 'path' });
+        }
+        for (const input of query.inputs) {
+            const decl = input.type.decl?.ref;
+            if (input.type.primitive === 'File' || isValueType(decl)) {
+                accept('error', `Input ${input.name} of query ${query.name} has the type ${input.type.primitive ?? decl!.name}, which a URL cannot carry.`, { node: endpoint, property: 'target' });
+            }
         }
     }
 

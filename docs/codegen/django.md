@@ -67,7 +67,7 @@ The app of a module is its qualified name with dots replaced by underscores: the
 | `transition` | a test class |
 | scheduled `job` | a `django.tasks` task in `<app>/jobs.py` and a management command named after the job |
 | `job` on an event | a signal receiver in `<app>/handlers.py` |
-| `query` | a function in `<app>/queries.py` returning a queryset with filter and ordering, plus a `<QUERY>_PAGE_SIZE` constant for `paginate` |
+| `query` | a function in `<app>/queries.py` returning a queryset with filter and ordering, plus a `<QUERY>_PAGE_SIZE` constant for `paginate`; its inputs are parameters, required ones first and optional ones defaulting to `None`, and callers pass them by name. A query with inputs also gets `<Query>Input` in `<app>/serializers.py`, a REST framework serializer that parses the inputs from URL parameters (entities by primary key, enums by value, lists from repeated parameters) |
 | `projection` | a REST framework `ModelSerializer` in `<app>/serializers.py`; derived fields and computed fields that follow references, such as `customer.name`, become read only fields |
 | `external` | a `typing.Protocol` in `<app>/externals.py` |
 | `setting`, `secret` of an external | a constant in `config/settings.py` read from the environment and a line in `.env.example` (see [settings and secrets](#settings-and-secrets)) |
@@ -153,7 +153,7 @@ Each endpoint of a REST interface becomes a view:
 
 | Endpoint | View |
 |---|---|
-| `GET` a query, with a projection | a `generics.ListAPIView` over the query function, using the projection's serializer; `picks` creates a serializer subclass with only those fields; `paginate` adds a `PageNumberPagination` |
+| `GET` a query, with a projection | a `generics.ListAPIView` over the query function, using the projection's serializer; `picks` creates a serializer subclass with only those fields; `paginate` adds a `PageNumberPagination`. The query's inputs come from the path and the query string through `<Query>Input`; parameters that do not parse answer `400` |
 | `POST`, `PUT`, `PATCH` or `DELETE` an action | an `APIView` that loads the instance by `{id}`, calls the action with the request data and `actor=request.user`, and answers `204`; declared errors and `InvalidTransition` answer `400` with `{"error": "<name>"}` |
 
 Path parameters become Django converters: `{id}` becomes `<int:id>`, others `<str:name>`. A `limit` on the interface becomes a `UserRateThrottle` on every view. An action on an entity needs `{id}` in its path; endpoints that do not fit these patterns become tasks.
@@ -222,7 +222,7 @@ A page is rendered on the server. Its view collects the page's components for th
 
 | Component | Renders |
 |---|---|
-| `list <query> as <projection> { picks }` | a table of the query's rows with the picked projection fields, paginated by the query's `paginate`, and a button per row for each action |
+| `list <query> as <projection> { picks }` | a table of the query's rows with the picked projection fields, paginated by the query's `paginate`, and a button per row for each action; the query's inputs come from the page's query string, and parameters that do not parse answer `400` |
 | `detail <projection>` | the record with the route's `{id}`, its fields, and a button for each action |
 | `form <action>` | a field for each input of the action and a submit button |
 

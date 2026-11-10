@@ -17,17 +17,35 @@ query OpenOrders from Order {
 }
 ```
 
+A query can take inputs, typed like the inputs of an action:
+
+```appling
+query OrdersOf from Order {
+  input {
+    of: crm.Account
+    since: DateTime?
+  }
+  where { customer == of && (since == null || placed_at >= since) }
+  sort placed_at desc
+}
+```
+
+An optional input (`?`) is null when the caller leaves it out. Nothing drops a condition by itself: the filter says what null means, as `since == null || placed_at >= since` does.
+
 | Clause | Meaning |
 |---|---|
 | `from Entity` | The entity the query reads |
-| `where { condition }` | A Bool filter over the entity's fields; it can also read `this`, `actor`, `now` and `tenant` |
+| `input { name: Type ... }` | Typed inputs, any number; the filter and the policies read them by name |
+| `where { condition }` | A Bool filter over the entity's fields and the inputs; it can also read `this`, `actor`, `now` and `tenant` |
 | `sort a desc, b` | Sort fields of the entity, each with an optional `asc` or `desc` (the generators default to ascending) |
 | `paginate N` | The page size |
 | `policy { condition }` | Query level access policies, any number |
 
 All clauses are optional and come in this order. A query inherits the policies of its entity; its own policies can only narrow access further. See [access](access.md#narrowing).
 
-A use case calls a query without arguments: `step OpenOrders()`.
+An input with the name of a field of the entity would hide that field inside the query, so it is an error: `Input note of query Q hides the field note of Order; rename the input.`
+
+A use case passes the inputs in order: `step OrdersOf(order.customer)` leaves `since` out, `step OrdersOf(order.customer, now)` gives both. A REST endpoint takes them from the request, see [interfaces](interfaces.md#query-inputs).
 
 ## Projections
 
@@ -120,7 +138,7 @@ The arguments must match the target:
 | Action without an entity | The inputs in order |
 | External operation | Its parameters in order |
 | Use case | Its parameters in order |
-| Query | None |
+| Query | Its inputs in order |
 
 Optional inputs and parameters may be left out. A wrong count is reported as `Close takes 1 to 2 argument(s), got 0.`, a wrong type as `Int is not assignable to String?.`
 

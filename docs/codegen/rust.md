@@ -90,7 +90,7 @@ Each policy becomes a private function in its module, such as `order_policy_read
 |---|---|
 | `entity` | `can_<op>_<entity>(actor, record)` for `read`, `create`, `update` and `delete`, false for an operation no policy grants; `can_<op>_<entity>_<field>` for the fields a field policy narrows. A record in the tenant also needs `in_tenant` |
 | `action` | `can_<action>(actor, record, inputs...)`: the update check of its entity and the action's own policies, false when there is neither; the action calls it first. An action without an entity that creates records and has no policy of its own checks `can_create_<entity>` on each record instead |
-| `query` | `can_<query>(actor, record)`: the read check of its entity and the query's own policies |
+| `query` | `can_<query>(actor, record, inputs...)`: the read check of its entity and the query's own policies |
 | `usecase` | `can_<use case>(actor, params...)` from its own policies; the actions it runs check themselves |
 
 Once the model has any policy, an operation that no policy covers is denied, the same rule as the [Django extension](django.md): an entity without policies gets checks that all return `false`, so its actions are forbidden too. A model without policies generates no checks, and its actions take no actor; only a [tenant](../language/access.md) then guards the actions on records in the tenant. Transitions on an event run without an actor and check nothing.
@@ -99,7 +99,7 @@ Checks borrow single required records and take every other input by value. A pol
 
 ## What becomes a task
 
-Queries, projections, interfaces, pages, flows, messages, use cases, external systems and jobs (queries and use cases still get their `can_...` check), and derived fields, defaults, preconditions, guards, policies and effects without a Rust translation, such as `actor` outside a policy or a role, string matching with `matches`, a `create`, `update` or `delete` effect that runs in a transition on an event, a `create` effect that leaves a required field without default unset, an `update` or `delete` whose path goes through an optional record before its end, a loop that changes its records while calling a method of the action's record, and an `emit` effect that leaves a required field of its event unset. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
+Queries, projections, interfaces, pages, flows, messages, use cases, external systems and jobs (queries and use cases still get their `can_...` check, and a query whose filter translates gets `in_<query>(record, inputs...) -> bool`, which says whether a record belongs to its results), and derived fields, defaults, preconditions, guards, policies and effects without a Rust translation, such as `actor` outside a policy or a role, string matching with `matches`, a `create`, `update` or `delete` effect that runs in a transition on an event, a `create` effect that leaves a required field without default unset, an `update` or `delete` whose path goes through an optional record before its end, a loop that changes its records while calling a method of the action's record, and an `emit` effect that leaves a required field of its event unset. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
 
 ## Run the generated project
 

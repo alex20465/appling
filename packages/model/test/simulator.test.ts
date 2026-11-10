@@ -199,6 +199,17 @@ test('a create effect needs the created entity create policies, true allows and 
     expect(sim.access('desk.Visitor').find(a => a.target === 'desk.Ticket' && a.operation === 'read')?.verdict).toBe('yes');
 });
 
+test('a query matches a record by its filter over the inputs, an optional input left out is null', async () => {
+    const sim = await simulator(examples());
+    const shopper = { actor: 'sales.Shopper' };
+    const account = (id: number) => ({ $type: 'crm.Account', id });
+    const order = { customer: account(1), placed_at: new Date('2026-10-01T00:00:00Z') };
+    expect(sim.matches('sales.OrdersOf', order, shopper, { of: account(1) })).toBe(true);
+    expect(sim.matches('sales.OrdersOf', order, shopper, { of: account(2) })).toBe(false);
+    expect(sim.matches('sales.OrdersOf', order, shopper, { of: account(1), since: new Date('2026-10-20T00:00:00Z') })).toBe(false);
+    expect(sim.matches('sales.OrdersOf', order, shopper)).toBe(UNKNOWN);
+});
+
 const CHECKOUT = `module shop {
   entity Product { stock: Int }
   entity Order { total: Int default 0 }
