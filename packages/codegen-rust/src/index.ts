@@ -54,9 +54,10 @@ const extension: CodegenExtension = {
             case 'Query': return [...guardSteps(node, context), ...queryFilterSteps(node, context), task(`implement the query ${last(node.qn)} on top of the generated domain module, with the storage, HTTP and scheduling crates of your choice`)];
             case 'UseCase':
                 return [...guardSteps(node, context), task(`implement the use case ${last(node.qn)} on top of the generated domain module, with the storage, HTTP and scheduling crates of your choice`)];
+            case 'External':
+                return [leftToCode(`implement a client for ${last(node.qn)} with the HTTP library of your choice`)];
             case 'Job':
             case 'Projection':
-            case 'External':
             case 'Interface':
             case 'Page':
             case 'Navigation':
@@ -941,4 +942,9 @@ function last(qn: string): string {
 
 function task(what: string): Step {
     return { kind: 'task', what };
+}
+
+/** A registry task the model leaves to the code by design (`docs/concept.md` section 8): it does not lower the coverage. */
+function leftToCode(what: string): Step {
+    return { kind: 'task', what, leftToCode: true };
 }

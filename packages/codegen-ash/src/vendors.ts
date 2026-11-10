@@ -1,7 +1,7 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { GraphNode, TypeData } from '@appling/model';
 import { lastOf } from './elixir.js';
-import { app, children, moduleName, snake, task } from './naming.js';
+import { app, children, leftToCode, moduleName, snake } from './naming.js';
 
 /** The environment variable of an external's key: `<EXTERNAL>_<KEY>` in SCREAMING_SNAKE (`CLERK_SECRET_KEY`). */
 export function envName(key: GraphNode): string {
@@ -73,13 +73,13 @@ export function vendorTasks(api: GraphNode, context: MapContext): Step[] {
         const vendor = api.data.source ? lastOf(api.data.source as string) : 'the vendor';
         for (const endpoint of children(api, context, 'Endpoint')) {
             const target = lastOf(endpoint.data.target as string);
-            tasks.push(task(`register ${endpoint.data.verb} ${endpoint.data.path} as a webhook at ${vendor} for the events ${target} handles`));
-            tasks.push(task(`receive ${endpoint.data.verb} ${endpoint.data.path} from ${vendor} for ${name}: verify the signature, then call ${target}`));
+            tasks.push(leftToCode(`register ${endpoint.data.verb} ${endpoint.data.path} as a webhook at ${vendor} for the events ${target} handles`));
+            tasks.push(leftToCode(`receive ${endpoint.data.verb} ${endpoint.data.path} from ${vendor} for ${name}: verify the signature, then call ${target}`));
         }
     }
     if (api.data.authBy) {
         const roles = context.graph.nodes.filter(n => n.kind === 'Role').map(r => lastOf(r.qn));
-        tasks.push(task(`set up ${lastOf(api.data.authBy as string)} to issue ${api.data.auth} tokens for ${name}${roles.length ? ` with a role claim naming ${roles.join(', ')}` : ''}`));
+        tasks.push(leftToCode(`set up ${lastOf(api.data.authBy as string)} to issue ${api.data.auth} tokens for ${name}${roles.length ? ` with a role claim naming ${roles.join(', ')}` : ''}`));
     }
     return tasks;
 }

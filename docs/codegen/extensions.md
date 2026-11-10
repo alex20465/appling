@@ -94,6 +94,7 @@ interface TemplateStep {
 interface TaskStep {
   kind: 'task';
   what: string;
+  leftToCode?: boolean;
 }
 
 interface Prerequisite {
@@ -135,7 +136,7 @@ interface MapContext {
 |---|---|
 | `command` | Runs `run[0]` with the other items as arguments, without a shell: no pipes, no globs, no variables. `cwd` is relative to the output folder and is created when missing. `input` goes to standard input. `env` adds variables to the environment the command inherits. The run stops at the first command that exits with a non zero code. `creates` lists files or folders for the registry entry. |
 | `template` | Writes `file`, relative to the output folder, with what `write` returns. `write` gets the current content, or `undefined` when the file does not exist yet, so several steps can add to one file. Return the whole new content. |
-| `task` | Never runs. Its `what` becomes an open task in the node's registry entry, with the node's properties and related elements as context. Write it as an instruction a person or an AI can act on. |
+| `task` | Never runs. Its `what` becomes an open task in the node's registry entry, with the node's properties and related elements as context. Write it as an instruction a person or an AI can act on. Set `leftToCode` when the model leaves the work to the code by design ([design concept, section 8](../concept.md#8-what-belongs-in-the-model)), such as an external system's client or a cron entry: the task stays open in the registry, but it does not lower the coverage. Leave it unset for a generator gap, something the model says that the extension does not produce yet. |
 
 Prefer the target framework's own command line generators and patch their output with templates; the result then looks like a project a developer of that framework would start.
 

@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { annotation, children, documented, importOnReady, pythonFile, task, template } from './files.js';
+import { annotation, children, documented, importOnReady, leftToCode, pythonFile, task, template } from './files.js';
 import { actionGuard, enforced, guardedCreate } from './access.js';
 import { scope, storedFields } from './models.js';
 import { preconditionTests, transitionTests } from './behavior-tests.js';
@@ -199,7 +199,7 @@ export function jobSteps(job: GraphNode, context: MapContext): Step[] {
             template(`${app}/management/__init__.py`, existing => existing ?? ''),
             template(`${app}/management/commands/__init__.py`, existing => existing ?? ''),
             template(`${app}/management/commands/${name}.py`, () => pythonFile(undefined, ['from django.core.management.base import BaseCommand', `from ${app}.jobs import ${name}`], command)),
-            task(`schedule "python manage.py ${name}" with cron "${job.data.schedule}"`)
+            leftToCode(`schedule "python manage.py ${name}" with cron "${job.data.schedule}"`)
         ];
     }
     const event = context.node(job.data.event as string)!;

@@ -85,18 +85,19 @@ $ appling generate --plan examples
   sales.PublicApi: template: config/urls.py
   (project): command: uv run python manage.py makemigrations
 
-| kind | generated | partial | todo | tasks |
-|---|---|---|---|---|
-| Action | 1 | 1 | 0 | 1 |
-| Actor | 2 | 0 | 0 | 0 |
+| kind | generated | partial | todo | tasks | left to code |
+|---|---|---|---|---|---|
+| Action | 2 | 0 | 0 | 0 | 0 |
+| Actor | 2 | 0 | 0 | 0 | 0 |
 ...
-| Policy | 0 | 7 | 0 | 7 |
+| Job | 1 | 0 | 0 | 0 | 1 |
+| Policy | 0 | 7 | 0 | 7 | 0 |
 ...
-| Tenant | 1 | 0 | 0 | 0 |
+| Tenant | 1 | 0 | 0 | 0 | 0 |
 ...
-| **total** | 55 (76%) | 16 | 1 | 18 |
+| **total** | 60 (83%) | 11 | 1 | 13 | 2 |
 
-72 element(s): 55 generated, 16 partial, 1 todo
+72 element(s): 58 generated, 13 partial, 1 todo
 ```
 
 Each line names the node that produced the step; `(project)` marks setup steps that run once. The table counts the registry entries per element kind by status and the registry tasks they leave, so you see where the extension still leaves work. The last line counts the registry entries by status.

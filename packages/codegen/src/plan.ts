@@ -5,6 +5,7 @@ export type Status = 'generated' | 'partial' | 'todo' | 'done';
 
 export interface Missing {
     what: string;
+    leftToCode?: boolean;
     context: {
         props: Record<string, unknown>;
         related: { qn: string, kind: string, edge: string }[];
@@ -59,13 +60,17 @@ export function plan(graph: Graph, extension: CodegenExtension, name: string, op
     return { extension: extension.name, test: extension.test, syncExclude: extension.syncExclude, steps: steps.map((s, i) => ({ s, i })).sort((a, b) => phase(a.s) - phase(b.s) || a.i - b.i).map(({ s }) => s), entries };
 }
 
-/** Registry entries of one node kind by status, and the registry tasks they leave. */
+/**
+ * Registry entries of one node kind by status, and the registry tasks they leave. Only generator gaps count: an
+ * element whose open work is all left to the code counts as generated, and those tasks count in `left`.
+ */
 export interface CoverageRow {
     kind: string;
     generated: number;
     partial: number;
     todo: number;
     tasks: number;
+    left: number;
 }
 
 export interface Coverage {
@@ -76,12 +81,15 @@ export interface Coverage {
 
 /** Counts the entries of a plan per node kind and status: how much of the model an extension generates. */
 export function coverage(entries: RegistryEntry[]): Coverage {
+    const gaps = (e: RegistryEntry) => e.missing.filter(m => !m.leftToCode).length;
+    const status = (e: RegistryEntry) => e.missing.length > 0 && gaps(e) === 0 ? 'generated' : e.status;
     const row = (kind: string, of: RegistryEntry[]): CoverageRow => ({
         kind,
-        generated: of.filter(e => e.status === 'generated' || e.status === 'done').length,
-        partial: of.filter(e => e.status === 'partial').length,
-        todo: of.filter(e => e.status === 'todo').length,
-        tasks: of.reduce((sum, e) => sum + e.missing.length, 0)
+        generated: of.filter(e => status(e) === 'generated' || status(e) === 'done').length,
+        partial: of.filter(e => status(e) === 'partial').length,
+        todo: of.filter(e => status(e) === 'todo').length,
+        tasks: of.reduce((sum, e) => sum + gaps(e), 0),
+        left: of.reduce((sum, e) => sum + e.missing.length - gaps(e), 0)
     });
     const kinds = [...Map.groupBy(entries, e => e.kind)].sort(([a], [b]) => a.localeCompare(b)).map(([kind, of]) => row(kind, of));
     return { kinds, total: row('total', entries) };
@@ -91,8 +99,8 @@ export function coverage(entries: RegistryEntry[]): Coverage {
 export function coverageTable({ kinds, total }: Coverage): string {
     const all = total.generated + total.partial + total.todo;
     const share = all ? ` (${Math.round(total.generated / all * 100)}%)` : '';
-    const line = (r: CoverageRow, label = r.kind, suffix = '') => `| ${label} | ${r.generated}${suffix} | ${r.partial} | ${r.todo} | ${r.tasks} |`;
-    return ['| kind | generated | partial | todo | tasks |', '|---|---|---|---|---|', ...kinds.map(r => line(r)), line(total, '**total**', share)].join('\n');
+    const line = (r: CoverageRow, label = r.kind, suffix = '') => `| ${label} | ${r.generated}${suffix} | ${r.partial} | ${r.todo} | ${r.tasks} | ${r.left} |`;
+    return ['| kind | generated | partial | todo | tasks | left to code |', '|---|---|---|---|---|---|', ...kinds.map(r => line(r)), line(total, '**total**', share)].join('\n');
 }
 
 export function describe(step: Step): string {
@@ -104,13 +112,14 @@ export function describe(step: Step): string {
 }
 
 function entry(node: GraphNode, steps: Step[] | undefined, extension: string, context: MapContext): RegistryEntry {
-    const tasks = (steps ?? []).filter(s => s.kind === 'task').map(s => s.what);
-    if (!steps) tasks.push(`${extension} does not generate ${node.kind} yet`);
+    const tasks = (steps ?? []).filter(s => s.kind === 'task').map(({ what, leftToCode }) => ({ what, leftToCode }));
+    if (!steps) tasks.push({ what: `${extension} does not generate ${node.kind} yet`, leftToCode: undefined });
     // Code exists when the node has its own steps or is covered by its parent's (`[]`) and leaves no task of its own.
     const work = (steps ?? []).filter(s => s.kind !== 'task');
     const hasCode = work.length > 0 || (steps !== undefined && tasks.length === 0);
+    // The `does` text is prose the model does not formalize, so implementing it is left to the code.
     const does = doesTask(node);
-    if (does) tasks.push(does);
+    if (does) tasks.push({ what: does, leftToCode: true });
     const related = [
         ...context.outgoing(node.qn).filter(e => e.kind !== 'contains').map(e => ({ qn: e.to, kind: context.node(e.to)!.kind, edge: e.kind })),
         ...context.incoming(node.qn).filter(e => e.kind !== 'contains').map(e => ({ qn: e.from, kind: context.node(e.from)!.kind, edge: `${e.kind} by` }))
@@ -122,7 +131,7 @@ function entry(node: GraphNode, steps: Step[] | undefined, extension: string, co
         status: tasks.length === 0 ? 'generated' : hasCode ? 'partial' : 'todo',
         steps: (steps ?? []).map(describe),
         files: work.flatMap(s => s.kind === 'template' ? [s.file] : s.kind === 'command' ? s.creates ?? [] : []),
-        missing: tasks.map(what => ({ what, context: { props: node.props, related } }))
+        missing: tasks.map(({ what, leftToCode }) => ({ what, ...leftToCode && { leftToCode }, context: { props: node.props, related } }))
     };
 }
 

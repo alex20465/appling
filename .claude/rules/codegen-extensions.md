@@ -19,4 +19,5 @@ paths:
 - Seed every new patch target in the test harness; patch writers assume the file exists.
 - Add any new stdlib module to `STANDARD_LIBRARY` in `files.ts`, or imports sort wrong.
 - Keep work that must land in the first migrations below phase 3.
+- Mark a task `leftToCode` when `docs/concept.md` section 8 leaves the work to the code; never close a registry task by adding syntax to the language.
 - Before changing these files, use the `codegen-extensions` skill.

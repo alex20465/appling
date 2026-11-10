@@ -17,9 +17,9 @@ const head = coverageReport([
 
 describe('the computation', () => {
     test('completion counts partial as half and an empty row as complete', () => {
-        expect(completion({ kind: 'k', generated: 2, partial: 2, todo: 0, tasks: 0 })).toBe(0.75);
-        expect(completion({ kind: 'k', generated: 0, partial: 1, todo: 3, tasks: 9 })).toBe(0.125);
-        expect(completion({ kind: 'k', generated: 0, partial: 0, todo: 0, tasks: 0 })).toBe(1);
+        expect(completion({ kind: 'k', generated: 2, partial: 2, todo: 0, tasks: 0, left: 0 })).toBe(0.75);
+        expect(completion({ kind: 'k', generated: 0, partial: 1, todo: 3, tasks: 9, left: 0 })).toBe(0.125);
+        expect(completion({ kind: 'k', generated: 0, partial: 0, todo: 0, tasks: 0, left: 0 })).toBe(1);
     });
 
     test('sums every input per extension and per kind, done counting as generated', () => {
@@ -27,14 +27,25 @@ describe('the computation', () => {
         expect(head.inputs).toEqual(['constructs', 'examples']);
         expect(head.extensions.map(e => e.extension)).toEqual(['@appling/codegen-django', '@appling/codegen-go']);
         expect(django.kinds).toEqual([
-            { kind: 'Action', generated: 0, partial: 1, todo: 1, tasks: 2 },
-            { kind: 'Entity', generated: 3, partial: 1, todo: 0, tasks: 1 }
+            { kind: 'Action', generated: 0, partial: 1, todo: 1, tasks: 2, left: 0 },
+            { kind: 'Entity', generated: 3, partial: 1, todo: 0, tasks: 1, left: 0 }
         ]);
-        expect(django.total).toEqual({ kind: 'total', generated: 3, partial: 2, todo: 1, tasks: 3 });
-        expect(django.inputs.examples).toEqual({ kind: 'total', generated: 2, partial: 0, todo: 0, tasks: 0 });
+        expect(django.total).toEqual({ kind: 'total', generated: 3, partial: 2, todo: 1, tasks: 3, left: 0 });
+        expect(django.inputs.examples).toEqual({ kind: 'total', generated: 2, partial: 0, todo: 0, tasks: 0, left: 0 });
         expect(django.completion).toBe(4 / 6);
-        expect(head.total).toEqual({ kind: 'total', generated: 3, partial: 2, todo: 2, tasks: 4 });
+        expect(head.total).toEqual({ kind: 'total', generated: 3, partial: 2, todo: 2, tasks: 4, left: 0 });
         expect(head.completion).toBe(4 / 7);
+    });
+
+    test('a task left to code does not lower the coverage and counts apart', () => {
+        const left = { what: 'implement a client', leftToCode: true, context: { props: {}, related: [] } };
+        const gap = { what: 'check the guard', context: { props: {}, related: [] } };
+        const report = coverageReport([{ extension: '@appling/codegen-go', input: 'constructs', entries: [
+            { qn: 'm.Payments', kind: 'External', layer: 'application', status: 'todo', steps: [], files: [], missing: [left] },
+            { qn: 'm.Flow', kind: 'Machine', layer: 'behavior', status: 'partial', steps: [], files: [], missing: [gap, left] }
+        ] }]);
+        expect(report.total).toEqual({ kind: 'total', generated: 1, partial: 1, todo: 0, tasks: 1, left: 2 });
+        expect(report.completion).toBe(0.75);
     });
 
     test('the badge carries the headline figure', () => {
@@ -65,10 +76,10 @@ describe('the Markdown', () => {
     test('without a base it has the marker, the headline, one line per extension and the kinds folded', () => {
         const text = coverageMarkdown(head);
         expect(text.startsWith(`${COVERAGE_MARKER}\n## Codegen coverage\n`)).toBe(true);
-        expect(text).toContain('**57.1%** generated completion, 4 registry tasks, over constructs and examples.');
-        expect(text).toContain('| django | 50.0% | 33.3% | 16.7% | 66.7% | 3 |');
+        expect(text).toContain('**57.1%** generated completion, 4 registry tasks and 0 left to code, over constructs and examples.');
+        expect(text).toContain('| django | 50.0% | 33.3% | 16.7% | 66.7% | 3 | 0 |');
         expect(text).toContain('<summary>django: 66.7% (constructs 50.0%, examples 100.0%)</summary>');
-        expect(text).toContain('| Action | 0 | 1 | 1 | 25.0% | 2 |');
+        expect(text).toContain('| Action | 0 | 1 | 1 | 25.0% | 2 | 0 |');
         expect(text).not.toContain('Changes per kind');
     });
 
@@ -79,13 +90,13 @@ describe('the Markdown', () => {
             { extension: '@appling/codegen-rust', input: 'constructs', entries: entries('Entity', ['generated']) }
         ]);
         const text = coverageMarkdown(head, base);
-        expect(text).toContain('**57.1%** generated completion ▼ -7.1 pp, 4 registry tasks, over');
-        expect(text).toContain('| django | 50.0% | 33.3% | 16.7% | 66.7% | ▲ +8.3 pp | 3 | ▲ -1 |');
-        expect(text).toContain('| go | 0.0% | 0.0% | 100.0% | 0.0% | new | 1 | new |');
-        expect(text).toContain('| rust | | | | gone | |');
+        expect(text).toContain('**57.1%** generated completion ▼ -7.1 pp, 4 registry tasks and 0 left to code, over');
+        expect(text).toContain('| django | 50.0% | 33.3% | 16.7% | 66.7% | ▲ +8.3 pp | 3 | ▲ -1 | 0 |');
+        expect(text).toContain('| go | 0.0% | 0.0% | 100.0% | 0.0% | new | 1 | new | 0 |');
+        expect(text).toContain('| rust | | | | gone | | |');
         expect(text).toContain('| django | Entity | 3 | 1 (0) | 0 (1) | 87.5% | ▲ +12.5 pp | 1 | ▲ -1 |');
         expect(text).not.toContain('| django | Action |');
-        expect(text).toContain('| Action | 0 | 1 | 1 | 25.0% |  | 2 |  |');
+        expect(text).toContain('| Action | 0 | 1 | 1 | 25.0% |  | 2 |  | 0 |');
     });
 
     test('an unchanged report says so', () => {

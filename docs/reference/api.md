@@ -160,7 +160,7 @@ Planning and running:
 | `plan(graph, extension, name, options)` | The ordered steps and one registry entry per node (`Plan`) |
 | `doesTask(node)` | The registry task of a node's [`does`](../language/descriptions.md) text, which `plan` adds to its entry |
 | `describe(step)` | A one line description of a step, as `--plan` prints it |
-| `coverage(entries)` | The registry entries per node kind: generated, partial, todo and the number of tasks, plus a total (`Coverage`) |
+| `coverage(entries)` | The registry entries per node kind: generated, partial, todo, the number of tasks (generator gaps) and of tasks left to code, plus a total (`Coverage`); an entry whose only tasks are left to code counts as generated |
 | `coverageTable(coverage)` | That coverage as the Markdown table `--plan` prints, the total with the generated share |
 | `coverageReport(plans)` | The coverage of several extensions over several inputs (`PlannedInput[]`): per extension the total per input, the rows per kind, the total and its completion, plus an overall total (`CoverageReport`) |
 | `completion(row)` | The completion of a row between 0 and 1: `(generated + partial / 2) / (generated + partial + todo)`, 1 without elements |

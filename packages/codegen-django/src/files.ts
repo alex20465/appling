@@ -36,6 +36,11 @@ export function task(what: string): Step {
     return { kind: 'task', what };
 }
 
+/** A registry task the model leaves to the code by design (`docs/concept.md` section 8): it does not lower the coverage. */
+export function leftToCode(what: string): Step {
+    return { kind: 'task', what, leftToCode: true };
+}
+
 /** Adds a block of code to a Python file, merging its imports into the file's import block. */
 export function pythonFile(existing: string | undefined, imports: Iterable<string>, block: string): string {
     const lines = (existing ?? '').replace(/\n# Create your [a-z ]+ here\.\n/, '\n').split('\n');

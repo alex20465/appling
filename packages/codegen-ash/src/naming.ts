@@ -54,6 +54,11 @@ export function task(what: string): Step {
     return { kind: 'task', what };
 }
 
+/** A registry task the model leaves to the code by design (`docs/concept.md` section 8): it does not lower the coverage. */
+export function leftToCode(what: string): Step {
+    return { kind: 'task', what, leftToCode: true };
+}
+
 export function children(node: GraphNode, context: MapContext, kind?: string): GraphNode[] {
     return context.children(node.qn).filter(c => !kind || c.kind === kind);
 }

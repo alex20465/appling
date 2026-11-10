@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { children, documented, importOnReady, pythonFile, task, template } from './files.js';
+import { children, documented, importOnReady, leftToCode, pythonFile, task, template } from './files.js';
 import { actorFields, actorUserSteps, scope, storedFields, userModel } from './models.js';
 import { policyTests } from './policy-tests.js';
 import { appOf, lastOf, parentOf, python, rolePredicate, snake, tenantGetter, wrap, type PythonScope } from './python.js';
@@ -118,7 +118,7 @@ export function tenantSteps(tenant: GraphNode, context: MapContext): Step[] {
         template('config/settings.py', existing => existing!.includes(line) ? existing! : /MIDDLEWARE = \[\n[\s\S]*?\]/.test(existing!)
             ? existing!.replace(/MIDDLEWARE = \[\n([\s\S]*?)\]/, (_, items) => `MIDDLEWARE = [\n${items}    ${line}\n]`)
             : `${existing!.trimEnd()}\n\nMIDDLEWARE = [\n    ${line}\n]\n`),
-        ...(resolve ? [] : [task(`set the tenant ${name} (a ${lastOf(entity.qn)}) of each request in ${middleware}`)])
+        ...(resolve ? [] : [leftToCode(`set the tenant ${name} (a ${lastOf(entity.qn)}) of each request in ${middleware}`)])
     ];
 }
 

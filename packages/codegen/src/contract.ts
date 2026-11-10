@@ -29,6 +29,8 @@ export interface TemplateStep extends StepOrder {
 export interface TaskStep {
     kind: 'task';
     what: string;
+    /** Work the model leaves to the code by design (`docs/concept.md` section 8), such as an external system's client; it does not lower the coverage. */
+    leftToCode?: boolean;
 }
 
 export type Step = CommandStep | TemplateStep | TaskStep;

@@ -20,6 +20,7 @@ pnpm test                   # vitest over packages/*/test
 pnpm vitest run packages/lang/test/validation.test.ts -t "name"   # one file, one test
 pnpm vitest run -u          # update snapshots (model, codegen-django, codegen-ash)
 node scripts/bench/check-scaling.mjs [copies...]   # time `check` on N copies of examples/ (catches superlinear validation)
+node scripts/bench/ai-modeling.mjs [--model sonnet] [--runs 1] [--brief name] [--keep]   # a fresh claude -p writes models from scripts/bench/briefs/ with only docs/language; scored by check
 node packages/desktop/out/bin.js examples       # Appling Desktop on the sample models (needs a display; ask the user to start it)
 pnpm --filter @appling/lang build   # rebuild only the language after grammar changes
 node scripts/ci/codegen-coverage.mjs   # codegen coverage of every extension over the constructs fixture and examples (--json, --markdown, --base, --root, --badge)
@@ -76,3 +77,4 @@ Grammar conventions: keywords that should remain valid as names (fields like `st
 | `packages/landing/**` | `landing-site` |
 | `packages/*/src/**`, `packages/*/README.md`, `examples/**`, `docs/**`, the docs files of `packages/landing` | `documentation` |
 | `packages/*/package.json`, `packages/*/CHANGELOG.md`, `.changeset/**`, `pnpm-workspace.yaml` | `release` |
+| `packages/lang/src/appling.langium`, `packages/lang/test/fixtures/constructs/**`, `docs/language/**`, `docs/concept.md`, `examples/**` | `language-scope` (rule only; the test is `docs/concept.md` section 8, repeated by the hook `.claude/hooks/language-scope.sh` on every edit of the grammar or `docs/language/`) |

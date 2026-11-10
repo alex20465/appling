@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { annotation, children, docstring, hasKind, pythonFile, task, template } from './files.js';
+import { annotation, children, docstring, hasKind, leftToCode, pythonFile, task, template } from './files.js';
 import { enforced, fieldGuards, policyImport, queryGuard, useCaseGuard } from './access.js';
 import { scope, storedFields } from './models.js';
 import { appOf, lastOf, parentOf, python, q, snake, type PythonScope } from './python.js';
@@ -180,7 +180,7 @@ export function externalSteps(external: GraphNode, context: MapContext): Step[] 
     const code = [`class ${lastOf(external.qn)}(Protocol):`, ...docstring(external, '    '), ...(methods.length ? methods.slice(1) : ['    pass'])].join('\n');
     return [
         template(`${appOf(external.module)}/externals.py`, existing => pythonFile(existing, imports, code)),
-        task(`implement a client for ${lastOf(external.qn)} and pass it to the use cases that call it`)
+        leftToCode(`implement a client for ${lastOf(external.qn)} and pass it to the use cases that call it`)
     ];
 }
 

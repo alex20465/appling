@@ -161,7 +161,7 @@ Rules:
 - Evaluates expressions, action preconditions and effects, and state machine transitions against sample data and actors.
 - Answers questions such as "Can an order reach Paid?", "Which actors can trigger Cancel?", and "Which invariants does this action risk violating?"
 
-Production runtime remains out of scope. The simulator is the minimum that makes behavior verifiable.
+Production runtime remains out of scope (section 8). The simulator is the minimum that makes behavior verifiable.
 
 ## 6. AI Integration
 
@@ -183,12 +183,30 @@ AI-generated changes pass the same structural validation as human edits, and are
 - Migration steps target elements by their qualified name as it was before the step, so layout and history can follow renames.
 - Once a release exists, editing a Layer 1 element it contains appends the step automatically. Steps go into one migration block per module, named after the release they follow, such as `since_v1_0_0`.
 
-## 8. Out of Scope (initial)
+## 8. What Belongs in the Model
 
-- Production runtime (code generation produces a draft project, not a runtime)
-- Deployment, infrastructure, environments
-- Performance, scaling, and SLAs
-- Visual design system and styling details
+The model says what the business decides: what exists, what may happen, who may do it, what must hold and what follows from what. It does not say how the code does it. The language stays small enough that a person or an AI reads all of it, so every construct has to earn its place.
+
+A construct belongs in the language only when all three hold:
+
+1. **A domain expert states it.** "A draft expires after 30 days" and "personal data is kept seven years" are business decisions; the wording of a confirmation email is not.
+2. **It changes what the business allows or what happens**, not how the code does it.
+3. **The validator or the simulator uses it.** Something only a generator reads belongs in the target's options in `appling.config.json`, or in the generated code.
+
+What fails the test goes elsewhere:
+
+| Concern | Where it goes |
+|---|---|
+| How to call an external system: base URL, paths, request mapping, credentials | the system's own contract, such as an OpenAPI file, or the generated client |
+| Stacks, repositories, deployment, infrastructure, environments | `appling.config.json` and the project itself |
+| Notifications: channels, recipients, subjects and texts | the generated code |
+| Seed and demo data | the generated project |
+| Message templates, styling, the visual design system | the generated code |
+| Performance, scaling and SLAs | out of scope |
+
+Code generation produces a draft, not a runtime. A registry task is either a **generator gap**, something the model says that the generator does not produce yet, or work the model **leaves to the code** by this section. Only generator gaps lower the codegen coverage; closing them is the generators' job, not the language's. A missing business fact never shows up as a task, because a generator only sees what the model says: it shows up as a scenario the model cannot express, or a question the simulator cannot answer.
+
+Before a new construct is added, the language reference the AI reads (`docs/language/`) is checked against its size budget, and `scripts/bench/ai-modeling.mjs` measures whether an assistant that knows only that reference still writes valid models from a business brief.
 
 ## 9. Guiding Philosophy
 

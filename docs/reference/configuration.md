@@ -171,7 +171,7 @@ Each entry:
 | `status` | `generated`, `partial` (generated with open tasks), `todo` (nothing generated) or `done` (open work finished) |
 | `steps` | One line per step that produced the element, as `appling generate --plan` prints them |
 | `files` | The files those steps wrote or created |
-| `missing` | The open tasks: `what` to do, and the `context` with the element's `props` and its `related` elements; `edge` is the reference kind, with ` by` appended for incoming references |
+| `missing` | The open tasks: `what` to do, `leftToCode` when the model leaves the work to the code by design, and the `context` with the element's `props` and its `related` elements; `edge` is the reference kind, with ` by` appended for incoming references |
 | `attempts` | How often someone tried to finish the open work (set by `registry_update`) |
 | `notes` | Notes left by those attempts |
 

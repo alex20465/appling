@@ -68,7 +68,7 @@ The headline figure, and the badge, is the completion over every extension and b
 completion = (generated + partial / 2) / (generated + partial + todo)
 ```
 
-A `partial` element has code and open registry tasks, so it counts as half. With `--base`, each figure shows its change: `▲` for a gain, `▼` for a drop, in percentage points for shares. Fewer registry tasks is a gain, so `▲ -2` means two tasks fewer. `appling generate --coverage` prints the same report for the targets of a project (see [the CLI](../tools/cli.md#coverage)).
+A `partial` element has code and open registry tasks, so it counts as half. Only generator gaps count: a task an extension marks `leftToCode` (work the model leaves to the code by design, [design concept, section 8](../concept.md#8-what-belongs-in-the-model)) is reported in its own column and does not lower the completion; an element whose only open tasks are left to code counts as generated. With `--base`, each figure shows its change: `▲` for a gain, `▼` for a drop, in percentage points for shares. Fewer registry tasks is a gain, so `▲ -2` means two tasks fewer. `appling generate --coverage` prints the same report for the targets of a project (see [the CLI](../tools/cli.md#coverage)).
 
 ## Generated projects end to end
 
@@ -91,6 +91,30 @@ scripts/ci/codegen-e2e-docker.sh rust                      # the same inside the
 Every key in the generated `.env.example` gets the placeholder `0`, the way a developer fills `.env`. When the model has secrets, the Django and Ash runs then check that the app stops without them and names the missing variable (`manage.py check`, `mix run --no-start`). Skipped tests (the registry task skeletons) pass; a failing test, a compiler error or a warning fails the run. For Ash the script first installs the `igniter_new` and `phx_new` archives. Without a local toolchain, `scripts/ci/codegen-e2e-docker.sh <target>` runs the script in `ghcr.io/astral-sh/uv:python3.12-bookworm-slim`, `elixir:1.18`, `golang:1.25` or `rust:1` with your Node mounted in (for Ash next to a `postgres:16-alpine` container); the projects stay in `.e2e/<target>/` and the caches in `.e2e/home/`, both ignored by git. Igniter and Phoenix compile a lot of dependencies: give Docker at least 6 GB of memory for Ash.
 
 On GitHub the `Codegen end to end` workflow (`.github/workflows/codegen-e2e.yml`) runs the script once per target on pull requests that touch the codegen packages, `lang`, `model`, `cli`, `examples/` or the script, every night and on demand. A failing job uploads the generated projects as an artifact. When a generated project does not build, fix the generator in its extension and add a snapshot or unit test for the fix.
+
+## Language size
+
+The language stays small enough for an assistant to read all of it ([design concept, section 8](../concept.md#8-what-belongs-in-the-model)). Two checks hold it there:
+
+- `packages/ai/test/language-budget.test.ts` fails when `docs/language/`, the reference the MCP tool `language_reference` serves, grows past 100,000 characters (about 25k tokens). A new construct fits into that budget or replaces something.
+- `scripts/bench/ai-modeling.mjs` gives each business brief in `scripts/bench/briefs/` to a fresh `claude -p` session that knows only that reference and has no tools, checks the model it answers with the built CLI and prints its errors, the element kinds it uses and its length. Run it before and after a language change; it needs Claude Code and spends tokens, so CI does not run it.
+
+```sh
+node scripts/bench/ai-modeling.mjs                      # every brief once with sonnet
+node scripts/bench/ai-modeling.mjs --model haiku --runs 3 --brief clinic --keep
+```
+
+```
+reference: 13 pages, 89189 characters (about 22297 tokens); model sonnet
+
+| brief | run | errors | kinds | lines |
+|---|---|---|---|---|
+| clinic | 1 | 0 | 23 | 179 |
+| expenses | 1 | 0 | 29 | 219 |
+| library | 1 | 0 | 22 | 188 |
+
+3 of 3 runs wrote a valid model.
+```
 
 ## Conventions
 

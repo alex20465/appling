@@ -51,6 +51,7 @@ This is the entry of the scheduled job `ExpireDrafts` from the [example model](.
   "missing": [
     {
       "what": "schedule \"python manage.py expire_drafts\" with cron \"0 3 * * *\"",
+      "leftToCode": true,
       "context": {
         "props": {
           "schedule": "0 3 * * *",
@@ -74,7 +75,7 @@ This is the entry of the scheduled job `ExpireDrafts` from the [example model](.
 | `status` | `generated`, `partial`, `todo` or `done` |
 | `steps` | Every step the extension returned for the element, one line each, tasks included |
 | `files` | The files written by its template steps and the files its commands create |
-| `missing` | The open tasks. Each has `what` to do and the model `context`: the element's properties and its related elements, with the edge that relates them. Incoming references read as `<edge> by`, such as `type by`. |
+| `missing` | The open tasks. Each has `what` to do, `leftToCode` when the model leaves the work to the code by design, and the model `context`: the element's properties and its related elements, with the edge that relates them. Incoming references read as `<edge> by`, such as `type by`. |
 | `attempts` | How often someone recorded work on the entry (added by the registry tools) |
 | `notes` | What they noted, such as what is left and why |
 
@@ -116,7 +117,7 @@ Because every graph node has an entry, the registry doubles as a coverage report
 70 element(s): 45 generated, 15 partial, 10 todo
 ```
 
-`appling generate --coverage` prints the share of generated, partial and todo elements per extension and per element kind, with the completion `(generated + partial / 2) / elements`; see [the CLI](../tools/cli.md#coverage).
+`appling generate --coverage` prints the share of generated, partial and todo elements per extension and per element kind, with the completion `(generated + partial / 2) / elements`; see [the CLI](../tools/cli.md#coverage). The coverage counts only generator gaps: a task with `leftToCode` is work the model leaves to the code by design ([design concept, section 8](../concept.md#8-what-belongs-in-the-model)), such as scheduling a cron entry or an external system's client, so it counts apart as `left to code`, and an element whose only open tasks are left to code counts as generated.
 
 To list the open work yourself, filter the entries, for example with `jq`:
 

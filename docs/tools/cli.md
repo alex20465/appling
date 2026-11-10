@@ -194,20 +194,20 @@ appling generate --plan
   sales.Order.invariant["total never negative"]: template: sales/tests.py
   (project): command: uv run python manage.py makemigrations
 
-| kind | generated | partial | todo | tasks |
-|---|---|---|---|---|
-| Entity | 2 | 0 | 0 | 0 |
-| Enum | 1 | 0 | 0 | 0 |
-| EnumLiteral | 2 | 0 | 0 | 0 |
-| Field | 4 | 0 | 0 | 0 |
-| Invariant | 0 | 1 | 0 | 1 |
-| Module | 2 | 0 | 0 | 0 |
-| **total** | 11 (92%) | 1 | 0 | 1 |
+| kind | generated | partial | todo | tasks | left to code |
+|---|---|---|---|---|---|
+| Entity | 2 | 0 | 0 | 0 | 0 |
+| Enum | 1 | 0 | 0 | 0 | 0 |
+| EnumLiteral | 2 | 0 | 0 | 0 | 0 |
+| Field | 4 | 0 | 0 | 0 | 0 |
+| Invariant | 0 | 1 | 0 | 1 | 0 |
+| Module | 2 | 0 | 0 | 0 | 0 |
+| **total** | 11 (92%) | 1 | 0 | 1 | 0 |
 
 12 element(s): 11 generated, 1 partial, 0 todo
 ```
 
-After the steps, a Markdown table counts the registry entries per element kind by status, with the number of registry tasks they leave; the total row gives the generated share. `partial` means the element was generated with open tasks; here the invariant got a skipped test whose body is a registry task. See [Task registry](../codegen/registry.md).
+After the steps, a Markdown table counts the registry entries per element kind by status, with the number of registry tasks they leave; the total row gives the generated share. Tasks are generator gaps. Work the model leaves to the code by design (an external system's client, a webhook's signature check, a cron entry, a [`does`](../language/descriptions.md) text) counts under `left to code`, and an element whose only open work is left to code counts as generated. The summary line below the table counts the registry statuses, which still list that work. `partial` means the element was generated with open tasks; here the invariant got a skipped test whose body is a registry task. See [Task registry](../codegen/registry.md).
 
 ### Coverage
 
@@ -220,30 +220,31 @@ appling generate --coverage examples
 ```
 ## Codegen coverage
 
-**85.8%** generated completion, 40 registry tasks, over model.
+**87.2%** generated completion, 37 registry tasks and 3 left to code, over model.
 
-| extension | generated | partial | todo | completion | tasks |
-|---|---|---|---|---|---|
-| django | 80.6% | 18.1% | 1.4% | 89.6% | 15 |
-| ash | 72.2% | 19.4% | 8.3% | 81.9% | 25 |
+| extension | generated | partial | todo | completion | tasks | left to code |
+|---|---|---|---|---|---|---|
+| django | 83.3% | 15.3% | 1.4% | 91.0% | 13 | 2 |
+| ash | 73.6% | 19.4% | 6.9% | 83.3% | 24 | 1 |
 
 ### Per node kind
 
 <details>
-<summary>django: 89.6% (model 89.6%)</summary>
+<summary>django: 91.0% (model 91.0%)</summary>
 
-| kind | generated | partial | todo | completion | tasks |
-|---|---|---|---|---|---|
-| Action | 2 | 0 | 0 | 100.0% | 0 |
+| kind | generated | partial | todo | completion | tasks | left to code |
+|---|---|---|---|---|---|---|
+| Action | 2 | 0 | 0 | 100.0% | 0 | 0 |
+| External | 1 | 0 | 0 | 100.0% | 0 | 1 |
 ...
-| Policy | 0 | 7 | 0 | 50.0% | 7 |
+| Policy | 0 | 7 | 0 | 50.0% | 7 | 0 |
 ...
 </details>
 
-Completion = (generated + partial / 2) / elements: a partial element has code and open registry tasks, so it counts as half.
+Completion = (generated + partial / 2) / elements: a partial element has code and open registry tasks, so it counts as half. Tasks are generator gaps; work the model leaves to the code by design (`docs/concept.md` section 8) counts in left to code and does not lower the completion.
 ```
 
-The output is Markdown, so it renders in a pull request or a job summary. The completion counts a `partial` element as half, because it has code and open tasks. `--coverage --json` prints the same report as JSON (`CoverageReport` of [`@appling/codegen`](../reference/api.md)). A target whose extension appears twice is planned once.
+The output is Markdown, so it renders in a pull request or a job summary. The completion counts a `partial` element as half, because it has code and open tasks. Only generator gaps count: work the model leaves to the code does not lower it ([design concept, section 8](../concept.md#8-what-belongs-in-the-model)). `--coverage --json` prints the same report as JSON (`CoverageReport` of [`@appling/codegen`](../reference/api.md)). A target whose extension appears twice is planned once.
 
 ### Migrate
 
