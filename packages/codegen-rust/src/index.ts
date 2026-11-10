@@ -34,7 +34,7 @@ const extension: CodegenExtension = {
             case 'Entity': return [append(node.module, entityBlock(node, context)), ...storedDurations(node, context), ...guardSteps(node, context)];
             case 'Field': return fieldSteps(node, context);
             case 'Invariant': return [...(validation(node, context) ? [] : [task(`check the invariant "${node.data.label}" in validate: ${node.props.condition}`)]), ...invariantTestSteps(node, context)];
-            case 'Policy': return [...policySteps(node, context), ...testSteps(node)];
+            case 'Policy': return [...policySteps(node, context), ...policyTestSteps(node, context)];
             case 'Role':
             case 'Actor':
             case 'Tenant':
@@ -570,6 +570,77 @@ function testSteps(node: GraphNode): Step[] {
         rustFile(node.module, text => text.replace(/(#\[cfg\(test\)\]\nmod tests \{\n)([\s\S]*?)(\}\n?$)/, (_, head, body, end) => `${head}${body}    #[test]\n    #[ignore = ${JSON.stringify(`registry task: ${node.qn}`)}]\n    fn ${name}() {}\n${end}`)),
         task(`write the test ${name}`)
     ];
+}
+
+const POLICY_CASES = [{ label: 'allows permitted actors', suffix: 'allows_permitted_actors' }, { label: 'denies other actors', suffix: 'denies_other_actors' }];
+
+/**
+ * The tests of a policy on a whole entity whose condition reads the actor only through `actor.is(...)`: the
+ * entity's valid record and `Actor::<actor>()` of a declared actor go to `can_<op>_<entity>`.
+ * `<test>_allows_permitted_actors` takes the first actor the simulator proves this policy lets through and asserts
+ * every operation whose whole record policies all read the actor that way and grant it;
+ * `<test>_denies_other_actors` takes the first actor the simulator proves this policy keeps out and refutes every
+ * operation it covers (the checks combine with `&&`). A case without such an actor stays ignored as a task; field
+ * policies, policies on other elements and a condition that reads more of the actor or that Rust cannot say keep
+ * the test ignored.
+ */
+function policyTestSteps(policy: GraphNode, context: MapContext): Step[] {
+    const entity = context.node(parentOf(policy.qn));
+    if (entity?.kind !== 'Entity' || ((policy.data.fields ?? []) as string[]).length) return testSteps(policy);
+    const wholes = policiesOf(entity, context).filter(p => !((p.data.fields ?? []) as string[]).length);
+    const record = snake(last(entity.qn));
+    const dry: RustScope = { ...rustScope(entity, context), self: record, actor: 'actor' };
+    const checkable = (p: GraphNode) => onlyActorKinds(p.data.condition as ExprData, context) && !!rustExpr(p.data.condition as ExprData, dry);
+    if (!checkable(policy)) return testSteps(policy);
+    const scope = rustScope(policy, context);
+    const valid = validRecord(entity, scope, context);
+    if (!valid) return testSteps(policy);
+    const sim = simulator(context);
+    const verdict = (p: GraphNode, actor: GraphNode) => sim.evaluate(p.data.condition as ExprData, { self: valid.record, actor: { actor: actor.qn, fields: {} } });
+    const operations = OPERATIONS.filter(op => covers(policy, op));
+    const actors = context.graph.nodes.filter(n => n.kind === 'Actor');
+    const allowed = actors.map(actor => ({ actor, operations: operations.filter(op => wholes.filter(p => covers(p, op)).every(p => checkable(p) && verdict(p, actor) === true)) }))
+        .find(a => verdict(policy, a.actor) === true && a.operations.length);
+    const deniedActor = actors.find(actor => verdict(policy, actor) === false);
+    const denied = deniedActor && { actor: deniedActor, operations };
+    if (!allowed && !denied) return testSteps(policy);
+    const name = testName(policy);
+    const message = (text: string) => JSON.stringify(text.replace(/\{/g, '{{').replace(/\}/g, '}}'));
+    const test = (fn: string, found: { actor: GraphNode, operations: string[] } | undefined, want: boolean) => found ? [
+        '#[test]',
+        `fn ${fn}() {`,
+        `    let actor = ${accessPath(scope, 'Actor')}::${snake(accessOf(context).name(found.actor.qn))}();`,
+        `    let ${record} = ${valid.name}();`,
+        ...found.operations.map(op => {
+            const check = `can_${op}_${record}`;
+            return `    assert!(${want ? '' : '!'}${check}(&actor, &${record}), ${message(`${check}: want ${want} for ${found.actor.qn}`)});`;
+        }),
+        '}'
+    ].join('\n') : [
+        '#[test]',
+        `#[ignore = ${JSON.stringify(`registry task: ${policy.qn}`)}]`,
+        `fn ${fn}() {}`
+    ].join('\n');
+    const [allows, denies] = POLICY_CASES.map(c => `${name}_${c.suffix}`);
+    const code = [test(allows, allowed, true), '', test(denies, denied, false)].join('\n');
+    const missing = [allowed ? undefined : allows, denied ? undefined : denies].filter(c => c !== undefined);
+    return [valid.step, testBlock(policy.module, code), ...missing.map(fn => task(`write the test ${fn}`))];
+}
+
+/**
+ * Whether the condition reads the actor only through `actor.is(X)` with an X whose verdict needs no actor field
+ * (an actor, or a role without a condition), and not the tenant, so `Actor::<actor>()` has the simulated verdict.
+ */
+function onlyActorKinds(expr: ExprData | undefined, context: MapContext): boolean {
+    if (!expr) return true;
+    if (expr.$type === 'MemberExpr' && expr.member === 'is' && expr.call && expr.receiver?.$type === 'NameExpr' && expr.receiver.name === 'actor' && !expr.receiver.target) {
+        const target = expr.args?.[0]?.target;
+        const node = target ? context.node(target) : undefined;
+        return node?.kind === 'Actor' || node?.kind === 'Role' && !node.data.condition;
+    }
+    if (expr.$type === 'NameExpr' && (expr.name === 'actor' || expr.name === 'tenant') && !expr.target) return false;
+    const parts = [expr.left, expr.right, expr.operand, expr.receiver, expr.index, ...(expr.args ?? []), ...(expr.items ?? [])];
+    return parts.every(p => onlyActorKinds(p, context));
 }
 
 function testName(node: GraphNode): string {
