@@ -68,14 +68,15 @@ export function cloneRepo(url: string, parent: string, options: CloneOptions & {
             if (existsSync(target)) rmSync(target, { recursive: true, force: true });
         };
         child.once('error', error => {
+            // A cancelled git may still write the folder until it exits; `close` cleans up then.
+            if (error.name === 'AbortError') return;
             cleanUp();
-            fail((error as NodeJS.ErrnoException).code === 'ENOENT' ? new Error('git was not found on the PATH.') : error.name === 'AbortError' ? new Error('The clone was cancelled.') : error);
+            fail((error as NodeJS.ErrnoException).code === 'ENOENT' ? new Error('git was not found on the PATH.') : error);
         });
         child.once('close', code => {
             if (code === 0) return done(target);
-            if (code === null) return;
             cleanUp();
-            fail(new Error(gitMessage(output) || `git clone ended with code ${code}.`));
+            fail(options.signal?.aborted ? new Error('The clone was cancelled.') : new Error(gitMessage(output) || `git clone ended with code ${code}.`));
         });
     });
 }
