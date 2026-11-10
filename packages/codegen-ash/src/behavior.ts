@@ -3,8 +3,8 @@ import type { ExprData, GraphNode, TypeData } from '@appling/model';
 import { ashExpr, constant, lastOf, parentOf, validation } from './elixir.js';
 import { addAuthorizer, addExtension, addToSection, prependToSection } from './resource.js';
 import { enforced } from './roles.js';
-import { testSteps } from './tests.js';
 import { coveredByScenario } from './scenario-tests.js';
+import { preconditionTests } from './model-tests.js';
 import { attributeType, children, fileOf, patch, snake, storedAttributes, task, typeModule } from './naming.js';
 
 /**
@@ -47,7 +47,7 @@ export function actionSteps(action: GraphNode, context: MapContext): Step[] {
     lines.push('end');
     if (action.data.consistency === 'eventual') tasks.push(task(`run ${lastOf(action.qn)} with eventual consistency, for example through AshOban`));
     // A scenario that runs the action replaces its guessed precondition tests.
-    const tests = preconditions.length && !coveredByScenario(action.qn, context) ? testSteps(action, entity, `action ${snake(lastOf(action.qn))} precondition`, preconditions.map((_, i) => `${i + 1} is enforced`), context) : [];
+    const tests = preconditions.length && !coveredByScenario(action.qn, context) ? preconditionTests(action, entity, context) : [];
     return [patch(fileOf(entity, context), existing => addToSection(existing, 'actions', lines)), ...tasks, ...tests];
 }
 

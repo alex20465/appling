@@ -406,6 +406,7 @@ func InOrdersOf(order *Order, of *crm.Account, since *time.Time) bool {
   "internal/sales/sales_test.go": "package sales
 
 import (
+	"shop/internal/access"
 	"testing"
 	"time"
 )

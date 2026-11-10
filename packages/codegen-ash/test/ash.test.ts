@@ -146,6 +146,11 @@ test('transitions get changeset tests on a record struct the simulator proves', 
     ];
     const refused = ['    refute changeset.valid?', '    assert Enum.any?(changeset.errors, &match?(%AshStateMachine.Errors.NoMatchingTransition{}, &1))'];
     const skipped = (qn: string, name: string) => [`  @tag skip: ${JSON.stringify(`registry task: ${qn}`)}`, `  test "${name}"`];
+    // The sample record in the first state Cancel leaves has no note, so its precondition fails with its message.
+    expect(text!.slice(text!.indexOf('  test "action cancel'), text!.indexOf('  test "transition'))).toBe([
+        '  test "action cancel precondition 1 is enforced" do', ...update('draft', 'cancel'),
+        '    refute changeset.valid?', '    assert Enum.any?(changeset.errors, &(Map.get(&1, :message) == "requires { has(note) }"))', '  end', '', ''
+    ].join('\n'));
     // The invariant and precondition tests come first.
     expect(text!.slice(text!.indexOf('  test "transition'))).toBe([
         '  test "transition draft -> placed moves from allowed states" do', ...update('draft', 'place', 'by: "by-1"'), '    assert changeset.valid?', '  end', '',

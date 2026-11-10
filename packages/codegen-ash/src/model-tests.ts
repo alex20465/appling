@@ -163,6 +163,64 @@ export function transitionTests(transition: GraphNode, context: MapContext): Ste
     return testSteps(transition, entity, title, tests, context);
 }
 
+/**
+ * The tests of an action's preconditions. Each builds a changeset for the action's update action on a record
+ * struct from the sample input, in the first state the action's transitions leave, which runs the precondition
+ * validations without a database. A case gets a body when the precondition translates to a validation, the
+ * simulator proves the earlier preconditions true and this one false on that record, and every attribute the
+ * condition compares is set (Ash's `compare` and `attribute_*` validations pass on nil); the changeset must
+ * then be invalid with the precondition's message. Without a sample input or sample values for the action's
+ * required arguments every case stays a registry task.
+ */
+export function preconditionTests(action: GraphNode, entity: GraphNode, context: MapContext): Step[] {
+    const preconditions = (action.data.preconditions ?? []) as { condition: ExprData, error?: string }[];
+    const texts = action.props.preconditions as string[];
+    const title = `action ${snake(lastOf(action.qn))} precondition`;
+    const cases = preconditions.map((_, i) => `${i + 1} is enforced`);
+    const args = requiredArguments(action, context);
+    const input = args && sampleInput(entity, context);
+    if (!args || !input) return testSteps(action, entity, title, cases, context);
+    const transition = context.graph.nodes.find(n => n.kind === 'Transition' && n.data.action === action.qn);
+    const stateField = transition && context.node(context.node(parentOf(transition.qn))!.data.field as string);
+    const state = stateField && parentOf(stateField.qn) === entity.qn ? lastOf(stateField.qn) : undefined;
+    const from = state ? (transition!.data.from as string[])[0] : undefined;
+    const record: SimRecord = state ? { ...input.record, [state]: from! } : input.record;
+    const values: [string, string][] = [...input.attributes, ...input.defaults.filter(([n]) => n !== state), ...(state ? [[state, `:${from}`] as [string, string]] : [])];
+    const resource = typeModule(entity, context);
+    const pairs = (list: [string, string][]) => list.map(([n, v]) => `${n}: ${v}`).join(', ');
+    const stored = storedAttributes(entity, context);
+    const tests: TestCase[] = preconditions.map((precondition, i) => {
+        const earlier = preconditions.slice(0, i).every(p => simulator(context).evaluate(p.condition, { self: record }) === true);
+        const fails = simulator(context).evaluate(precondition.condition, { self: record }) === false;
+        const set = [...targets(precondition.condition)].every(qn => record[lastOf(qn)] !== null && record[lastOf(qn)] !== undefined);
+        if (!earlier || !fails || !set || !validation(precondition.condition, stored, context.node)) return { name: cases[i] };
+        const message = precondition.error ? lastOf(precondition.error) : texts[i];
+        return {
+            name: cases[i],
+            body: [
+                `record = struct!(${resource}, %{${pairs(values)}})`,
+                `changeset = Ash.Changeset.for_update(record, :${snake(lastOf(action.qn))}, %{${pairs(args)}}, authorize?: false)`,
+                'refute changeset.valid?',
+                `assert Enum.any?(changeset.errors, &(Map.get(&1, :message) == ${JSON.stringify(message)}))`
+            ]
+        };
+    });
+    return testSteps(action, entity, title, tests, context);
+}
+
+/** Sample values for an action's required arguments, or undefined when one has none. */
+function requiredArguments(action: GraphNode, context: MapContext): [string, string][] | undefined {
+    const args: [string, string][] = [];
+    for (const param of context.children(action.qn).filter(c => c.kind === 'Param')) {
+        const type = param.data.type as TypeData;
+        if (type.optional) continue;
+        const value = type.many ? { elixir: '[]' } : sample(lastOf(param.qn), type, context);
+        if (!value) return undefined;
+        args.push([lastOf(param.qn), value.elixir]);
+    }
+    return args;
+}
+
 interface TransitionPlan {
     /** The update action AshStateMachine runs the transition with. */
     action: string;
@@ -187,14 +245,8 @@ function transitionPlan(transition: GraphNode, entity: GraphNode, context: MapCo
     if (!action) return { action: snake(lastOf(event!)), transitions, arguments: [] };
     const node = context.node(action)!;
     if (node.data.entity !== entity.qn) return undefined;
-    const args: [string, string][] = [];
-    for (const param of context.children(node.qn).filter(c => c.kind === 'Param')) {
-        const type = param.data.type as TypeData;
-        if (type.optional) continue;
-        const value = type.many ? { elixir: '[]' } : sample(lastOf(param.qn), type, context);
-        if (!value) return undefined;
-        args.push([lastOf(param.qn), value.elixir]);
-    }
+    const args = requiredArguments(node, context);
+    if (!args) return undefined;
     return { action: snake(lastOf(action)), transitions, node, arguments: args };
 }
 
