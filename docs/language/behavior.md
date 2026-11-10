@@ -179,6 +179,7 @@ machine OrderFlow on Order.status {
   transition draft -> placed via PlaceOrder effect { emit OrderPlaced { order = this } }
   transition placed -> paid on PaymentReceived
   transition draft, placed -> cancelled via Cancel when { !has(paid_at) }
+  transition placed -> cancelled after "48h" since placed_at
 }
 ```
 
@@ -196,10 +197,11 @@ stateDiagram-v2
 | `transition a, b -> c` | Moves from any of the listed states to the target state |
 | `via Action` | The action that triggers the transition |
 | `on Event` | The event that triggers the transition (instead of `via`) |
+| `after "24h" since field` | Taken once a from state lasted that long since the date field |
 | `when { guard }` | A Bool condition that must hold; it reads the fields of the machine's entity |
 | `effect { ... }` | Effects that run with the transition, as in actions; `set` assigns fields of the machine's entity |
 
-Every transition has exactly one trigger, `via` or `on`.
+Every transition has one trigger: `via`, `on` or `after` (units `d`, `h`, `m`, `s`, `ms`; an empty date never comes due).
 
 The rules a machine must follow:
 

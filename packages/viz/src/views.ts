@@ -472,13 +472,15 @@ function machineFlow(index: GraphIndex, qn: string): Flow {
     const transitions = index.children(qn).filter(c => c.kind === 'Transition');
     const jobs = index.graph.nodes.filter(n => n.kind === 'Job');
     const edges = transitions.flatMap(transition => {
-        const { action, event } = transition.data as { action?: string, event?: string };
+        const { action, event, after, since } = transition.data as { action?: string, event?: string, after?: string, since?: string };
         const guard = transition.props.guard as string | undefined;
+        // A timed transition: `after 24h`, with the date it counts from in the note.
+        const trigger = action ? shortName(action, index) : after !== undefined ? `after ${after}` : `on ${shortName(event ?? '', index)}`;
         return (transition.props.from as string[]).map(from => {
             const running = jobs.filter(j => action && j.data.action === action && runsIn(j, `${states}.${from}`, states)).map(j => `job ${shortName(j.qn, index)}`);
             return {
-                from: `${states}.${from}`, to: `${states}.${transition.props.to}`, label: action ? shortName(action, index) : `on ${shortName(event ?? '', index)}`,
-                note: [guard && `when ${guard}`, ...running].filter(Boolean).join(' · ') || undefined, qn: action ?? event, of: transition.qn
+                from: `${states}.${from}`, to: `${states}.${transition.props.to}`, label: trigger,
+                note: [since && `since ${localName(since, index)}`, guard && `when ${guard}`, ...running].filter(Boolean).join(' · ') || undefined, qn: action ?? event ?? since, of: transition.qn
             };
         });
     });

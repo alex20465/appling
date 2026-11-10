@@ -68,7 +68,7 @@ Describes what can happen to the data and how it changes.
 
 - Actions: CRUD and custom, each with input, **preconditions**, effects, and declared errors.
 - Effects: `set` a field of the record, `create` a record (`as name` names it for the effects after it), `emit` an event, `for x in <collection relationship>` to repeat effects per related record, `update <relationship path> { set ... }` to change a related record, and `delete self` or `delete <relationship path>`. A loop iterates only collection relationships of the action's entity; paths start at a field, a loop variable or an `as` name and lead to one record. All effects of one action run in one transaction. `delete` removes the record for good; archiving instead belongs to the data lifecycle.
-- State machines: own the transitions over a Layer 1 state field. Each transition has guards and effects, and is triggered by actions or events.
+- State machines: own the transitions over a Layer 1 state field. Each transition has guards and effects, and is triggered by actions, events or time: a timed transition is taken once a record stayed in its from state for a duration since a date field ("a draft expires after 30 days").
 - Events (domain events emitted by actions or transitions)
 - Jobs: asynchronous or scheduled execution of actions
 - Transaction / consistency boundary per action

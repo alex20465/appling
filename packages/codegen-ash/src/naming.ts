@@ -88,3 +88,8 @@ export function fieldPolicyOf(field: GraphNode, context: MapContext): GraphNode 
     return context.graph.nodes.find(p => p.kind === 'Policy' && ((p.data.fields ?? []) as string[]).includes(field.qn)
         && (!((p.data.operations ?? []) as string[]).length || ((p.data.operations ?? []) as string[]).includes('read')));
 }
+
+/** The update action of a timed transition: `<to>_after_<since>`, such as `cancelled_after_placed_at`. */
+export function timedAction(transition: GraphNode): string {
+    return `${transition.data.to}_after_${snake(lastOf(transition.data.since as string))}`;
+}

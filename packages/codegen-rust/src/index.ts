@@ -1,5 +1,5 @@
 import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
-import { coveredByScenarios, scenarioCall, Simulator, throughPath, UNKNOWN, type Actor as SimActor, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
+import { coveredByScenarios, durationMs, scenarioCall, Simulator, throughPath, UNKNOWN, type Actor as SimActor, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
 import { accessFile, accessOf, accessSteps, actorFields, actorFieldType, durationAttribute, durationSteps, libStep, PRIMITIVES, roleCondition, tenantOf, tenantPaths } from './access.js';
 import { enumVariant, pascal, qualify, rustExpr, rustTerm, snake, type RustScope } from './rust.js';
 
@@ -41,7 +41,7 @@ const extension: CodegenExtension = {
                 return accessSteps(node, context);
             case 'Action': return actionSteps(node, context);
             case 'Machine': return machineSteps(node, context);
-            case 'Transition': return transitionTestSteps(node, context);
+            case 'Transition': return node.data.after !== undefined ? timedTestSteps(node, context) : transitionTestSteps(node, context);
             case 'Scenario': return scenarioSteps(node, context);
             case 'EnumLiteral':
             case 'Param':
@@ -713,7 +713,122 @@ function machineSteps(machine: GraphNode, context: MapContext): Step[] {
             '}'
         ].join('\n')), ...tasks);
     }
-    return steps;
+    return [...steps, ...timeoutSteps(machine, entity, context)];
+}
+
+/** A duration such as `48h` or `1h30m` as a `chrono::TimeDelta`, in the largest unit that divides it. */
+function rustDuration(text: string): string | undefined {
+    const ms = durationMs(text);
+    const unit = ([['days', 86_400_000], ['hours', 3_600_000], ['minutes', 60_000], ['seconds', 1000], ['milliseconds', 1]] as const).find(([, size]) => ms > 0 && ms % size === 0);
+    return unit && `chrono::TimeDelta::${unit[0]}(${ms / unit[1]})`;
+}
+
+/** The name of a machine's function over its timed transitions. */
+function timeoutName(machine: GraphNode): string {
+    return `${snake(last(machine.qn))}_timeouts`;
+}
+
+/** Whether the date of a timed transition lies the duration back from `now` or longer, in Rust. */
+function dueCondition(transition: GraphNode, self: string, context: MapContext): string | undefined {
+    const since = context.node(transition.data.since as string)!;
+    const type = since.data.type as TypeData;
+    const delta = rustDuration(String(transition.data.after));
+    if (!delta) return undefined;
+    const now = type.primitive === 'Date' ? 'now.date_naive()' : 'now';
+    const field = `${self}.${last(since.qn)}`;
+    return type.optional ? `${field}.is_some_and(|since| since + ${delta} <= ${now})` : `${field} + ${delta} <= ${now}`;
+}
+
+/**
+ * The timed transitions of a machine (`after … since …`) become `<machine>_timeouts(record, now)`: the first one
+ * whose from state holds, whose date lies the duration back from now or longer and whose guard holds runs its
+ * effects and moves the record. It returns the events it emits and whether the record moved; the storage calls it
+ * for the rows a periodic sweep selects, the interval being the project's decision (decision 2A on #88).
+ */
+function timeoutSteps(machine: GraphNode, entity: GraphNode, context: MapContext): Step[] {
+    const timed = context.children(machine.qn).filter(t => t.kind === 'Transition' && t.data.after !== undefined);
+    if (!timed.length) return [];
+    const self = snake(last(entity.qn));
+    const scope: RustScope = { ...rustScope(machine, context), self };
+    const field = context.node(machine.data.field as string)!;
+    const enumNode = context.node((field.data.type as TypeData).decl!)!;
+    const state = `${self}.${last(field.qn)}`;
+    const tasks: Step[] = [];
+    const arms: string[] = [];
+    for (const transition of timed) {
+        const due = dueCondition(transition, self, context);
+        const guard = transition.data.guard ? rustExpr(transition.data.guard as ExprData, scope) : 'true';
+        if (!due || !guard) {
+            tasks.push(task(`apply the timed transition ${last(transition.qn)} in ${timeoutName(machine)}`));
+            continue;
+        }
+        const from = (transition.data.from as string[]).map(s => enumVariant(context.node(`${enumNode.qn}.${s}`)!, scope)).join(' | ');
+        arms.push(
+            `    ${from} if ${[due, ...(guard === 'true' ? [] : [`(${guard})`])].join(' && ')} => {`,
+            ...effectBlock(transition, self, scope, context, tasks).map(l => `        ${l}`),
+            `        ${state} = ${enumVariant(context.node(`${enumNode.qn}.${transition.data.to}`)!, scope)};`,
+            '        (events, true)',
+            '    }'
+        );
+    }
+    if (!arms.length) return tasks;
+    const emits = arms.some(l => l.includes('events.push('));
+    const body = [`let ${emits ? 'mut ' : ''}events = Vec::new();`, `match ${state} {`, ...arms, '    _ => (events, false),', '}'];
+    return [append(machine.module, [
+        `/// Applies the first timed transition of ${machine.qn} that is due at \`now\` to the record. Returns the events it`,
+        '/// emits and whether the record moved; a periodic sweep calls it for the rows it selects.',
+        `pub fn ${timeoutName(machine)}(${self}: &mut ${qualify(entity, scope)}, now: chrono::DateTime<chrono::Utc>) -> (Vec<Event>, bool) {`,
+        ...body.map(l => `    ${l}`),
+        '}'
+    ].join('\n')), ...tasks];
+}
+
+/**
+ * The test of a timed transition: the entity's valid record in a from state whose date lies a minute (a day for
+ * a Date) past the duration moves to `to`, and the same record dated now stays. The simulator, its clock past
+ * the duration, must take this transition with nothing undecided.
+ */
+function timedTestSteps(transition: GraphNode, context: MapContext): Step[] {
+    if (covered(context).has(transition.qn)) return [];
+    const machine = context.node(parentOf(transition.qn))!;
+    const field = context.node(machine.data.field as string)!;
+    const entity = context.node(parentOf(field.qn))!;
+    const since = context.node(transition.data.since as string)!;
+    const scope = rustScope(transition, context);
+    const valid = entity.module === transition.module && machine.module === transition.module ? validRecord(entity, scope, context) : undefined;
+    const delta = rustDuration(String(transition.data.after));
+    if (!valid || !delta) return testSteps(transition);
+    const type = since.data.type as TypeData;
+    const date = type.primitive === 'Date';
+    const now = new Date();
+    const due = new Date(now.getTime() - durationMs(String(transition.data.after)) - (date ? 86_400_000 : 60_000));
+    const later = new Simulator(context.graph, now);
+    const stateName = last(field.qn);
+    const from = (transition.data.from as string[]).find(state => {
+        const result = later.elapse(machine.qn, { ...valid.record, [stateName]: state, [last(since.qn)]: due });
+        return result?.transition === transition.qn && !result.undecided.length;
+    });
+    if (!from) return testSteps(transition);
+    const enumNode = context.node((field.data.type as TypeData).decl!)!;
+    const literal = (s: string) => enumVariant(context.node(`${enumNode.qn}.${s}`)!, scope);
+    const today = date ? 'now.date_naive()' : 'now';
+    const wrap = (value: string) => type.optional ? `Some(${value})` : value;
+    const run = (when: string, moved: boolean, expected: string, label: string) => [
+        `    let mut x = ${valid.name}();`,
+        `    x.${stateName} = ${literal(from)};`,
+        `    x.${last(since.qn)} = ${wrap(when)};`,
+        `    let (_, moved) = ${timeoutName(machine)}(&mut x, now);`,
+        `    assert!(${moved ? 'moved' : '!moved'} && x.${stateName} == ${expected}, ${JSON.stringify(label)});`
+    ];
+    const code = [
+        '#[test]',
+        `fn ${testName(transition)}() {`,
+        '    let now = chrono::Utc::now();',
+        ...run(`${today} - ${delta} - chrono::TimeDelta::${date ? 'days' : 'minutes'}(1)`, true, literal(transition.data.to as string), `${from} goes to ${transition.data.to} once due`),
+        ...run(today, false, literal(from), `${from} stays until due`),
+        '}'
+    ].join('\n');
+    return [valid.step, testBlock(transition.module, code)];
 }
 
 /** An ignored test per rule in the module's test module; writing its body is a registry task, with the reason when one is known. */

@@ -535,6 +535,63 @@ const QUERY_INPUTS = `module shop {
     page Orders route "/orders" { list OrdersOf as OrderView }
 }`;
 
+test('timed transitions become a sweep task with a management command, tested on both sides of the duration', async () => {
+    const { files, entries } = await generate({
+        'shop.appling': `module shop {
+            enum Status { open held closed }
+            entity Ticket {
+                status: Status state default open
+                priority: Int default 1
+                opened_at: DateTime default now
+                held_on: Date?
+                note: String?
+            }
+            machine TicketFlow on Ticket.status {
+                transition open -> closed after "24h" since opened_at when { priority < 5 } effect { set note = "expired" }
+                transition held -> open after "2d" since held_on
+            }
+        }`
+    });
+    expect(files['shop/jobs.py']).toContain([
+        '@task',
+        '@transaction.atomic',
+        'def ticket_flow_timeouts() -> None:',
+        '    """Moves the rows of shop.TicketFlow whose timed transitions are due."""',
+        '    now = timezone.now()',
+        '    for ticket in Ticket.objects.filter(status__in=(Status.OPEN,), opened_at__lte=now - timedelta(hours=24)):',
+        '        if not (ticket.priority < 5):',
+        '            continue',
+        '        ticket.note = "expired"',
+        '        ticket.status = Status.CLOSED',
+        '        ticket.save()',
+        '    for ticket in Ticket.objects.filter(status__in=(Status.HELD,), held_on__lte=now - timedelta(days=2)):',
+        '        ticket.status = Status.OPEN',
+        '        ticket.save()'
+    ].join('\n'));
+    expect(files['shop/management/commands/ticket_flow_timeouts.py']).toContain('        ticket_flow_timeouts.enqueue()');
+    expect(entries['shop.TicketFlow'].missing.map(m => [m.what, m.leftToCode])).toEqual([['schedule "python manage.py ticket_flow_timeouts" at the interval the timeouts of TicketFlow need', true]]);
+    expect(entries['shop.TicketFlow.transition[open->closed]'].status).toBe('generated');
+    expect(entries['shop.TicketFlow.transition[held->open]'].status).toBe('generated');
+    expect(files['shop/tests.py']).toContain([
+        '    def test_moves_once_due(self):',
+        '        for state in (Status.OPEN,):',
+        '            with self.subTest(state=state):',
+        '                ticket = make_ticket(status=state, opened_at=timezone.now() - timedelta(hours=24) - timedelta(minutes=1))',
+        '                ticket_flow_timeouts.call()',
+        '                ticket.refresh_from_db()',
+        '                self.assertEqual(ticket.status, Status.CLOSED)',
+        '',
+        '    def test_waits_until_due(self):',
+        '        for state in (Status.OPEN,):',
+        '            with self.subTest(state=state):',
+        '                ticket = make_ticket(status=state, opened_at=timezone.now())',
+        '                ticket_flow_timeouts.call()',
+        '                ticket.refresh_from_db()',
+        '                self.assertEqual(ticket.status, state)'
+    ].join('\n'));
+    expect(files['shop/tests.py']).toContain('ticket = make_ticket(status=state, held_on=timezone.localdate() - timedelta(days=2) - timedelta(days=1))');
+});
+
 test('query inputs become parameters, read from the path and the query string by a serializer', async () => {
     const { files, entries } = await generate({ 'shop.appling': QUERY_INPUTS });
     expect(entries['shop.OrdersOf'].missing).toEqual([]);

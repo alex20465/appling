@@ -265,7 +265,7 @@
   },
   {
     "kind": "SetEffect",
-    "generated": 6,
+    "generated": 7,
     "partial": 0,
     "todo": 0,
     "tasks": 0,
@@ -281,7 +281,7 @@
   },
   {
     "kind": "Transition",
-    "generated": 2,
+    "generated": 3,
     "partial": 1,
     "todo": 0,
     "tasks": 1,
@@ -313,7 +313,7 @@
   },
   {
     "kind": "total",
-    "generated": 122,
+    "generated": 124,
     "partial": 16,
     "todo": 17,
     "tasks": 34,

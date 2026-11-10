@@ -1,11 +1,11 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { ashExpr, constant, lastOf, parentOf, validation } from './elixir.js';
+import { ago, ashExpr, constant, lastOf, parentOf, validation } from './elixir.js';
 import { addAuthorizer, addExtension, addToSection, prependToSection } from './resource.js';
 import { enforced } from './roles.js';
 import { coveredByScenario } from './scenario-tests.js';
 import { preconditionTests } from './model-tests.js';
-import { attributeType, children, fileOf, patch, snake, storedAttributes, task, typeModule } from './naming.js';
+import { attributeType, children, fileOf, patch, snake, storedAttributes, task, timedAction, typeModule } from './naming.js';
 
 /**
  * An action on an entity becomes an update action of its resource: arguments, precondition validations, changes and
@@ -75,9 +75,10 @@ export function machineSteps(machine: GraphNode, context: MapContext): Step[] {
     const byEvent = Map.groupBy(transitions.filter(t => t.data.event), t => t.data.event as string);
     const settings = [`initial_states [:${initial}]`, `default_initial_state :${initial}`, `state_attribute :${lastOf(field.qn)}`];
     const lines = transitions.map(t => {
-        const action = snake(lastOf((t.data.action ?? t.data.event) as string));
+        const action = t.data.after !== undefined ? timedAction(t) : snake(lastOf((t.data.action ?? t.data.event) as string));
         return `transition :${action}, from: [${(t.data.from as string[]).map(s => `:${s}`).join(', ')}], to: :${t.data.to}`;
     });
+    const timed = timedSteps(machine, entity, transitions.filter(t => t.data.after !== undefined), context);
     const eventActions = [...byEvent].flatMap(([event, list]) => {
         const targets = [...new Set(list.map(t => t.data.to as string))];
         return targets.length === 1 ? [[`update :${snake(lastOf(event))} do`, '  require_atomic? false', `  change transition_state(:${targets[0]})`, 'end']] : [];
@@ -88,8 +89,54 @@ export function machineSteps(machine: GraphNode, context: MapContext): Step[] {
             for (const action of eventActions) text = addToSection(text, 'actions', action);
             return text;
         }),
+        ...timed,
         ...[...byEvent.keys()].map(event => task(`call ${typeModule(entity, context)} :${snake(lastOf(event))} when ${lastOf(event)} happens`))
     ];
+}
+
+/**
+ * A timed transition (`after … since …`) becomes an update action with its effects and target state, run by an
+ * AshOban trigger for every row in a from state whose date lies the duration back, the guard included in the
+ * trigger's `where`. The trigger runs on AshOban's default schedule, every minute; another interval is the
+ * project's decision (`docs/concept.md` section 8, the sweep of decision 2A on #88).
+ */
+function timedSteps(machine: GraphNode, entity: GraphNode, timed: GraphNode[], context: MapContext): Step[] {
+    const steps: Step[] = [];
+    const field = lastOf(machine.data.field as string);
+    for (const transition of timed) {
+        const name = timedAction(transition);
+        const since = ago(String(transition.data.after));
+        const guard = transition.data.guard ? ashExpr(transition.data.guard as ExprData, context.node) : 'true';
+        const changes = children(transition, context).filter(c => c.kind.endsWith('Effect')).map(e => effectChange(e, context));
+        if (!since || !guard || changes.some(c => !c)) {
+            steps.push(task(`sweep ${lastOf(machine.qn)} from ${(transition.data.from as string[]).join(', ')} to ${transition.data.to} after ${transition.data.after} since ${lastOf(transition.data.since as string)}${transition.props.guard ? ` when ${transition.props.guard}` : ''}`));
+            continue;
+        }
+        const from = (transition.data.from as string[]).map(s => `:${s}`).join(', ');
+        const where = [`${field} in [${from}]`, `${lastOf(transition.data.since as string)} <= ${since}`, ...(guard === 'true' ? [] : [guard.includes(' or ') ? `(${guard})` : guard])].join(' and ');
+        const module = typeModule(entity, context);
+        const pascal = name.split('_').map(w => w[0].toUpperCase() + w.slice(1)).join('');
+        const queue = `${snake(lastOf(entity.qn))}_${name}`;
+        const action = [`update :${name} do`, '  require_atomic? false', ...changes.map(c => `  change ${c}`), `  change transition_state(:${transition.data.to})`, 'end'];
+        const read = [`read :${name}_targets do`, '  pagination keyset?: true, required?: false', 'end'];
+        const trigger = [
+            `trigger :${name} do`,
+            `  action :${name}`,
+            `  read_action :${name}_targets`,
+            `  queue :${queue}`,
+            `  where expr(${where})`,
+            `  worker_module_name ${module}.AshOban.Worker.${pascal}`,
+            `  scheduler_module_name ${module}.AshOban.Scheduler.${pascal}`,
+            'end'
+        ];
+        const bypass = ['bypass AshOban.Checks.AshObanInteraction do', '  authorize_if always()', 'end'];
+        const authorize = (text: string) => !enforced(context) || text.includes(bypass[0]) ? text : addAuthorizer(prependToSection(text, 'policies', bypass));
+        steps.push(
+            patch(fileOf(entity, context), existing => authorize(addToSection(addToSection(addToSection(addExtension(existing, 'AshOban'), 'actions', action), 'actions', read), 'oban', trigger, 'triggers'))),
+            patch('config/config.exs', existing => existing.replace(/queues: \[([^\]]*)\]/, (all, list) => list.includes(`${queue}:`) ? all : `queues: [${list}, ${queue}: 10]`))
+        );
+    }
+    return steps;
 }
 
 /** A scheduled job becomes an AshOban trigger that runs the action for every matching row. */

@@ -78,6 +78,7 @@ The touched element is printed canonically, so a formatted file stays formatted.
 ```ts
 const simulator = new Simulator(graph);
 simulator.reach('sales.OrderFlow', 'paid');    // shortest transition path from the initial state, or undefined
+simulator.elapse('sales.OrderFlow', { status: 'placed', placed_at: new Date('2026-01-01') }); // the timed transition due at the clock (new Simulator(graph, now)), applied, or undefined
 simulator.actors('sales.Cancel');              // per actor: 'yes', 'no' or 'depends' (on the data)
 simulator.access('sales.Shopper');            // what one actor may do: entity operations, actions, queries, use cases, pages, each with verdict and deciding policies
 simulator.risks('sales.Discount');             // invariants that read a field the action changes, also through derived fields

@@ -50,6 +50,64 @@ test('invariant tests check a valid record and a violation the simulator proves'
     expect(entries['v.Ticket.invariant["points in range"]'].status).toBe('generated');
 });
 
+test('timed transitions become <Machine>Timeouts, tested on both sides of the duration', async () => {
+    const source = `module m {
+  enum State {
+    open
+    held
+    closed
+  }
+  event Expired {
+    reference: String
+  }
+  entity Ticket {
+    reference: String
+    state: State default open
+    points: Int default 0
+    opened_at: DateTime default now
+    held_at: DateTime?
+  }
+  machine TicketFlow on Ticket.state {
+    transition open -> closed after "48h" since opened_at when { points < 5 } effect { emit Expired { reference = reference } }
+    transition held -> open after "1h30m" since held_at
+  }
+}`;
+    const { documents, services } = await buildWorkspace({ 'm.appling': source });
+    const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), go, 'app');
+    const files = new Map<string, string>();
+    for (const { step } of result.steps) if (step.kind === 'template') files.set(step.file, step.write(files.get(step.file)));
+    expect(files.get('internal/m/machines.go')).toContain([
+        'func TicketFlowTimeouts(ticket *Ticket, now time.Time) ([]any, bool) {',
+        '\tvar events []any',
+        '\tswitch {',
+        '\tcase (ticket.State == StateOpen) && !now.Before(ticket.OpenedAt.Add(48 * time.Hour)) && (ticket.Points < 5):',
+        '\t\tevents = append(events, Expired{Reference: ticket.Reference})',
+        '\t\tticket.State = StateClosed',
+        '\t\treturn events, true',
+        '\tcase (ticket.State == StateHeld) && ticket.HeldAt != nil && !now.Before(ticket.HeldAt.Add(90 * time.Minute)):',
+        '\t\tticket.State = StateOpen',
+        '\t\treturn events, true',
+        '\t}',
+        '\treturn events, false',
+        '}'
+    ].join('\n'));
+    const tests = files.get('internal/m/m_test.go')!;
+    expect(tests).toContain([
+        '\tt.Run("goes from held to open once due", func(t *testing.T) {',
+        '\t\tnow := time.Now()',
+        '\t\tsince := now.Add(-(90 * time.Minute) - time.Minute)',
+        '\t\tx := validTicket()',
+        '\t\tx.State = StateHeld',
+        '\t\tx.HeldAt = &since',
+        '\t\tif _, moved := TicketFlowTimeouts(x, now); !moved || x.State != StateOpen {'
+    ].join('\n'));
+    expect(tests).toContain('\t\tsince := now\n');
+    expect(tests).not.toContain('t.Skip');
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['m.TicketFlow.transition[open->closed]'].status).toBe('generated');
+    expect(entries['m.TicketFlow.transition[held->open]'].status).toBe('generated');
+});
+
 test('a default the valid record leaves to New<Entity> adds no import to the test file', async () => {
     const source = `module d {
   entity Slot {

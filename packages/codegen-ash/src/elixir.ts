@@ -1,4 +1,4 @@
-import type { ExprData, GraphNode } from '@appling/model';
+import { durationMs, type ExprData, type GraphNode } from '@appling/model';
 
 type Lookup = (qn: string) => GraphNode | undefined;
 
@@ -149,6 +149,15 @@ export function constant(expr: ExprData, node: Lookup): string | undefined {
 }
 
 const UNITS: Record<string, string> = { d: 'day', h: 'hour', m: 'minute', s: 'second' };
+
+const AGO_UNITS: [string, number][] = [['day', 86_400_000], ['hour', 3_600_000], ['minute', 60_000], ['second', 1000], ['millisecond', 1]];
+
+/** A duration such as `48h` or `1h30m` as Ash's `ago(90, :minute)`, in the largest unit that divides it. */
+export function ago(text: string): string | undefined {
+    const ms = durationMs(text);
+    const unit = AGO_UNITS.find(([, size]) => ms > 0 && ms % size === 0);
+    return unit && `ago(${ms / unit[1]}, :${unit[0]})`;
+}
 
 /** `now - duration("720h")` and `now + duration(...)` as Ash's `ago(720, :hour)` and `from_now(...)`. */
 function relativeTime(expr: ExprData): string | undefined {

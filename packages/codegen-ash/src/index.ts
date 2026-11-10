@@ -33,7 +33,7 @@ const extension: CodegenExtension = {
         const install = [
             // Ash policies need a SAT solver; simple_sat is pure Elixir, so the project builds without a C compiler.
             'ash', 'ash_postgres', ...(enforced(context) ? ['simple_sat'] : []), ...(pages ? ['ash_phoenix'] : []), ...(has('Machine') ? ['ash_state_machine'] : []),
-            ...(has('Job', j => !!j.data.schedule) ? ['ash_oban'] : []), ...(pages && api ? ['ash_json_api'] : [])
+            ...(has('Job', j => !!j.data.schedule) || has('Transition', t => t.data.after !== undefined) ? ['ash_oban'] : []), ...(pages && api ? ['ash_json_api'] : [])
         ];
         return [
             { kind: 'command', run: ['mix', 'igniter.new', app(context), ...(pages ? ['--with', 'phx.new', '--with-args=--no-install'] : []), '--install', install.join(','), '--yes', '--no-git'], cwd: '..', creates: ['mix.exs', 'lib/'] },

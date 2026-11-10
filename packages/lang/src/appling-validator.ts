@@ -2,13 +2,16 @@ import { AstUtils, WorkspaceCache, type AstNode, type ValidationAcceptor, type V
 import {
     isAction, isActor, isBinaryExpr, isBoolExpr, isEntity, isField, isExternal, isRole, isScenario, isExternalOperation, isMemberExpr, isNameExpr, isEnum, isMachine, isMigration, isModule, isValueType,
     type ApplingAstType, type Endpoint, type External, type ExternalKey, type Interface, type Machine, type Migration, type MigrationStep, type Model,
-    type Expr, type Policy, type Projection, type Query, type RenameStep, type Scenario, type SetEffect, type CreateEffect, type DeleteEffect, type ForEffect, type UpdateEffect
+    type Expr, type Policy, type Projection, type Query, type RenameStep, type Scenario, type SetEffect, type Transition, type CreateEffect, type DeleteEffect, type ForEffect, type UpdateEffect
 } from './generated/ast.js';
 import { scenarioTarget } from './appling-scenario.js';
 import { effectEntity, namedPaths, projectionSourceEntity } from './appling-scope.js';
 import { ExpressionTyper } from './appling-types.js';
 import { doesTargets } from './appling-does.js';
 import type { ApplingServices } from './appling-module.js';
+
+/** A duration as `24h`, `30d` or `1h30m`, the format `duration()` reads. */
+const DURATION = /^(\d+(\.\d+)?(ms|d|h|m|s))+$/;
 
 export type Layer = 'cross' | 'domain' | 'behavior' | 'application' | 'interface' | 'experience';
 
@@ -113,6 +116,19 @@ export class ApplingValidator {
             [...transition.from, transition.to].forEach(state => {
                 if (!states.has(state)) accept('error', `"${state}" is not a value of ${enumDecl.name}.`, { node: transition });
             });
+            if (transition.after !== undefined) this.checkTimedTransition(transition, accept);
+        }
+    }
+
+    /** `after "<duration>" since <field>`: a positive duration such as `24h` or `1h30m`, counted from a stored date. */
+    private checkTimedTransition(transition: Transition, accept: ValidationAcceptor): void {
+        const text = transition.after!;
+        if (!DURATION.test(text) || !/[1-9]/.test(text)) {
+            accept('error', `"${text}" is no duration such as "24h".`, { node: transition, property: 'after' });
+        }
+        const field = transition.since?.ref;
+        if (field && (!['Date', 'DateTime'].includes(field.type.primitive ?? '') || field.type.many || field.derived)) {
+            accept('error', `${field.name} is no stored Date or DateTime.`, { node: transition, property: 'since' });
         }
     }
 

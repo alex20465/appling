@@ -141,10 +141,49 @@ export class Simulator {
                 for (const t of transitions.filter(t => (t.data.from as string[]).includes(current))) {
                     const to = t.data.to as string;
                     if (seen.has(to)) continue;
-                    seen.set(to, [...seen.get(current)!, { transition: t.qn, trigger: last((t.data.action ?? t.data.event) as string), to, guarded: !!t.data.guard }]);
+                    seen.set(to, [...seen.get(current)!, { transition: t.qn, trigger: triggerOf(t), to, guarded: !!t.data.guard }]);
                     queue.push(to);
                 }
             }
+        }
+        return undefined;
+    }
+
+    /**
+     * Lets time pass for a record of the machine's entity, up to the simulator's clock: takes the first timed
+     * transition (`after … since …`) whose from states hold the record's state, whose duration has passed since its
+     * date field and whose guard does not fail, and applies its effects and target state. Undefined when none is due,
+     * also when the date field is empty; `undecided` names a guard or date that depends on data not given.
+     */
+    elapse(machine: string, record: Record): (RunResult & { transition: string, undecided: string[] }) | undefined {
+        const node = this.node(machine);
+        const field = last(node.data.field as string);
+        const entity = this.parentOf(node.data.field as string);
+        const before: Record = { ...record, $type: entity };
+        const scope = { self: before };
+        for (const t of this.kids(node, 'Transition').filter(t => t.data.after !== undefined)) {
+            if (!(t.data.from as string[]).includes(String(before[field]))) continue;
+            const since = before[last(t.data.since as string)];
+            const undecided: string[] = [];
+            if (since === undefined) undecided.push(`the date ${last(t.data.since as string)}`);
+            else if (since === null) continue;
+            else {
+                const start = since instanceof Date ? since.getTime() : Date.parse(String(since));
+                if (!(start + durationMs(String(t.data.after)) <= this.now.getTime())) continue;
+            }
+            const guard = t.data.guard ? this.evaluate(t.data.guard as ExprData, scope) : true;
+            if (guard === false) continue;
+            if (guard === UNKNOWN) undecided.push(`the guard ${String(t.props.guard)}`);
+            const after = clone(before) as Record;
+            const result: RunResult = { allowed: 'yes', outcome: 'done', reasons: [], before, events: [], writes: [], violated: [] };
+            this.effects(t, after, scope, result);
+            after[field] = t.data.to as string;
+            if (!result.deleted) {
+                for (const invariant of this.kids(this.node(entity), 'Invariant')) {
+                    if (this.evaluate(invariant.data.condition as ExprData, { self: after }) === false) result.violated.push(String(invariant.data.label));
+                }
+            }
+            return { ...result, after, transition: t.qn, undecided };
         }
         return undefined;
     }
@@ -595,10 +634,7 @@ export class Simulator {
 
     private call(expr: ExprData, scope: Scope): Value {
         const [arg] = expr.args ?? [];
-        if (expr.name === 'duration') {
-            const parts = [...String(arg?.value ?? '').matchAll(/(\d+(?:\.\d+)?)(ms|d|h|m|s)/g)];
-            return parts.reduce((total, [, amount, unit]) => total + Number(amount) * MS[unit], 0);
-        }
+        if (expr.name === 'duration') return durationMs(String(arg?.value ?? ''));
         const value = arg ? this.evaluate(arg, scope) : UNKNOWN;
         if (expr.name === 'has') return value === UNKNOWN ? UNKNOWN : value !== null && value !== undefined;
         if (value === UNKNOWN) return UNKNOWN;
@@ -702,6 +738,17 @@ function fieldsOf(policy: GraphNode): string[] {
 function covers(policy: GraphNode, operation: string): boolean {
     const operations = (policy.data.operations as string[] | undefined) ?? [];
     return !operations.length || operations.includes(operation);
+}
+
+/** `24h`, `1h30m` or `2d` in milliseconds. */
+export function durationMs(text: string): number {
+    return [...text.matchAll(/(\d+(?:\.\d+)?)(ms|d|h|m|s)/g)].reduce((total, [, amount, unit]) => total + Number(amount) * MS[unit], 0);
+}
+
+/** What takes a transition: its action, its event, or `after <duration>`. */
+function triggerOf(transition: GraphNode): string {
+    if (transition.data.after !== undefined) return `after ${String(transition.data.after)}`;
+    return last((transition.data.action ?? transition.data.event) as string);
 }
 
 function last(qn: string): string {

@@ -20,6 +20,35 @@ test('reachability follows transitions from the initial state', async () => {
     expect(sim.reach('sales.OrderFlow', 'draft')?.path).toEqual([]);
 });
 
+test('a timed transition moves a record once its duration passed since the date, and reachability follows it', async () => {
+    const sim = await simulator({ 'm.appling': `module m {
+      enum S { open held closed }
+      entity Ticket {
+        status: S state default open
+        points: Int default 0
+        opened_at: DateTime default now
+        held_at: DateTime?
+        note: String?
+        invariant "noted when closed" { status != closed || has(note) }
+      }
+      machine Flow on Ticket.status {
+        transition open -> closed after "48h" since opened_at when { points < 5 } effect { set note = "expired" }
+        transition held -> open after "1h" since held_at
+      }
+    }` });
+    expect(sim.reach('m.Flow', 'closed')?.path).toEqual([{ transition: 'm.Flow.transition[open->closed]', trigger: 'after 48h', to: 'closed', guarded: true }]);
+    // The clock is 2026-10-23T10:00Z.
+    const due = sim.elapse('m.Flow', { status: 'open', points: 1, opened_at: new Date('2026-10-21T09:59:00Z'), note: null });
+    expect(due).toMatchObject({ transition: 'm.Flow.transition[open->closed]', after: { status: 'closed', note: 'expired' }, violated: [], undecided: [] });
+    expect(sim.elapse('m.Flow', { status: 'open', points: 1, opened_at: new Date('2026-10-21T10:01:00Z') })).toBeUndefined();
+    expect(sim.elapse('m.Flow', { status: 'open', points: 9, opened_at: new Date('2026-10-01T00:00:00Z') })).toBeUndefined();
+    expect(sim.elapse('m.Flow', { status: 'closed', opened_at: new Date('2026-10-01T00:00:00Z') })).toBeUndefined();
+    // An empty date never comes due; a date or guard not given leaves the answer undecided.
+    expect(sim.elapse('m.Flow', { status: 'held', held_at: null })).toBeUndefined();
+    expect(sim.elapse('m.Flow', { status: 'held' })?.undecided).toEqual(['the date held_at']);
+    expect(sim.elapse('m.Flow', { status: 'open', opened_at: '2026-10-01T00:00:00Z' })?.undecided).toEqual(['the guard points < 5']);
+});
+
 test('reachability also starts from the states a create assigns', async () => {
     const sim = await simulator({ 'm.appling': `module m {
       enum S { open waiting done }

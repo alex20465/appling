@@ -1,5 +1,5 @@
 import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
-import { coveredByScenarios, scenarioCall, Simulator, throughPath, UNKNOWN, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
+import { coveredByScenarios, durationMs, scenarioCall, Simulator, throughPath, UNKNOWN, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
 import { accessFile, accessOf, accessSteps, actorFields, actorFieldType, tenantOf, tenantPaths } from './access.js';
 import { camel, enumConstant, goExpr, goTerm, pascal, PRIMITIVES, qualify, type GoScope } from './golang.js';
 
@@ -38,7 +38,7 @@ const extension: CodegenExtension = {
                 return accessSteps(node, context);
             case 'Action': return actionSteps(node, context);
             case 'Machine': return machineSteps(node, context);
-            case 'Transition': return covered(context).has(node.qn) ? [] : transitionTestSteps(node, context);
+            case 'Transition': return covered(context).has(node.qn) ? [] : node.data.after !== undefined ? timedTestSteps(node, context) : transitionTestSteps(node, context);
             case 'Scenario': return scenarioSteps(node, context);
             case 'EnumLiteral':
             case 'Param':
@@ -588,7 +588,119 @@ function machineSteps(machine: GraphNode, context: MapContext): Step[] {
         const name = `${last(machine.qn)}On${last(eventQn)}`;
         steps.push(goFile(machine.module, 'machines.go', context, handlerImports, `// ${name} applies the transitions of ${machine.qn} that ${last(eventQn)} triggers.\nfunc ${name}(event ${qualify(event, scope)}) ([]any, error) {\n${body.map(l => `\t${l}`).join('\n')}\n}`), ...tasks);
     }
-    return steps;
+    return [...steps, ...timeoutSteps(machine, entity, context)];
+}
+
+/** A duration such as `48h` or `1h30m` as Go, in the largest unit that divides it: `48 * time.Hour`, `90 * time.Minute`. */
+function goDuration(text: string): string | undefined {
+    const ms = durationMs(text);
+    const unit = ([['time.Hour', 3_600_000], ['time.Minute', 60_000], ['time.Second', 1000], ['time.Millisecond', 1]] as const).find(([, size]) => ms > 0 && ms % size === 0);
+    return unit && `${ms / unit[1]} * ${unit[0]}`;
+}
+
+/** The name of a machine's function over its timed transitions. */
+function timeoutName(machine: GraphNode): string {
+    return `${last(machine.qn)}Timeouts`;
+}
+
+/**
+ * The timed transitions of a machine (`after … since …`) become `<Machine>Timeouts(record, now)`: the first one
+ * whose from state holds, whose date lies the duration back from now or longer and whose guard holds runs its
+ * effects and moves the record. It returns the events it emits and whether the record moved; the storage calls it
+ * for the rows a periodic sweep selects, the interval being the project's decision (decision 2A on #88).
+ */
+function timeoutSteps(machine: GraphNode, entity: GraphNode, context: MapContext): Step[] {
+    const timed = context.children(machine.qn).filter(t => t.kind === 'Transition' && t.data.after !== undefined);
+    if (!timed.length) return [];
+    const imports = new Set(['time']);
+    const self = camel(last(entity.qn));
+    const scope: GoScope = { ...goScope(machine, context, imports), self };
+    const field = context.node(machine.data.field as string)!;
+    const enumNode = context.node((field.data.type as TypeData).decl!)!;
+    const state = `${self}.${pascal(last(field.qn))}`;
+    const tasks: Step[] = [];
+    const cases: string[] = [];
+    for (const transition of timed) {
+        const since = context.node(transition.data.since as string)!;
+        const date = `${self}.${pascal(last(since.qn))}`;
+        const delta = goDuration(String(transition.data.after));
+        const guard = transition.data.guard ? goExpr(transition.data.guard as ExprData, scope) : 'true';
+        if (!delta || !guard) {
+            tasks.push(task(`apply the timed transition ${last(transition.qn)} in ${timeoutName(machine)}`));
+            continue;
+        }
+        const from = (transition.data.from as string[]).map(s => `${state} == ${enumConstant(context.node(`${enumNode.qn}.${s}`)!, scope)}`).join(' || ');
+        const conditions = [`(${from})`, ...((since.data.type as TypeData).optional ? [`${date} != nil`] : []), `!now.Before(${date}.Add(${delta}))`, ...(guard === 'true' ? [] : [`(${guard})`])];
+        cases.push(
+            `case ${conditions.join(' && ')}:`,
+            ...effectBlock(transition, self, scope, context, tasks).map(l => `\t${l}`),
+            `\t${state} = ${enumConstant(context.node(`${enumNode.qn}.${transition.data.to}`)!, scope)}`,
+            '\treturn events, true'
+        );
+    }
+    if (!cases.length) return tasks;
+    const name = timeoutName(machine);
+    const body = ['var events []any', 'switch {', ...cases, '}', 'return events, false'];
+    const code = [
+        `// ${name} applies the first timed transition of ${machine.qn} that is due at now to the record. It returns`,
+        '// the events it emits and whether the record moved; a periodic sweep calls it for the rows it selects.',
+        `func ${name}(${self} *${qualify(entity, scope)}, now time.Time) ([]any, bool) {`,
+        ...body.map(l => `\t${l}`),
+        '}'
+    ].join('\n');
+    return [goFile(machine.module, 'machines.go', context, imports, code), ...tasks];
+}
+
+/**
+ * The test of a timed transition: the entity's valid record in a from state whose date lies a minute past the
+ * duration moves to `to`, and the same record dated now stays. The simulator, its clock past the duration, must
+ * take this transition with nothing undecided and no earlier case of the switch taking the record.
+ */
+function timedTestSteps(transition: GraphNode, context: MapContext): Step[] {
+    const machine = context.node(parentOf(transition.qn))!;
+    const field = context.node(machine.data.field as string)!;
+    const entity = context.node(parentOf(field.qn))!;
+    const since = context.node(transition.data.since as string)!;
+    const valid = entity.module === transition.module ? validRecord(entity, context) : undefined;
+    const delta = goDuration(String(transition.data.after));
+    const guard = transition.data.guard ? goExpr(transition.data.guard as ExprData, { ...goScope(machine, context, new Set()), self: 'x' }) : 'true';
+    if (!valid || !delta || !guard) return testSteps(transition, context);
+    const now = new Date();
+    const due = new Date(now.getTime() - durationMs(String(transition.data.after)) - 60_000);
+    const later = new Simulator(context.graph, now);
+    const stateName = last(field.qn);
+    const from = (transition.data.from as string[]).find(state => {
+        const result = later.elapse(machine.qn, { ...valid.record, [stateName]: state, [last(since.qn)]: due });
+        return result?.transition === transition.qn && !result.undecided.length;
+    });
+    if (!from) return testSteps(transition, context);
+    const imports = new Set(['testing', 'time']);
+    const scope = goScope(transition, context, imports);
+    const enumNode = context.node((field.data.type as TypeData).decl!)!;
+    const literal = (s: string) => enumConstant(context.node(`${enumNode.qn}.${s}`)!, scope);
+    const state = pascal(stateName);
+    const date = pascal(last(since.qn));
+    const optional = (since.data.type as TypeData).optional;
+    const name = testName(transition);
+    const run = (title: string, when: string, moved: boolean, expected: string) => [
+        `\tt.Run("${title}", func(t *testing.T) {`,
+        '\t\tnow := time.Now()',
+        `\t\tsince := ${when}`,
+        `\t\tx := ${valid.name}()`,
+        `\t\tx.${state} = ${literal(from)}`,
+        `\t\tx.${date} = ${optional ? '&since' : 'since'}`,
+        `\t\tif _, moved := ${timeoutName(machine)}(x, now); ${moved ? '!moved' : 'moved'} || x.${state} != ${expected} {`,
+        `\t\t\tt.Fatalf("${title}: moved %v, state %v", moved, x.${state})`,
+        '\t\t}',
+        '\t})'
+    ];
+    const code = [
+        `func ${name}(t *testing.T) {`,
+        ...run(`goes from ${from} to ${transition.data.to} once due`, `now.Add(-(${delta}) - time.Minute)`, true, literal(transition.data.to as string)),
+        ...run(`stays ${from} until due`, 'now', false, literal(from)),
+        '}'
+    ].join('\n');
+    return [valid.step, goFile(transition.module, `${pkgOf(transition.module)}_test.go`, context, imports, code)];
 }
 
 /** A skipped test per case of a rule in the module's test file; writing its body is a registry task. */
