@@ -4,6 +4,7 @@ import { interfaceSteps } from './api.js';
 import { projectionFieldSteps, querySteps } from './application.js';
 import { actionSteps, jobSteps, machineSteps } from './behavior.js';
 import { elixirString, lastOf, parentOf, withModuledoc } from './elixir.js';
+import { eventSteps } from './events.js';
 import { migrationSteps } from './migrations.js';
 import { hasPages, navigationSteps, pageSteps } from './pages.js';
 import { actorAttributeSpecs, actorFieldSteps, actorSteps, constrainRoles, homeAt, homeFields } from './actors.js';
@@ -33,7 +34,9 @@ const extension: CodegenExtension = {
         const install = [
             // Ash policies need a SAT solver; simple_sat is pure Elixir, so the project builds without a C compiler.
             'ash', 'ash_postgres', ...(enforced(context) ? ['simple_sat'] : []), ...(pages ? ['ash_phoenix'] : []), ...(has('Machine') ? ['ash_state_machine'] : []),
-            ...(has('Job', j => !!j.data.schedule) ? ['ash_oban'] : []), ...(pages && api ? ['ash_json_api'] : [])
+            ...(has('Job', j => !!j.data.schedule) ? ['ash_oban'] : []),
+            // Events publish through :telemetry, which Ash already pulls in; a direct dependency keeps the compiler quiet.
+            ...(has('Event') ? ['telemetry'] : []), ...(pages && api ? ['ash_json_api'] : [])
         ];
         return [
             { kind: 'command', run: ['mix', 'igniter.new', app(context), ...(pages ? ['--with', 'phx.new', '--with-args=--no-install'] : []), '--install', install.join(','), '--yes', '--no-git'], cwd: '..', creates: ['mix.exs', 'lib/'] },
@@ -73,7 +76,7 @@ const extension: CodegenExtension = {
             case 'Navigation': return navigationSteps(node, context);
             case 'Messages': return [];
             case 'Flow': return [task(`guide people through ${((node.data.pages ?? []) as string[]).map(p => p.split('.').pop()).join(', ')} for the use case ${String(node.data.usecase).split('.').pop()}, for example with links between the LiveViews`)];
-            case 'Event': return [task(`publish ${lastOf(node.qn)} with an Ash notifier, for example Ash.Notifier.PubSub`)];
+            case 'Event': return eventSteps(node, context);
             case 'External': return [leftToCode(`implement ${lastOf(node.qn)} as a client module or generic actions`)];
             case 'ExternalKey': return externalKeySteps(node, context);
             case 'UseCase': return [task(`implement ${lastOf(node.qn)} as a Reactor or a generic action`)];

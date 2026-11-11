@@ -84,7 +84,8 @@ Modules are named `<App>.<Module>`, with nested modules as `<App>.<A>.<B>`; a ty
 | `actor` | the record that acts: the resource of its `is` entity, a resource of its own or a struct (see [actors](#actors)) |
 | `role` | an `Ash.Policy.SimpleCheck` module `<App>.<Module>.Checks.<Role>` in `lib/<app>/<module>/checks/<role>.ex` (see [roles](#roles)) |
 | `tenant` | attribute multitenancy on the resources that belong to the tenant's entity (see [tenants](#tenants)) |
-| `event`, `external`, `usecase` | tasks: an Ash notifier, a client module or generic actions, a Reactor or generic action |
+| `event` | a struct module `<App>.<Module>.<Event>` with `publish/1` (see [events](#events)) |
+| `external`, `usecase` | tasks: a client module or generic actions, a Reactor or generic action |
 | `setting`, `secret` of an external | a `config` line in `config/runtime.exs` read from the environment and a line in `.env.example` (see [settings and secrets](#settings-and-secrets)) |
 | `interface webhook` | tasks: register each endpoint at the vendor, receive it and verify its signature |
 | `scenario` | an ExUnit test in `test/<app>/<module>/scenarios_test.exs` (see [scenarios](#scenarios)) |
@@ -106,7 +107,32 @@ Modules are named `<App>.<Module>`, with nested modules as `<App>.<A>.<B>`; a ty
 
 ### Actions
 
-An action on an entity becomes an update action of its resource with `require_atomic? false`; one that deletes its own record (`delete self`) without a transition becomes a destroy action. Its inputs become `argument`s. Preconditions and guards become `validate` lines when they translate to builtin validations. `set` effects become `set_attribute` for constants and `now`, or `atomic_update` with an expression. A transition of the state machine adds `change transition_state(:<state>)`.
+An action on an entity becomes an update action of its resource with `require_atomic? false`; one that deletes its own record (`delete self`) without a transition becomes a destroy action. Its inputs become `argument`s. Preconditions and guards become `validate` lines when they translate to builtin validations. `set` effects become `set_attribute` for constants and `now`, or `atomic_update` with an expression. `emit` effects publish their event after the action committed (see [events](#events)). A transition of the state machine adds `change transition_state(:<state>)`.
+
+### Events
+
+An event becomes a struct module in `lib/<app>/<module>/<event>.ex` with its required fields in `@enforce_keys`. `publish/1` fires the `:telemetry` event `name/0` (`[:<app>, :<module>, :<event>]`) with the struct as metadata `:event`. Handlers subscribe with `:telemetry.attach/4` and run in the publishing process, as Django's signals do. A model with events adds `telemetry` to the project's dependencies.
+
+```elixir
+:telemetry.attach("reserve-stock", Shop.Sales.OrderPlaced.name(), fn _name, _measurements, %{event: event}, _config ->
+  Shop.Warehouse.reserve(event.order)
+end, nil)
+```
+
+An `emit` in an action becomes an `after_transaction` change that builds the struct and publishes it once the action committed:
+
+```elixir
+change after_transaction(fn
+  _changeset, {:ok, record}, _context ->
+    Shop.Sales.OrderPlaced.publish(%Shop.Sales.OrderPlaced{order: record})
+    {:ok, record}
+
+  _changeset, result, _context ->
+    result
+end)
+```
+
+Its values may be `this` (the record), an attribute of the record, an action input (`Ash.Changeset.get_argument/2`) or a constant. An `emit` with any other value, or without a value for a required field, stays a task.
 
 ### State machines
 
@@ -312,7 +338,7 @@ test "scenario ClerkCancelsDraft" do
 end
 ```
 
-A scenario only gets a body when the generated project does what the model says, which the extension checks with the Appling simulator: the precondition and guard validations of the action and the state check of AshStateMachine must pass on the given rows (fail, for `then fails`, where the precondition of `E` must translate and be false), the translated invariants must hold after the call without reading a field the action sets, and for a call with an actor every policy that guards it must translate, as must the role checks it names. For `then { ... }`, every `set` of the action must translate too. Ash checks the policies only after the validations, so a refused scenario also needs the validations to pass. Every other scenario stays a skipped test, and writing it is a task of its registry entry that says why, for example a call to a use case or an action without an entity, a given row with a list of entities, a required relationship the scenario does not give, an `emitted` check (events are tasks), or a check that does not translate.
+A scenario only gets a body when the generated project does what the model says, which the extension checks with the Appling simulator: the precondition and guard validations of the action and the state check of AshStateMachine must pass on the given rows (fail, for `then fails`, where the precondition of `E` must translate and be false), the translated invariants must hold after the call without reading a field the action sets, and for a call with an actor every policy that guards it must translate, as must the role checks it names. For `then { ... }`, every `set` of the action must translate too. Ash checks the policies only after the validations, so a refused scenario also needs the validations to pass. Every other scenario stays a skipped test, and writing it is a task of its registry entry that says why, for example a call to a use case or an action without an entity, a given row with a list of entities, a required relationship the scenario does not give, an `emitted` check (the tests do not catch published events yet), or a check that does not translate.
 
 Scenario tests replace the guessed tests of what they cover: an action that a scenario's `when` runs gets no precondition tests, and the transitions it triggers get no transition tests, so their registry entries gain no task for them.
 
@@ -485,9 +511,9 @@ Whatever cannot be translated is listed in the [registry](registry.md):
 - many to many relationships, and derived or default fields of value types
 - calculations over lists, and derived fields or defaults that do not translate
 - invariants, preconditions and guards over calculations, relationships or other resources, and guards when an action has several transitions
-- effects that create rows or emit events, loops (`for`), updates and deletes of related records, `delete self` in an action with a transition, and actions with several target states
+- effects that create rows, `emit` effects with values other than the record, its attributes, inputs and constants, loops (`for`), updates and deletes of related records, `delete self` in an action with a transition, and actions with several target states
 - actions with `consistency eventual`, and actions without an entity
-- policies that do not translate, which deny until written, and writes of field policies (see [policies](#policies)), role conditions that do not translate, telling apart actors bound to the same entity, resources that reach the tenant only through relationships, events, externals and use cases
+- policies that do not translate, which deny until written, and writes of field policies (see [policies](#policies)), role conditions that do not translate, telling apart actors bound to the same entity, resources that reach the tenant only through relationships, externals and use cases
 - jobs on events, and jobs whose filter does not translate
 - authentication, rate limits and CORS of interfaces, and endpoints that do not fit the route patterns
 - flows, and interfaces with a protocol other than `rest`
