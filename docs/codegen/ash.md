@@ -110,7 +110,7 @@ An action on an entity becomes an update action of its resource with `require_at
 
 ### State machines
 
-A machine becomes an `AshStateMachine` section on the resource of its state field: `initial_states` and `default_initial_state` from the field's default (or the first enum value), `state_attribute`, and one `transition` per transition. Transitions on an event get an update action named after the event, and calling it when the event happens is a task.
+A machine becomes an `AshStateMachine` section on the resource of its state field: `initial_states` and `default_initial_state` from the field's default (or the first enum value), `state_attribute`, and one `transition` per transition. Transitions on an event get an update action named after the event, and calling it when the event happens is a task. A timed transition (`after ... since ...`) gets an update action `<to>_after_<since>` with its effects and `transition_state`, and an AshOban trigger that runs it for every row in a from state whose date lies the duration back (`where expr(status in [:placed] and placed_at <= ago(48, :hour))`, the guard added), on AshOban's default schedule of every minute.
 
 ### Jobs
 

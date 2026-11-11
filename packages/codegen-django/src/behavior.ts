@@ -3,9 +3,9 @@ import { throughPath, type ExprData, type GraphNode, type TypeData } from '@appl
 import { annotation, children, documented, importOnReady, leftToCode, pythonFile, task, template } from './files.js';
 import { actionGuard, canName, enforced, guardedCreate, policyImport } from './access.js';
 import { scope, storedFields } from './models.js';
-import { preconditionTests, transitionTests } from './behavior-tests.js';
+import { preconditionTests, timedTransitionTests, timeoutName, transitionTests } from './behavior-tests.js';
 import { covered } from './fixtures.js';
-import { appOf, constantOf, lastOf, parentOf, python, q, snake, wrap, type PythonScope } from './python.js';
+import { appOf, constantOf, duration, lastOf, parentOf, python, q, snake, wrap, type PythonScope } from './python.js';
 
 interface Code {
     lines: string[];
@@ -82,6 +82,7 @@ export function actionSteps(action: GraphNode, context: MapContext): Step[] {
 /** The tests of a transition, unless a scenario runs its action: then the scenario test replaces them. */
 export function transitionSteps(transition: GraphNode, context: MapContext): Step[] {
     if (covered(context).has(transition.qn)) return [];
+    if (transition.data.after !== undefined) return timedTransitionTests(transition, context);
     const trigger = lastOf((transition.data.action ?? transition.data.event) as string);
     const rule = `${(transition.data.from as string[]).join(', ')} -> ${transition.data.to} via ${trigger}${transition.props.guard ? ` when ${transition.props.guard}` : ''}`;
     return transitionTests(transition, rule, context);
@@ -231,8 +232,8 @@ export function machineSteps(machine: GraphNode, context: MapContext): Step[] {
     const field = context.node(machine.data.field as string);
     const entity = field && context.node(parentOf(field.qn));
     const byEvent = Map.groupBy(children(machine, context, 'Transition').filter(t => t.data.event), t => t.data.event as string);
-    if (!entity || !byEvent.size) return [];
-    const steps: Step[] = [];
+    if (!entity) return [];
+    const steps: Step[] = timeoutSteps(machine, entity, context);
     for (const [eventQn, transitions] of byEvent) {
         const event = context.node(eventQn)!;
         const carrier = children(event, context, 'Field').find(f => (f.data.type as TypeData).decl === entity.qn);
@@ -250,6 +251,72 @@ export function machineSteps(machine: GraphNode, context: MapContext): Step[] {
         steps.push(template(`${appOf(machine.module)}/handlers.py`, existing => pythonFile(existing, code.imports, body)), importOnReady(machine.module, 'handlers'), ...code.tasks);
     }
     return steps;
+}
+
+/**
+ * The timed transitions of a machine (`after … since …`) become one Django task that sweeps the rows: per
+ * transition, in declaration order, the rows in a from state whose date lies the duration back or longer, then
+ * the guard, the effects and the new state. The rows of a later transition are read after the earlier ones moved.
+ * A management command enqueues it; how often the scheduler runs it is the project's decision (`docs/concept.md`
+ * section 8, the sweep of decision 2A on #88).
+ */
+function timeoutSteps(machine: GraphNode, entity: GraphNode, context: MapContext): Step[] {
+    const timed = children(machine, context, 'Transition').filter(t => t.data.after !== undefined);
+    if (!timed.length) return [];
+    const field = context.node(machine.data.field as string)!;
+    const enumNode = context.node((field.data.type as TypeData).decl!)!;
+    const enumName = lastOf(enumNode.qn);
+    const instance = snake(lastOf(entity.qn));
+    const name = timeoutName(machine);
+    const app = appOf(machine.module);
+    const code: Code = { lines: [], imports: new Set([
+        'from django.tasks import task', 'from django.utils import timezone',
+        `from ${appOf(entity.module)}.models import ${lastOf(entity.qn)}`, `from ${appOf(enumNode.module)}.enums import ${enumName}`
+    ]), tasks: [] };
+    const pyScope: PythonScope = { ...scope(context, code.imports), self: instance };
+    for (const transition of timed) {
+        const delta = duration(String(transition.data.after), code);
+        if (!delta) {
+            code.tasks.push(task(`sweep ${lastOf(machine.qn)} ${transition.props.from} -> ${transition.data.to} after ${transition.data.after}`));
+            continue;
+        }
+        const from = (transition.data.from as string[]).map(s => `${enumName}.${constantOf(s)}`);
+        const filter = `${lastOf(field.qn)}__in=(${from.join(', ')}${from.length === 1 ? ',' : ''}), ${lastOf(transition.data.since as string)}__lte=now - ${delta}`;
+        const branch: Code = { lines: [], imports: code.imports, tasks: code.tasks };
+        if (transition.data.guard) {
+            const guard = python(transition.data.guard as ExprData, pyScope);
+            if (guard) branch.lines.push(`if not ${wrap(guard)}:`, '    continue');
+            else code.tasks.push(task(`check the guard ${transition.props.guard} of ${lastOf(transition.qn)}`));
+        }
+        effectBlock(transition, instance, context, pyScope, branch);
+        branch.lines.push(`${instance}.${lastOf(field.qn)} = ${enumName}.${constantOf(transition.data.to as string)}`, `${instance}.${branch.deletes ? 'delete' : 'save'}()`);
+        code.lines.push(`for ${instance} in ${lastOf(entity.qn)}.objects.filter(${filter}):`, ...branch.lines.map(l => `    ${l}`));
+    }
+    if (!code.lines.length) return code.tasks;
+    code.imports.add('from django.db import transaction');
+    const body = [
+        '@task',
+        '@transaction.atomic',
+        `def ${name}() -> None:`,
+        `    """Moves the rows of ${machine.qn} whose timed transitions are due."""`,
+        '    now = timezone.now()',
+        ...code.lines.map(l => `    ${l}`)
+    ].join('\n');
+    const command = [
+        'class Command(BaseCommand):',
+        `    help = ${JSON.stringify(`Applies the timed transitions of ${lastOf(machine.qn)} that are due.`)}`,
+        '',
+        '    def handle(self, *args, **options):',
+        `        ${name}.enqueue()`
+    ].join('\n');
+    return [
+        template(`${app}/jobs.py`, existing => pythonFile(existing, code.imports, body)),
+        template(`${app}/management/__init__.py`, existing => existing ?? ''),
+        template(`${app}/management/commands/__init__.py`, existing => existing ?? ''),
+        template(`${app}/management/commands/${name}.py`, () => pythonFile(undefined, ['from django.core.management.base import BaseCommand', `from ${app}.jobs import ${name}`], command)),
+        leftToCode(`schedule "python manage.py ${name}" at the interval the timeouts of ${lastOf(machine.qn)} need`),
+        ...code.tasks
+    ];
 }
 
 /** A scheduled job becomes a Django task and a management command for the scheduler; an event job becomes a receiver. */

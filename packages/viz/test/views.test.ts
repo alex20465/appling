@@ -294,6 +294,23 @@ test('one action of several targets is one edge per target', async () => {
     expect(chart(flowView(index, 'machine', ['m.F'])).edges).toEqual(['a -Go-> b', 'a -Go-> c']);
 });
 
+test('a timed transition is labelled with its duration and notes the date it counts from', async () => {
+    const index = await indexOf({ 'm.appling': `module m {
+  enum S { a b }
+  entity E {
+    s: S state default a
+    at: DateTime default now
+  }
+  machine F on E.s {
+    transition a -> b after "24h" since at
+  }
+}
+` });
+    const flow = flowView(index, 'machine', ['m.F']);
+    expect(chart(flow).edges).toEqual(['a -after 24h-> b [since at]']);
+    expect(flow.edges[0]).toMatchObject({ qn: 'm.E.at' });
+});
+
 test('an action card says between which states it moves, who may run it and what it requires and changes', async () => {
     const cards = cardView(await indexOf(examples()), 'action', ['sales.PlaceOrder']);
     expect(text(cards)).toEqual([{

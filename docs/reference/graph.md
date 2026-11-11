@@ -265,6 +265,7 @@ The reference kinds, with the element the edge starts from:
 | `error` | An action (its preconditions); a use case (its error handlers); a scenario (`then fails`) | The error |
 | `event` | A transition or job; an `emit` effect; a use case (its `await` steps); a scenario (its `emitted` checks) | The event |
 | `action` | A transition or job | The action it runs |
+| `since` | A timed transition | The date field it counts from |
 | `actions` | A page (its `list` and `detail` components) | The actions offered |
 | `target` | A use case (its calls); an endpoint; a scenario (its `when` call) | The action, query, use case or external operation |
 | `persona` | A scenario (its `as`) | The actor or role |

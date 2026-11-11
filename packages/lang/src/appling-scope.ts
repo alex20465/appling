@@ -79,7 +79,7 @@ export class ApplingScopeProvider extends DefaultScopeProvider {
             const update = node.$container;
             return this.fieldsOf(isUpdateEffect(update) ? updatedEntity(update.target, this.services) : effectEntity(node));
         }
-        if (isForEffect(node)) {
+        if (isForEffect(node) || (isTransition(node) && context.property === 'since')) {
             return this.fieldsOf(effectEntity(node));
         }
         if (isHandler(node)) {

@@ -165,6 +165,64 @@ const ACCESS = `module m {
   }
 }`;
 
+test('timed transitions become <machine>_timeouts, tested on both sides of the duration', async () => {
+    const source = `module m {
+  enum State {
+    open
+    held
+    closed
+  }
+  event Expired {
+    reference: String
+  }
+  entity Ticket {
+    reference: String
+    state: State default open
+    points: Int default 0
+    opened_at: DateTime default now
+    held_on: Date?
+  }
+  machine TicketFlow on Ticket.state {
+    transition open -> closed after "48h" since opened_at when { points < 5 } effect { emit Expired { reference = reference } }
+    transition held -> open after "2d" since held_on
+  }
+}`;
+    const { documents, services } = await buildWorkspace({ 'm.appling': source });
+    const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), rust, 'app');
+    const files = new Map<string, string>();
+    for (const { step } of result.steps) if (step.kind === 'template') files.set(step.file, step.write(files.get(step.file)));
+    const [code, tests] = files.get('src/m.rs')!.split('#[cfg(test)]');
+    expect(code).toContain([
+        'pub fn ticket_flow_timeouts(ticket: &mut Ticket, now: chrono::DateTime<chrono::Utc>) -> (Vec<Event>, bool) {',
+        '    let mut events = Vec::new();',
+        '    match ticket.state {',
+        '        State::Open if ticket.opened_at + chrono::TimeDelta::days(2) <= now && (ticket.points < 5) => {',
+        '            events.push(Event::Expired(Expired { reference: ticket.reference.clone() }));',
+        '            ticket.state = State::Closed;',
+        '            (events, true)',
+        '        }',
+        '        State::Held if ticket.held_on.is_some_and(|since| since + chrono::TimeDelta::days(2) <= now.date_naive()) => {',
+        '            ticket.state = State::Open;',
+        '            (events, true)',
+        '        }',
+        '        _ => (events, false),',
+        '    }',
+        '}'
+    ].join('\n'));
+    expect(tests).toContain([
+        '        let mut x = valid_ticket();',
+        '        x.state = State::Held;',
+        '        x.held_on = Some(now.date_naive() - chrono::TimeDelta::days(2) - chrono::TimeDelta::days(1));',
+        '        let (_, moved) = ticket_flow_timeouts(&mut x, now);',
+        '        assert!(moved && x.state == State::Open, "held goes to open once due");'
+    ].join('\n'));
+    expect(tests).toContain('        x.held_on = Some(now.date_naive());\n');
+    expect(tests).not.toContain('#[ignore');
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['m.TicketFlow.transition[open->closed]'].status).toBe('generated');
+    expect(entries['m.TicketFlow.transition[held->open]'].status).toBe('generated');
+});
+
 test('roles, actors, the tenant and policies become the access module and pure checks', async () => {
     const { documents, services } = await buildWorkspace({ 'm.appling': ACCESS });
     const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), rust, 'app');

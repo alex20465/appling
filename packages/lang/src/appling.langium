@@ -142,7 +142,9 @@ Machine:
 
 Transition:
     'transition' from+=Ident (',' from+=Ident)* '->' to=Ident
-    ('via' action=[Action:QualifiedName] | 'on' event=[Event:QualifiedName])
+    ('via' action=[Action:QualifiedName] | 'on' event=[Event:QualifiedName]
+        // A timed transition: taken once the record stayed in a from state for the duration since the date field.
+        | 'after' after=STRING 'since' since=[Field:Ident])
     ('when' '{' guard=Expr '}')?
     ('effect' '{' effects+=Effect* '}')?;
 
@@ -357,7 +359,7 @@ Ident returns string:
     | 'flow' | 'actor' | 'tenant' | 'set' | 'op' | 'human' | 'system' | 'service' | 'asc'
     | 'desc' | 'remove' | 'rename' | 'retype' | 'roles' | 'second' | 'minute' | 'hour' | 'link'
     | 'core' | 'supporting' | 'peripheral' | 'default' | 'limit' | 'messages' | 'migration' | 'is' | 'does'
-    | 'setting' | 'secret' | 'scenario' | 'given' | 'then' | 'fails' | 'refused';
+    | 'setting' | 'secret' | 'scenario' | 'given' | 'then' | 'fails' | 'refused' | 'after' | 'since';
 
 hidden terminal WS: /\s+/;
 terminal ID: /[_a-zA-Z][\w]*/;

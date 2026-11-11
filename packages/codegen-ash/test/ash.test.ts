@@ -430,6 +430,53 @@ test('once the model has a policy, every resource denies what no policy covers, 
     expect(Object.values(entries).find(e => e.qn.startsWith('ops.Ticket.policy[') && e.qn.includes('fields'))!.missing.map(m => m.what)).toContain('guard writes of note on ops.Ticket for update, which Ash field policies do not cover: actor.is(Clerk)');
 });
 
+test('timed transitions become update actions run by AshOban triggers on the rows that are due', async () => {
+    const result = await planFor({
+        'shop.appling': `module ops {
+            enum Status { open held closed }
+            entity Ticket {
+                status: Status state default open
+                priority: Int default 1
+                opened_at: DateTime default now
+                note: String?
+            }
+            machine TicketFlow on Ticket.status {
+                transition open, held -> closed after "1h30m" since opened_at when { priority < 5 || has(note) } effect { set note = "expired" }
+            }
+        }`
+    });
+    const resource = 'defmodule Shop.Ops.Ticket do\n  use Ash.Resource,\n    domain: Shop.Ops\nend\n';
+    const ticket = result.steps.reduce((current, { step }) => step.kind === 'template' && step.file === 'lib/shop/ops/ticket.ex' ? step.write(current) : current, resource);
+    const config = result.steps.reduce((current, { step }) => step.kind === 'template' && step.file === 'config/config.exs' ? step.write(current) : current, 'config :shop, Oban, queues: [default: 10]\n');
+    expect(ticket).toContain('extensions: [AshOban, AshStateMachine]');
+    expect(ticket).toContain('      transition :closed_after_opened_at, from: [:open, :held], to: :closed\n');
+    expect(ticket).toContain([
+        '    update :closed_after_opened_at do',
+        '      require_atomic? false',
+        '      change set_attribute(:note, "expired")',
+        '      change transition_state(:closed)',
+        '    end',
+        '',
+        '    read :closed_after_opened_at_targets do',
+        '      pagination keyset?: true, required?: false',
+        '    end'
+    ].join('\n'));
+    expect(ticket).toContain([
+        '      trigger :closed_after_opened_at do',
+        '        action :closed_after_opened_at',
+        '        read_action :closed_after_opened_at_targets',
+        '        queue :ticket_closed_after_opened_at',
+        '        where expr(status in [:open, :held] and opened_at <= ago(90, :minute) and ((priority < 5) or (not is_nil(note))))',
+        '        worker_module_name Shop.Ops.Ticket.AshOban.Worker.ClosedAfterOpenedAt',
+        '        scheduler_module_name Shop.Ops.Ticket.AshOban.Scheduler.ClosedAfterOpenedAt',
+        '      end'
+    ].join('\n'));
+    expect(config).toContain('queues: [default: 10, ticket_closed_after_opened_at: 10]');
+    expect(result.steps.find(s => s.step.kind === 'command' && s.step.run.includes('igniter.new'))!.step).toMatchObject({ run: expect.arrayContaining([expect.stringContaining('ash_oban')]) });
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['ops.TicketFlow'].status).toBe('generated');
+});
+
 test('does texts become the moduledoc and attribute descriptions, and one registry task each', async () => {
     const result = await planFor({
         'shop.appling': `module shop {

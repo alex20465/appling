@@ -1,8 +1,8 @@
 import type { MapContext, Step } from '@appling/codegen';
-import { UNKNOWN, type ExprData, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
+import { durationMs, Simulator, UNKNOWN, type ExprData, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
 import { children } from './files.js';
 import { factory, holds, sample, simulator } from './fixtures.js';
-import { appOf, constantOf, lastOf, parentOf, python, snake } from './python.js';
+import { appOf, constantOf, duration, lastOf, parentOf, python, snake } from './python.js';
 import { testSteps, type TestCase } from './tests.js';
 
 /** The rows and inputs a test runs an action with, as Python and as the simulator sees them. */
@@ -172,6 +172,62 @@ export function transitionTests(transition: GraphNode, rule: string, context: Ma
     ];
     if (tests.every(t => !t.body)) return testSteps(transition, rule, tests, context);
     return testSteps(transition, rule, tests, context, imports, run.steps);
+}
+
+/** The name of a machine's sweep over its timed transitions: the task in `jobs.py` and the management command. */
+export function timeoutName(machine: GraphNode): string {
+    return `${snake(lastOf(machine.qn))}_timeouts`;
+}
+
+/**
+ * The tests of a timed transition (`after … since …`): a row in each from state whose date lies a minute more
+ * than the duration back must be in `to` after the sweep ran, and a row whose date is now must stay. A state
+ * only counts when the simulator, its clock moved past the duration, takes this transition with nothing left
+ * undecided and the invariants holding afterwards; without such a state the case stays a registry task.
+ */
+export function timedTransitionTests(transition: GraphNode, context: MapContext): Step[] {
+    const machine = context.node(parentOf(transition.qn))!;
+    const field = context.node(machine.data.field as string)!;
+    const since = lastOf(transition.data.since as string);
+    const rule = `${(transition.data.from as string[]).join(', ')} -> ${transition.data.to} after ${transition.data.after} since ${since}${transition.props.guard ? ` when ${transition.props.guard}` : ''}`;
+    const cases = ['moves_once_due', 'waits_until_due'];
+    const enumNode = context.node((field.data.type as TypeData).decl!)!;
+    const entity = context.node(parentOf(field.qn))!;
+    const made = factory(entity, context);
+    const imports = new Set<string>();
+    const delta = duration(String(transition.data.after), { imports });
+    const guard = transition.data.guard as ExprData | undefined;
+    if (!made || !delta || (guard && !translated(guard, context))) return testSteps(transition, rule, cases, context);
+    const stateField = lastOf(field.qn);
+    const enumName = lastOf(enumNode.qn);
+    const instance = snake(lastOf(entity.qn));
+    const constant = (state: string) => `${enumName}.${constantOf(state)}`;
+    const date = (context.node(transition.data.since as string)!.data.type as TypeData).primitive === 'Date';
+    const now = new Date();
+    const due = new Date(now.getTime() - durationMs(String(transition.data.after)) - (date ? 86_400_000 : 60_000));
+    const later = new Simulator(context.graph, now);
+    const moving = (transition.data.from as string[]).filter(state => {
+        const result = later.elapse(machine.qn, { ...made.record, [stateField]: state, [since]: due });
+        return result?.transition === transition.qn && !result.undecided.length && !result.violated.length && !result.writes.length && !result.events.length;
+    });
+    if (!moving.length) return testSteps(transition, rule, cases, context);
+    const sweep = timeoutName(machine);
+    for (const line of [made.import, `from ${appOf(enumNode.module)}.enums import ${enumName}`, `from ${appOf(machine.module)}.jobs import ${sweep}`, 'from django.utils import timezone']) imports.add(line);
+    const start = date ? 'timezone.localdate()' : 'timezone.now()';
+    const back = `${start} - ${delta} - timedelta(${date ? 'days' : 'minutes'}=1)`;
+    const loop = (when: string, expected: (state: string) => string) => [
+        `for state in ${tuple(moving.map(constant))}:`,
+        '    with self.subTest(state=state):',
+        `        ${instance} = make_${instance}(${stateField}=state, ${since}=${when})`,
+        `        ${sweep}.call()`,
+        `        ${instance}.refresh_from_db()`,
+        `        self.assertEqual(${instance}.${stateField}, ${expected('state')})`
+    ];
+    const tests: TestCase[] = [
+        { name: cases[0], body: loop(back, () => constant(transition.data.to as string)) },
+        { name: cases[1], body: loop(start, state => state) }
+    ];
+    return testSteps(transition, rule, tests, context, imports, made.steps);
 }
 
 /**

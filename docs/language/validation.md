@@ -66,6 +66,8 @@ See [descriptions](descriptions.md#naming-elements).
 | A machine governs an entity field marked `state` with an enum type | `A machine must govern an entity field marked "state" with an enum type.` |
 | Each state field has at most one machine | `State field <field> is already owned by another machine.` |
 | Every state in a transition is a value of the field's enum | `"<state>" is not a value of <Enum>.` |
+| `after` is a positive duration | `"<text>" is no duration such as "24h".` |
+| `since` is a stored date | `<field> is no stored Date or DateTime.` |
 | A `set` effect never changes a `state` field | `A state field changes only through a machine transition.` |
 
 ## Effects

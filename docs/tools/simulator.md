@@ -96,7 +96,9 @@ A customer may close a cart only when it is theirs, which depends on the cart's 
 
 ## How it decides
 
-**Reachability.** The search starts at the machine's [initial states](../language/behavior.md#initial-states): the default of its state field and every state a `create` effect assigns, or every value of the enum when there is neither. It follows transitions by their `from` states. Guards are not evaluated; the path marks guarded transitions.
+**Reachability.** The search starts at the machine's [initial states](../language/behavior.md#initial-states): the default of its state field and every state a `create` effect assigns, or every value of the enum when there is neither. It follows transitions by their `from` states. Guards are not evaluated; the path marks guarded transitions. A timed transition's trigger reads `after <duration>`.
+
+**Letting time pass.** `elapse(machine, record)` takes the first timed transition (`after ... since ...`) that is due for the record at the simulator's clock: its from state holds, the duration has passed since its date field and its guard does not fail. It returns the record after the transition's effects and new state, the violated invariants and what stayed `undecided` (a date or guard the record does not give), or undefined when none is due or the date is empty.
 
 **Who may trigger an action.** An action is allowed when its own policies, the policies of its entity that cover `update` (or every operation), and the policies that cover `create` of every entity it creates (through a `create` effect of the action or of a transition it triggers) hold. Following the [concept](../concept.md), the effective policy is the conjunction of all policies along the way, so an entity that only lets clerks update it also keeps other actors from its actions. An actor holds the roles listed in its declaration, and `actor.is(...)` is true for the actor itself and for those roles whose [condition](../language/access.md#roles) holds; a condition that reads actor fields the question does not give makes the answer `depends`.
 

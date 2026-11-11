@@ -24,6 +24,18 @@ test('machine governs a state field with an enum type', async () => {
         .toContain('A machine must govern an entity field marked "state" with an enum type.');
 });
 
+test('a timed transition takes a positive duration and counts from a stored date', async () => {
+    const order = `enum Status { open done } entity Order { status: Status state placed_at: DateTime? due: Date note: String late: Bool = has(placed_at) }`;
+    const flow = (rest: string) => `module m { ${order} machine Flow on Order.status { transition open -> done ${rest} } }`;
+    expect(await check(flow('after "24h" since placed_at'))).toEqual([]);
+    expect(await check(flow('after "1h30m" since due when { note != "" } effect { set note = "late" }'))).toEqual([]);
+    expect(await check(flow('after "a day" since placed_at'))).toContain('"a day" is no duration such as "24h".');
+    expect(await check(flow('after "0h" since placed_at'))).toContain('"0h" is no duration such as "24h".');
+    expect(await check(flow('after "24h" since note'))).toContain('note is no stored Date or DateTime.');
+    expect(await check(flow('after "24h" since late'))).toContain('late is no stored Date or DateTime.');
+    expect(await check(flow('after "24h" since missing'))).toContain("Could not resolve reference to Field named 'missing'.");
+});
+
 test('state field has one machine', async () => {
     expect(await check(`module m { ${ORDER} machine A on Order.status { } machine B on Order.status { } }`))
         .toContain('State field status is already owned by another machine.');

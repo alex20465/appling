@@ -2,7 +2,7 @@ import type { MapContext, Step } from '@appling/codegen';
 import { Simulator, UNKNOWN, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
 import { homeAt } from './actors.js';
 import { constant, lastOf, parentOf, validation } from './elixir.js';
-import { fieldsOf, relationTarget, snake, storedAttributes, typeModule } from './naming.js';
+import { fieldsOf, relationTarget, snake, storedAttributes, timedAction, typeModule } from './naming.js';
 import { testSteps, type TestCase } from './tests.js';
 
 /** A value a test may give an attribute, as Elixir and as the simulator sees it (UNKNOWN when the test must not rely on it). */
@@ -236,6 +236,7 @@ interface TransitionPlan {
 function transitionPlan(transition: GraphNode, entity: GraphNode, context: MapContext): TransitionPlan | undefined {
     const action = transition.data.action as string | undefined;
     const event = transition.data.event as string | undefined;
+    if (transition.data.after !== undefined) return { action: timedAction(transition), transitions: [transition], arguments: [] };
     if (!action && !event) return undefined;
     // An action's update action is written once for every transition it drives, an event's per machine.
     const transitions = action

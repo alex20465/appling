@@ -194,7 +194,7 @@ function method(expr: ExprData, scope: PythonScope): string | undefined {
 }
 
 /** `720h`, `1h30m`, `2d` in the style of Go and CEL durations. */
-function duration(text: string, scope: PythonScope): string | undefined {
+export function duration(text: string, scope: Pick<PythonScope, 'imports'>): string | undefined {
     const parts = [...text.matchAll(/(\d+(?:\.\d+)?)(ms|d|h|m|s)/g)];
     if (!parts.length || parts.map(p => p[0]).join('') !== text) return undefined;
     scope.imports.add('from datetime import timedelta');

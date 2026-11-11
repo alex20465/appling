@@ -147,6 +147,7 @@ module shop core {
   machine OrderFlow on Order.status supporting {
     transition draft -> placed via PlaceOrder effect { emit OrderPlaced { order = this } }
     transition placed -> paid on PaymentReceived
+    transition placed -> cancelled after "48h" since placed_at effect { set note = "expired unpaid" }
     transition draft, placed -> cancelled via Cancel when { status != paid && -discount < 1 && !has(note) }
   }
 
