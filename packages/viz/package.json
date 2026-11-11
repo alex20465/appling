@@ -35,6 +35,7 @@
     "build": "tsc && cp src/canvas/canvas.css out/canvas/"
   },
   "dependencies": {
+    "@appling/lang": "workspace:*",
     "@appling/model": "workspace:*"
   },
   "peerDependencies": {

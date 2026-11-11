@@ -34,8 +34,8 @@ const DECORATIONS: Record<ChangeStatus, [string, string]> = {
 const TYPED = new Set(['Field', 'Param']);
 
 /**
- * The IDE's side panels as native views in the Appling sidebar (`appling.inspector`, `.changes`, `.playbook`, `.review`,
- * `.code`; search is VS Code's Go to Symbol in Workspace), showing the IDE tab last active: its client sends the state, the trees come from
+ * The IDE's side panels as native views in the Appling sidebar (`appling.inspector`, `.changes`, `.review`, `.code`;
+ * search is VS Code's Go to Symbol in Workspace), showing the IDE tab last active: its client sends the state, the trees come from
  * `panel-trees.ts`, and what the user does goes back to the client as an action, or happens here (opening files and
  * diffs, inspector edits as VS Code edits through the server's `/api/edit`).
  */
@@ -85,7 +85,6 @@ export class Panels implements Disposable {
             command('appling.inspector.add', () => this.addMember()),
             command('appling.inspector.remove', () => this.removeElement()),
             command('appling.changes.acceptAll', () => this.act({ type: 'accept' })),
-            command('appling.playbook.play', () => this.play()),
             command('appling.review.compare', () => this.compare()),
             command('appling.review.mark', () => this.act({ type: 'review', marked: true })),
             command('appling.review.unmark', () => this.act({ type: 'review', marked: false })),
@@ -172,10 +171,8 @@ export class Panels implements Disposable {
         };
         for (const [key, value] of Object.entries(context)) void commands.executeCommand('setContext', key, value);
         const live = (state.live?.files.length ?? 0) + state.proposals.length;
-        const unwatched = state.playbook?.chapters.filter(c => c.seen === undefined || c.seen < c.steps.length).length ?? 0;
         const badge = (count: number, what: string) => count ? { value: count, tooltip: `${count} ${what}` } : undefined;
         this.trees.changes.view.badge = badge(live, 'unseen changes and proposals');
-        this.trees.playbook.view.badge = badge(unwatched, 'unwatched chapters');
         this.trees.tasks.view.badge = badge(state.snapshot.tasks.length, 'open registry tasks');
         this.trees.tasks.view.description = state.snapshot.targets.length ? undefined : 'no stack yet';
         this.trees.changes.view.description = state.live?.files.length ? diffSummary(state.live.diff) : undefined;
@@ -329,14 +326,6 @@ export class Panels implements Disposable {
 
     private select(qn: string): void {
         if (this.active) this.host.post(this.active, { type: 'element', qn });
-    }
-
-    /** Play or resume: where the user is, else the first unwatched chapter. */
-    private play(): void {
-        const playbook = this.current()?.state.playbook;
-        if (!playbook?.chapters.length) return;
-        const first = playbook.chapters.find(c => c.seen === undefined || c.seen < c.steps.length) ?? playbook.chapters[0];
-        this.act({ type: 'play', position: playbook.position.chapter ? playbook.position : { chapter: first.id, step: 0 } });
     }
 
     private async compare(): Promise<void> {

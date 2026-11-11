@@ -209,51 +209,11 @@ button:focus-visible { outline: 2px solid var(--appling-leaf); outline-offset: 2
 .review-summary .removed { color: var(--appling-ink-muted); }
 .review .hunk { margin: 2px 0 8px; }
 
-/* The playbook (#19): chapters beside the canvas, the player over it. */
-.chapters { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
-.chapter { padding: 6px 8px; border-left: 3px solid var(--session, var(--appling-line)); border-radius: 4px; background: var(--appling-surface); }
-.chapter.here { background: var(--appling-surface-elevated); }
-.chapter.unwatched .result > span:first-child { font-weight: 600; }
-.chapter .result { display: flex; justify-content: space-between; gap: 8px; width: 100%; padding: 0; background: none; border: 0; color: var(--appling-ink); text-align: left; font-size: 12.5px; cursor: pointer; }
-.chapter-meta { font-size: 11.5px; margin-top: 2px; }
-.chapter-meta .link { word-break: normal; }
-.chapter-result { margin: 4px 0 0; font-size: 12px; color: var(--appling-ink-soft); }
-.player { grid-template-rows: auto minmax(0, 1fr) auto; }
-.player > .tree-canvas { min-height: 0; }
 .agent-bar-end { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .agent-bar-end .button { margin-left: 0; }
-/* Below the canvas: the step's note as a caption over a control bar, as in a video player. */
-.player-dock { border-top: 1px solid var(--appling-line); background: var(--appling-surface-raised); font-size: 12.5px; }
-.player-caption { display: grid; gap: 3px; padding: 8px 14px 6px; max-height: 30vh; overflow: auto; }
-.player-caption p { margin: 0; }
-.player-controls { display: flex; align-items: center; gap: 4px; padding: 4px 8px 6px; }
-.player-icon { display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--appling-ink-soft); cursor: pointer; }
-.player-icon:hover:not(:disabled) { background: color-mix(in srgb, var(--appling-ink) 10%, transparent); color: var(--appling-ink); }
-.player-icon:focus-visible { outline: 2px solid var(--session, var(--appling-leaf)); outline-offset: 1px; }
-.player-icon:disabled { opacity: 0.35; cursor: default; }
-.player-icon.play { width: 36px; height: 36px; background: var(--session, var(--appling-leaf)); color: var(--appling-surface); }
-.player-icon.play:hover { background: color-mix(in srgb, var(--session, var(--appling-leaf)) 85%, var(--appling-ink)); color: var(--appling-surface); }
-/* One segment per position (the plan, then each step): the past filled, the current one filling while it plays. */
-.player-track { flex: 1; display: flex; align-items: center; height: 14px; gap: 3px; min-width: 80px; margin: 0 8px; padding: 0; list-style: none; }
-.player-track li { position: relative; flex: 1; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--appling-ink) 14%, transparent); overflow: hidden; }
-.player-track li.past { background: var(--session, var(--appling-leaf)); }
-.player-track li.here { background: color-mix(in srgb, var(--session, var(--appling-leaf)) 45%, transparent); }
-.player-track li > span { position: absolute; inset: 0 auto 0 0; background: var(--session, var(--appling-leaf)); transition: width 100ms linear; pointer-events: none; }
-.player-track button { position: absolute; inset: -8px 0; width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; }
-.player-track li:hover { height: 8px; }
-.player-status { font: 11px var(--appling-font-mono); color: var(--appling-ink-muted); white-space: nowrap; }
-@media (max-width: 640px) { .player-status { display: none; } }
-.step-state, .step-change { font: 600 10px var(--appling-font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
-.step-state.planned { color: var(--appling-ink-muted); }
-.step-state.done { color: var(--appling-leaf); }
-.step-change.add { color: var(--appling-leaf); }
-.step-change.change { color: var(--appling-rust); }
-.step-change.remove { color: var(--appling-ink-muted); }
-.player-queue { font-size: 11.5px; }
 .stack-picker { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); z-index: 3; width: min(420px, calc(100% - 32px)); padding: 14px 16px; border: 1px solid var(--appling-amber); border-radius: 8px; background: var(--appling-surface-elevated); box-shadow: 0 8px 24px var(--appling-shadow); }
 .stack-picker h3 { margin: 0 0 4px; font-size: 14px; }
 .stack-picker p { margin: 0 0 10px; font-size: 12px; }
-.playbook-chip { position: absolute; top: 60px; right: 12px; z-index: 2; padding: 4px 10px; border: 1px solid var(--appling-leaf); border-radius: 14px; background: var(--appling-surface-raised); color: var(--appling-ink); font-size: 12px; }
 
 /* implementation: gutter marks, dots, the code view, the Code tab and the generation offer */
 .gutter-impl { border-radius: 50%; margin-left: 5px; width: 8px !important; height: 8px !important; margin-top: 6px; cursor: pointer; }

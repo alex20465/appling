@@ -3,14 +3,14 @@ title: Repo view
 description: The view of each repo in Appling Desktop, with the model canvas as its main area, a search over every element, an inspector that edits through validated operations and the source one click away.
 ---
 
-Every repo you open in [Appling Desktop](desktop.md) gets its own view, served by an IDE server that Desktop runs for that repo. In VS Code the [Appling extension](vscode.md) shows the same view in a tab per project, with the text in VS Code's own editors. With only the command line installed, [`appling ide`](cli.md#ide) opens it in your browser. The model canvas is the main area. Next to it a side panel holds the search, the inspector, the live changes, the playbook, the review and the code tab, and the **Source** button in the header (**View › Toggle Source**) unfolds the text editor with the language server. All of them show the same model: the text is the source, the views are computed from it, and every change from the inspector goes back into the text.
+Every repo you open in [Appling Desktop](desktop.md) gets its own view, served by an IDE server that Desktop runs for that repo. In VS Code the [Appling extension](vscode.md) shows the same view in a tab per project, with the text in VS Code's own editors. With only the command line installed, [`appling ide`](cli.md#ide) opens it in your browser. The model canvas is the main area. Next to it a side panel holds the search, the inspector, the live changes, the review and the code tab, and the **Source** button in the header (**View › Toggle Source**) unfolds the text editor with the language server. All of them show the same model: the text is the source, the views are computed from it, and every change from the inspector goes back into the text.
 
 > [!TIP]
 > To try the repo view without installing anything, open the [demo](https://appling.tools/ide/). It runs the same view on the sample sales and CRM model entirely in your browser, language server included, with the source shown next to the canvas. Edits stay in the page until you reload; generation and the review of commits need Desktop.
 
 The header shows the workspace folder, the release indicator (once a release exists), either `valid` or the number of errors in the model, and **Source** (**Hide source** while the editor is open).
 
-AI works through agents in the repo's terminals, connected to the [MCP server](ai.md#mcp-server) of the repo as [agent sessions](ai.md#agent-sessions): their views, proposals and playbook chapters show up here. **View › Toggle Code View** opens a full Code OSS (VS Code) next to the canvas, with the [Appling extension](editors.md#vs-code); selecting an element on the canvas opens its source there, and the cursor in a `.appling` file there selects the element on the canvas. On Linux, **text diff** in the Review tab opens there too, in Code OSS's diff editor.
+AI works through agents in the repo's terminals, connected to the [MCP server](ai.md#mcp-server) of the repo as [agent sessions](ai.md#agent-sessions): their views and proposals show up here. **View › Toggle Code View** opens a full Code OSS (VS Code) next to the canvas, with the [Appling extension](editors.md#vs-code); selecting an element on the canvas opens its source there, and the cursor in a `.appling` file there selects the element on the canvas. On Linux, **text diff** in the Review tab opens there too, in Code OSS's diff editor.
 
 ## The editor
 
@@ -45,7 +45,7 @@ Each circle has the color of its layer and the number of nodes it unfolds into. 
 
 The [relevance](../language/relevance.md) of a declaration decides how it is drawn: the more relevant, the larger its circle and the closer to the middle of its row, while the least relevant sit small at the edges. `core` declarations have a stronger ring and a bolder name, `peripheral` ones are faded until you point at them.
 
-Clicking a circle unfolds it and selects it: the inspector shows what it does, who may run it and where it is used, and every link there selects the next element. Clicking the selected declaration again folds it: what it held shrinks back into it. The canvas moves to keep what you unfolded in view.
+Clicking a circle unfolds it and selects it: the inspector shows what it does, who may run it and where it is used, and every link there selects the next element. Clicking the selected declaration again folds it: what it held shrinks back into it. The canvas moves to keep what you unfolded in view. What stands stays where it is: new shoots go above their node, and where two crowns would meet, both lean out to their side instead of pushing the nodes below apart.
 
 The tree is drawn as a plant. New shoots come out of the bud on top of the node you clicked, one after another, each on a stem that carries leaves and is thicker the more grows from it. Sap runs up the stems from the seed to the current node. A wave of rings spreads from a node when you unfold or fold it, and from every drawn element that a new version of the model added (green) or changed (blue), whether you, the inspector or an agent session wrote the change. With reduced motion set in your system, the plant stands still and has no waves.
 
@@ -63,10 +63,13 @@ Right click a node for its menu. Right click the empty canvas for the menu of th
 |---|---|---|
 | A declaration or module | **Edit in the inspector** | Selects it and shows the inspector, where you rename, retype and set its properties |
 | A declaration or module | **Remove…** | Asks in the menu, then removes it with the `remove` [edit operation](#how-edits-are-applied) |
-| Any node | **New element…** | A name and a description in your words: a request for an agent to model the element |
-| A request | **Edit request…**, **Remove request** | Changes or drops the request |
+| The seed | **New module…** | A name and a description in your words: a request for an agent to model a module |
+| A module, group or declaration | **New element…** | A kind, a name and a description: a request for an agent to model the element |
+| A request | **Edit request…**, **New element on it…**, **Remove request** | Changes the request, asks for an element on top of it, or drops it with the requests built on it |
 
-A request does not touch the model. It is kept in `.appling/requests.json` in the workspace folder and drawn as a ghost with a dashed copper ring under the node you asked from (a group's requests go to its module, the seed's to the model as a whole), tagged `requested · for an agent`. It counts for its parent's bud. An agent session takes it with the MCP tool [`request_next`](ai.md#request-tools), writes the element and closes it with `request_done`; the **Code** tab lists the waiting requests.
+The kind list offers only what fits the place, following the [layer rules](../language/validation.md): the model as a whole takes a module, a module (or a requested module) takes any declaration, and a declaration takes the kinds that may reference it, since the tree grows what uses each node. Under an entity you can ask for an action, a query or another entity, under an action a use case or a page, never an entity. A group offers the kinds of the node it hangs under, with its own kind chosen.
+
+A request does not touch the model. It is kept in `.appling/requests.json` in the workspace folder and drawn as a ghost with a dashed copper ring and its kind under the node you asked from (a group's requests go to its parent), tagged `requested · for an agent`. It counts for its parent's bud, and the parent unfolds to show it. A module that is still empty, or that holds requests, shows in every lens, so you can build on a module right after an agent wrote it. You can keep sketching on a request before any agent modeled it: a request built on another one waits for it and moves under the new element once that one is done. While an agent session works on a request, the ghost carries the session's ring and the tag `modeling · <session>`. An agent session takes it with the MCP tool [`request_next`](ai.md#request-tools), writes the element and closes it with `request_done`; the **Code** tab lists the waiting requests.
 
 The lens and the link entities option are saved in `.appling/view.json` in the workspace folder, so the view opens the same way next time.
 
@@ -194,14 +197,6 @@ The [visual tools](ai.md#visual-tools) of the repo's agent sessions draw on this
 
 A change a session proposes with `propose_edits` shows at the top of the Changes tab with its summary, text and model differences and a comment field; a banner on the canvas points there while the tab is closed. **Accept** writes it and **Reject** sends your comment back to the agent, whose tool call waits for the decision. When the session ends, its views go and its waiting proposals are rejected.
 
-## The playbook
-
-The **Playbook** tab lists the chapters of the workspace's [playbook](ai.md#the-playbook) in order, with the count of unwatched chapters on its tab. A chapter is unwatched until you step to its last step. Each chapter shows its session's colour and label, its title, its steps done of planned, and the chapters it builds on. **replay** plays it from its plan, **session** jumps to its session (its tab in Desktop, else its agent view), and **diff** opens the Changes tab with only the files that session wrote. A chapter written in another repo of the workspace opens that repo's Changes tab, in its own view, in Desktop (`window.applingDesktop.showChanges`). While chapters wait unwatched, a chip at the top right of the canvas counts them.
-
-**Play** (or **Resume**) puts the player on the canvas, laid out like a video player. The bar at the top shows the chapter and its session, with **Session**, **Diff** and **×** (back to the model). The canvas draws the trail of the chapter so far, starting with the elements of the chapters it builds on, and marks the current step's elements: added ones green, changed ones yellow, removed ones ghosted. The marks pulse once on every step. A planned step previews its change with dashed rings; a done step is drawn solid. Below the canvas, the step's note as a caption with the queue of chapters that come next, and the control bar: step back, play or pause, step forward, one segment per position (the plan, then each step; click one to jump there), the step and its state, and replay from the plan.
-
-You step by hand: **→** and **←** in the control bar or on the keyboard, and the space bar plays or pauses. Each step grows on the canvas: the camera glides once to where the step's new nodes will stand and stays there while they unfold one after another along the tree, the path from the seed down to each element first, about a second apart. **Play** steps forward on its own: the current segment fills up and the status counts the seconds to the next step. The time starts once the step has grown, and each step stays for as long as its note takes to read, about 240 words a minute plus two seconds for the canvas, at least 3 and at most 20 seconds; the plan takes as long as its text. Playing stops at the chapter's last step and on **Pause**; **Play** goes on from where you are, or from the plan at the chapter's end. A step taken by hand starts the next step's time over. A chapter that arrives while you watch another one joins the queue and never moves the canvas. Past the last step of a chapter, **→** goes on to the next chapter. Your position is kept with the playbook, so every repo view of the workspace and every session knows where you are.
-
 ## The Code tab
 
 The **Code** tab shows how far the model is implemented and generates from the repo view: the count of elements per [implementation state](implementation.md#implementation-states), the targets of `appling.config.json`, buttons to generate the outstanding elements, the selected element, the checked ones or everything, the running generation with its log, the elements [requested](#the-right-click-menu) on the canvas, waiting for an agent, and the open registry tasks with their status, attempts, notes and the agent session that claimed each. The tab counts the open tasks. See [Seed to code](implementation.md).
@@ -251,10 +246,9 @@ The server endpoints, for reference:
 | `POST /mcp` | The repo's MCP server for [agent sessions](ai.md#agent-sessions); needs a session's bearer token |
 | `GET`, `POST /api/sessions` | Lists the agent sessions, opens one (returns its token and the MCP URL) |
 | `PATCH`, `DELETE /api/sessions/<id>` | Renames a session or sets its status, ends it |
-| `GET /api/playbook?workspace=` | The playbook of the view's workspace (an absolute path; without it, the one the app shows) |
 | `POST /api/sessions/<id>/ask` | Delivers `{ text }`, a question typed in the session's view, to its inbox |
 | `POST /api/live/accept` | Accepts the live changes of `{ paths }`, or of every changed file; returns the changes left |
 | `POST /api/live/revert` | Writes the text last accepted of `{ path }` back |
 | `POST /api/proposals/<id>` | Decides a waiting proposal with `{ decision: { accepted, comment? } }` |
-| websocket `/events?workspace=` | Snapshot pushes on file changes, the live changes (`live`), the agent sessions, their `ide_act` actions, views (`agent-view`), proposals and the playbook of the view's workspace; the view reports its selection, view, the agent view it shows on it and its workspace (a view that moves to another workspace gets that one's playbook) |
+| websocket `/events` | Snapshot pushes on file changes, the live changes (`live`), the agent sessions, their `ide_act` actions, views (`agent-view`) and proposals; the view reports its selection, view, the agent view it shows on it |
 | websocket `/lsp` | One language server per connection |

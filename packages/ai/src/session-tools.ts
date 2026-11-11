@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { MAX_ATTEMPTS } from './project.js';
 import type { EditOperation } from '@appling/model';
 import { define, REGISTRY_TOOLS, type Tools } from './tools.js';
-import type { PlaybookStore } from './playbook.js';
 import { findConflicts, peers, SESSION_STATUSES, sessionTitle, type AgentSession, type Channel, type ClaimConflict, type Claims, type SessionStore } from './sessions.js';
 
 /** What the IDE shows, as far as the IDE server and the app around it know it. */
@@ -94,8 +93,6 @@ export interface SessionScope {
     id: string;
     store: SessionStore;
     host?: IdeHost;
-    /** The workspace playbooks; with them the session gets the playbook tools. */
-    playbook?: PlaybookStore;
 }
 
 export const SESSION_INSTRUCTIONS = `You work in an agent session of Appling Desktop, next to other agent sessions that may change the same model and files at the same time. The session tools keep you coordinated with them and show the person what each session does:
@@ -175,7 +172,7 @@ export function sessionTools(scope: SessionScope): Tools {
             run: (_, input) => attempt(async () => ({ sent: true, to: await store.send(id, input.to, input.text) }))
         }),
         session_inbox: define({
-            description: 'Read the messages other sessions and the person (as User: questions typed in your view, playbook responses) sent you; reading them marks them read.',
+            description: 'Read the messages other sessions and the person (as User: questions typed in your view) sent you; reading them marks them read.',
             input: {},
             run: () => attempt(async () => ({ messages: await store.inbox(id) }))
         }),

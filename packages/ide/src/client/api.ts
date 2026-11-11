@@ -1,4 +1,4 @@
-import type { ElementRequest, Playbook, PlaybookPosition } from '@appling/ai';
+import type { ElementRequest } from '@appling/ai';
 import type { EditOperation, EditResult } from '@appling/model';
 import type { FileDiff, Review, Revision } from '../shared/review.js';
 import type { Decision, LiveChanges } from '../shared/live.js';
@@ -32,8 +32,8 @@ export async function saveFile(path: string, text: string): Promise<void> {
  * their actions. `report` tells the server what the client shows, `unsaved` which files have unsaved edits (Appling
  * Desktop shows them on the rail).
  */
-export function onEvents(handlers: IdeEvents, workspace?: string): { close(): void, report(report: ClientReport): void, unsaved(files: string[]): void } {
-    const socket = new WebSocket(`ws://${location.host}/events${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`);
+export function onEvents(handlers: IdeEvents): { close(): void, report(report: ClientReport): void, unsaved(files: string[]): void } {
+    const socket = new WebSocket(`ws://${location.host}/events`);
     let pending: ClientReport | undefined;
     let unsaved: string[] | undefined;
     socket.onopen = () => {
@@ -48,7 +48,6 @@ export function onEvents(handlers: IdeEvents, workspace?: string): { close(): vo
         if (message.type === 'live') handlers.live?.(message.live);
         if (message.type === 'agent-view') handlers.agentView?.(message.view, !!message.ended);
         if (message.type === 'proposals') handlers.proposals?.(message.proposals);
-        if (message.type === 'playbook') handlers.playbook?.(message.playbook);
         if (message.type === 'generation') handlers.generation?.(message.run);
         if (message.type === 'generation-event') handlers.generationEvent?.(message.id, message.event);
     };
@@ -66,8 +65,8 @@ export function onEvents(handlers: IdeEvents, workspace?: string): { close(): vo
 }
 
 /** Starts a generation run through the targets of `appling.config.json`; the run then streams over the events. */
-export async function startGeneration(selection: GenerationSelection, workspace?: string): Promise<GenerationRun> {
-    const response = await fetch('/api/generate', { method: 'POST', body: JSON.stringify({ selection, workspace }) });
+export async function startGeneration(selection: GenerationSelection): Promise<GenerationRun> {
+    const response = await fetch('/api/generate', { method: 'POST', body: JSON.stringify({ selection }) });
     if (!response.ok) throw new Error(await response.text());
     return response.json();
 }
@@ -108,26 +107,14 @@ export async function askSession(session: string, text: string): Promise<void> {
     if (!response.ok) throw new Error(await response.text());
 }
 
-/** The playbook of the workspace the view belongs to (Appling Desktop names it), else of the one the app shows. */
-export async function loadPlaybook(workspace?: string): Promise<Playbook> {
-    return (await fetch(`/api/playbook${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`)).json();
-}
-
-/** Moves the user in the playbook; the chapter counts as watched up to there. */
-export async function movePlaybook(workspace: string, position: PlaybookPosition): Promise<Playbook> {
-    const response = await fetch('/api/playbook/position', { method: 'POST', body: JSON.stringify({ workspace, ...position }) });
-    if (!response.ok) throw new Error(await response.text());
-    return response.json();
-}
-
-/** Asks an agent for an element by name and description (`.appling/requests.json`); the snapshot shows it. */
-export async function addRequest(request: { name: string, description: string, parent?: string }): Promise<ElementRequest> {
+/** Asks an agent for an element by name, description and kind (`.appling/requests.json`); the snapshot shows it. */
+export async function addRequest(request: { name: string, description: string, kind?: string, parent?: string, parentRequest?: string }): Promise<ElementRequest> {
     const response = await fetch('/api/requests', { method: 'POST', body: JSON.stringify(request) });
     if (!response.ok) throw new Error(await response.text());
     return response.json();
 }
 
-export async function updateRequest(id: string, change: { name?: string, description?: string }): Promise<void> {
+export async function updateRequest(id: string, change: { name?: string, description?: string, kind?: string }): Promise<void> {
     const response = await fetch(`/api/requests/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(change) });
     if (!response.ok) throw new Error(await response.text());
 }

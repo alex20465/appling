@@ -24,7 +24,6 @@ interface BoardEntry extends RailSession {
     workspaceName?: string;
     duration: string;
     note?: string;
-    unwatched: number;
 }
 
 type Answer = { kind: 'allow' } | { kind: 'deny' } | { kind: 'option', option: number } | { kind: 'reply', text: string };
@@ -152,7 +151,6 @@ function renderBoard(entries: BoardEntry[]): void {
         main.append(element('span', 'where', [entry.title !== entry.name ? entry.name : undefined, entry.repoName, entry.workspaceName].filter(Boolean).join(' · ')));
         if (entry.prompt ?? entry.note) main.append(element('span', 'note', entry.prompt?.message ?? entry.note));
         const side = element('div', 'side');
-        if (entry.unwatched) side.append(element('span', 'unwatched', `${entry.unwatched} to watch`));
         side.append(element('span', 'status', entry.statusLabel), element('span', 'duration', entry.duration));
         if (entry.prompt && WAITING.has(entry.status)) {
             const answer = element('button', 'action', 'Answer…');

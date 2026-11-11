@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { resolve } from 'node:path';
-import { ipcChannel, remoteAppHost, RemotePlaybookStore, RemoteSessionStore } from '@appling/ai';
+import { ipcChannel, remoteAppHost, RemoteSessionStore } from '@appling/ai';
 import { startIde, type Implementation } from './server.js';
 import { snapshot } from './workspace.js';
 
@@ -15,9 +15,9 @@ const origins = args.flatMap((a, i) => a === '--origin' && args[i + 1] ? [args[i
 // Started by an app with an IPC channel (Appling Desktop, the VS Code extension): it shows the number of model errors,
 // the unsaved files and the unseen model changes.
 const status = (errors: string[]) => process.send?.({ type: 'status', errors: errors.length });
-// With --shared-sessions, the app holds the agent sessions and the playbooks of the workspace and serves them over IPC.
+// With --shared-sessions, the app holds the agent sessions of the workspace and serves them over IPC.
 const shared = process.send && args.includes('--shared-sessions')
-    ? { sessions: new RemoteSessionStore(ipcChannel(process)), playbooks: new RemotePlaybookStore(ipcChannel(process)), host: remoteAppHost(ipcChannel(process)) } : {};
+    ? { sessions: new RemoteSessionStore(ipcChannel(process)), host: remoteAppHost(ipcChannel(process)) } : {};
 const unsaved = (files: string[]) => process.send?.({ type: 'status', unsaved: files });
 const unseen = (changes: number) => process.send?.({ type: 'status', changes });
 // the implementation marks and code links for the code view

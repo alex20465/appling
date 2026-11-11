@@ -11,7 +11,7 @@ Every tool in Appling is built on six public packages. Use them to build your ow
 | `@appling/lang/lsp` | The language server services |
 | `@appling/model` | Semantic graph, edit operations, releases |
 | `@appling/codegen` | Code generation core: plans, registry, migrations |
-| `@appling/ai` | Workspace access for AI, MCP server, agent sessions, playbook |
+| `@appling/ai` | Workspace access for AI, MCP server, agent sessions |
 | `@appling/viz` | Model views, the canvases of Appling Desktop's repo view and the types of the visual tools |
 
 ## Language: @appling/lang
@@ -48,6 +48,7 @@ const canonical = print(document.parseResult.value as Model);
 | `ExpressionTyper` | Types expressions: `checkModel(model)` fills `types`, `targets` (the element each name stands for) and `problems` (`Problem[]`); `typeOf(expr)` types one expression in its position, `namesAt(effect)` lists the names an effect sees |
 | `show(type)`, `typeOfRef(ref)` | The display name of a `Type`, such as `Money?`, and the `Type` a `TypeRef` declares |
 | `LAYER_OF`, `Layer` | The layer of every top level declaration type |
+| `mayReference(from, to)` | Whether a declaration of kind `from` may reference one of kind `to` under the layer rules; also at the langium free subpath `@appling/lang/layers` |
 | `scenarioTarget(scenario)`, `scenarioErrors(scenario)`, `scenarioActor(scenario, actors)` | What a scenario's `when` runs, the errors it may fail with and the actor it runs as |
 | AST types and guards | `Model`, `Module`, `Entity`, `isEntity` and the rest of the generated AST |
 
@@ -252,12 +253,7 @@ Tools and MCP:
 | `IdeHost`, `IdeContext`, `IdeAction`, `AppHost`, `serveAppHost`, `remoteAppHost` | What `ide_context` and `ide_act` go through, and the part the app around the IDE server adds, also over IPC |
 | `findConflicts(sessions, self, touched)`, `overlaps(a, b)`, `peers(sessions, self)`, `sessionTitle(session)` | The claim rules and a session's display name |
 | `repoFolder(repo)`, `absolute(repo, file)` | A session's repo folder and a claimed file as the store keeps them: a local folder resolved, a remote one as it is on its machine (`ssh://` ids unchanged, POSIX folders by POSIX rules, also on Windows) |
-| `PlaybookStore`, `MemoryPlaybookStore(folder?)`, `Playbook`, `Chapter`, `PlaybookStep`, `StepInput`, `PlaybookPosition`, `CHANGE_KINDS`, `RESPONSE_KINDS` | The [workspace playbooks](../tools/ai.md#the-playbook): open a chapter, add steps, mark them done, close, read, move the user, respond, onChange; with a folder, each playbook is kept there as a JSON file |
-| `servePlaybookStore(store, channel)`, `RemotePlaybookStore` | A playbook store served to another process and reached from there, like the session store |
-| `ElementRequest`, `REQUESTS`, `readRequests(root)`, `addRequest(root, request)`, `updateRequest(root, id, change)`, `removeRequest(root, id)`, `takeRequest(root)` | The elements [requested on the canvas](../tools/ide.md#the-right-click-menu) by name and description, in `<root>/.appling/requests.json` |
-| `openChapter(store, author, chapter)`, `ChapterAuthor`, `ChapterWriter` | Writes a chapter without MCP, such as for a code generation run: `add`, `done`, `close`, `read` |
-| `playbookTools(id, sessions, playbooks)`, `PLAYBOOK_INSTRUCTIONS`, `respondToStep(playbooks, sessions, chapter, step, response)` | The playbook tools of a session (`createMcpServer` adds them when `SessionScope.playbook` is set), their instructions, and the user's response, stored and delivered to the session's inbox |
-| `playbookKey(session)`, `isUnwatched(chapter)`, `unwatched(playbook)`, `playbookPosition(playbook)` | A session's playbook, the unwatched chapters in total, per session and per repo, and where the user is |
+| `ElementRequest`, `REQUESTS`, `readRequests(root)`, `addRequest(root, request)`, `updateRequest(root, id, change)`, `removeRequest(root, id, qn?)`, `takeRequest(root, session?)` | The elements [requested on the canvas](../tools/ide.md#the-right-click-menu) by kind, name and description, possibly built on another request, in `<root>/.appling/requests.json` |
 | `handleMcpRequest(server, request, response, hosts?)` | Answers one Streamable HTTP request with a fresh server, as `serveHttp` and the IDE server do |
 | `serveHttp(root, port)` | The MCP server over Streamable HTTP on `127.0.0.1`; returns `{ url, close() }` |
 | `REGISTRY_PROMPT`, `MCP_INSTRUCTIONS` | The registry skill text and the MCP server instructions that make the model the source of truth for business logic |
@@ -296,11 +292,12 @@ The root export (also `@appling/viz/protocol`) has the types the [visual tools](
 | Export | Purpose |
 |---|---|
 | `GraphIndex` | The graph with children, parents and lineage by qualified name, and `relevanceOf(qn)`, the relevance of the declaration an element belongs to |
-| `growTree(index, settings, unfolded, name?, trail?)` | The dependency tree of `settings.lens` as a `TreeNode`: the seed holds the modules, a module the declarations of the lens, a declaration the declarations that use it, grouped by kind when there is more than one; only the node ids in `unfolded` have children, the most relevant first; a node id in `trail` shows only its children in `unfolded` or `trail` |
+| `requestKinds(node)`, `REQUEST_KINDS` | The kinds a new element may take under a tree node: a module under the seed, any declaration in a module, else the kinds that may reference the node's kind |
+| `growTree(index, settings, unfolded, name?, trail?, requests?)` | The dependency tree of `settings.lens` as a `TreeNode`: the seed holds the modules, a module the declarations of the lens, a declaration the declarations that use it, grouped by kind when there is more than one; only the node ids in `unfolded` have children, the most relevant first; a node id in `trail` shows only its children in `unfolded` or `trail` |
 | `trailOf(index, settings, focus)`, `lensOf(kind)` | The `unfolded` and `trail` sets that draw the focused elements one after another, each unfolded in place, with the node id of each; the lens that starts from a kind |
 | `growOrder(now, next)` | The nodes a focus adds from one `trailOf` state to the next, each element after its path from the seed, in focus order |
 | `changeMarks(index, changes, modules?)`, `MarkedChanges`, `ChangeMark` | The declarations that added, changed and removed elements belong to, each `added` or `removed` when the declaration itself is new or gone, else `changed`; removed elements count only when the index has them (see `withRemoved`); with `modules`, the modules that hold a marked declaration are `changed` too |
-| `sessionMarks(index, marks)`, `SessionMark` | The declarations that the elements claimed or highlighted by agent sessions belong to, each with the first session's mark |
+| `sessionMarks(index, marks)`, `SessionMark` | The declarations that the elements claimed or highlighted by agent sessions belong to, each with the first session's mark; a mark on `?<id>` rings the request an agent session took |
 | `revealPath(index, settings, qn)` | The node ids to unfold so that an element's declaration shows in its module |
 | `factOf(index, node)` | The short fact a tree node shows under its name, such as `on Order · draft, placed → cancelled` |
 | `LENSES`, `Lens` | The lenses (`domain`, `behavior`, `application`, `interfaces`, `access`) with their label and the kinds the tree starts from |

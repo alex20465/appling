@@ -6,16 +6,14 @@ import type { DesktopHooks } from './hooks.js';
 /**
  * The hooks of a host that embeds the IDE in an iframe, opened with `?host=frame` (the VS Code extension's webview,
  * whose page relays between this frame and the extension): each hook the IDE calls is a message `{ type, ... }` to
- * the parent; the parent's `element`, `cursor`, `showChanges` and `panel` messages reach the IDE's listeners, and one
- * that arrives before its listener waits for it. `?workspace=` names the workspace the view belongs to. The parent draws
- * the side panels (`panels`), so the IDE has none of its own.
+ * the parent; the parent's `element`, `cursor` and `panel` messages reach the IDE's listeners, and one that arrives
+ * before its listener waits for it. The parent draws the side panels (`panels`), so the IDE has none of its own.
  */
 export type FrameRequest =
     | { type: 'openSource', uri: string, start: number, end: number }
     | { type: 'openCode', path: string, start: number, end: number }
     | { type: 'openTextDiff', path: string, before?: string, rev: string, line?: number }
     | { type: 'focusSession', session: string }
-    | { type: 'showChanges', repo: string, session?: string }
     | { type: 'panels', state: PanelState }
     | { type: 'showPanel', name: PanelName }
     | { type: 'error', message: string }
@@ -25,10 +23,9 @@ export type FrameRequest =
 export type FrameEvent =
     | { type: 'element', qn: string }
     | { type: 'cursor', uri: string, offset: number }
-    | { type: 'showChanges', session?: string }
     | { type: 'panel', action: PanelAction };
 
-export function frameHooks(post: (message: FrameRequest) => void, listen: (receive: (message: unknown) => void) => void, workspace?: string): DesktopHooks {
+export function frameHooks(post: (message: FrameRequest) => void, listen: (receive: (message: unknown) => void) => void): DesktopHooks {
     const listeners: { [T in FrameEvent['type']]?: (event: Extract<FrameEvent, { type: T }>) => void } = {};
     const waiting = new Map<FrameEvent['type'], FrameEvent>();
     const deliver = (event: FrameEvent) => {
@@ -51,8 +48,6 @@ export function frameHooks(post: (message: FrameRequest) => void, listen: (recei
         openCode: request => post({ type: 'openCode', ...request }),
         openTextDiff: request => post({ type: 'openTextDiff', ...request }),
         focusSession: session => post({ type: 'focusSession', session }),
-        showChanges: (repo, session) => post({ type: 'showChanges', repo, ...session ? { session } : {} }),
-        onShowChanges: callback => on('showChanges', event => callback(event.session)),
         onCodeElement: callback => on('element', event => callback(event.qn)),
         onCodeCursor: callback => on('cursor', event => callback(event.uri, event.offset)),
         panels: state => post({ type: 'panels', state }),
@@ -60,8 +55,7 @@ export function frameHooks(post: (message: FrameRequest) => void, listen: (recei
         showPanel: name => post({ type: 'showPanel', name }),
         showError: message => post({ type: 'error', message }),
         chooseStack: selection => post({ type: 'chooseStack', selection }),
-        edit: operation => post({ type: 'edit', operation }),
-        workspace: () => workspace
+        edit: operation => post({ type: 'edit', operation })
     };
 }
 
@@ -96,7 +90,6 @@ export function frameEvent(message: unknown): FrameEvent | undefined {
     if (!m || typeof m !== 'object') return undefined;
     if (m.type === 'element' && typeof m.qn === 'string') return { type: 'element', qn: m.qn };
     if (m.type === 'cursor' && typeof m.uri === 'string' && Number.isInteger(m.offset)) return { type: 'cursor', uri: m.uri, offset: m.offset as number };
-    if (m.type === 'showChanges') return { type: 'showChanges', ...typeof m.session === 'string' ? { session: m.session } : {} };
     // the parent is the extension, which builds the actions; only their shape is checked
     const action = m.action as { type?: unknown } | undefined;
     if (m.type === 'panel' && action && typeof action === 'object' && typeof action.type === 'string') return { type: 'panel', action: action as PanelAction };
@@ -113,7 +106,6 @@ if (params?.get('host') === 'frame' && window.parent !== window) {
             const theme = themeEvent(event.data);
             if (theme) applyTheme(theme);
             else receive(event.data);
-        }),
-        params.get('workspace') ?? undefined
+        })
     );
 }

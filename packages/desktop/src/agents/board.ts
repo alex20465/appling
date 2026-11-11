@@ -40,8 +40,6 @@ export interface BoardEntry {
     duration: string;
     note?: string;
     prompt?: AgentPrompt;
-    /** Playbook chapters of the session the user has not watched yet (#19). */
-    unwatched: number;
     /** The session whose tab is shown in the active repo. */
     active: boolean;
 }
@@ -52,8 +50,6 @@ const ORDER: AgentStatus[] = ['needs-input', 'blocked', 'failed', 'working', 'do
 export interface BoardContext {
     repoName(repo: string): string;
     workspaceName(workspace: string): string | undefined;
-    /** Unwatched playbook chapters by session id. */
-    unwatched?: Record<string, number>;
     /** The shown session of the active repo. */
     active?: string;
     now?: Date;
@@ -81,7 +77,6 @@ export function boardEntries(sessions: readonly SessionView[], context: BoardCon
             duration: formatDuration((session.ended ? Date.parse(session.ended) : now) - Date.parse(session.started)),
             ...session.note ? { note: session.note } : {},
             ...session.prompt ? { prompt: session.prompt } : {},
-            unwatched: context.unwatched?.[session.id] ?? 0,
             active: session.id === context.active
         }));
 }

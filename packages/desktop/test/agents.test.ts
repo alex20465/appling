@@ -23,18 +23,18 @@ describe('board', () => {
         id, name: 'Claude Code', status, color: '#2f9e44', repo: '/r/shop', workspace: '/w/team.code-workspace', started: '2026-11-08T11:00:00Z', ...extra
     });
 
-    test('lists every session, the waiting ones first, with title, status colour, repo, duration and unwatched chapters', () => {
+    test('lists every session, the waiting ones first, with title, status colour, repo and duration', () => {
         const entries = boardEntries([
             view('a', 'done', { label: 'Orders', started: '2026-11-08T09:30:00Z' }),
             view('b', 'needs-input', { repo: '/r/crm', prompt: { kind: 'permission', message: 'Allow?', at: '' } }),
             view('c', 'exited', { started: '2026-11-08T11:58:00Z', ended: '2026-11-08T11:59:30Z' }),
             view('d', 'working', { label: 'Invoices' })
-        ], { repoName: repo => repo.split('/').pop()!, workspaceName: () => 'team', unwatched: { d: 2 }, active: 'd', now });
-        expect(entries.map(e => [e.id, e.title, e.status, e.statusColor, e.repoName, e.workspaceName, e.duration, e.unwatched, e.active])).toEqual([
-            ['b', 'Claude Code', 'needs-input', '#e5a84f', 'crm', 'team', '1h 00m', 0, false],
-            ['d', 'Invoices', 'working', '#5cbf63', 'shop', 'team', '1h 00m', 2, true],
-            ['a', 'Orders', 'done', '#8a8174', 'shop', 'team', '2h 30m', 0, false],
-            ['c', 'Claude Code', 'exited', '#8a8174', 'shop', 'team', '1m', 0, false]
+        ], { repoName: repo => repo.split('/').pop()!, workspaceName: () => 'team', active: 'd', now });
+        expect(entries.map(e => [e.id, e.title, e.status, e.statusColor, e.repoName, e.workspaceName, e.duration, e.active])).toEqual([
+            ['b', 'Claude Code', 'needs-input', '#e5a84f', 'crm', 'team', '1h 00m', false],
+            ['d', 'Invoices', 'working', '#5cbf63', 'shop', 'team', '1h 00m', true],
+            ['a', 'Orders', 'done', '#8a8174', 'shop', 'team', '2h 30m', false],
+            ['c', 'Claude Code', 'exited', '#8a8174', 'shop', 'team', '1m', false]
         ]);
         expect(railSessions([view('a', 'working'), view('b', 'failed'), view('x', 'working', { repo: '/r/crm' })], '/r/shop', 'a'))
             .toEqual([{ id: 'b', title: 'Claude Code', status: 'failed', statusColor: '#e5684f', color: '#2f9e44', active: false }, { id: 'a', title: 'Claude Code', status: 'working', statusColor: '#5cbf63', color: '#2f9e44', active: true }]);

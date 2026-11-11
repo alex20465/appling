@@ -4,16 +4,13 @@ import { frameEvent, frameHooks, themeEvent, type FrameRequest } from '../src/cl
 test('hooks become messages to the parent, and its events reach listeners registered before or after', () => {
     const sent: FrameRequest[] = [];
     let receive: (message: unknown) => void = () => undefined;
-    const hooks = frameHooks(message => sent.push(message), r => receive = r, '/work/shop.code-workspace');
+    const hooks = frameHooks(message => sent.push(message), r => receive = r);
     hooks.openSource!({ uri: 'file:///repo/sales.appling', start: 3, end: 9 });
     hooks.openCode!({ path: 'app/models.py', start: 4, end: 8 });
-    hooks.showChanges!('/repo/crm');
     expect(sent).toEqual([
         { type: 'openSource', uri: 'file:///repo/sales.appling', start: 3, end: 9 },
-        { type: 'openCode', path: 'app/models.py', start: 4, end: 8 },
-        { type: 'showChanges', repo: '/repo/crm' }
+        { type: 'openCode', path: 'app/models.py', start: 4, end: 8 }
     ]);
-    expect(hooks.workspace!()).toBe('/work/shop.code-workspace');
     // an element the extension sends before the IDE listens waits for the listener
     receive({ type: 'element', qn: 'sales.Order' });
     const elements: string[] = [];
@@ -25,7 +22,6 @@ test('hooks become messages to the parent, and its events reach listeners regist
 
 test('only well formed events pass', () => {
     expect(frameEvent({ type: 'cursor', uri: 'file:///a.appling', offset: 4 })).toEqual({ type: 'cursor', uri: 'file:///a.appling', offset: 4 });
-    expect(frameEvent({ type: 'showChanges', session: 7 })).toEqual({ type: 'showChanges' });
     expect(frameEvent({ type: 'openSource' })).toBeUndefined();
     expect(frameEvent('element')).toBeUndefined();
 });

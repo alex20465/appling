@@ -49,7 +49,7 @@ A run goes through every target, in a worker so the IDE stays responsive while t
 - An existing project is brought up to the model like [`appling generate --sync`](../codegen/sync.md): its pending migration steps first, then a fresh generation merged three ways, but only the files of the selected elements. Files are shared (one `models.py` holds every entity of an app), so every element whose files were all merged counts as generated too.
 - What the generator cannot complete stays in the registry as tasks.
 
-The tab shows the running generation: the planned steps, what was generated, the elements left with open tasks and the log. Each run also becomes a chapter of the [playbook](ide.md#the-playbook), written by **Code generation**: one step per target with the elements it plans, done with the files, references and merge result once generated, a step for the registry tasks it left, and the result.
+The tab shows the running generation: the planned steps, what was generated, the elements left with open tasks and the log.
 
 ## Generation records
 

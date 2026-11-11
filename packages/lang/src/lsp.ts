@@ -10,7 +10,8 @@ import { isModule } from './generated/ast.js';
 import { ApplingModule } from './appling-module.js';
 import { print } from './appling-printer.js';
 import { modulePath } from './appling-scope.js';
-import { LAYER_OF, registerValidationChecks } from './appling-validator.js';
+import { registerValidationChecks } from './appling-validator.js';
+import { LAYER_OF } from './layers.js';
 
 /** Formats the whole document into canonical form, the same as `appling fmt`. */
 export class ApplingFormatter implements Formatter {

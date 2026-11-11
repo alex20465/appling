@@ -4,6 +4,6 @@ export * from './appling-printer.js';
 export * from './appling-workspace.js';
 export { ApplingScopeProvider, effectEntity, modulePath, projectionSourceEntity } from './appling-scope.js';
 export { ExpressionTyper, show, typeOfRef, type Problem, type Type } from './appling-types.js';
-export { LAYER_OF, type Layer } from './appling-validator.js';
+export { LAYER_OF, mayReference, type Layer } from './layers.js';
 export { scenarioActor, scenarioErrors, scenarioTarget } from './appling-scenario.js';
 export * from './generated/ast.js';

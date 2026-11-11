@@ -17,7 +17,7 @@ beforeAll(async () => {
     cpSync(join(import.meta.dirname, '../../../examples'), root, { recursive: true });
     ide = await startIdeProcess(root, { main: join(import.meta.dirname, '../../ide/out/server/main.js') });
     const snapshot = await (await fetch(`${ide.url}/api/snapshot`)).json();
-    base = { snapshot, proposals: [], sessions: [], playing: false, review: { on: false, rev: 'HEAD', marked: true, revisions: [] } };
+    base = { snapshot, proposals: [], sessions: [], review: { on: false, rev: 'HEAD', marked: true, revisions: [] } };
     index = new GraphIndex(snapshot.graph);
 }, 60000);
 afterAll(() => ide?.close());
@@ -64,18 +64,6 @@ test('changes list proposals and every changed file with its elements, accept an
     expect(tree[1]).toMatchObject({ run: { type: 'liveDiff', path: 'sales.appling' }, actions: { revert: { action: { type: 'revert', path: 'sales.appling' } } } });
     expect(tree[1].description).toContain('orders');
     expect(tree[1].children![0].label).toBe('sales.Order');
-    // a chapter's diff shows only its session's files
-    expect(labels(PANEL_TREES.changes({ ...state, proposals: [], changesOf: 's2' }, index))).toEqual(['Written by ended session']);
-});
-
-test('the playbook lists chapters with their steps; a click plays, replay starts over', () => {
-    const chapter = { id: 'c1', session: 's1', label: 'orders', color: '#fff', repo: '', title: 'Orders', plan: 'The plan', status: 'open', refs: [], opened: '', seen: 1,
-        steps: [{ n: 1, elements: ['sales.Order'], change: 'show', note: 'The order', state: 'done', responses: [] }, { n: 2, elements: [], change: 'add', note: 'Next', state: 'planned', responses: [] }] };
-    const tree = PANEL_TREES.playbook({ ...base, playbook: { workspace: 'w', chapters: [chapter], position: { chapter: 'c1', step: 1 } } as never }, index);
-    expect(tree[0]).toMatchObject({ label: 'Orders', description: '1/2 · orders', icon: 'circle-filled', run: { action: { type: 'play', position: { chapter: 'c1', step: 1 } } } });
-    expect(tree[0].actions?.replay).toEqual({ type: 'action', action: { type: 'play', position: { chapter: 'c1', step: 0 } } });
-    expect(tree[0].actions?.session).toBeUndefined();
-    expect(tree[0].children![1].run).toEqual({ type: 'action', action: { type: 'play', position: { chapter: 'c1', step: 2 } } });
 });
 
 test('the review lists the model changes and files since the revision', () => {

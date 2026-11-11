@@ -6,7 +6,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { expect, test } from 'vitest';
 import { writeRegistry } from '@appling/codegen';
 import type { Bubble, Decision, Review, Show, Status } from '@appling/viz';
-import { addRequest, createMcpServer, MAX_ATTEMPTS, Project, proposal, ProposalContext, type VisualHost } from '../src/index.js';
+import { addRequest, createMcpServer, MAX_ATTEMPTS, Project, proposal, ProposalContext, readRequests, takeRequest, type VisualHost } from '../src/index.js';
 
 function workspace(): string {
     const root = mkdtempSync(join(tmpdir(), 'appling-ai-'));
@@ -61,6 +61,22 @@ test('the MCP server exposes model and registry tools and the registry prompt', 
     expect(await text('request_done', { id: asked.id, qn: 'sales.Invoice' })).toEqual({ error: 'The model has no sales.Invoice yet.' });
     expect(await text('request_done', { id: asked.id, qn: 'sales.Order' })).toEqual({ ok: true, open: 0 });
     expect(await text('request_done', { id: asked.id })).toEqual({ error: `No request ${asked.id}.` });
+    // a request built on another waits for it, then goes under its element; dropping one drops what is built on it
+    const entity = addRequest(root, { name: 'Invoice', description: '', kind: 'Entity', parent: 'sales.Order' });
+    const action = addRequest(root, { name: 'Bill', description: '', kind: 'Action', parentRequest: entity.id });
+    expect(await text('request_next', {})).toMatchObject({ id: entity.id, kind: 'Entity' });
+    expect(await text('request_done', { id: entity.id, qn: 'sales.Order' })).toEqual({ ok: true, open: 1 });
+    expect(readRequests(root)).toMatchObject([{ id: action.id, parent: 'sales.Order' }]);
+    expect(readRequests(root)[0].parentRequest).toBeUndefined();
+    addRequest(root, { name: 'Remind', description: '', kind: 'Job', parentRequest: action.id });
+    expect(await text('request_done', { id: action.id })).toEqual({ ok: true, open: 0, dropped: ['Remind'] });
+    // the session that took a request keeps it before one another session took
+    const first = addRequest(root, { name: 'A', description: '' });
+    const second = addRequest(root, { name: 'B', description: '' });
+    expect(takeRequest(root, 's1')).toMatchObject({ id: first.id, takenBy: 's1' });
+    expect(takeRequest(root, 's2')).toMatchObject({ id: second.id, takenBy: 's2' });
+    expect(takeRequest(root, 's2')).toMatchObject({ id: second.id });
+    expect(readRequests(root).map(r => r.takenBy)).toEqual(['s1', 's2']);
     const prompt = await client.getPrompt({ name: 'implement_next_task' });
     expect((prompt.messages[0].content as { text: string }).text).toContain('registry_next');
 });

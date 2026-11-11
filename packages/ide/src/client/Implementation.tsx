@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { AgentSession } from '@appling/ai';
 import type { GenerationEvent, GenerationSelection } from '@appling/codegen';
 import { IMPLEMENTATION_STATES } from '@appling/model/implementation';
-import { IMPLEMENTATION_LABELS } from '@appling/viz/views';
+import { IMPLEMENTATION_LABELS, kindLabel } from '@appling/viz/views';
 import type { GenerationRun, Snapshot } from '../shared/snapshot.js';
 import { claimOf } from '../shared/panels.js';
 
@@ -83,8 +83,8 @@ export function Implementation({ snapshot, run, sessions, selected, onSelect, on
                     <ul className="tasks">{snapshot.requests.map(request => (
                         <li key={request.id}>
                             <div>
-                                <strong>{request.name}</strong> <span className="task-status status-todo">{request.taken ? 'taken' : 'waiting'}</span>
-                                <span className="muted"> · {request.parent ? <>under {link(request.parent)}</> : 'in the model'}</span>
+                                <strong>{request.name}</strong>{request.kind && <span className="muted"> {kindLabel(request.kind)}</span>} <span className="task-status status-todo">{request.taken ? 'taken' : 'waiting'}</span>
+                                <span className="muted"> · {request.parentRequest ? `on the requested ${snapshot.requests.find(r => r.id === request.parentRequest)?.name}` : request.parent ? <>under {link(request.parent)}</> : 'in the model'}</span>
                             </div>
                             {request.description && <p className="muted">{request.description}</p>}
                         </li>

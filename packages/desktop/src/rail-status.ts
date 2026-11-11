@@ -20,14 +20,12 @@ export interface RailCounts {
     unsaved: number;
     /** Unseen model changes: files changed since the user last accepted them in the repo's view (#11). */
     unseen: number;
-    /** Playbook chapters (#19) the user has not watched to their last step, of the sessions working in the repo. */
-    unwatched: number;
 }
 
 export type RailCount = keyof RailCounts;
 
 /** Every count, most urgent first: the badge shows the first one above zero. */
-export const RAIL_COUNTS: readonly RailCount[] = ['agentsWaiting', 'agentsFailed', 'tasksFailed', 'errors', 'agentsWorking', 'tasksRunning', 'unsaved', 'unwatched', 'unseen'];
+export const RAIL_COUNTS: readonly RailCount[] = ['agentsWaiting', 'agentsFailed', 'tasksFailed', 'errors', 'agentsWorking', 'tasksRunning', 'unsaved', 'unseen'];
 
 /** The counts a badge can show; unseen changes get a dot of their own on a background repo instead. */
 const BADGE_COUNTS = RAIL_COUNTS.filter(key => key !== 'unseen');
@@ -64,7 +62,7 @@ export interface RepoRailStatus {
 }
 
 export function emptyCounts(): RailCounts {
-    return { agentsWorking: 0, agentsWaiting: 0, agentsFailed: 0, tasksRunning: 0, tasksFailed: 0, errors: 0, unsaved: 0, unseen: 0, unwatched: 0 };
+    return { agentsWorking: 0, agentsWaiting: 0, agentsFailed: 0, tasksRunning: 0, tasksFailed: 0, errors: 0, unsaved: 0, unseen: 0 };
 }
 
 /**
@@ -177,8 +175,7 @@ const LABELS: Record<RailCount, [string, string]> = {
     agentsWorking: ['agent working', 'agents working'],
     tasksRunning: ['task running', 'tasks running'],
     unsaved: ['unsaved file', 'unsaved files'],
-    unseen: ['changed file not yet seen', 'changed files not yet seen'],
-    unwatched: ['playbook chapter not yet watched', 'playbook chapters not yet watched']
+    unseen: ['changed file not yet seen', 'changed files not yet seen']
 };
 
 /**
@@ -213,24 +210,6 @@ export function agentContributions(sessions: readonly { repo: string, status: st
         const counts = result.get(id)?.counts ?? {};
         counts[key] = (counts[key] ?? 0) + 1;
         result.set(id, { counts });
-    }
-    return result;
-}
-
-/**
- * The playbook source: per repo, the chapters of the given playbooks that the user has not watched to their last step
- * (a chapter counts for the repo its elements belong to).
- */
-export function playbookContributions(playbooks: Iterable<{ chapters: readonly { repo: string, steps: readonly unknown[], seen?: number }[] }>): Map<string, RailContribution> {
-    const result = new Map<string, RailContribution>();
-    for (const book of playbooks) {
-        for (const chapter of book.chapters) {
-            if (chapter.seen !== undefined && chapter.seen >= chapter.steps.length) continue;
-            const id = repoId(chapter.repo);
-            const counts = result.get(id)?.counts ?? {};
-            counts.unwatched = (counts.unwatched ?? 0) + 1;
-            result.set(id, { counts });
-        }
     }
     return result;
 }

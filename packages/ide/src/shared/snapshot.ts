@@ -1,4 +1,4 @@
-import type { AgentSession, ElementRequest, IdeAction, Playbook } from '@appling/ai';
+import type { AgentSession, ElementRequest, IdeAction } from '@appling/ai';
 import type { AgentView, LiveChanges, Proposal } from './live.js';
 import type { Dependency, ElementImplementation, Graph, ResolvedReference } from '@appling/model';
 import type { GenerationEvent, GenerationSelection, TargetState, TargetTask } from '@appling/codegen';
@@ -72,8 +72,6 @@ export interface IdeEvents {
     agentView?(view: AgentView, ended: boolean): void;
     /** The proposals waiting for a decision, after each change. */
     proposals?(proposals: Proposal[]): void;
-    /** The playbook of the workspace the view shows (#19), after each change. */
-    playbook?(playbook: Playbook): void;
     /** A generation run started or ended; also the current one on connect. */
     generation?(run: GenerationRun): void;
     /** One event of the running generation. */
@@ -87,6 +85,4 @@ export interface ClientReport {
     file?: string;
     /** The agent session whose view the canvas shows. */
     watching?: string;
-    /** The workspace the view belongs to (Appling Desktop names it): its playbook goes to this view. */
-    workspace?: string;
 }

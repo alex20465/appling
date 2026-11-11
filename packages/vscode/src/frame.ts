@@ -18,7 +18,6 @@ export type PanelAction =
     | OpenMessage
     | DiffMessage
     | { type: 'focusSession', session: string }
-    | { type: 'showChanges', repo: string, session?: string }
     /** What the side panels show; the extension draws them (`panels.ts`). */
     | { type: 'panels', state: PanelState }
     | { type: 'showPanel', name: PanelName }
@@ -44,8 +43,6 @@ export function panelAction(root: string, message: unknown): PanelAction | undef
             return diffMessage(root, m as { path: string, rev: string });
         case 'focusSession':
             return typeof m.session === 'string' ? { type: 'focusSession', session: m.session } : undefined;
-        case 'showChanges':
-            return typeof m.repo === 'string' ? { type: 'showChanges', repo: m.repo, ...typeof m.session === 'string' ? { session: m.session } : {} } : undefined;
         case 'panels':
             return m.state && typeof m.state === 'object' && typeof (m.state as PanelState).snapshot === 'object' ? { type: 'panels', state: m.state as PanelState } : undefined;
         case 'showPanel':
@@ -72,11 +69,10 @@ function isOperation(value: unknown): value is EditOperation {
     return !!fields && fields.every(f => typeof o![f] === 'string');
 }
 
-/** The URL of the IDE client in the tab: the server's (as VS Code reaches it) with the workspace it plays. */
-export function clientUrl(server: string, workspace?: string): string {
+/** The URL of the IDE client in the tab: the server's, as VS Code reaches it. */
+export function clientUrl(server: string): string {
     const url = new URL('/', server);
     url.searchParams.set('host', 'frame');
-    if (workspace) url.searchParams.set('workspace', workspace);
     return url.toString();
 }
 

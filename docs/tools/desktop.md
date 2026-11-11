@@ -59,7 +59,7 @@ Moving never reloads anything: the canvas, its selection, the code view and agen
 
 Appling saves which window holds what and where every window is, once per monitor setup, and restores it at the next start. A window whose monitor is gone opens on the primary display. The code views that were open come back too, each once its repo is shown.
 
-A folder can sit in several workspaces and still has one canvas. It plays the playbook of the workspace whose window shows it, and switches to the other workspace's playbook when it moves to that one's window.
+A folder can sit in several workspaces and still has one canvas.
 
 ## Terminals
 
@@ -110,7 +110,7 @@ An agent session is a coding agent running in a tab of the terminal panel, wired
 - **Status.** The tab shows the agent's name until the agent labels its session through MCP; double click the tab (or the name on the board) to rename it. Its colour follows the status: green while it works, amber while it needs input or is blocked, gray when it is done or exited, red when it failed. Label, status and claims come from the agent through MCP; that it waits for you or finished its turn comes from its hooks or terminal notifications, never from reading its output.
 - **Exit.** When the agent exits, its tab turns gray and keeps its scrollback until you close it. Closing the tab ends the MCP session and releases its claims.
 - **The rail** shows a dot per session under its repo, in its status colour, with a ring around the session whose tab is shown. The repo's badge sums its sessions.
-- **The session board**, **Agents › Agent Sessions…** (`Ctrl+Shift+A`), lists every session of every workspace and repo with its label, status, repo, how long it runs and its unwatched playbook chapters. Arrows and Enter, or a click, jump to its tab.
+- **The session board**, **Agents › Agent Sessions…** (`Ctrl+Shift+A`), lists every session of every workspace and repo with its label, status, repo and how long it runs. Arrows and Enter, or a click, jump to its tab.
 - **Answer without the terminal.** When a session in a background repo or workspace needs input, a desktop notification says so. Click it, or the session's amber dot on the rail, for the answer form: **Allow**, **Deny**, an option number or a typed reply, written to the agent's terminal. On macOS the notification itself has Allow and Deny buttons and a reply field.
 - **The canvas.** Elements a session claimed have a ring in the session's colour; click the ring to go to the session.
 - **Restarts.** Sessions are terminals, so they keep running when the app closes and come back in their tabs, with their MCP session and token. The agents reach Desktop through one local endpoint whose port stays the same between starts.

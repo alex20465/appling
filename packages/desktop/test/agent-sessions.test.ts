@@ -7,8 +7,6 @@ import { afterEach, expect, test } from 'vitest';
 import { agentSessions, desktopHost, openAgentSession } from '../src/agent-sessions.js';
 import { startIdeProcess, type IdeProcess } from '../src/ide-process.js';
 import { Workspaces } from '../src/workspaces.js';
-import { MemoryPlaybookStore } from '@appling/ai';
-import { desktopPlaybooks } from '../src/playbooks.js';
 
 const processes: IdeProcess[] = [];
 afterEach(() => processes.splice(0).forEach(p => p.close()));
@@ -58,38 +56,4 @@ test('the repo servers of a workspace share the agent sessions of the main proce
 
     await store.end(a.session.id);
     expect((await callB('sessions_list')).others).toEqual([]);
-}, 60000);
-
-test('the sessions of all repos of a workspace write one playbook in the main process, kept in the data folder', async () => {
-    const [shop, crm] = [repo(), repo()];
-    const workspaces = new Workspaces();
-    const file = join(tmpdir(), 'playbook-team.code-workspace');
-    workspaces.open(file, [{ path: shop, name: 'shop' }, { path: crm, name: 'crm' }]);
-    workspaces.select(shop, file);
-    const store = agentSessions();
-    const folder = mkdtempSync(join(tmpdir(), 'appling-desktop-playbooks-'));
-    const playbooks = desktopPlaybooks(folder);
-    const host = desktopHost(workspaces);
-    const started = await Promise.all([shop, crm].map(root => startIdeProcess(root, { sessions: store, playbooks, host })));
-    processes.push(...started);
-
-    const a = await openAgentSession(store, { name: 'Claude Code', repo: shop, workspace: file, mcp: started[0].mcp });
-    const b = await openAgentSession(store, { name: 'Codex', repo: crm, workspace: file, mcp: started[1].mcp });
-    const callA = await agent(a.mcp, a.headers);
-    const callB = await agent(b.mcp, b.headers);
-    const first = await callA('playbook_open_chapter', { title: 'Orders', plan: 'Shop side', steps: [{ elements: ['sales.Order'], change: 'change', note: 'Discount' }] });
-    const second = await callB('playbook_open_chapter', { title: 'Accounts', plan: 'CRM side', refs: [first.chapter.id] });
-    expect(second.queued.map((c: { title: string }) => c.title)).toEqual(['Orders', 'Accounts']);
-
-    // the crm view plays the workspace's playbook, with the shop's chapter in it
-    const read = await (await fetch(`${started[1].url}/api/playbook`)).json();
-    expect(read).toMatchObject({ workspace: file, chapters: [{ title: 'Orders', repo: shop }, { title: 'Accounts', repo: crm, refs: [first.chapter.id] }] });
-    const respond = { method: 'POST', body: JSON.stringify({ chapter: first.chapter.id, step: 1, kind: 'approve' }) };
-    expect(await (await fetch(`${started[1].url}/api/playbook/respond`, respond)).json()).toEqual({ ok: true, delivered: true });
-    expect((await callA('session_inbox')).messages).toMatchObject([{ fromLabel: 'User', text: expect.stringMatching(/approved step 1/) }]);
-
-    // the playbook outlives the sessions and the app
-    await store.end(a.session.id);
-    await store.end(b.session.id);
-    expect((await new MemoryPlaybookStore(folder).read(file)).chapters.map(c => c.title)).toEqual(['Orders', 'Accounts']);
 }, 60000);

@@ -15,11 +15,11 @@ export function grain(text: string, salt = 0): number {
     return ((hash >>> 0) % 1000) / 1000;
 }
 
-/** The stem from the top of the parent's circle up to the bottom of the child's, arriving upright and leaning a little to its own side on the way. */
+/** The stem from the top of the parent's circle to the bottom of the child's: it sets out towards the child, leaning a little to its own side, and bends upright before it arrives. */
 export function stem({ node, x, y, parent }: Placed, radius: (node: TreeNode) => number): Curve {
     const [from, to] = [parent!.y - radius(parent!.node), y + radius(node)];
     const lean = (grain(node.id) - 0.5) * 36;
-    return [parent!.x, from, parent!.x + lean, from + (to - from) * 0.55, x, from + (to - from) * 0.4, x, to];
+    return [parent!.x, from, parent!.x + (x - parent!.x) * 0.35 + lean, from + (to - from) * 0.45, x, from + (to - from) * 0.5, x, to];
 }
 
 export function pathOf([x0, y0, x1, y1, x2, y2, x3, y3]: Curve): string {

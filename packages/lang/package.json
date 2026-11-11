@@ -18,6 +18,10 @@
       "types": "./out/lsp.d.ts",
       "default": "./out/lsp.js"
     },
+    "./layers": {
+      "types": "./out/layers.d.ts",
+      "default": "./out/layers.js"
+    },
     "./monarch": {
       "types": "./out/syntaxes/monarch.d.ts",
       "default": "./out/syntaxes/monarch.js"

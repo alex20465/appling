@@ -1,4 +1,4 @@
-import type { AgentSession, Playbook, PlaybookPosition } from '@appling/ai';
+import type { AgentSession } from '@appling/ai';
 import type { GenerationSelection } from '@appling/codegen';
 import type { GraphDiff } from '@appling/model/diff';
 import type { Decision, LiveChanges, Proposal } from './live.js';
@@ -10,7 +10,7 @@ import type { GenerationRun, Snapshot } from './snapshot.js';
  * client's side column: the client sends what they show (`PanelState`) after every change and does what they ask
  * (`PanelAction`). Hosts without the `panels` hook keep the side column.
  */
-export const PANELS = ['search', 'inspector', 'changes', 'playbook', 'review', 'code'] as const;
+export const PANELS = ['search', 'inspector', 'changes', 'review', 'code'] as const;
 export type PanelName = typeof PANELS[number];
 
 export interface PanelState {
@@ -21,14 +21,9 @@ export interface PanelState {
     live?: LiveChanges;
     proposals: Proposal[];
     sessions: AgentSession[];
-    playbook?: Playbook;
-    /** Whether the canvas plays the playbook. */
-    playing: boolean;
     run?: GenerationRun;
     /** The review: whether it marks the canvas (`on` and `marked`), the revision compared with and its result. */
     review: { on: boolean, rev: string, marked: boolean, revisions: Revision[], result?: PanelReview };
-    /** The session whose changes the Changes panel shows alone. */
-    changesOf?: string;
 }
 
 /** The session that claimed an element or one of its parents, as `overlaps` of `@appling/ai` decides. */
@@ -46,8 +41,4 @@ export type PanelAction =
     | { type: 'accept', paths?: string[] }
     | { type: 'revert', path: string }
     | { type: 'decide', id: string, decision: Decision }
-    | { type: 'play', position: PlaybookPosition }
-    | { type: 'session', chapter: string }
-    | { type: 'diff', chapter: string }
-    | { type: 'review', on?: boolean, rev?: string, marked?: boolean }
-    | { type: 'changesOf', session?: string };
+    | { type: 'review', on?: boolean, rev?: string, marked?: boolean };

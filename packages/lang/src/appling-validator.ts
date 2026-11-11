@@ -1,6 +1,6 @@
 import { AstUtils, WorkspaceCache, type AstNode, type ValidationAcceptor, type ValidationChecks } from 'langium';
 import {
-    isAction, isActor, isBinaryExpr, isBoolExpr, isEntity, isField, isExternal, isRole, isScenario, isExternalOperation, isMemberExpr, isNameExpr, isEnum, isMachine, isMigration, isModule, isValueType,
+    isAction, isActor, isBinaryExpr, isBoolExpr, isEntity, isField, isExternal, isRole, isExternalOperation, isMemberExpr, isNameExpr, isEnum, isMachine, isMigration, isModule, isValueType,
     type ApplingAstType, type Endpoint, type External, type ExternalKey, type Interface, type Machine, type Migration, type MigrationStep, type Model,
     type Expr, type Policy, type Projection, type Query, type RenameStep, type Scenario, type SetEffect, type CreateEffect, type DeleteEffect, type ForEffect, type UpdateEffect
 } from './generated/ast.js';
@@ -9,19 +9,7 @@ import { effectEntity, namedPaths, projectionSourceEntity } from './appling-scop
 import { ExpressionTyper } from './appling-types.js';
 import { doesTargets } from './appling-does.js';
 import type { ApplingServices } from './appling-module.js';
-
-export type Layer = 'cross' | 'domain' | 'behavior' | 'application' | 'interface' | 'experience';
-
-export const LAYER_OF: Record<string, Layer> = {
-    Module: 'cross', Role: 'cross', Actor: 'cross', Tenant: 'cross', Migration: 'cross',
-    Enum: 'domain', ValueType: 'domain', Entity: 'domain',
-    Event: 'behavior', Action: 'behavior', Machine: 'behavior', Job: 'behavior',
-    Query: 'application', Projection: 'application', External: 'application', UseCase: 'application',
-    Interface: 'interface',
-    Page: 'experience', Navigation: 'experience', Flow: 'experience', Messages: 'experience',
-    // Outside the five layers: a scenario may reference anything it can see.
-    Scenario: 'cross'
-};
+import { LAYER_OF, mayReference } from './layers.js';
 
 export function registerValidationChecks(services: ApplingServices): void {
     const validator = new ApplingValidator(services);
@@ -316,19 +304,7 @@ function memberOf(node: AstNode): AstNode | undefined {
 }
 
 function isAllowed(from: AstNode, to: AstNode): boolean {
-    if (isScenario(from)) return true;
-    const source = LAYER_OF[from.$type];
-    const target = LAYER_OF[to.$type];
-    if (source === target || target === 'cross') return true;
-    switch (source) {
-        case 'cross': return target === 'domain';
-        case 'domain': return false;
-        case 'behavior': return target === 'domain';
-        case 'application': return target === 'domain' || target === 'behavior';
-        case 'interface':
-        case 'experience':
-            return target === 'application' || isAction(to) || isEnum(to) || isValueType(to);
-    }
+    return mayReference(from.$type, to.$type);
 }
 
 /** A field, loop variable or `as` name, followed by fields: `item.product`, not `this`, an input or a call. */

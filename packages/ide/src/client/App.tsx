@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AgentSession, Chapter, Playbook, PlaybookPosition } from '@appling/ai';
+import type { AgentSession } from '@appling/ai';
 import { DEFAULT_VIEW, type ClientReport, type GenerationRun, type SessionAct, type Snapshot, type ViewSettings } from '../shared/snapshot.js';
 import type { GenerationSelection } from '@appling/codegen';
 import { STACK_LABELS, type Stack } from '@appling/codegen/stacks';
@@ -11,13 +11,11 @@ import { elementTextDiff, type Review as ReviewData, type Revision } from '../sh
 import type { PanelAction, PanelName } from '../shared/panels.js';
 import { openTextDiff } from './hooks.js';
 import type { AgentView, LiveChanges, Proposal } from '../shared/live.js';
-import { acceptChanges, addRequest, addTarget, connectLanguageServer, SOURCE_OPEN, decideProposal, loadCode, loadPlaybook, loadRelease, loadReview, loadRevisions, loadSnapshot, loadView, movePlaybook, onEvents, removeRequest, requestEdit, revertChange, saveFile, saveView, startGeneration, updateRequest } from './api.js';
+import { acceptChanges, addRequest, addTarget, connectLanguageServer, SOURCE_OPEN, decideProposal, loadCode, loadRelease, loadReview, loadRevisions, loadSnapshot, loadView, onEvents, removeRequest, requestEdit, revertChange, saveFile, saveView, startGeneration, updateRequest } from './api.js';
 import { Implementation } from './Implementation.js';
 import type { OpenCode } from './CodeView.js';
 import { AgentCanvas, AgentStrip } from './AgentView.js';
 import { Live } from './Live.js';
-import { PlaybookPanel, PlaybookPlayer } from './Playbook.js';
-import { unwatchedCounts } from '../shared/player.js';
 import { Editor, type Reveal } from './Editor.js';
 import { ModelCanvas, type NodeMenu } from '@appling/viz/canvas';
 import { elementAt, GraphIndex, type SessionMark } from '@appling/viz/views';
@@ -79,14 +77,6 @@ export function App() {
     const [agentViews, setAgentViews] = useState<Record<string, AgentView>>({});
     const [watching, setWatching] = useState<string>();
     const [proposals, setProposals] = useState<Proposal[]>([]);
-    /** The workspace's playbook (#19); the canvas plays it only while `playing`, and moves only on the user's steps. */
-    const [playbook, setPlaybook] = useState<Playbook>();
-    const [playing, setPlaying] = useState(false);
-    /** The workspace this view belongs to, as Appling Desktop names it; elsewhere the server decides. */
-    const [workspace, setWorkspace] = useState(() => desktop?.workspace?.());
-    const viewWorkspace = useRef(workspace);
-    /** The session whose changes the Changes tab shows alone, after a chapter jumped to its diff. */
-    const [changesOf, setChangesOf] = useState<string>();
 
     useEffect(() => {
         loadSnapshot().then(first => {
@@ -96,13 +86,7 @@ export function App() {
         });
         loadRelease().then(setRelease);
         loadView().then(setView);
-        loadPlaybook(viewWorkspace.current).then(setPlaybook);
-        // A repo view shared by several workspaces plays the playbook of the one it belongs to; reload it when shown again.
-        const shown = () => { if (document.visibilityState === 'visible') loadPlaybook(viewWorkspace.current).then(setPlaybook); };
-        document.addEventListener('visibilitychange', shown);
-        addEventListener('focus', shown);
         const events = onEvents({
-            playbook: setPlaybook,
             snapshot: setSnapshot, sessions: setSessions, act: a => act.current(a), live: setLive, proposals: setProposals,
             generation: setRun,
             generationEvent: (id, event) => setRun(current => current?.id === id ? { ...current, events: [...current.events, event] } : current),
@@ -110,25 +94,16 @@ export function App() {
                 const { [next.session]: _, ...rest } = current;
                 return ended ? rest : { ...rest, [next.session]: next };
             })
-        }, viewWorkspace.current);
-        // Appling Desktop moved the view to a window of another workspace: the server sends that one's playbook.
-        desktop?.onWorkspace?.(next => {
-            viewWorkspace.current = next;
-            setWorkspace(next);
         });
         report.current = events.report;
         reportUnsaved.current = events.unsaved;
-        return () => {
-            events.close();
-            document.removeEventListener('visibilitychange', shown);
-            removeEventListener('focus', shown);
-        };
+        return () => events.close();
     }, []);
 
     // What the IDE shows, for the agent sessions' ide_context.
     useEffect(() => {
-        report.current({ selection: selected, view: { ...view }, file: snapshot?.files.find(f => f.uri === active)?.path, watching, workspace });
-    }, [selected, view, active, snapshot, watching, workspace]);
+        report.current({ selection: selected, view: { ...view }, file: snapshot?.files.find(f => f.uri === active)?.path, watching });
+    }, [selected, view, active, snapshot, watching]);
 
     // The view of a session that ended closes.
     useEffect(() => { if (watching && !agentViews[watching]?.show) setWatching(undefined); }, [agentViews, watching]);
@@ -156,7 +131,7 @@ export function App() {
     const generate = useCallback((selection: GenerationSelection) => {
         setOffer(0);
         show('code');
-        startGeneration(selection, viewWorkspace.current).then(setRun, fail);
+        startGeneration(selection).then(setRun, fail);
     }, []);
     /** The selection waiting for a stack, while the picker asks for one. */
     const [picking, setPicking] = useState<GenerationSelection>();
@@ -212,7 +187,6 @@ export function App() {
         // live changes compare with the text last accepted, not a commit: the Changes tab shows that file's diff
         const file = liveMarks?.files.find(f => f.elements.includes(qn));
         if (!file) return;
-        setChangesOf(undefined);
         setLiveOpen({ path: file.path });
         show('changes');
     };
@@ -273,8 +247,6 @@ export function App() {
     const selectRef = useRef(select);
     selectRef.current = select;
     useEffect(() => { desktop?.onCodeElement?.(qn => selectRef.current(qn)); }, []);
-    // a chapter of this repo, played in another repo's view, jumped here to its diff
-    useEffect(() => { desktop?.onShowChanges?.(session => { setChangesOf(session); show('changes'); }); }, []);
 
     /** Opens an element's source in the host's editor (on the user's request; the canvas selection stays in the IDE). */
     const openSource = desktop?.openSource && ((qn: string) => {
@@ -302,47 +274,22 @@ export function App() {
 
     const sessionMarks = useMemo(() => {
         const repo = snapshot && decodeURIComponent(snapshot.root.replace('file://', ''));
-        return sessions.filter(s => s.repo === repo).flatMap(s => [...s.claims.elements, ...highlights[s.id] ?? []].map((element): SessionMark => ({ element, color: s.color, label: s.label ?? s.name, session: s.id })));
+        return sessions.filter(s => s.repo === repo).flatMap(s => [...s.claims.elements, ...highlights[s.id] ?? [], ...snapshot!.requests.filter(r => r.takenBy === s.id).map(r => `?${r.id}`)].map((element): SessionMark => ({ element, color: s.color, label: s.label ?? s.name, session: s.id })));
     }, [sessions, highlights, snapshot]);
 
-    /** The user steps in the playbook: shown at once, then stored, where the sessions read it. */
-    const movePlay = (position: PlaybookPosition) => {
-        if (!playbook) return;
-        setPlaybook({ ...playbook, position });
-        setPlaying(true);
-        movePlaybook(playbook.workspace, position).then(setPlaybook, fail);
-    };
-    /** A chapter jumps to its session: its tab in Appling Desktop, else its view on the canvas. */
-    const toSession = (chapter: Chapter) => {
-        if (!chapter.session) return;
-        if (desktop?.focusSession) return desktop.focusSession(chapter.session);
-        if (agentViews[chapter.session]?.show) {
-            setPlaying(false);
-            setWatching(chapter.session);
-        }
-    };
-    /** A chapter jumps to its diff: this repo's Changes tab, or in Desktop the one of the repo the chapter came from. */
-    const toDiff = (chapter: Chapter) => {
-        const repo = snapshot && decodeURIComponent(snapshot.root.replace('file://', ''));
-        if (repo && chapter.repo !== repo && desktop?.showChanges) return desktop.showChanges(chapter.repo, chapter.session);
-        setChangesOf(chapter.session);
-        show('changes');
-    };
-    const unwatchedCount = unwatchedCounts(playbook).total;
 
     // The host's side panels: what they show, sent after the changes settle, and what they ask.
     useEffect(() => {
         if (!snapshot || !desktop?.panels) return;
         const timer = setTimeout(() => desktop.panels!({
             snapshot: { ...snapshot, files: snapshot.files.map(({ uri, path }) => ({ uri, path })) },
-            selected, live, proposals, sessions, playbook, playing, run, changesOf,
+            selected, live, proposals, sessions, run,
             review: { on: reviewing, rev, marked, revisions, result: review && (review.ok ? { ok: true, commit: review.commit, diff: review.diff, files: review.files } : review) }
         }), 50);
         return () => clearTimeout(timer);
-    }, [snapshot, selected, live, proposals, sessions, playbook, playing, run, changesOf, reviewing, rev, marked, revisions, review]);
+    }, [snapshot, selected, live, proposals, sessions, run, reviewing, rev, marked, revisions, review]);
     const panelAction = useRef<(action: PanelAction) => void>(() => undefined);
     panelAction.current = action => {
-        const chapter = action.type === 'session' || action.type === 'diff' ? playbook?.chapters.find(c => c.id === action.chapter) : undefined;
         switch (action.type) {
             case 'select': return select(action.qn, false);
             case 'generate': return generate(action.selection);
@@ -350,10 +297,6 @@ export function App() {
             case 'accept': return void acceptChanges(action.paths).then(setLive, fail);
             case 'revert': return void revertChange(action.path).catch(fail);
             case 'decide': return void decideProposal(action.id, action.decision).catch(fail);
-            case 'play': return movePlay(action.position);
-            case 'session': return chapter && toSession(chapter);
-            case 'diff': return chapter && toDiff(chapter);
-            case 'changesOf': return setChangesOf(action.session);
             case 'review':
                 if (action.on !== undefined) setReviewing(action.on);
                 if (action.rev !== undefined && action.rev !== rev) { setReview(undefined); setRev(action.rev); }
@@ -397,16 +340,9 @@ export function App() {
                     onCloseCode={() => setCode(undefined)}
                 />
                 <div className="canvas-area">
-                    {playing && playbook?.position.chapter
-                        ? <PlaybookPlayer index={canvasIndex} playbook={playbook} settings={view} selected={element} repo={decodeURIComponent(snapshot.root.replace('file://', ''))}
-                            onMove={movePlay}
-                            onSelect={qn => select(qn, false)} onClose={() => setPlaying(false)} onSession={toSession} onDiff={toDiff} />
-                        : watched?.show
+                    {watched?.show
                         ? <AgentCanvas key={watched.session} index={canvasIndex} view={watched} session={sessions.find(s => s.id === watched.session)} settings={view} selected={element} changes={canvasChanges} onSelect={qn => select(qn, false)} onClose={() => setWatching(undefined)} onOpenFile={openFile} />
                         : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={element} settings={view} sessions={sessionMarks} onSession={desktop?.focusSession} implementation={snapshot.implementation} requests={snapshot.requests} menu={nodeMenu} action={canvasAction} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
-                    {!playing && unwatchedCount > 0 && (
-                        <button className="playbook-chip" onClick={() => show('playbook')}>{unwatchedCount} playbook chapter{unwatchedCount > 1 ? 's' : ''} to watch</button>
-                    )}
                     {picking && (
                         <div className="stack-picker" role="dialog" aria-label="Choose a stack">
                             <h3>Generate with which stack?</h3>
@@ -434,7 +370,6 @@ export function App() {
                         <button className={side === 'search' ? 'active' : ''} onClick={() => setSide('search')}>Search</button>
                         <button className={side === 'inspector' ? 'active' : ''} onClick={() => setSide('inspector')}>Inspector</button>
                         <button className={side === 'changes' ? 'active' : ''} onClick={() => setSide('changes')}>Changes{unseenCount + proposals.length > 0 && <span className="tab-count">{unseenCount + proposals.length}</span>}</button>
-                        <button className={side === 'playbook' ? 'active' : ''} onClick={() => setSide('playbook')}>Playbook{unwatchedCount > 0 && <span className="tab-count">{unwatchedCount}</span>}</button>
                         <button className={side === 'review' ? 'active' : ''} onClick={() => { setSide('review'); setReviewing(true); }}>Review</button>
                         <button className={side === 'code' ? 'active' : ''} onClick={() => setSide('code')}>Code{snapshot.tasks.length > 0 && <span className="tab-count">{snapshot.tasks.length}</span>}</button>
                     </nav>
@@ -446,10 +381,7 @@ export function App() {
                         <Live live={live} proposals={proposals} sessions={sessions}
                             onAccept={paths => acceptChanges(paths).then(setLive)} onRevert={path => revertChange(path).catch(fail)}
                             onDecide={(id, decision) => decideProposal(id, decision).catch(fail)}
-                            onSelect={qn => select(qn, false)} session={changesOf} onAllSessions={() => setChangesOf(undefined)} openPath={liveOpen} />
-                    </div>
-                    <div hidden={side !== 'playbook'} className="side-panel">
-                        <PlaybookPanel playbook={playbook} sessions={sessions} playing={playing} onPlay={movePlay} onSession={toSession} onDiff={toDiff} />
+                            onSelect={qn => select(qn, false)} openPath={liveOpen} />
                     </div>
                     <div hidden={side !== 'review'} className="side-panel">
                         {reviewing && <Review snapshot={snapshot} review={review} rev={rev} revisions={revisions} marked={marked} onRev={next => { setReview(undefined); setRev(next); }} onMarked={setMarked} onSelect={qn => select(qn, false)} />}

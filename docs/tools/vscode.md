@@ -3,7 +3,7 @@ title: VS Code
 description: Work with Appling models in VS Code, with the repo view in a tab per project, jumps between the model, its code and the canvas, and agent sessions in VS Code terminals.
 ---
 
-The Appling extension for VS Code brings the [repo view](ide.md) into VS Code. It finds the Appling projects of your workspace, runs one IDE server per project and opens each project's model canvas in a tab of its own, with the inspector, Changes, Playbook, Review, Code and Tasks panels as native views in the Appling sidebar. The text stays in VS Code's own editors, with the [language server](editors.md#vs-code). Agents run as [agent sessions](ai.md#agent-sessions) in VS Code's terminals, as they do in [Appling Desktop](desktop.md#agent-sessions).
+The Appling extension for VS Code brings the [repo view](ide.md) into VS Code. It finds the Appling projects of your workspace, runs one IDE server per project and opens each project's model canvas in a tab of its own, with the inspector, Changes, Review, Code and Tasks panels as native views in the Appling sidebar. The text stays in VS Code's own editors, with the [language server](editors.md#vs-code). Agents run as [agent sessions](ai.md#agent-sessions) in VS Code's terminals, as they do in [Appling Desktop](desktop.md#agent-sessions).
 
 Inside the code view of Appling Desktop the extension runs only the language server and the bridge to Desktop's canvas, since Desktop shows the repo view itself.
 
@@ -46,13 +46,12 @@ Each project's tab shows the [repo view](ide.md)'s canvas, without its own sourc
 
 ### The panels
 
-The sidebar shows the panels of the IDE tab you used last, as VS Code trees. A click on an element selects it on the canvas; the canvas's selection shows in **Inspector**. A banner or chip on the canvas (proposals waiting, chapters to watch, a generation) opens its panel.
+The sidebar shows the panels of the IDE tab you used last, as VS Code trees. A click on an element selects it on the canvas; the canvas's selection shows in **Inspector**. A banner or chip on the canvas (proposals waiting, a generation) opens its panel.
 
 | Panel | Shows | Does |
 |---|---|---|
 | **Inspector** | The selected element: kind and layer, its change, implementation state and code, what an action does and who may trigger it, what an actor may do, an entity's actions, a machine's reachable states, its properties, members, what uses it and what it uses | The title buttons open the source and the code, rename, change the type, add a member and remove the element; each property line edits, adds or removes in an input box. Edits are VS Code edits of the files, saved and undoable |
 | **Changes** | Proposals with their hunks and model changes, then every changed file with the session that wrote it and its elements; the badge counts them | Accept or reject a proposal (with a comment), accept or revert a file, accept all; a file opens VS Code's diff against the text you last accepted |
-| **Playbook** | The chapters with their steps; the badge counts the unwatched ones | A chapter or step plays it on the canvas; replay, the session's terminal and the session's changes are its buttons |
 | **Review** | The model changes and the changed files since a revision | Compare with any commit, mark on the canvas or not; text diffs open in VS Code's diff editor |
 | **Code** | The implementation counts, the targets, the elements changed since the last generation (with check boxes) and the running generation | **Generate…** picks what: the outstanding elements, the selected one, the checked ones or everything; the log opens in the **Appling Generation** output |
 | **Tasks** | The elements [requested](ide.md#the-right-click-menu) on the canvas, waiting for an agent, then the open tasks of every target's [registry](../codegen/registry.md): each element with its status, attempts and claiming session, what it still misses and its notes; the badge counts them | A request selects the node it was asked under; a task selects its element; the Inspector lists the selected element's tasks too |
@@ -63,8 +62,7 @@ The sidebar shows the panels of the IDE tab you used last, as VS Code trees. A c
 | **Open code**, or a code reference | The element's code, at its lines (see [Code references](references.md)) |
 | A text diff in Review or the Inspector | VS Code's diff editor between the revision and the working tree |
 | A changed file in Changes | VS Code's diff editor between the text you last accepted and the file now |
-| A chapter's session, or a claim ring on the canvas | The session's terminal |
-| A chapter's diff from another project | That project's tab, with Changes showing that session's files |
+| A claim ring on the canvas | The session's terminal |
 | An agent's `ide_act` with `open` and a file | The `.appling` file at the line |
 
 To find an element, use VS Code's **Go to Symbol in Workspace** (Ctrl+T): the language server lists every element by its qualified name, `sales.Order.status`. VS Code's search finds the text.
@@ -99,9 +97,9 @@ Agents you start yourself, in any terminal, work on the model through the Applin
 |---|---|
 | Agent Sessions view | Each session with its label (the agent's name until the agent sets one), status and project; click it for its terminal, the speech bubble answers a waiting one, the cross ends it |
 | Notification | A session that waits while its terminal is out of view says so, with **Allow** and **Deny** for a permission, **Reply…** for anything else, and **Show** for its terminal |
-| IDE tab | The claims of every session on the canvas, the files they wrote in the Changes tab, their views, proposals and playbook chapters |
+| IDE tab | The claims of every session on the canvas, the files they wrote in the Changes tab, their views and proposals |
 
-The sessions of all projects share one session store and one playbook, kept in the extension's global storage, so they see each other's labels, status and claims across projects as in a Desktop workspace. The workspace is the `.code-workspace` file, or the first folder.
+The sessions of all projects share one session store, so they see each other's labels, status and claims across projects as in a Desktop workspace. The workspace is the `.code-workspace` file, or the first folder.
 
 The agent runs as a command of your shell through VS Code's shell integration, which lets the extension see the agent's terminal notifications (OSC 9, OSC 777) and its exit. Without shell integration the command is typed into the shell; the status then comes from the agent's hooks and MCP alone. VS Code shows extensions no terminal input, so when you answer a prompt by typing into the terminal, the session stays marked as waiting until the agent reports again. Answering from the notification or the view clears it at once. Closing the terminal ends the session and releases its claims. Sessions end with the VS Code window.
 
@@ -122,4 +120,4 @@ In a Remote SSH, WSL or dev container window the extension runs where the files 
 
 ## How it works
 
-The extension starts the IDE server of `@appling/ide` (bundled into the extension) once per project, on VS Code's own Node, with the shared session and playbook store served over its IPC channel. The tab is a webview with the server's page in an iframe opened with `?host=frame`. The page sends its requests and the panels' state to the extension with `postMessage` and takes the selection, the jumps, the panels' actions and VS Code's theme the same way; the extension checks every path it receives against the project's folder (code may also sit next to it) before it opens a file. The server only lets VS Code's webviews embed its page (`Content-Security-Policy: frame-ancestors`). See [Security](ide.md#security).
+The extension starts the IDE server of `@appling/ide` (bundled into the extension) once per project, on VS Code's own Node, with the shared session store served over its IPC channel. The tab is a webview with the server's page in an iframe opened with `?host=frame`. The page sends its requests and the panels' state to the extension with `postMessage` and takes the selection, the jumps, the panels' actions and VS Code's theme the same way; the extension checks every path it receives against the project's folder (code may also sit next to it) before it opens a file. The server only lets VS Code's webviews embed its page (`Content-Security-Policy: frame-ancestors`). See [Security](ide.md#security).

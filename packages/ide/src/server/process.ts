@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { ipcChannel, serveAppHost, servePlaybookStore, serveSessionStore, type AppHost, type PlaybookStore, type SessionStore } from '@appling/ai';
+import { ipcChannel, serveAppHost, serveSessionStore, type AppHost, type SessionStore } from '@appling/ai';
 
 export interface IdeProcess {
     url: string;
@@ -26,8 +26,6 @@ export interface IdeProcessOptions {
     onImplementation?(implementation: CodeMarks): void;
     /** The agent sessions shared by every repo server, served to this one over its IPC channel. */
     sessions?: SessionStore;
-    /** The workspace playbooks (#19), shared like the sessions; give them together with `sessions`. */
-    playbooks?: PlaybookStore;
     /** What the app adds to a session's IDE context and does with its actions. */
     host?: AppHost;
     /**
@@ -66,8 +64,7 @@ export function startIdeProcess(root: string, options: IdeProcessOptions = {}): 
     });
     const stops = [
         options.sessions && serveSessionStore(options.sessions, ipcChannel(child)),
-        options.host && serveAppHost(options.host, ipcChannel(child)),
-        options.playbooks && servePlaybookStore(options.playbooks, ipcChannel(child))
+        options.host && serveAppHost(options.host, ipcChannel(child))
     ];
     child.once('exit', () => stops.forEach(stop => stop?.()));
     let stderr = '';

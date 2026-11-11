@@ -21,6 +21,8 @@ export interface ToolContext {
     sources(): Sources;
     /** Applies an edit; returns why it was rejected, or the changed files. */
     edit(operation: EditOperation, dryRun: boolean): Promise<{ ok: boolean, errors?: string[], changed?: string[] }>;
+    /** The agent session the tools run for, if any. */
+    session?: string;
 }
 
 export function diskContext(project: Project): ToolContext {
@@ -158,16 +160,19 @@ export const REGISTRY_TOOLS = {
 /** Tools for the elements the person asked for on the canvas by name and description, for an agent to model. */
 export const REQUEST_TOOLS = {
     request_next: define({
-        description: 'The next element the person asked for on the canvas: a name, a description in their words and the element or module it belongs under (parent). Model it: decide its kind, write its Appling source in the parent\'s module (or under the parent) with edit_model or write_model_file, then call request_done with its qualified name. Returns nothing when no request is open.',
+        description: 'The next element the person asked for on the canvas: a name, a description in their words, the kind they chose (kind, such as Entity or Action; decide it yourself when missing) and the element or module it belongs under (parent; a Module request without parent is a top level module). Model it: write its Appling source in the parent\'s module (or under the parent) with edit_model or write_model_file, then call request_done with its qualified name. Requests built on another request wait until that one is done. Returns nothing when no request is open.',
         input: {},
-        run: async context => takeRequest(context.project.root) ?? { done: 'No open requests.' }
+        run: async context => takeRequest(context.project.root, context.session) ?? { done: 'No open requests.' }
     }),
     request_done: define({
-        description: 'Mark a request done once its element is in the model, or drop it (without qn) when it cannot be modeled; say why to the person then.',
+        description: 'Mark a request done once its element is in the model; the requests built on it then go under that element. Or drop it (without qn) when it cannot be modeled, with the requests built on it; say why to the person then.',
         input: { id: z.string(), qn: z.string().optional().describe('Qualified name of the element that now models the request') },
         run: async (context, input) => {
             if (input.qn && !(await context.project.graph()).nodes.some(n => n.qn === input.qn)) return { error: `The model has no ${input.qn} yet.` };
-            return removeRequest(context.project.root, input.id) ? { ok: true, open: readRequests(context.project.root).length } : { error: `No request ${input.id}.` };
+            const removed = removeRequest(context.project.root, input.id, input.qn);
+            if (!removed.length) return { error: `No request ${input.id}.` };
+            const dropped = removed.slice(1).map(r => r.name);
+            return { ok: true, open: readRequests(context.project.root).length, ...dropped.length ? { dropped } : {} };
         }
     })
 };

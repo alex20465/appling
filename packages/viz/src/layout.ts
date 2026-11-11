@@ -17,32 +17,82 @@ const ROW = 100;
 /** Folded children beyond this many wrap into rows. */
 const WRAP = 6;
 
+/** The children of one node as they stand together: a row, or the rows of a wrapped group. */
+interface Block {
+    parent: Placed;
+    /** Each child, from the middle of the block and at its height. */
+    items: { node: TreeNode, dx: number, y: number }[];
+    /** What each row takes, from the middle of the block. */
+    rows: { left: number, right: number, y: number }[];
+}
+
 /**
- * Places the tree growing upwards: each parent centered below its children, groups of folded elements wrapped into
- * rows. Children come most relevant first; each row puts them in the middle and the least relevant at the edges.
+ * Places the tree growing upwards the way a plant does: what stands stays, and each node's children go above it, most
+ * relevant in the middle, groups of folded elements wrapped into rows. Where the children of two nodes would meet,
+ * both give way to their side, so a wide crown leans out on its stems and never pushes the nodes below it apart.
  */
 export function layoutTree(root: TreeNode): Placed[] {
-    const placed: Placed[] = [];
-    const place = (node: TreeNode, x: number, y: number, parent?: Placed) => {
-        const here = { node, x, y, parent };
-        placed.push(here);
-        const children = node.children ?? [];
-        if (wraps(node)) {
-            const slot = SLOT[children[0].type];
-            for (let row = 0; row * WRAP < children.length; row++) {
-                const inRow = centered(children.slice(row * WRAP, (row + 1) * WRAP));
-                inRow.forEach((child, column) => place(child, x + (column - (inRow.length - 1) / 2) * slot, y - LEVEL - row * ROW, here));
+    const placed: Placed[] = [{ node: root, x: 0, y: 0 }];
+    /** The rows of the wrapped blocks placed so far, which reach up beside the rows of deeper nodes. */
+    const tall: { left: number, right: number, y: number, of: Placed, depth: number }[] = [];
+    let row = placed;
+    for (let depth = 0; row.length; depth++) {
+        const blocks = row.filter(p => p.node.children?.length).map(blockOf);
+        const gap = (a: Block, b: Block) => Math.max(...a.rows.flatMap(ra => b.rows.filter(rb => meet(ra.y, rb.y)).map(rb => ra.right - rb.left)));
+        // every block as near to its parent as the ones before it allow, then as the ones after it allow: between the two, both sides give way alike
+        const pushed: number[] = [];
+        const pulled: number[] = [];
+        blocks.forEach((b, i) => pushed[i] = Math.max(b.parent.x, ...blocks.slice(0, i).map((a, j) => pushed[j] + gap(a, b))));
+        blocks.forEach((_, n) => {
+            const i = blocks.length - 1 - n;
+            pulled[i] = Math.min(blocks[i].parent.x, ...blocks.slice(i + 1).map((b, j) => pulled[i + 1 + j] - gap(blocks[i], b)));
+        });
+        const at = blocks.map((_, i) => (pushed[i] + pulled[i]) / 2);
+        // then out of the way of the wrapped rows beside it
+        const beside = blocks.map(b => {
+            let [low, high] = [-Infinity, Infinity];
+            for (const fixed of tall) {
+                let lineage = b.parent;
+                for (let d = depth; d > fixed.depth; d--) lineage = lineage.parent!;
+                for (const r of b.rows.filter(r => meet(r.y, fixed.y))) {
+                    if (fixed.of.x < lineage.x) low = Math.max(low, fixed.right - r.left);
+                    else high = Math.min(high, fixed.left - r.right);
+                }
             }
-            return;
-        }
-        let left = x - children.reduce((sum, child) => sum + width(child), 0) / 2;
-        for (const child of centered(children)) {
-            place(child, left + width(child) / 2, y - LEVEL, here);
-            left += width(child);
-        }
-    };
-    place(root, 0, 0);
+            return { low, high };
+        });
+        blocks.forEach((b, i) => at[i] = Math.max(at[i], beside[i].low, ...blocks.slice(0, i).map((a, j) => at[j] + gap(a, b))));
+        blocks.forEach((_, n) => {
+            const i = blocks.length - 1 - n;
+            at[i] = Math.min(at[i], beside[i].high, ...blocks.slice(i + 1).map((b, j) => at[i + 1 + j] - gap(blocks[i], b)));
+        });
+        row = blocks.flatMap((b, i) => b.items.map(item => ({ node: item.node, x: at[i] + item.dx, y: item.y, parent: b.parent })));
+        placed.push(...row);
+        blocks.forEach((b, i) => { if (b.rows.length > 1) tall.push(...b.rows.map(r => ({ left: at[i] + r.left, right: at[i] + r.right, y: r.y, of: b.parent, depth }))); });
+    }
     return placed;
+}
+
+function blockOf(parent: Placed): Block {
+    const children = parent.node.children!;
+    const lines = wraps(parent.node) ? Array.from({ length: Math.ceil(children.length / WRAP) }, (_, i) => children.slice(i * WRAP, (i + 1) * WRAP)) : [children];
+    const block: Block = { parent, items: [], rows: [] };
+    lines.forEach((line, i) => {
+        const y = parent.y - LEVEL - i * ROW;
+        const width = line.reduce((sum, child) => sum + SLOT[child.type], 0);
+        let left = -width / 2;
+        for (const node of centered(line)) {
+            block.items.push({ node, dx: left + SLOT[node.type] / 2, y });
+            left += SLOT[node.type];
+        }
+        block.rows.push({ left: -width / 2, right: width / 2, y });
+    });
+    return block;
+}
+
+/** Two rows at these heights are near enough for their nodes to touch. */
+function meet(y1: number, y2: number): boolean {
+    return Math.abs(y1 - y2) < ROW;
 }
 
 /** The first in the middle, then the next ones alternating to either side. */
@@ -54,13 +104,6 @@ function centered<T>(items: T[]): T[] {
 
 function wraps(node: TreeNode): boolean {
     return (node.children?.length ?? 0) > WRAP && !node.children!.some(c => c.children);
-}
-
-function width(node: TreeNode): number {
-    const children = node.children ?? [];
-    if (!children.length) return SLOT[node.type];
-    if (wraps(node)) return Math.max(SLOT[node.type], WRAP * SLOT[children[0].type]);
-    return Math.max(SLOT[node.type], children.reduce((sum, child) => sum + width(child), 0));
 }
 
 export interface PlacedFlow {

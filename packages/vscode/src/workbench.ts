@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
-import { MemoryPlaybookStore, MemorySessionStore, type AppHost } from '@appling/ai';
+import { MemorySessionStore, type AppHost } from '@appling/ai';
 import { startIdeProcess, type CodeMarks, type IdeProcess } from '@appling/ide/process';
 import {
     commands, env, EventEmitter, ThemeIcon, TreeItem, TreeItemCollapsibleState, Uri, ViewColumn, window, workspace,
@@ -14,8 +14,8 @@ import { Panels } from './panels.js';
 import type { PanelAction } from '@appling/ide/panels';
 import { projectOf, projectRoots } from './projects.js';
 
-/** What the IDE client is told: select an element, the element at a model file's offset, show the Changes tab, a panel's action. */
-type FrameEvent = { type: 'element', qn: string } | { type: 'cursor', uri: string, offset: number } | { type: 'showChanges', session?: string } | { type: 'panel', action: PanelAction };
+/** What the IDE client is told: select an element, the element at a model file's offset, a panel's action. */
+type FrameEvent = { type: 'element', qn: string } | { type: 'cursor', uri: string, offset: number } | { type: 'panel', action: PanelAction };
 
 interface Project {
     root: string;
@@ -41,14 +41,13 @@ export interface AgentHost {
 
 /**
  * Appling in a plain VS Code window (Desktop's code view has its own canvas): the Appling projects of the workspace,
- * one IDE server per project (`@appling/ide`, sharing one session and playbook store, as Desktop's repos do), the
+ * one IDE server per project (`@appling/ide`, sharing one session store, as Desktop's repos do), the
  * Projects view with each project's modules, the IDE tab per project (the IDE client in a webview, without its own
  * source pane), the jump from a `.appling` editor into the IDE, the implementation marks and code links in the
  * editor, and `Initialize Appling` (`appling init` in a terminal).
  */
 export class Workbench implements Disposable {
     readonly store = new MemorySessionStore();
-    readonly playbooks: MemoryPlaybookStore;
     readonly workspaceId = workspaceId();
     private readonly projects = new Map<string, Project>();
     private readonly panels = new Map<string, WebviewPanel>();
@@ -62,7 +61,6 @@ export class Workbench implements Disposable {
     private initializing?: string;
 
     constructor(private readonly context: ExtensionContext) {
-        this.playbooks = new MemoryPlaybookStore(join(context.globalStorageUri.fsPath, 'playbooks'));
         this.implementation = new ImplementationView(qn => this.showElement(qn));
         this.sidePanels = new Panels({
             post: (root, event) => void this.panels.get(root)?.webview.postMessage(event),
@@ -141,7 +139,7 @@ export class Workbench implements Disposable {
             // VS Code's own binary runs as Node, as for its language servers
             env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
             main: this.context.asAbsolutePath(join('out', 'ide', 'out', 'server', 'main.js')),
-            sessions: this.store, playbooks: this.playbooks, host: this.host(),
+            sessions: this.store, host: this.host(),
             onStatus: status => {
                 if (status.errors === undefined) return;
                 project.errors = status.errors;
@@ -209,7 +207,7 @@ export class Workbench implements Disposable {
         if (origin !== new URL(ide.url).origin && ide.child.connected) ide.child.send({ type: 'trust', origin });
         const panel = window.createWebviewPanel('appling.ide', `Appling: ${basename(root)}`, ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] });
         panel.iconPath = Uri.file(this.context.asAbsolutePath(join('out', 'appling-icon.svg')));
-        panel.webview.html = panelHtml(clientUrl(origin, this.workspaceId), randomBytes(16).toString('base64'));
+        panel.webview.html = panelHtml(clientUrl(origin), randomBytes(16).toString('base64'));
         this.panels.set(root, panel);
         this.active = root;
         this.sidePanels.activate(root);
@@ -239,8 +237,7 @@ export class Workbench implements Disposable {
             else if (action.type === 'showPanel') this.sidePanels.show(action.name);
             else if (action.type === 'error') window.showErrorMessage(`Appling: ${action.message}`);
             else if (action.type === 'chooseStack') void this.sidePanels.chooseStack(root, action.selection);
-            else if (action.type === 'edit') await this.sidePanels.apply(root, action.operation);
-            else if (this.projects.has(action.repo)) await this.show(action.repo, { type: 'showChanges', ...action.session ? { session: action.session } : {} });
+            else await this.sidePanels.apply(root, action.operation);
         } catch (error) {
             window.showErrorMessage(`Appling: ${(error as Error).message}`);
         }
@@ -367,7 +364,7 @@ class ProjectsTree implements TreeDataProvider<Project | { project: Project, qn:
     }
 }
 
-/** The workspace the sessions and the playbook belong to: the `.code-workspace` file, else the first folder. */
+/** The workspace the sessions belong to: the `.code-workspace` file, else the first folder. */
 function workspaceId(): string | undefined {
     const file = workspace.workspaceFile;
     if (file?.scheme === 'file') return file.fsPath;

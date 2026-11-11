@@ -99,6 +99,15 @@ test('elements requested on the canvas are kept in .appling/requests.json and co
     expect((await fetch(`${ide.url}/api/requests/${added.id}`, { method: 'DELETE' })).status).toBe(204);
     expect((await fetch(`${ide.url}/api/requests/${added.id}`, { method: 'DELETE' })).status).toBe(404);
     expect((await (await fetch(`${ide.url}/api/snapshot`)).json()).requests).toEqual([]);
+    // a kind the language has, and a request to build on that exists
+    expect((await fetch(`${ide.url}/api/requests`, { method: 'POST', body: JSON.stringify({ name: 'Bill', kind: 'Migration' }) })).status).toBe(400);
+    const entity = await (await fetch(`${ide.url}/api/requests`, { method: 'POST', body: JSON.stringify({ name: 'Invoice', kind: 'Entity', parent: 'sales.Order' }) })).json();
+    expect((await fetch(`${ide.url}/api/requests`, { method: 'POST', body: JSON.stringify({ name: 'Bill', kind: 'Action', parentRequest: 'nope' }) })).status).toBe(404);
+    const action = await (await fetch(`${ide.url}/api/requests`, { method: 'POST', body: JSON.stringify({ name: 'Bill', kind: 'Action', parentRequest: entity.id }) })).json();
+    expect(action).toMatchObject({ kind: 'Action', parentRequest: entity.id });
+    expect(action.parent).toBeUndefined();
+    expect((await fetch(`${ide.url}/api/requests/${entity.id}`, { method: 'DELETE' })).status).toBe(204);
+    expect((await (await fetch(`${ide.url}/api/snapshot`)).json()).requests).toEqual([]);
 });
 
 test('changes on disk are pushed as snapshots', async () => {

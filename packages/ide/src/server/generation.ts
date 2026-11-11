@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 import type { GenerationEvent, GenerationSelection } from '@appling/codegen';
 import type { GenerationRun } from '../shared/snapshot.js';
-import { NO_PLAYBOOK, runTitle, type PlaybookHook } from './generation-chapter.js';
 
 /** Runs one generation and calls back with its events; resolves when it ended. */
 export type GenerationSpawner = (root: string, selection: GenerationSelection, onEvent: (event: GenerationEvent) => void) => Promise<void>;
@@ -36,7 +35,7 @@ export function parseSelection(input: unknown): GenerationSelection | undefined 
 
 /**
  * One generation run at a time for the IDE's workspace: pushes `{ type: 'generation', run }` when a run starts and
- * ends and `{ type: 'generation-event', id, event }` for each event, and writes the run into a playbook chapter.
+ * ends and `{ type: 'generation-event', id, event }` for each event.
  */
 export class GenerationRunner {
     private run?: GenerationRun;
@@ -44,7 +43,6 @@ export class GenerationRunner {
     constructor(
         private readonly root: string,
         private readonly broadcast: (message: unknown) => void,
-        private readonly playbook: PlaybookHook = NO_PLAYBOOK,
         private readonly spawn: GenerationSpawner = workerSpawner
     ) { }
 
@@ -58,29 +56,21 @@ export class GenerationRunner {
         if (this.run && !this.run.ended) return undefined;
         const run: GenerationRun = { id: randomUUID(), title: runTitle(selection, outstanding), selection, started: new Date().toISOString(), events: [] };
         this.run = run;
-        let chapter: ReturnType<PlaybookHook['onGenerationRun']> = NO_PLAYBOOK.onGenerationRun(run);
-        try {
-            chapter = this.playbook.onGenerationRun({ id: run.id, title: run.title, selection, started: run.started });
-        } catch (error) {
-            console.error(error);
-        }
-        const safely = (call: () => void) => {
-            try {
-                call();
-            } catch (error) {
-                console.error(error);
-            }
-        };
         this.broadcast({ type: 'generation', run });
         this.spawn(this.root, selection, event => {
             run.events.push(event);
             this.broadcast({ type: 'generation-event', id: run.id, event });
-            if (event.type === 'done') safely(() => chapter.close({ failed: event.failed, generated: event.generated, tasks: event.tasks }));
-            else if (event.type !== 'start') safely(() => chapter.add(event));
         }).finally(() => {
             run.ended = new Date().toISOString();
             this.broadcast({ type: 'generation', run });
         });
         return run;
     }
+}
+
+/** What a run is called in the Code tab, such as `Generate 3 outstanding elements`. */
+export function runTitle(selection: GenerationSelection, outstanding?: number): string {
+    if (selection.mode === 'all') return 'Generate everything';
+    if (selection.mode === 'outstanding') return outstanding === undefined ? 'Generate the outstanding elements' : `Generate ${outstanding} outstanding element${outstanding === 1 ? '' : 's'}`;
+    return selection.elements.length === 1 ? `Generate ${selection.elements[0]}` : `Generate ${selection.elements.length} elements`;
 }

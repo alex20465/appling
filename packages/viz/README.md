@@ -17,9 +17,9 @@ The root export (also `@appling/viz/protocol`) has the types the visual tools of
 
 | Export | Purpose |
 |---|---|
-| `growTree(index, settings, unfolded, name?, trail?)` | The dependency tree of one lens (`domain`, `behavior`, `application`, `interfaces`, `access`): modules, then the lens's declarations, then what uses each unfolded declaration, the most relevant first; trail nodes show only the children on the trail |
+| `requestKinds(node)`, `REQUEST_KINDS` | The kinds a person may request under a tree node, by the layer rules |
+| `growTree(index, settings, unfolded, name?, trail?, requests?)` | The dependency tree of one lens (`domain`, `behavior`, `application`, `interfaces`, `access`): modules, then the lens's declarations, then what uses each unfolded declaration, the most relevant first; trail nodes show only the children on the trail |
 | `trailOf(index, settings, focus)`, `lensOf(kind)` | The tree state that draws elements one after another, each unfolded in place; the lens of a kind |
-| `growOrder(now, next)` | The nodes a focus adds from one tree state to the next, in the order a growing canvas unfolds them |
 | `modelPulse(before, after, qns)` | Which of these elements a new model added, or changed in itself or in something it holds |
 | `revealPath(index, settings, qn)`, `factOf(index, node)` | The node ids that show a declaration, and the fact a node shows under its name |
 | `cardView(index, view, focus)` | The `action` or `event` view as cards of facts |

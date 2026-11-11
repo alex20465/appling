@@ -44,7 +44,7 @@ flowchart BT
 | `@appling/model` | Turns resolved models into the serializable [semantic graph](../reference/graph.md); applies [edit operations](../reference/edit-operations.md) as minimal text edits; writes release snapshots and migration steps |
 | `@appling/codegen` | The extension contract, planning in layer order, the step runner, the task registry and migration planning |
 | `@appling/codegen-django`, `@appling/codegen-ash` | Extensions: a map from graph node kinds to commands, templates and tasks |
-| `@appling/ai` | The workspace `Project`, the tool definitions of the MCP server, agent sessions, the playbook and the registry skill |
+| `@appling/ai` | The workspace `Project`, the tool definitions of the MCP server, agent sessions and the registry skill |
 | `@appling/cli` | `check`, `fmt`, `graph`, `release`, `generate` |
 | `@appling/viz` | The pure view logic (tree, search, flowcharts, cards) and the SVG canvases |
 | `@appling/ide` | The repo view of Desktop: a server per repo (snapshot, file, edit, live changes, sessions, `/mcp`, a language server per websocket) and a React client with Monaco and the canvases of `@appling/viz`; also built as the browser demo of the landing site |

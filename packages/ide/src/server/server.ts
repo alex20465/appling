@@ -8,18 +8,17 @@ import { createConnection } from 'vscode-languageserver/node';
 import { WebSocketMessageReader, WebSocketMessageWriter, type IWebSocket } from 'vscode-ws-jsonrpc';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { createApplingLspServices } from '@appling/lang/lsp';
-import { addRequest, createMcpServer, handleMcpRequest, MemoryPlaybookStore, MemorySessionStore, removeRequest, REQUESTS, touchedBy, updateRequest, type AppHost, type PlaybookStore, type SessionStore } from '@appling/ai';
+import { LAYER_OF } from '@appling/lang/layers';
+import { addRequest, createMcpServer, handleMcpRequest, MemorySessionStore, readRequests, removeRequest, REQUESTS, touchedBy, updateRequest, type AppHost, type SessionStore } from '@appling/ai';
 import { applyEdit, latestRelease, readReleases, REFERENCES, type EditOperation, type LineMark } from '@appling/model';
 import { addTarget, CONFIG, GENERATIONS, readConfig, REGISTRY, STACKS, type Stack } from '@appling/codegen';
 import type { Snapshot } from '../shared/snapshot.js';
 import { fileDiff, review, revisions } from './git.js';
 import { codeLinks, fileMarks, readView, snapshot, writeView } from './workspace.js';
 import { GenerationRunner, parseSelection, type GenerationSpawner } from './generation.js';
-import { playbookChapters, type PlaybookHook } from './generation-chapter.js';
 import { ideHost, type ClientContext } from './sessions.js';
 import { LiveTracker } from './live.js';
 import { AgentViews } from './visuals.js';
-import { playbookWorkspace, servePlaybook, viewWorkspace } from './playbook.js';
 import { unseen, type LiveChanges } from '../shared/live.js';
 import type { Decision } from '@appling/viz/protocol';
 
@@ -36,8 +35,6 @@ export interface Ide {
     /** The repo's MCP server; agents reach it with a session's token as bearer token. */
     mcp: string;
     sessions: SessionStore;
-    /** The workspace playbooks the sessions write and the client plays; also for the app's own chapters (`openChapter`). */
-    playbooks: PlaybookStore;
     /** Trusts one more origin from now on, such as where VS Code forwarded this server's port (`asExternalUri`). */
     trust(origin: string): void;
     close(): Promise<void>;
@@ -52,8 +49,6 @@ export interface IdeOptions {
     sessions?: SessionStore;
     /** What the app around the IDE adds to a session's context and does with its actions, such as Appling Desktop. */
     host?: AppHost;
-    /** The workspace playbooks, shared like the sessions; default: a store of this server's own, in memory. */
-    playbooks?: PlaybookStore;
     /** Called with the number of unseen model changes (changed files since the user last accepted) after each change. */
     onUnseen?(count: number): void;
     /**
@@ -61,8 +56,6 @@ export interface IdeOptions {
      * server from another machine (Appling Desktop's remote repos).
      */
     origins?: string[];
-    /** Where generation runs go in the playbook; default: a chapter per run in `playbooks` (`playbookChapters`). */
-    generationChapters?: PlaybookHook;
     /** Runs a generation; default: a worker thread (tests inject their own). */
     generate?: GenerationSpawner;
     /** Called with the implementation marks of the model files and the code references by file, after every snapshot (Appling Desktop's code view shows them). */
@@ -80,12 +73,6 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
     const events = new Set<WebSocket>();
     let origins: string[] = [];
     const sessions = options.sessions ?? new MemorySessionStore();
-    const playbooks = options.playbooks ?? new MemoryPlaybookStore();
-    const workspace = (view?: string) => playbookWorkspace(root, options.host, view);
-    // the workspace each connected view belongs to, as it reports it (see `ClientReport.workspace`)
-    const viewsWorkspace = new Map<WebSocket, string | undefined>();
-    // the workspace of the view that started the current generation run, for its playbook chapter
-    let generationWorkspace: string | undefined;
     const client: ClientContext = {};
     // the unsaved files each connected client reports, for Appling Desktop's rail
     const unsaved = new Map<WebSocket, string[]>();
@@ -111,26 +98,19 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
         broadcast({ type: 'sessions', sessions: list });
         views.prune(list.map(s => s.id));
     });
-    // Each view gets only the playbook of the workspace it belongs to.
-    const stopPlaybooks = playbooks.onChange(async book => {
-        if (!events.size) return;
-        const text = JSON.stringify({ type: 'playbook', playbook: book });
-        for (const ws of events) if (book.workspace === await workspace(viewsWorkspace.get(ws))) ws.send(text);
-    });
-    const agents: Agents = { live, views, sessions, host, playbooks };
+    const agents: Agents = { live, views, sessions, host };
     let refresh: () => void = () => undefined;
     const generation = new GenerationRunner(root, message => {
         broadcast(message);
         if ((message as { type: string, run?: { ended?: string } }).type === 'generation' && (message as { run: { ended?: string } }).run.ended) refresh();
-    }, options.generationChapters ?? playbookChapters(playbooks, () => workspace(generationWorkspace), root), options.generate);
+    }, options.generate);
 
     const server = createServer((request, response) => {
         if (!trusted(request, origins)) return send(response, 403, 'Forbidden');
         const work = request.url === '/mcp' ? serveMcp(request, response, root, agents)
-            : request.url?.startsWith('/api/playbook') ? servePlaybook(request, response, playbooks, sessions, workspace, () => body(request))
             : request.url?.startsWith('/api/sessions') ? serveSessions(request, response, root, sessions, views)
             : request.url?.startsWith('/api/live/') || request.url?.startsWith('/api/proposals/') ? serveLive(request, response, live, views)
-            : request.url?.startsWith('/api/generat') || request.url?.startsWith('/api/code?') || request.url === '/api/targets' ? serveGeneration(request, response, root, generation, view => generationWorkspace = view)
+            : request.url?.startsWith('/api/generat') || request.url?.startsWith('/api/code?') || request.url === '/api/targets' ? serveGeneration(request, response, root, generation)
             : handle(request, response, root, live);
         work.catch(error => response.headersSent ? response.end() : send(response, 500, String(error)));
     });
@@ -144,22 +124,13 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
                 events.add(ws);
                 ws.on('close', () => {
                     events.delete(ws);
-                    viewsWorkspace.delete(ws);
                     if (unsaved.delete(ws)) reportUnsaved();
                 });
                 // The client reports what it shows, for the sessions' IDE context, and its unsaved files.
                 ws.on('message', data => {
                     try {
-                        const message = JSON.parse(data.toString()) as { type?: string, files?: unknown, workspace?: unknown } & ClientContext;
-                        if (message.type === 'context') {
-                            Object.assign(client, { selection: message.selection, view: message.view, file: message.file, watching: message.watching });
-                            const before = viewsWorkspace.get(ws);
-                            viewsWorkspace.set(ws, viewWorkspace(message.workspace));
-                            // a view that moved to another workspace gets that one's playbook
-                            if (before !== viewsWorkspace.get(ws)) {
-                                workspace(viewsWorkspace.get(ws)).then(playbooks.read.bind(playbooks)).then(playbook => ws.send(JSON.stringify({ type: 'playbook', playbook })), () => undefined);
-                            }
-                        }
+                        const message = JSON.parse(data.toString()) as { type?: string, files?: unknown } & ClientContext;
+                        if (message.type === 'context') Object.assign(client, { selection: message.selection, view: message.view, file: message.file, watching: message.watching });
                         if (message.type === 'unsaved' && Array.isArray(message.files)) {
                             unsaved.set(ws, message.files.filter((f): f is string => typeof f === 'string'));
                             reportUnsaved();
@@ -172,9 +143,6 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
                 ws.send(JSON.stringify({ type: 'live', live: live.current() }));
                 for (const view of views.all()) ws.send(JSON.stringify({ type: 'agent-view', view }));
                 ws.send(JSON.stringify({ type: 'proposals', proposals: views.proposals() }));
-                const named = viewWorkspace(new URL(request.url!, 'http://localhost').searchParams.get('workspace'));
-                viewsWorkspace.set(ws, named);
-                workspace(named).then(playbooks.read.bind(playbooks)).then(playbook => ws.send(JSON.stringify({ type: 'playbook', playbook })), () => undefined);
                 const run = generation.current();
                 if (run) ws.send(JSON.stringify({ type: 'generation', run }));
             } else ws.close();
@@ -210,13 +178,11 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
         url: origins[0],
         mcp: `${origins[0]}/mcp`,
         sessions,
-        playbooks,
         trust: origin => {
             if (/^https?:\/\/[\w.-]+(:\d+)?$/.test(origin) && !origins.includes(origin)) origins.push(origin);
         },
         close: () => new Promise(done => {
             stopSessions();
-            stopPlaybooks();
             watcher.close();
             clearTimeout(timer);
             sockets.clients.forEach(ws => ws.terminate());
@@ -232,14 +198,13 @@ interface Agents {
     views: AgentViews;
     sessions: SessionStore;
     host: ReturnType<typeof ideHost>;
-    playbooks: PlaybookStore;
 }
 
 /**
  * The repo's MCP server for one agent session, named by the bearer token of the request. Its visual tools draw on
  * this repo's canvas, and the files its tool calls write are attributed to it in the live changes.
  */
-async function serveMcp(request: IncomingMessage, response: ServerResponse, root: string, { live, views, sessions, host, playbooks }: Agents): Promise<void> {
+async function serveMcp(request: IncomingMessage, response: ServerResponse, root: string, { live, views, sessions, host }: Agents): Promise<void> {
     const token = /^Bearer (.+)$/.exec(request.headers.authorization ?? '')?.[1];
     const id = token && await sessions.authenticate(token);
     if (!id) {
@@ -252,7 +217,7 @@ async function serveMcp(request: IncomingMessage, response: ServerResponse, root
         const ok = !!result && typeof result === 'object' && (result as { ok?: boolean }).ok !== false && !('error' in result);
         if (ok && files.length) live.attribute(id, files).catch(error => console.error(error));
     };
-    await handleMcpRequest(createMcpServer(root, { session: { id, store: sessions, host, playbook: playbooks }, visualizer: views.host(id), onToolCall }), request, response);
+    await handleMcpRequest(createMcpServer(root, { session: { id, store: sessions, host }, visualizer: views.host(id), onToolCall }), request, response);
 }
 
 /**
@@ -261,15 +226,14 @@ async function serveMcp(request: IncomingMessage, response: ServerResponse, root
  * text of a code file (read only) inside the workspace or a generate target, for the jump from an element to its code;
  * `POST /api/targets` (`{ stack }`, a key of `STACKS`) adds that stack's target to `appling.config.json`.
  */
-async function serveGeneration(request: IncomingMessage, response: ServerResponse, root: string, runner: GenerationRunner, startedIn: (workspace?: string) => void): Promise<void> {
+async function serveGeneration(request: IncomingMessage, response: ServerResponse, root: string, runner: GenerationRunner): Promise<void> {
     const url = new URL(request.url!, 'http://localhost');
     if (url.pathname === '/api/generation' && request.method === 'GET') return json(response, runner.current() ?? null);
     if (url.pathname === '/api/generate' && request.method === 'POST') {
-        const input = JSON.parse(await body(request) || '{}') as { selection?: unknown, workspace?: unknown };
+        const input = JSON.parse(await body(request) || '{}') as { selection?: unknown };
         const selection = parseSelection(input.selection);
         if (!selection) return send(response, 400, 'A selection is required: { mode: "outstanding" | "all" } or { mode: "elements", elements: [...] }.');
         const outstanding = selection.mode === 'outstanding' ? Object.values((await snapshot(root)).implementation).filter(s => s.outstanding).length : undefined;
-        if (!runner.current() || runner.current()!.ended) startedIn(viewWorkspace(input.workspace));
         const run = runner.start(selection, outstanding);
         if (!run) return send(response, 409, 'A generation is running.');
         response.writeHead(202, { 'content-type': 'application/json' });
@@ -366,17 +330,20 @@ async function handle(request: IncomingMessage, response: ServerResponse, root: 
         return send(response, 204, '');
     }
     if (url.pathname === '/api/requests' && request.method === 'POST') {
-        const { name, description, parent } = JSON.parse(await body(request)) as { name?: string, description?: string, parent?: string };
+        const { name, description, kind, parent, parentRequest } = JSON.parse(await body(request)) as { name?: string, description?: string, kind?: string, parent?: string, parentRequest?: string };
         if (!name?.trim()) return send(response, 400, 'A name is required.');
-        return json(response, addRequest(root, { name: name.trim(), description: description?.trim() ?? '', parent }));
+        if (!requestable(kind)) return send(response, 400, `No element kind ${kind}.`);
+        if (parentRequest && !readRequests(root).some(r => r.id === parentRequest)) return send(response, 404, 'No such request.');
+        return json(response, addRequest(root, { name: name.trim(), description: description?.trim() ?? '', kind, parent, parentRequest }));
     }
     const requestId = url.pathname.match(/^\/api\/requests\/([\w-]+)$/)?.[1];
     if (requestId && request.method === 'PUT') {
-        const { name, description } = JSON.parse(await body(request)) as { name?: string, description?: string };
-        const updated = updateRequest(root, requestId, { ...name?.trim() ? { name: name.trim() } : {}, ...description !== undefined ? { description: description.trim() } : {} });
+        const { name, description, kind } = JSON.parse(await body(request)) as { name?: string, description?: string, kind?: string };
+        if (!requestable(kind)) return send(response, 400, `No element kind ${kind}.`);
+        const updated = updateRequest(root, requestId, { ...name?.trim() ? { name: name.trim() } : {}, ...description !== undefined ? { description: description.trim() } : {}, ...kind ? { kind } : {} });
         return updated ? json(response, updated) : send(response, 404, 'No such request.');
     }
-    if (requestId && request.method === 'DELETE') return removeRequest(root, requestId) ? send(response, 204, '') : send(response, 404, 'No such request.');
+    if (requestId && request.method === 'DELETE') return removeRequest(root, requestId).length ? send(response, 204, '') : send(response, 404, 'No such request.');
     if (url.pathname === '/api/edit' && request.method === 'POST') {
         const { sources, operation } = JSON.parse(await body(request)) as { sources: Record<string, string>, operation: EditOperation };
         return json(response, await applyEdit(sources, operation, { release: latestRelease(readReleases(root)) }));
@@ -428,6 +395,11 @@ function withWorkspace(message: string, folder: { uri: string, name: string }): 
 }
 
 /** Only pages served by this IDE may talk to it: blocks other sites and DNS rebinding. */
+/** A kind a request may ask for: none, or a declaration a person can sketch (not a migration). */
+function requestable(kind: string | undefined): boolean {
+    return !kind || (kind in LAYER_OF && kind !== 'Migration');
+}
+
 function trusted(request: IncomingMessage, origins: string[]): boolean {
     const host = `http://${request.headers.host}`;
     const origin = request.headers.origin;

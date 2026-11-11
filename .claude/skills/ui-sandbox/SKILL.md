@@ -44,7 +44,7 @@ Cover the flows touched by the task, or all of them for a general review:
 3. Search: find an element, open it; the inspector shows it.
 4. Inspector edit: rename a field; the canvas and **Source** follow, the edit is undoable in the editor, the file saves.
 5. Review: after the edit, the diff against the base commit lists it and marks it on the canvas.
-6. Changes, Playbook, Code tabs: each opens, shows its empty state sensibly, nothing throws.
+6. Changes and Code tabs: each opens, shows its empty state sensibly, nothing throws.
 7. Target specific: in VS Code the Appling sidebar trees, **Appling: Open the IDE**, **Appling: Show in the IDE** from a `.appling` editor; in Desktop the rail, Ctrl+Tab switcher, terminal panel and code view.
 
 ## Problems

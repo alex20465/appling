@@ -21,7 +21,6 @@
 #agents .where, #agents .note { overflow: hidden; color: var(--ink-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 #agents .side { display: flex; flex: none; align-items: center; gap: 8px; color: var(--ink-muted); font-size: 12px; }
 #agents .status { color: var(--status); }
-#agents .unwatched { padding: 0 6px; border-radius: 8px; background: #4dabf7; color: var(--surface); font-weight: 600; }
 #agents .end { border: 0; background: none; color: var(--ink-muted); font-size: 14px; cursor: pointer; }
 #agents .end:hover { color: var(--ink); }
 #agents input { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; outline: none; background: var(--surface); color: var(--ink); font: inherit; }

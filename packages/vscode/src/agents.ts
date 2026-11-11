@@ -61,7 +61,7 @@ export interface AgentsOptions {
     /** The MCP endpoint of the project's IDE server; undefined while it is not running. */
     ideMcp(repo: string): string | undefined;
     hookScript: string;
-    /** The workspace the sessions belong to (their playbook). */
+    /** The workspace the sessions belong to. */
     workspace?: string;
     geminiSystemSettings?(): Record<string, unknown> | undefined;
 }

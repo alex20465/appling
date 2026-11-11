@@ -45,7 +45,6 @@ body { display: grid; grid-template-columns: 48px 1fr; background: var(--surface
 .badge.agentsWaiting { background: var(--attention); }
 .badge.agentsWorking, .badge.tasksRunning { background: var(--leaf); }
 .badge.unsaved { background: var(--ink-muted); }
-.badge.unwatched { background: #4dabf7; }
 /* A remote repo's connection: dashed amber while (re)connecting, red when it failed, a dot in the top right when it is connected. */
 .repo.conn-connecting, .repo.conn-reconnecting { border-style: dashed; border-color: var(--attention); }
 .repo.conn-reconnecting { animation: reconnecting 1.2s ease-in-out infinite alternate; }

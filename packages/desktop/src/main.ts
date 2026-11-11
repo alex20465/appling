@@ -7,13 +7,11 @@ import { CodeViews, type SourceLocation } from './code-view.js';
 import { EXTENSION, readCodeWorkspace, writeCodeWorkspace } from './code-workspace.js';
 import { displayFingerprint, displayOf, placeWindow, type DisplayInfo } from './displays.js';
 import { gitBranch, watchGit } from './git.js';
-import { unwatched } from '@appling/ai';
 import { agentSessions, desktopHost } from './agent-sessions.js';
 import { appCommand, sessionArg, trayMode, withoutAppFlags } from './app-flags.js';
 import { AgentUi } from './agents/ui.js';
 import { cloneIpc } from './clone-ipc.js';
 import { agentContributions, RailStatus, railBadge, railLines } from './rail-status.js';
-import { desktopPlaybooks, playbookRail } from './playbooks.js';
 import { startIdeProcess, type IdeProcess } from './ide-process.js';
 import { COMMANDS, loadKeybindings } from './keybindings.js';
 import { IDE_PANE, paneId, paneLabel, parsePane, registerPaneType } from './panes.js';
@@ -28,8 +26,6 @@ import { startTray } from './tray.js';
 import { Updater } from './updater.js';
 import { currentDisplays, WindowHost } from './window-host.js';
 import { dropTarget, layoutFor, MAIN, rememberLayout, type SavedLayout } from './windows.js';
-import { viewWorkspace } from './view-workspace.js';
-import { chapterRepo } from './chapter-repo.js';
 import { Workspaces } from './workspaces.js';
 import { systemNotifier } from '@appling/pty-host';
 import { RemoteRepos } from './remote/desktop.js';
@@ -114,7 +110,7 @@ const processes = new Map<string, IdeProcess>();
 const sessions = agentSessions();
 /** What the rail shows per repo and per workspace; every feature reports into its own source (`rail-status.ts`). */
 const rail = new RailStatus();
-const railSources = { validation: rail.source('validation'), editor: rail.source('editor'), git: rail.source('git'), agents: rail.source('agents'), live: rail.source('live'), playbook: rail.source('playbook'), connection: rail.source('connection'), tasks: rail.source('tasks') };
+const railSources = { validation: rail.source('validation'), editor: rail.source('editor'), git: rail.source('git'), agents: rail.source('agents'), live: rail.source('live'), connection: rail.source('connection'), tasks: rail.source('tasks') };
 /** Repos on SSH hosts, in dev containers and in WSL (`remote/`): their servers run there, reached over the transport. */
 /** Notifications here for the terminals of remote repos that need input while no view is attached (#18). */
 const remoteStatus = new RemoteStatus({
@@ -131,9 +127,6 @@ const remotes = new RemoteRepos({ userData: app.getPath('userData'), app: () => 
 // a session counts on the rail under its Desktop repo id (an agent session's own, else the path it works in)
 sessions.onChange(list => railSources.agents.replace(agentContributions(list.map(s => ({ ...s, repo: agents?.sessions.get(s.id)?.repo ?? s.repo })))));
 rail.onChange(() => refresh());
-/** The playbook of every workspace (#19), kept in the app's data folder; unwatched chapters count on the rail. */
-const playbooks = desktopPlaybooks(join(app.getPath('userData'), 'playbooks'));
-const playbookCounts = playbookRail(playbooks, railSources.playbook, key => !!workspaces.get(key) || workspaces.live().has(key));
 /** Watchers of each repo's git `HEAD`, so the rail follows checkouts made anywhere. */
 const heads = new Map<string, () => void>();
 const updater = new Updater(() => host.base());
@@ -247,7 +240,6 @@ const agents = new AgentUi({
     send: (window, channel, ...args) => host.native(window)?.shell.webContents.send(channel, ...args),
     windowOf: sender => host.idOf(sender),
     focusActive: () => activeView()?.webContents.focus(),
-    unwatched: () => Object.assign({}, ...playbooks.all().map(book => unwatched(book).sessions)),
     refresh: () => refresh(),
     window: () => host.base()
 });
@@ -339,29 +331,9 @@ function start(): void {
         const pane = [...host.panes].find(([id, view]) => view.webContents === sender && parsePane(id)?.type === IDE_PANE)?.[0];
         return pane ? parsePane(pane)?.repo : undefined;
     };
-    ipcMain.on('ideWorkspace', event => {
-        const repo = repoOf(event.sender);
-        event.returnValue = repo ? workspaceOfView(repo) : undefined;
-    });
     ipcMain.on('ideSelected', (event, location: SourceLocation) => {
         const repo = repoOf(event.sender);
         if (repo && typeof location?.uri === 'string' && Number.isInteger(location.start)) code?.selected(repo, location);
-    });
-    ipcMain.on('ideShowChanges', (event, repo: string, session?: string) => {
-        const from = repoOf(event.sender);
-        if (!from || typeof repo !== 'string') return;
-        const workspace = workspaceOfView(from);
-        const folders = workspaces.all().find(w => w.id === workspace)?.folders.map(f => f.path) ?? [];
-        const target = chapterRepo(repo, folders, id => remotes.get(id)?.root);
-        if (!target) return;
-        if (workspaces.select(target, workspace)) changed();
-        // the view may only now come up; the repo preload holds the message until its client listens
-        const tell = (tries: number) => {
-            const view = host.panes.get(paneId(IDE_PANE, target));
-            if (view && !view.webContents.isDestroyed()) view.webContents.send('ideShowChanges', typeof session === 'string' ? session : undefined);
-            else if (tries > 0) setTimeout(() => tell(tries - 1), 300);
-        };
-        tell(20);
     });
     ipcMain.on('ideFocusSession', (event, session: string) => repoOf(event.sender) && typeof session === 'string' && agents.jump(session));
     ipcMain.on('ideTextDiff', (event, request: TextDiffRequest) => {
@@ -477,7 +449,6 @@ function changed(): void {
     const revealed = shown !== lastShown ? reveal() : undefined;
     if (shown !== lastShown) tasksMenuSoon();
     lastShown = shown;
-    playbookCounts.refresh();
     refresh();
     if (revealed) host.show(revealed);
     save();
@@ -492,7 +463,6 @@ async function launch(id: string): Promise<void> {
             node: process.execPath,
             env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
             sessions,
-            playbooks,
             host: desktopHost(workspaces, { tabs: session => agents.tabs(session), focus: session => agents.jump(session.id) }),
             onImplementation: state => code?.implementation(id, state),
             onStatus: ({ errors, unsaved, changes }) => {
@@ -530,7 +500,6 @@ async function launchRemote(id: string): Promise<void> {
         await remotes.launch(id, {
             ide: {
                 sessions,
-                playbooks,
                 host: desktopHost(workspaces, { tabs: session => agents.tabs(session), focus: session => agents.jump(session.id) }),
                 // the marks and links carry the paths there, which the code view there uses as they are
                 onImplementation: state => code?.implementation(id, state),
@@ -738,7 +707,6 @@ function refresh(): void {
         if (ref?.type === CODE_PANE) host.setHidden(pane, !code?.isShown(ref.repo));
     }
     host.arrange();
-    tellViewWorkspaces();
     code?.visible(new Set(windows.all().flatMap(w => {
         const repo = workspaces.get(windows.activeOf(w.id, openIds()) ?? '')?.active;
         return [...(repo ? [repo] : []), ...w.panes.flatMap(p => parsePane(p)?.type === CODE_PANE ? [parsePane(p)!.repo] : [])];
@@ -840,27 +808,6 @@ function activeView(): WebContentsView | undefined {
 // ---- windows (issue #14) ----
 
 /** The open workspace ids in rail order. */
-/** The workspace a repo's view belongs to now: the one of the window it is in (`viewWorkspace`). */
-function workspaceOfView(repo: string): string | undefined {
-    return viewWorkspace(repo, host.paneWindow(paneId(IDE_PANE, repo)), windows, workspaces.all());
-}
-
-/** What each repo view was last told it belongs to. */
-const toldWorkspace = new Map<string, string | undefined>();
-
-/** Tells each repo view whose workspace changed (it moved to a window of another workspace), for its playbook. */
-function tellViewWorkspaces(): void {
-    for (const [pane, view] of host.panes) {
-        const ref = parsePane(pane);
-        if (ref?.type !== IDE_PANE || view.webContents.isDestroyed()) continue;
-        const now = workspaceOfView(ref.repo);
-        if (toldWorkspace.has(pane) && toldWorkspace.get(pane) === now) continue;
-        toldWorkspace.set(pane, now);
-        view.webContents.send('ideWorkspace', now);
-    }
-    for (const pane of toldWorkspace.keys()) if (!host.panes.has(pane)) toldWorkspace.delete(pane);
-}
-
 function openIds(): string[] {
     return workspaces.all().map(w => w.id);
 }

@@ -9,7 +9,7 @@ description: Give AI assistants validated access to your model through the MCP s
 - the [appling skill and rules](#appling-skill-and-rules), which make a coding agent design and change the application through the model,
 - the [registry skill](#registry-skill), instructions for an agent that finishes a generated project one task at a time,
 - the [visual tools](#visual-tools), with which an agent in [Appling Desktop](desktop.md) shows you parts of the model on the repo's canvas and asks you to accept its changes,
-- [agent sessions](#agent-sessions) and the [playbook](#the-playbook), which let several agents work side by side in Desktop and tell you what they did as one story.
+- [agent sessions](#agent-sessions), which let several agents work side by side in Desktop.
 
 Appling has no built in chat: AI work runs through coding agents such as Claude Code, in a terminal of Desktop or anywhere else, connected to the MCP server.
 
@@ -128,14 +128,14 @@ The entry from `registry_next` carries everything an agent needs: the element's 
 
 ### Request tools
 
-These two tools work on the elements the person asked for on the [canvas](ide.md#the-right-click-menu) by name and description only, kept in `.appling/requests.json` in the workspace folder. The canvas draws each as a requested ghost until it is done.
+These two tools work on the elements the person asked for on the [canvas](ide.md#the-right-click-menu) by kind, name and description, kept in `.appling/requests.json` in the workspace folder. The canvas draws each as a requested ghost until it is done.
 
 | Tool | Input | Returns |
 |---|---|---|
-| `request_next` | none | `{ id, name, description, parent?, at, taken }`: the oldest request no agent took yet, else the oldest one, marked taken now; `parent` is the element or module it was asked for under. Or `{ done: "No open requests." }` |
-| `request_done` | `id` (string), `qn?` (string): the element that now models it | `{ ok: true, open }` with the count of requests left. With `qn` the model must have that element, else `{ error: "The model has no <qn> yet." }`; without `qn` the request is dropped |
+| `request_next` | none | `{ id, name, description, kind?, parent?, at, taken, takenBy? }`: the oldest request no agent took yet, else the oldest one this session took, else the oldest one, marked taken now by the session; `parent` is the element or module it was asked for under, none for a top level module. A request built on another request waits until that one is done. Or `{ done: "No open requests." }` |
+| `request_done` | `id` (string), `qn?` (string): the element that now models it | `{ ok: true, open, dropped? }` with the count of requests left. With `qn` the model must have that element, else `{ error: "The model has no <qn> yet." }`, and the requests built on it go under that element; without `qn` the request is dropped with the requests built on it, named in `dropped` |
 
-The agent decides the element's kind from the description and the parent, writes it with `edit` or `write_model_file`, then calls `request_done`.
+The agent models the element of the kind asked for (or decides one when a request has none) under its parent, writes it with `edit` or `write_model_file`, then calls `request_done`.
 
 ### Reference tools
 
@@ -271,7 +271,7 @@ The server instructions tell the agent to set the label after reading the first 
 | `session_release` | `elements?`, `files?`; neither releases every claim | `{ claims }` |
 | `sessions_list` | none | `{ self, others }`: the sessions of the workspace with label, status, note, repo, claims and last tool call |
 | `session_message` | `to`: a session id or label; `text` | `{ sent: true, to }`, or `{ error }` for an unknown or ambiguous session |
-| `session_inbox` | none | `{ messages }`: the unread messages of other sessions and of the person (`fromLabel` User: questions typed in the session's view, playbook responses), each with `from`, `fromLabel`, `text` and `at`; reading marks them read |
+| `session_inbox` | none | `{ messages }`: the unread messages of other sessions and of the person (`fromLabel` User: questions typed in the session's view), each with `from`, `fromLabel`, `text` and `at`; reading marks them read |
 | `ide_context` | none | What the IDE shows: the session's `tab`, the `repo`, the `activeRepo` and `workspace`, the open `tabs`, the canvas `view`, the `selection` and the open `file` |
 | `ide_act` | `action`: `focus`, `open`, `highlight` or `reveal`; `elements?`; `file?`, `line?` | `{ ok: true }`, or `{ ok: false, reason }`. `focus` shows the session's tab (Desktop only), `open` and `reveal` select an element or open a file, `highlight` marks elements on the canvas in the session's colour (an empty list clears them) |
 
@@ -293,35 +293,3 @@ In Desktop, agents reach the MCP server through one local endpoint of the app (`
 
 The IDE server pushes every change of the sessions over its `/events` websocket as `{ type: "sessions", sessions }`, and every `ide_act` except `focus` as `{ type: "act", session, color, action, ... }`. The IDE client reports what it shows (`{ type: "context", selection, view, file, watching }`) on the same socket, which `ide_context` returns, and draws the claimed and highlighted elements of its repo's sessions with a ring in the session's colour.
 
-## The playbook
-
-Sessions work in parallel, but the person follows one story at a time. Every workspace has one playbook: the chapters the sessions of all its repos write about what they plan and do, which the person plays on the canvas of the [IDE](ide.md#the-playbook) step by step. A session opens a chapter when it starts a piece of work, with its plan as ordered steps. Each step names the elements it adds, changes or removes, with a note. The person previews the planned steps and responds before the work is done. As the session works, it marks the steps done in the same chapter and closes the chapter with the result.
-
-The playbook moves only when the person steps or plays a chapter. A chapter opened while the person watches another one queues after it and never moves the canvas. The server instructions tell sessions to read the playbook first, to never interrupt, to append after the chapter being watched, and to name the earlier chapters they build on in `refs`.
-
-### Playbook tools
-
-| Tool | Input | Returns |
-|---|---|---|
-| `playbook_open_chapter` | `title`, `plan`; `steps?`: `[{ elements, change, note }]` with `change` one of `add`, `change`, `remove` or `show`; `refs?`: ids of earlier chapters | `{ chapter, watching, queued, unwatched }`: the chapter with numbered steps, and where the person is |
-| `playbook_add_steps` | `chapter?`, `steps` | The same, with the steps appended |
-| `playbook_step_done` | `chapter?`, `steps`: step numbers; `note?` | The same, with the steps marked done |
-| `playbook_close_chapter` | `chapter?`, `result` | The same, with the chapter closed |
-| `playbook_read` | none | `{ watching, queued, unwatched, chapters }`: the chapter and step the person watches (`null` when none), the unwatched chapters after it, and every chapter with its steps, states and the person's responses |
-
-Without `chapter`, the tools write the session's last open chapter. A session writes only its own chapters; it reads all of them.
-
-The person approves, rejects or comments on any step. The response is stored with the step, and while the session that wrote the chapter runs, it also lands in that session's inbox as a message from `User` (`from: "user"`), so the next tool result says a message waits.
-
-### Where playbooks live
-
-Appling Desktop holds the playbooks next to the sessions in its main process and serves them to every repo's IDE server over the same IPC channel. It keeps each workspace's playbook as a JSON file in the `playbooks` folder of the app's data folder, so playbooks outlive the sessions and the app. A session's playbook is the one of its workspace, or of its repo folder when it has none. A repo view plays the playbook of the workspace it belongs to: in Desktop, the workspace of the window that shows it. An IDE server started on its own keeps its playbooks in memory.
-
-The IDE server writes a chapter for every [generation run](implementation.md#generate-from-the-ide) it starts, as **Code generation**. The app writes chapters of its own without MCP, through `openChapter(store, author, chapter)` from `@appling/ai`. It returns a writer with `add(steps)`, `done(numbers, note?)`, `close(result)` and `read()`:
-
-```ts
-const chapter = await openChapter(ide.playbooks, { workspace, repo, label: 'Generate Django', color: '#1971c2' },
-    { title: 'Generate the Django project', plan: 'One app per module', steps: [{ elements: ['sales.Order'], change: 'show', note: 'models.py' }] });
-await chapter.done([1]);
-await chapter.close('Generated 12 files');
-```

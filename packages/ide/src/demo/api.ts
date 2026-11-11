@@ -1,4 +1,4 @@
-import type { ElementRequest, Playbook } from '@appling/ai';
+import type { ElementRequest } from '@appling/ai';
 import { applyEdit, type EditOperation, type EditResult } from '@appling/model/edit';
 import { buildSnapshot } from '../shared/model.js';
 import type { FileDiff, Review, Revision } from '../shared/review.js';
@@ -43,20 +43,23 @@ export async function saveFile(path: string, text: string): Promise<void> {
 }
 
 /** Requests stay in memory; the demo has no agent to model them. */
-export async function addRequest(request: { name: string, description: string, parent?: string }): Promise<ElementRequest> {
+export async function addRequest(request: { name: string, description: string, kind?: string, parent?: string, parentRequest?: string }): Promise<ElementRequest> {
     const added = { id: crypto.randomUUID().slice(0, 8), ...request, at: new Date().toISOString() };
     requests = [...requests, added];
     await changed();
     return added;
 }
 
-export async function updateRequest(id: string, change: { name?: string, description?: string }): Promise<void> {
+export async function updateRequest(id: string, change: { name?: string, description?: string, kind?: string }): Promise<void> {
     requests = requests.map(r => r.id === id ? { ...r, ...change } : r);
     await changed();
 }
 
+/** Removes a request with the requests built on it, which come after it. */
 export async function removeRequest(id: string): Promise<void> {
-    requests = requests.filter(r => r.id !== id);
+    const removed = new Set([id]);
+    for (const r of requests) if (r.parentRequest && removed.has(r.parentRequest)) removed.add(r.id);
+    requests = requests.filter(r => !removed.has(r.id));
     await changed();
 }
 
@@ -88,15 +91,6 @@ export async function decideProposal(): Promise<void> {}
 
 /** The demo has no agent sessions to ask. */
 export async function askSession(): Promise<void> {}
-
-/** The demo has no agent sessions, so its playbook stays empty. */
-export async function loadPlaybook(): Promise<Playbook> {
-    return { workspace: ROOT, chapters: [], position: { step: 0 } };
-}
-
-export async function movePlaybook(): Promise<Playbook> {
-    return loadPlaybook();
-}
 
 export function requestEdit(sources: Record<string, string>, operation: EditOperation): Promise<EditResult> {
     return applyEdit(sources, operation);

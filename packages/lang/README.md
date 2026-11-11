@@ -140,6 +140,7 @@ const canonical = print(model);
 | `errorsOf(workspace)` | The error messages of a built workspace |
 | `modulePath(module)` | The dotted path of a module, such as `a.b` |
 | `LAYER_OF` | The layer of every top level declaration type |
+| `mayReference(from, to)` | Whether a declaration of kind `from` may reference one of kind `to`; also at `@appling/lang/layers`, without langium |
 | `scenarioTarget(scenario)`, `scenarioErrors(scenario)`, `scenarioActor(scenario, actors)` | What a scenario's `when` runs, the errors it may fail with and the actor it runs as |
 | `ExpressionTyper` | Types expressions (`checkModel(model)`) and records `types`, `targets` (the element each name in an expression stands for) and `problems` |
 | `show(type)`, `typeOfRef(ref)` | The display name of a type, and the type a `TypeRef` declares |

@@ -118,16 +118,6 @@
         "icon": "$(run-all)"
       },
       {
-        "command": "appling.panel.replay",
-        "title": "Replay",
-        "icon": "$(debug-restart)"
-      },
-      {
-        "command": "appling.panel.session",
-        "title": "Show the session",
-        "icon": "$(terminal)"
-      },
-      {
         "command": "appling.panel.edit",
         "title": "Edit",
         "icon": "$(edit)"
@@ -173,11 +163,6 @@
         "command": "appling.changes.acceptAll",
         "title": "Appling: Accept all",
         "icon": "$(check-all)"
-      },
-      {
-        "command": "appling.playbook.play",
-        "title": "Appling: Play",
-        "icon": "$(play)"
       },
       {
         "command": "appling.review.compare",
@@ -239,11 +224,6 @@
           "when": "appling.ide && !appling.desktop"
         },
         {
-          "id": "appling.playbook",
-          "name": "Playbook",
-          "when": "appling.ide && !appling.desktop"
-        },
-        {
           "id": "appling.review",
           "name": "Review",
           "when": "appling.ide && !appling.desktop"
@@ -278,10 +258,6 @@
       {
         "view": "appling.changes",
         "contents": "No unseen changes. Every change to the model, by an agent session or anything else that writes the files, is listed here and marked on the canvas until you accept it."
-      },
-      {
-        "view": "appling.playbook",
-        "contents": "No chapters yet. Agent sessions open a chapter with their plan when they start a piece of work; you play it on the canvas and respond to each step."
       },
       {
         "view": "appling.inspector",
@@ -342,11 +318,6 @@
           "group": "navigation"
         },
         {
-          "command": "appling.playbook.play",
-          "when": "view == appling.playbook",
-          "group": "navigation"
-        },
-        {
           "command": "appling.review.compare",
           "when": "view == appling.review",
           "group": "navigation@1"
@@ -380,52 +351,42 @@
         },
         {
           "command": "appling.panel.accept",
-          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\baccept\\b/",
+          "when": "view =~ /^appling\\.(inspector|changes|review|code)$/ && viewItem =~ /\\baccept\\b/",
           "group": "inline"
         },
         {
           "command": "appling.panel.revert",
-          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\brevert\\b/",
+          "when": "view =~ /^appling\\.(inspector|changes|review|code)$/ && viewItem =~ /\\brevert\\b/",
           "group": "inline"
         },
         {
           "command": "appling.panel.reject",
-          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\breject\\b/",
+          "when": "view =~ /^appling\\.(inspector|changes|review|code)$/ && viewItem =~ /\\breject\\b/",
           "group": "inline"
         },
         {
           "command": "appling.panel.diff",
-          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\bdiff\\b/",
+          "when": "view =~ /^appling\\.(inspector|changes|review|code)$/ && viewItem =~ /\\bdiff\\b/",
           "group": "inline"
         },
         {
           "command": "appling.panel.generate",
-          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\bgenerate\\b/",
-          "group": "inline"
-        },
-        {
-          "command": "appling.panel.replay",
-          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\breplay\\b/",
-          "group": "inline"
-        },
-        {
-          "command": "appling.panel.session",
-          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\bsession\\b/",
+          "when": "view =~ /^appling\\.(inspector|changes|review|code)$/ && viewItem =~ /\\bgenerate\\b/",
           "group": "inline"
         },
         {
           "command": "appling.panel.edit",
-          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\bedit\\b/",
+          "when": "view =~ /^appling\\.(inspector|changes|review|code)$/ && viewItem =~ /\\bedit\\b/",
           "group": "inline"
         },
         {
           "command": "appling.panel.add",
-          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\badd\\b/",
+          "when": "view =~ /^appling\\.(inspector|changes|review|code)$/ && viewItem =~ /\\badd\\b/",
           "group": "inline"
         },
         {
           "command": "appling.panel.remove",
-          "when": "view =~ /^appling\\.(inspector|changes|playbook|review|code)$/ && viewItem =~ /\\bremove\\b/",
+          "when": "view =~ /^appling\\.(inspector|changes|review|code)$/ && viewItem =~ /\\bremove\\b/",
           "group": "inline"
         },
         {
@@ -469,14 +430,6 @@
         },
         {
           "command": "appling.panel.generate",
-          "when": "false"
-        },
-        {
-          "command": "appling.panel.replay",
-          "when": "false"
-        },
-        {
-          "command": "appling.panel.session",
           "when": "false"
         },
         {
@@ -529,10 +482,6 @@
         },
         {
           "command": "appling.changes.acceptAll",
-          "when": "appling.ide"
-        },
-        {
-          "command": "appling.playbook.play",
           "when": "appling.ide"
         },
         {

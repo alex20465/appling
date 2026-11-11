@@ -572,13 +572,13 @@ importers:
 
   packages/viz:
     dependencies:
+      '@appling/lang':
+        specifier: workspace:*
+        version: link:../lang
       '@appling/model':
         specifier: workspace:*
         version: link:../model
     devDependencies:
-      '@appling/lang':
-        specifier: workspace:*
-        version: link:../lang
       '@types/node':
         specifier: ^24.19.2
         version: 24.19.2

@@ -5,7 +5,7 @@ import { buildWorkspace, examples } from '../../lang/test/workspace.js';
 import { layoutFlow, layoutTree } from '../src/layout.js';
 import { loads, sproutDelays } from '../src/canvas/plant.js';
 import {
-    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, implementationMarks, sessionMarks, entityActions, factOf, flowView, GraphIndex, growOrder, growTree, lensOf, modelPulse, policyText, relations, revealPath, search, trailOf, viewFor,
+    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, implementationMarks, sessionMarks, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, requestKinds, modelPulse, policyText, relations, revealPath, search, trailOf, viewFor,
     type Card, type Flow, type TreeNode
 } from '../src/views.js';
 
@@ -74,6 +74,43 @@ test('requested elements hang as ghosts under the node they were asked for under
     const order = tree.children![0].children![0].children![0];
     expect(order.count).toBe(14);
     expect(order.children!.at(-1)).toMatchObject({ id: '~/sales/#Entity/sales.Order/?r1', type: 'request', fact: 'billed per order' });
+});
+
+test('a request built on another request hangs under it, with the kind and layer asked for', async () => {
+    const index = await indexOf(examples());
+    const requests = [
+        { id: 'r1', name: 'Invoice', description: '', kind: 'Entity', parent: 'sales.Order' },
+        { id: 'r2', name: 'Bill', description: 'bills an invoice', kind: 'Action', parentRequest: 'r1' }
+    ];
+    const open = new Set(['~', '~/sales', '~/sales/#Entity', '~/sales/#Entity/sales.Order', '~/sales/#Entity/sales.Order/?r1']);
+    const order = growTree(index, DOMAIN, open, 'shop', undefined, requests).children![0].children![0].children![0];
+    const invoice = order.children!.at(-1)!;
+    expect(invoice).toMatchObject({ type: 'request', kind: 'Entity', layer: 'domain', count: 1 });
+    expect(invoice.children).toMatchObject([{ id: '~/sales/#Entity/sales.Order/?r1/?r2', type: 'request', kind: 'Action', layer: 'behavior' }]);
+    expect(growTree(index, DOMAIN, open, 'shop', undefined, requests.slice(1)).children!.find(m => m.type === 'request')).toBeUndefined();
+});
+
+test('an empty module and a module with requests show in every lens, so the person can build on them', async () => {
+    const index = await indexOf({ ...examples(), 'billing.appling': 'module billing {\n}\n' });
+    const requests = [{ id: 'r1', name: 'Invoice', description: '', kind: 'Entity', parent: 'billing' }, { id: 'r2', name: 'Hint', description: '', kind: 'Page', parent: 'crm' }];
+    const open = new Set(['~', '~/billing']);
+    const behavior = growTree(index, { ...DOMAIN, lens: 'behavior' }, open, 'shop', undefined, requests);
+    expect(behavior.children!.map(m => m.label)).toEqual(expect.arrayContaining(['billing', 'crm']));
+    expect(behavior.children!.find(m => m.label === 'billing')).toMatchObject({ fact: 'empty', count: 1, children: [{ type: 'request', label: 'Invoice' }] });
+    expect(growTree(index, { ...DOMAIN, lens: 'behavior' }, open).children!.map(m => m.label)).toEqual(expect.arrayContaining(['billing']));
+    expect(growTree(index, { ...DOMAIN, lens: 'behavior' }, open).children!.map(m => m.label)).not.toContain('crm');
+});
+
+test('a new element may take a module in the model, any kind in a module, else a kind that may use the element', () => {
+    const node = (type: TreeNode['type'], kind?: string): TreeNode => ({ id: 'x', type, kind, label: 'x', fact: '', count: 0, relevance: 0 });
+    expect(requestKinds(node('seed'))).toEqual(['Module']);
+    expect(requestKinds(node('module'))).toEqual(expect.arrayContaining(['Entity', 'Enum', 'Action', 'Page', 'Module']));
+    expect(requestKinds(node('request', 'Module'))).toContain('Enum');
+    expect(requestKinds(node('element', 'Entity'))).toEqual(expect.arrayContaining(['Entity', 'Action', 'Query', 'Actor']));
+    expect(requestKinds(node('element', 'Entity'))).not.toContain('Interface');
+    expect(requestKinds(node('element', 'Entity'))).not.toContain('Enum');
+    expect(requestKinds(node('element', 'Action'))).not.toContain('Entity');
+    expect(requestKinds(node('request', 'Query'))).toEqual(['Query', 'Projection', 'External', 'UseCase', 'Interface', 'Page', 'Navigation', 'Flow', 'Messages', 'Scenario']);
 });
 
 test('a trail draws only the elements shown one after another, each unfolded where the tree already has it', async () => {
@@ -320,19 +357,6 @@ test('a use case is a flowchart of its steps with its error handlers and timeout
     expect(anchorOf(index, 'sales.Order.status', new Set(['sales', 'sales.Order']))).toBe('sales.Order');
 });
 
-test('a growing focus adds each element after its path from the seed, along the focus', () => {
-    const now = { unfolded: new Set(['~/sales/#Entity/sales.Order']), trail: new Set(['~', '~/sales', '~/sales/#Entity']) };
-    const next = {
-        unfolded: new Set(['~/sales/#Entity/sales.Order', '~/sales/#Entity/sales.Order/#Action/sales.PlaceOrder', '~/crm/#Entity/crm.Customer']),
-        trail: new Set(['~', '~/sales', '~/sales/#Entity', '~/sales/#Entity/sales.Order', '~/sales/#Entity/sales.Order/#Action', '~/crm', '~/crm/#Entity'])
-    };
-    expect(growOrder(now, next)).toEqual([
-        '~/sales/#Entity/sales.Order/#Action', '~/sales/#Entity/sales.Order/#Action/sales.PlaceOrder',
-        '~/crm', '~/crm/#Entity', '~/crm/#Entity/crm.Customer'
-    ]);
-    expect(growOrder(next, next)).toEqual([]);
-});
-
 test('a new model pulses the elements it added or changed inside', async () => {
     const before = await indexOf({ 'm.appling': 'module m {\n  entity A {\n    x: String\n  }\n  entity B {\n    y: String\n  }\n}' });
     const after = await indexOf({ 'm.appling': 'module m {\n  entity A {\n    renamed: String\n  }\n  entity B {\n    y: String\n  }\n  entity C {\n    z: String\n  }\n}' });
@@ -353,4 +377,22 @@ test('new nodes sprout generation by generation, siblings one after another', as
     const shoots = next.filter(p => p.parent?.node.id === module);
     expect(Math.min(...shoots.map(p => delays.get(p.node.id)!))).toBe(0);
     expect(loads(next).get(module)).toBe(shoots.length);
+});
+
+test('unfolding a wide crown leaves the nodes below where they stand and overlaps nothing', async () => {
+    const index = await indexOf(examples());
+    const open = new Set(['~']);
+    let before = layoutTree(growTree(index, DOMAIN, open));
+    // unfold everything level by level, four levels up
+    for (let level = 0; level < 4; level++) {
+        for (const p of before) if (p.node.count && !p.node.cycle) open.add(p.node.id);
+        const after = layoutTree(growTree(index, DOMAIN, open));
+        const now = new Map(after.map(p => [p.node.id, p]));
+        const depth = (p: { node: TreeNode }) => p.node.id.split('/').length;
+        const deepest = Math.max(...before.map(depth));
+        for (const p of before.filter(p => depth(p) < deepest)) expect([p.node.id, now.get(p.node.id)!.x]).toEqual([p.node.id, p.x]);
+        for (const a of after) for (const b of after) if (a !== b && Math.abs(a.y - b.y) < 100 && a.x <= b.x) expect(b.x - a.x, `${a.node.id} and ${b.node.id}`).toBeGreaterThanOrEqual(200);
+        before = after;
+    }
+    expect(before.length).toBeGreaterThan(40);
 });

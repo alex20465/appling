@@ -13,9 +13,6 @@ interface LiveProps {
     onRevert(path: string): void;
     onDecide(id: string, decision: Decision): void;
     onSelect(qn: string): void;
-    /** Only the files this session wrote, such as when a playbook chapter jumps to its session's diff. */
-    session?: string;
-    onAllSessions?(): void;
     /** A file whose text diff opens, such as when the Inspector asks for a live changed element's diff. */
     openPath?: { path: string };
 }
@@ -26,12 +23,12 @@ const STATUS: Record<LiveFile['status'], string> = { added: 'A', modified: 'M', 
  * Beside the canvas: the proposals agent sessions wait on, then every model change since the user last accepted, per
  * file, with the session that wrote it, its model diff and its text diff, to accept (stop marking it) or revert.
  */
-export function Live({ live, proposals, sessions, onAccept, onRevert, onDecide, onSelect, session, onAllSessions, openPath }: LiveProps) {
+export function Live({ live, proposals, sessions, onAccept, onRevert, onDecide, onSelect, openPath }: LiveProps) {
     const [open, setOpen] = useState<string>();
     useEffect(() => { if (openPath) setOpen(openPath.path); }, [openPath]);
     const byId = new Map(sessions.map(s => [s.id, s]));
     const changes = new Map((live?.diff.changes ?? []).map(c => [c.qn, c]));
-    const files = (live?.files ?? []).filter(f => !session || f.sessions.includes(session));
+    const files = live?.files ?? [];
 
     return (
         <div className="review live">
@@ -39,7 +36,6 @@ export function Live({ live, proposals, sessions, onAccept, onRevert, onDecide, 
             {proposals.map(p => <ProposalCard key={p.id} proposal={p} session={byId.get(p.session)} onDecide={decision => onDecide(p.id, decision)} onSelect={onSelect} />)}
 
             <h3>Changes</h3>
-            {session && <p className="muted">Written by {byId.get(session)?.label ?? byId.get(session)?.name ?? 'the session'} · <button className="link" onClick={onAllSessions}>show all</button></p>}
             {!files.length && <p className="muted">No unseen changes. Every change to the model, by an agent session or anything else that writes the files, is marked here and on the canvas until you accept it.</p>}
             {files.length > 0 && (
                 <p className="review-summary">

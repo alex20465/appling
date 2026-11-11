@@ -74,7 +74,7 @@
 .impl-unimplemented { fill: transparent; stroke: var(--appling-ink-muted) !important; stroke-dasharray: 2 1.5; }
 .impl-shifted { fill: var(--appling-info); }
 .impl-broken { fill: var(--appling-danger); }
-/* no code yet: a hollow circle; its tag says so in words, so dashes stay for planned and requested */
+/* no code yet: a hollow circle; its tag says so in words, so dashes stay for requested */
 .tree-item.not-generated .ring { fill: var(--appling-surface); }
 .impl-requested { fill: transparent; stroke: var(--appling-copper) !important; stroke-dasharray: 2 1.5; }
 /* The state in words under a node's labels, in the colour of its dot. */
@@ -84,6 +84,9 @@
 .tag-shifted { --tag: var(--appling-info); }
 .tag-broken { --tag: var(--appling-danger); }
 .tag-requested { --tag: var(--appling-copper); }
+/* a request an agent session took: the ring in the session's colour says which */
+.tag-modeling { --tag: var(--appling-info); }
+.impl-modeling { fill: var(--appling-info); }
 /* A requested element: a ghost until an agent models it. */
 .tree-item.request .ring { fill: transparent; stroke: var(--appling-copper); stroke-width: 1.5; stroke-dasharray: 3 3; }
 .tree-item.request .name { fill: var(--appling-copper); font-style: italic; }
@@ -98,7 +101,7 @@
 .node-menu-row button[type="submit"] { background: var(--appling-leaf); color: var(--appling-surface); font-weight: 600; }
 .node-menu-row button:disabled { opacity: 0.5; cursor: default; }
 .node-form { gap: 6px; padding: 8px; width: 280px; }
-.node-form input, .node-form textarea { padding: 5px 8px; border: 1px solid var(--appling-line); border-radius: 4px; background: var(--appling-surface); color: var(--appling-ink); font: inherit; resize: vertical; }
+.node-form input, .node-form textarea, .node-form select { padding: 5px 8px; border: 1px solid var(--appling-line); border-radius: 4px; background: var(--appling-surface); color: var(--appling-ink); font: inherit; resize: vertical; }
 .node-form input:focus, .node-form textarea:focus { outline: 1px solid var(--appling-leaf); border-color: var(--appling-leaf); }
 .node-menu-hint { font-size: 11px; color: var(--appling-ink-muted); }
 
@@ -116,7 +119,6 @@
 .tree-legend .change-badge circle { fill: var(--change); }
 .tree-legend .change-badge text { fill: var(--appling-surface); font: 700 10px var(--appling-font-mono); text-anchor: middle; }
 .tree-legend .legend-ring { fill: none; stroke: var(--appling-branch); stroke-width: 1.5; }
-.tree-legend .legend-ring.planned { stroke: var(--appling-change-added); stroke-dasharray: 3 2; }
 .tree-legend .legend-ring.session { stroke: var(--appling-info); stroke-width: 2; stroke-dasharray: 3 2; }
 .tree-legend .bud { fill: var(--appling-sprout); }
 .tree-legend p { margin: 8px 0 0; font-size: 11px; color: var(--appling-ink-muted); }
@@ -230,12 +232,3 @@ button.card-row:hover { background: var(--appling-surface-hover); }
 .file-link { padding: 0; border: 0; background: none; color: var(--appling-leaf); font: 11px var(--appling-font-mono); text-align: left; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .file-link:hover { color: var(--appling-sprout); }
 .cards .loose-bubbles { position: static; grid-column: 1 / -1; max-width: none; max-height: none; }
-
-/* The playbook player: planned changes preview dashed; each step plays its marks (two names so a new beat restarts it). */
-.tree-item.planned .ring { stroke-dasharray: 6 3; filter: none; }
-.tree-item.planned.removed { opacity: 0.7; }
-.tree-item.beat-0 .ring { animation: mark-beat-0 900ms ease-out 2; transform-box: fill-box; transform-origin: center; }
-.tree-item.beat-1 .ring { animation: mark-beat-1 900ms ease-out 2; transform-box: fill-box; transform-origin: center; }
-@keyframes mark-beat-0 { 0% { transform: scale(1); } 35% { transform: scale(1.35); stroke-width: 5; } 100% { transform: scale(1); } }
-@keyframes mark-beat-1 { 0% { transform: scale(1); } 35% { transform: scale(1.35); stroke-width: 5; } 100% { transform: scale(1); } }
-@media (prefers-reduced-motion: reduce) { .tree-item.beat-0 .ring, .tree-item.beat-1 .ring { animation: none; } }

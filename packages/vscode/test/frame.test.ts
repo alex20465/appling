@@ -10,16 +10,15 @@ test('requests of the IDE client stay inside the project', () => {
     expect(panelAction('/w/shop', { type: 'openTextDiff', path: 'sales.appling', rev: 'HEAD~1', line: 2 })).toEqual({ type: 'diff', path: '/w/shop/sales.appling', before: '/w/shop/sales.appling', rev: 'HEAD~1', line: 2 });
     expect(panelAction('/w/shop', { type: 'openTextDiff', path: 'sales.appling', rev: '--output=x' })).toBeUndefined();
     expect(panelAction('/w/shop', { type: 'focusSession', session: 's1' })).toEqual({ type: 'focusSession', session: 's1' });
-    expect(panelAction('/w/shop', { type: 'showChanges', repo: '/w/crm', session: 's1' })).toEqual({ type: 'showChanges', repo: '/w/crm', session: 's1' });
     expect(panelAction('/w/shop', 'openCode')).toBeUndefined();
 });
 
 test('the tab embeds the client of the server it reaches, and allows only that frame', () => {
-    const src = clientUrl('http://localhost:41234', '/w/shop.code-workspace');
-    expect(src).toBe('http://localhost:41234/?host=frame&workspace=%2Fw%2Fshop.code-workspace');
+    const src = clientUrl('http://localhost:41234');
+    expect(src).toBe('http://localhost:41234/?host=frame');
     const html = panelHtml(src, 'n0nce');
     expect(html).toContain("frame-src http://localhost:41234; script-src 'nonce-n0nce'");
-    expect(html).toContain('src="http://localhost:41234/?host=frame&amp;workspace=%2Fw%2Fshop.code-workspace"');
+    expect(html).toContain('src="http://localhost:41234/?host=frame"');
     expect(html).toContain('if (event.origin === origin) vscode.postMessage(event.data);');
 });
 

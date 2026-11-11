@@ -33,8 +33,6 @@ export interface AgentUiOptions {
     windowOf(sender: WebContents): string | undefined;
     /** Gives the focus back to the window's repo view. */
     focusActive(): void;
-    /** Unwatched playbook chapters per session (#19). */
-    unwatched(): Record<string, number>;
     /** Redraws every rail. */
     refresh(): void;
     window(): BaseWindow | undefined;
@@ -166,8 +164,7 @@ export class AgentUi {
     private entries(): BoardEntry[] {
         const repo = this.options.activeRepo();
         return boardEntries(this.sessions.list(), {
-            repoName: this.options.repoName, workspaceName: this.options.workspaceName,
-            unwatched: this.options.unwatched(), active: repo ? this.sessions.active(repo)?.id : undefined
+            repoName: this.options.repoName, workspaceName: this.options.workspaceName, active: repo ? this.sessions.active(repo)?.id : undefined
         });
     }
 

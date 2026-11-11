@@ -34,7 +34,7 @@ export interface PanelNode {
     checked?: boolean;
 }
 
-export const VERBS = ['accept', 'revert', 'reject', 'diff', 'generate', 'replay', 'session', 'edit', 'add', 'remove'] as const;
+export const VERBS = ['accept', 'revert', 'reject', 'diff', 'generate', 'edit', 'add', 'remove'] as const;
 export type Verb = typeof VERBS[number];
 
 export type Run =
@@ -56,7 +56,7 @@ export type Run =
 type Builder = (state: PanelState, index: GraphIndex) => PanelNode[];
 
 /** The panels the sidebar shows; search is VS Code's own (Go to Symbol in Workspace, from the language server). */
-export const VIEWS = ['inspector', 'changes', 'playbook', 'review', 'code', 'tasks'] as const;
+export const VIEWS = ['inspector', 'changes', 'review', 'code', 'tasks'] as const;
 export type ViewName = typeof VIEWS[number];
 
 /**
@@ -66,7 +66,7 @@ export type ViewName = typeof VIEWS[number];
 function tasksTree(state: PanelState, index: GraphIndex): PanelNode[] {
     const snapshot = state.snapshot;
     const requests = group('requests', 'Requested elements', snapshot.requests.map(r => ({
-        id: `request/${r.id}`, label: r.name, description: `${r.parent ? `under ${r.parent}` : 'in the model'} · ${r.taken ? 'taken by an agent' : 'waiting for an agent'}`,
+        id: `request/${r.id}`, label: r.name, description: `${r.kind ? `${kindLabel(r.kind)} ` : ''}${r.parentRequest ? `on the requested ${snapshot.requests.find(p => p.id === r.parentRequest)?.name}` : r.parent ? `under ${r.parent}` : 'in the model'} · ${r.taken ? 'taken by an agent' : 'waiting for an agent'}`,
         tooltip: r.description, icon: 'lightbulb', ...r.parent ? { run: { type: 'action', action: { type: 'select', qn: r.parent } } as Run } : {}
     })), true, String(snapshot.requests.length));
     if (!snapshot.targets.length) return requests;
@@ -94,7 +94,6 @@ function registryTasks(state: PanelState, index: GraphIndex): PanelNode[] {
 export const PANEL_TREES: Record<ViewName, Builder> = {
     inspector: inspectorTree,
     changes: changesTree,
-    playbook: playbookTree,
     review: reviewTree,
     code: codeTree,
     tasks: tasksTree
@@ -291,13 +290,9 @@ function changesTree(state: PanelState, index: GraphIndex): PanelNode[] {
     }));
     const live = state.live;
     const changes = new Map((live?.diff.changes ?? []).map(c => [c.qn, c]));
-    const files = (live?.files ?? []).filter(f => !state.changesOf || f.sessions.includes(state.changesOf));
-    const filter: PanelNode[] = state.changesOf ? [{
-        id: 'only', label: `Written by ${sessionName(state, state.changesOf)}`, description: 'show all', icon: 'filter', run: { type: 'action', action: { type: 'changesOf' } }
-    }] : [];
+    const files = live?.files ?? [];
     return [
         ...group('proposals', 'Proposed changes', proposals),
-        ...filter,
         ...files.map((f): PanelNode => ({
             id: `file/${f.path}`, label: f.path, file: f.path, status: f.status,
             description: `${f.sessions.length ? f.sessions.map(id => sessionName(state, id)).join(', ') : 'written to disk'} · ${new Date(f.at).toLocaleTimeString()}`,
@@ -314,37 +309,6 @@ function changesTree(state: PanelState, index: GraphIndex): PanelNode[] {
 /** "2 added · 1 changed · 0 removed" */
 export function diffSummary(diff: GraphDiff): string {
     return `${diff.added.length} added · ${diff.changed.length} changed · ${diff.removed.length} removed`;
-}
-
-function playbookTree(state: PanelState): PanelNode[] {
-    const playbook = state.playbook;
-    const chapters = playbook?.chapters ?? [];
-    const position = playbook?.position ?? { step: 0 };
-    const live = new Set(state.sessions.map(s => s.id));
-    const play = (chapter: string, step: number): Run => ({ type: 'action', action: { type: 'play', position: { chapter, step } } });
-    return chapters.map(chapter => {
-        const done = chapter.steps.filter(s => s.state === 'done').length;
-        const here = chapter.id === position.chapter;
-        const unwatched = chapter.seen === undefined || chapter.seen < chapter.steps.length;
-        const builds = chapter.refs.map(r => chapters.find(c => c.id === r)?.title ?? 'an earlier chapter');
-        return {
-            id: `chapter/${chapter.id}`, label: chapter.title, icon: here && state.playing ? 'play-circle' : unwatched ? 'circle-filled' : 'circle-outline',
-            description: [`${done}/${chapter.steps.length}`, chapter.status === 'closed' && 'closed', chapter.label].filter(Boolean).join(' · '),
-            tooltip: [chapter.plan, builds.length && `Builds on ${builds.join(', ')}`, chapter.result].filter(Boolean).join('\n\n'),
-            run: play(chapter.id, here ? position.step : 0),
-            actions: {
-                replay: play(chapter.id, 0),
-                ...chapter.session && live.has(chapter.session) ? { session: { type: 'action', action: { type: 'session', chapter: chapter.id } } as Run } : {},
-                ...chapter.session ? { diff: { type: 'action', action: { type: 'diff', chapter: chapter.id } } as Run } : {}
-            },
-            children: chapter.steps.map(step => ({
-                id: `chapter/${chapter.id}/${step.n}`, label: step.note, description: `${step.state === 'done' ? 'done' : 'planned'} · ${step.change} ${step.elements.join(', ')}`,
-                tooltip: [step.note, step.doneNote, ...step.responses.map(r => `${r.kind}${r.text ? `: ${r.text}` : ''}`)].filter(Boolean).join('\n'),
-                icon: step.state === 'done' ? 'pass' : 'circle-large-outline', run: play(chapter.id, step.n)
-            })),
-            expanded: here
-        };
-    });
 }
 
 function reviewTree(state: PanelState, index: GraphIndex): PanelNode[] {

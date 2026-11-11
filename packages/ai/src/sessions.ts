@@ -44,7 +44,7 @@ export interface AgentSession {
 }
 
 export interface SessionMessage {
-    /** The sending session's id, or `user` for the user (such as a response to a playbook step). */
+    /** The sending session's id, or `user` for the user. */
     from: string;
     fromLabel: string;
     to: string;
@@ -87,7 +87,7 @@ export interface SessionStore {
     touch(id: string, tool: string): Promise<void>;
     /** Sends a message to a session, named by its id or its label. Returns the recipient's id. */
     send(from: string, to: string, text: string): Promise<string>;
-    /** Delivers a message from the user or the app (not a session) to a session's inbox, such as a response to a step of its playbook chapter. */
+    /** Delivers a message from the user or the app (not a session) to a session's inbox, such as a question typed in its view. */
     post(to: string, message: { fromLabel: string, text: string }): Promise<void>;
     /** The session's unread messages; reading them marks them read. */
     inbox(id: string): Promise<SessionMessage[]>;
