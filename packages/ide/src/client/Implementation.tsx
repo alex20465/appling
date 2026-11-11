@@ -19,8 +19,8 @@ interface ImplementationProps {
 
 /**
  * The code side of the model: how much is implemented, generation through the targets of `appling.config.json`
- * (what changed since the last one, a selection, or everything), the running generation, and the registry tasks with
- * the agent session that claimed each.
+ * (what changed since the last one, a selection, or everything), the running generation, the elements requested on
+ * the canvas, and the registry tasks with the agent session that claimed each.
  */
 export function Implementation({ snapshot, run, sessions, selected, onSelect, onGenerate }: ImplementationProps) {
     const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -77,6 +77,21 @@ export function Implementation({ snapshot, run, sessions, selected, onSelect, on
                 )}
             </section>
             {run && <RunView run={run} onSelect={onSelect} />}
+            {snapshot.requests.length > 0 && (
+                <section>
+                    <h3>Requested elements</h3>
+                    <ul className="tasks">{snapshot.requests.map(request => (
+                        <li key={request.id}>
+                            <div>
+                                <strong>{request.name}</strong> <span className="task-status status-todo">{request.taken ? 'taken' : 'waiting'}</span>
+                                <span className="muted"> · {request.parent ? <>under {link(request.parent)}</> : 'in the model'}</span>
+                            </div>
+                            {request.description && <p className="muted">{request.description}</p>}
+                        </li>
+                    ))}</ul>
+                    <p className="muted">Asked for on the canvas (right click a node). Agent sessions model them with the MCP tool request_next.</p>
+                </section>
+            )}
             <section>
                 <h3>Registry tasks</h3>
                 {snapshot.tasks.length === 0 && <p className="muted">No open tasks.</p>}

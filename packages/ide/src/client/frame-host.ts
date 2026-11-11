@@ -1,3 +1,4 @@
+import type { EditOperation } from '@appling/model';
 import type { GenerationSelection } from '@appling/codegen';
 import type { PanelAction, PanelName, PanelState } from '../shared/panels.js';
 import type { DesktopHooks } from './hooks.js';
@@ -18,7 +19,8 @@ export type FrameRequest =
     | { type: 'panels', state: PanelState }
     | { type: 'showPanel', name: PanelName }
     | { type: 'error', message: string }
-    | { type: 'chooseStack', selection: GenerationSelection };
+    | { type: 'chooseStack', selection: GenerationSelection }
+    | { type: 'edit', operation: EditOperation };
 
 export type FrameEvent =
     | { type: 'element', qn: string }
@@ -58,6 +60,7 @@ export function frameHooks(post: (message: FrameRequest) => void, listen: (recei
         showPanel: name => post({ type: 'showPanel', name }),
         showError: message => post({ type: 'error', message }),
         chooseStack: selection => post({ type: 'chooseStack', selection }),
+        edit: operation => post({ type: 'edit', operation }),
         workspace: () => workspace
     };
 }

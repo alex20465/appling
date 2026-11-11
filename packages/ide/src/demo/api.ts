@@ -1,4 +1,4 @@
-import type { Playbook } from '@appling/ai';
+import type { ElementRequest, Playbook } from '@appling/ai';
 import { applyEdit, type EditOperation, type EditResult } from '@appling/model/edit';
 import { buildSnapshot } from '../shared/model.js';
 import type { FileDiff, Review, Revision } from '../shared/review.js';
@@ -18,9 +18,15 @@ const texts = import.meta.glob<string>('../../../../examples/*.appling', { query
 const files = new Map(Object.entries(texts).map(([path, text]) => [path.split('/').pop()!, text]));
 const listeners = new Set<(snapshot: Snapshot) => void>();
 let view = DEFAULT_VIEW;
+let requests: ElementRequest[] = [];
 
-export function loadSnapshot(): Promise<Snapshot> {
-    return buildSnapshot(ROOT, [...files].map(([path, text]) => ({ uri: `${ROOT}/${path}`, path, text })));
+export async function loadSnapshot(): Promise<Snapshot> {
+    return { ...await buildSnapshot(ROOT, [...files].map(([path, text]) => ({ uri: `${ROOT}/${path}`, path, text }))), requests };
+}
+
+async function changed(): Promise<void> {
+    const snapshot = await loadSnapshot();
+    for (const listener of listeners) listener(snapshot);
 }
 
 export async function loadView(): Promise<ViewSettings> {
@@ -33,8 +39,25 @@ export async function saveView(next: ViewSettings): Promise<void> {
 
 export async function saveFile(path: string, text: string): Promise<void> {
     files.set(path, text);
-    const snapshot = await loadSnapshot();
-    for (const listener of listeners) listener(snapshot);
+    await changed();
+}
+
+/** Requests stay in memory; the demo has no agent to model them. */
+export async function addRequest(request: { name: string, description: string, parent?: string }): Promise<ElementRequest> {
+    const added = { id: crypto.randomUUID().slice(0, 8), ...request, at: new Date().toISOString() };
+    requests = [...requests, added];
+    await changed();
+    return added;
+}
+
+export async function updateRequest(id: string, change: { name?: string, description?: string }): Promise<void> {
+    requests = requests.map(r => r.id === id ? { ...r, ...change } : r);
+    await changed();
+}
+
+export async function removeRequest(id: string): Promise<void> {
+    requests = requests.filter(r => r.id !== id);
+    await changed();
 }
 
 /** The demo has no agent sessions: only snapshots. */
@@ -73,10 +96,6 @@ export async function loadPlaybook(): Promise<Playbook> {
 
 export async function movePlaybook(): Promise<Playbook> {
     return loadPlaybook();
-}
-
-export async function respondToStep(): Promise<{ delivered: boolean }> {
-    return { delivered: false };
 }
 
 export function requestEdit(sources: Record<string, string>, operation: EditOperation): Promise<EditResult> {

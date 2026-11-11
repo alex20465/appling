@@ -25,6 +25,8 @@ The server instructions tell the assistant that the model is the source of truth
 | `registry_next` | The next open task of a generated project, with its model context; in an agent session it skips tasks other sessions claimed and claims it |
 | `registry_update` | Marks a task `done`, or `partial` with a note |
 | `run_tests` | Runs the generated project's tests |
+| `request_next` | The oldest element the person requested on the canvas by name and description (`.appling/requests.json`), marked taken |
+| `request_done` | Closes a request once the model has its element (`qn`), or drops it |
 | `code_references` | Where an element and its members are implemented, by file and line range, with their status; without a name, every reference that is not current |
 | `record_code_references` | Records the line ranges that implement an element in `.appling/references.json`, each with its first line as the anchor |
 | `implementation_status` | How far the model is implemented: counts per state and the elements that are not implemented or changed since the last generation |

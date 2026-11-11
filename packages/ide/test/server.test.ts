@@ -89,6 +89,18 @@ test('view settings are stored outside the model', async () => {
     expect(JSON.parse(readFileSync(join(root, '.appling/view.json'), 'utf8'))).toEqual(view);
 });
 
+test('elements requested on the canvas are kept in .appling/requests.json and come with the snapshot', async () => {
+    expect((await fetch(`${ide.url}/api/requests`, { method: 'POST', body: JSON.stringify({ name: ' ' }) })).status).toBe(400);
+    const added = await (await fetch(`${ide.url}/api/requests`, { method: 'POST', body: JSON.stringify({ name: 'Invoice', description: 'billed per order', parent: 'sales.Order' }) })).json();
+    expect(added).toMatchObject({ name: 'Invoice', description: 'billed per order', parent: 'sales.Order' });
+    expect((await fetch(`${ide.url}/api/requests/${added.id}`, { method: 'PUT', body: JSON.stringify({ description: 'one per order' }) })).status).toBe(200);
+    expect((await (await fetch(`${ide.url}/api/snapshot`)).json()).requests).toMatchObject([{ id: added.id, name: 'Invoice', description: 'one per order' }]);
+    expect(JSON.parse(readFileSync(join(root, '.appling/requests.json'), 'utf8'))).toHaveLength(1);
+    expect((await fetch(`${ide.url}/api/requests/${added.id}`, { method: 'DELETE' })).status).toBe(204);
+    expect((await fetch(`${ide.url}/api/requests/${added.id}`, { method: 'DELETE' })).status).toBe(404);
+    expect((await (await fetch(`${ide.url}/api/snapshot`)).json()).requests).toEqual([]);
+});
+
 test('changes on disk are pushed as snapshots', async () => {
     const socket = new WebSocket(ide.url.replace('http', 'ws') + '/events', { origin: ide.url });
     await new Promise(resolve => socket.on('open', resolve));

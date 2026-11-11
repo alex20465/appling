@@ -60,6 +60,21 @@ test('the tree starts folded at the seed and unfolds modules, then the lens decl
     expect(growTree(index, DOMAIN, open).children!.find(m => m.label === 'sales')!.fact).toBe('1 entity · 1 value · 1 enum');
 });
 
+test('requested elements hang as ghosts under the node they were asked for under, and count for its bud', async () => {
+    const index = await indexOf(examples());
+    const requests = [
+        { id: 'r1', name: 'Invoice', description: 'billed per order', parent: 'sales.Order' },
+        { id: 'r2', name: 'billing', description: 'a module for invoices' }
+    ];
+    const open = new Set(['~', '~/sales', '~/sales/#Entity', '~/sales/#Entity/sales.Order']);
+    const tree = growTree(index, DOMAIN, open, 'shop', undefined, requests);
+    expect(tree.count).toBe(3);
+    expect(tree.children!.at(-1)).toMatchObject({ id: '~/?r2', type: 'request', request: 'r2', label: 'billing' });
+    const order = tree.children![0].children![0].children![0];
+    expect(order.count).toBe(14);
+    expect(order.children!.at(-1)).toMatchObject({ id: '~/sales/#Entity/sales.Order/?r1', type: 'request', fact: 'billed per order' });
+});
+
 test('a trail draws only the elements shown one after another, each unfolded where the tree already has it', async () => {
     const index = await indexOf(examples());
     const { unfolded, trail, ids } = trailOf(index, DOMAIN, ['sales.Order', 'sales.Cancel', 'crm.Account', 'crm.Clerk']);

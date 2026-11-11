@@ -1,4 +1,4 @@
-import type { AgentSession, IdeAction, Playbook } from '@appling/ai';
+import type { AgentSession, ElementRequest, IdeAction, Playbook } from '@appling/ai';
 import type { AgentView, LiveChanges, Proposal } from './live.js';
 import type { Dependency, ElementImplementation, Graph, ResolvedReference } from '@appling/model';
 import type { GenerationEvent, GenerationSelection, TargetState, TargetTask } from '@appling/codegen';
@@ -40,6 +40,8 @@ export interface Snapshot {
     targets: TargetState[];
     /** The open registry tasks of every target. */
     tasks: TargetTask[];
+    /** The elements asked for on the canvas by name and description, for an agent to model (`.appling/requests.json`). */
+    requests: ElementRequest[];
     errors: string[];
 }
 

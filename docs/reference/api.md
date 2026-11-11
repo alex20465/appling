@@ -241,7 +241,7 @@ Tools and MCP:
 
 | Export | Purpose |
 |---|---|
-| `MODEL_TOOLS`, `AUTHORING_TOOLS`, `REGISTRY_TOOLS`, `REFERENCE_TOOLS`, `Tools` | The tool definitions: description, zod input shape and `run(context, input)` |
+| `MODEL_TOOLS`, `AUTHORING_TOOLS`, `REGISTRY_TOOLS`, `REQUEST_TOOLS`, `REFERENCE_TOOLS`, `Tools` | The tool definitions: description, zod input shape and `run(context, input)` |
 | `operationSchema` | The zod schema of an edit operation |
 | `ToolContext`, `diskContext(project)`, `ProposalContext` | Where tools read and write: the files on disk, or a working copy that collects operations |
 | `createMcpServer(root, { visualizer?, onToolCall? })`, `McpServerOptions` | An MCP server with all tools, the `implement_next_task` and `derive_model` prompts and `MCP_INSTRUCTIONS`; with a visualizer also the visual tools; `onToolCall(tool, input, result)` sees every call, such as to attribute the files it wrote |
@@ -254,6 +254,7 @@ Tools and MCP:
 | `repoFolder(repo)`, `absolute(repo, file)` | A session's repo folder and a claimed file as the store keeps them: a local folder resolved, a remote one as it is on its machine (`ssh://` ids unchanged, POSIX folders by POSIX rules, also on Windows) |
 | `PlaybookStore`, `MemoryPlaybookStore(folder?)`, `Playbook`, `Chapter`, `PlaybookStep`, `StepInput`, `PlaybookPosition`, `CHANGE_KINDS`, `RESPONSE_KINDS` | The [workspace playbooks](../tools/ai.md#the-playbook): open a chapter, add steps, mark them done, close, read, move the user, respond, onChange; with a folder, each playbook is kept there as a JSON file |
 | `servePlaybookStore(store, channel)`, `RemotePlaybookStore` | A playbook store served to another process and reached from there, like the session store |
+| `ElementRequest`, `REQUESTS`, `readRequests(root)`, `addRequest(root, request)`, `updateRequest(root, id, change)`, `removeRequest(root, id)`, `takeRequest(root)` | The elements [requested on the canvas](../tools/ide.md#the-right-click-menu) by name and description, in `<root>/.appling/requests.json` |
 | `openChapter(store, author, chapter)`, `ChapterAuthor`, `ChapterWriter` | Writes a chapter without MCP, such as for a code generation run: `add`, `done`, `close`, `read` |
 | `playbookTools(id, sessions, playbooks)`, `PLAYBOOK_INSTRUCTIONS`, `respondToStep(playbooks, sessions, chapter, step, response)` | The playbook tools of a session (`createMcpServer` adds them when `SessionScope.playbook` is set), their instructions, and the user's response, stored and delivered to the session's inbox |
 | `playbookKey(session)`, `isUnwatched(chapter)`, `unwatched(playbook)`, `playbookPosition(playbook)` | A session's playbook, the unwatched chapters in total, per session and per repo, and where the user is |

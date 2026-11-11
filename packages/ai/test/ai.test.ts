@@ -6,7 +6,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { expect, test } from 'vitest';
 import { writeRegistry } from '@appling/codegen';
 import type { Bubble, Decision, Review, Show, Status } from '@appling/viz';
-import { createMcpServer, MAX_ATTEMPTS, Project, proposal, ProposalContext, type VisualHost } from '../src/index.js';
+import { addRequest, createMcpServer, MAX_ATTEMPTS, Project, proposal, ProposalContext, type VisualHost } from '../src/index.js';
 
 function workspace(): string {
     const root = mkdtempSync(join(tmpdir(), 'appling-ai-'));
@@ -34,7 +34,7 @@ test('the MCP server exposes model and registry tools and the registry prompt', 
     const client = new Client({ name: 'test', version: '1' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await Promise.all([createMcpServer(root).connect(serverTransport), client.connect(clientTransport)]);
-    expect((await client.listTools()).tools.map(t => t.name).sort()).toEqual(['check', 'code_references', 'edit', 'graph_query', 'implementation_status', 'language_reference', 'read_source', 'record_code_references', 'registry_next', 'registry_update', 'run_tests', 'simulate', 'write_model_file']);
+    expect((await client.listTools()).tools.map(t => t.name).sort()).toEqual(['check', 'code_references', 'edit', 'graph_query', 'implementation_status', 'language_reference', 'read_source', 'record_code_references', 'registry_next', 'registry_update', 'request_done', 'request_next', 'run_tests', 'simulate', 'write_model_file']);
     const text = async (name: string, args: Record<string, unknown>) => JSON.parse(((await client.callTool({ name, arguments: args })).content as { text: string }[])[0].text);
     expect((await text('language_reference', {})).pages).toContainEqual({ page: 'overview', title: 'Language overview', description: expect.any(String) });
     expect((await text('language_reference', { page: 'domain' })).markdown).toContain('entity');
@@ -54,6 +54,13 @@ test('the MCP server exposes model and registry tools and the registry prompt', 
     expect((await text('code_references', { qn: 'sales.Checkout' })).references).toMatchObject([{ qn: 'sales.Checkout#step[2]', status: 'current' }]);
     expect((await text('record_code_references', { qn: 'sales.Checkout#step[9]', ranges: [] })).error).toBe('No element or sub-anchor sales.Checkout#step[9].');
     await text('record_code_references', { qn: 'sales.Checkout#step[2]', ranges: [] });
+    // elements the person asked for on the canvas: the oldest first, done once the model has it
+    expect(await text('request_next', {})).toEqual({ done: 'No open requests.' });
+    const asked = addRequest(root, { name: 'Invoice', description: 'billed per order', parent: 'sales.Order' });
+    expect(await text('request_next', {})).toMatchObject({ id: asked.id, name: 'Invoice', description: 'billed per order', parent: 'sales.Order', taken: expect.any(String) });
+    expect(await text('request_done', { id: asked.id, qn: 'sales.Invoice' })).toEqual({ error: 'The model has no sales.Invoice yet.' });
+    expect(await text('request_done', { id: asked.id, qn: 'sales.Order' })).toEqual({ ok: true, open: 0 });
+    expect(await text('request_done', { id: asked.id })).toEqual({ error: `No request ${asked.id}.` });
     const prompt = await client.getPrompt({ name: 'implement_next_task' });
     expect((prompt.messages[0].content as { text: string }).text).toContain('registry_next');
 });

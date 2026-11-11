@@ -59,10 +59,22 @@ type Builder = (state: PanelState, index: GraphIndex) => PanelNode[];
 export const VIEWS = ['inspector', 'changes', 'playbook', 'review', 'code', 'tasks'] as const;
 export type ViewName = typeof VIEWS[number];
 
-/** The open tasks of every target's registry: what the generated code still misses, for an agent or you to finish. */
+/**
+ * The elements asked for on the canvas, waiting for an agent to model them, then the open tasks of every target's
+ * registry: what the generated code still misses, for an agent or you to finish.
+ */
 function tasksTree(state: PanelState, index: GraphIndex): PanelNode[] {
     const snapshot = state.snapshot;
-    if (!snapshot.targets.length) return [];
+    const requests = group('requests', 'Requested elements', snapshot.requests.map(r => ({
+        id: `request/${r.id}`, label: r.name, description: `${r.parent ? `under ${r.parent}` : 'in the model'} · ${r.taken ? 'taken by an agent' : 'waiting for an agent'}`,
+        tooltip: r.description, icon: 'lightbulb', ...r.parent ? { run: { type: 'action', action: { type: 'select', qn: r.parent } } as Run } : {}
+    })), true, String(snapshot.requests.length));
+    if (!snapshot.targets.length) return requests;
+    return [...requests, ...registryTasks(state, index)];
+}
+
+function registryTasks(state: PanelState, index: GraphIndex): PanelNode[] {
+    const snapshot = state.snapshot;
     const byTarget = (target: string) => snapshot.tasks.filter(t => t.target === target).map(task => {
         const claim = claimOf(state.sessions, task.qn);
         return {

@@ -1,3 +1,4 @@
+import type { EditOperation } from '@appling/model';
 import type { PanelAction, PanelName, PanelState } from '../shared/panels.js';
 import type { TextDiffRequest } from '../shared/review.js';
 import type { GenerationSelection } from '@appling/codegen';
@@ -49,6 +50,8 @@ export interface DesktopHooks {
     showError?(message: string): void;
     /** Without a target: the host asks for a stack, adds its target and then sends the `generate` panel action. */
     chooseStack?(selection: GenerationSelection): void;
+    /** Runs an edit operation on the host's own editors (VS Code's documents, unsaved text included) and saves them. */
+    edit?(operation: EditOperation): void;
 }
 
 declare global {

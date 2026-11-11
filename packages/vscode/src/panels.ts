@@ -251,9 +251,17 @@ export class Panels implements Disposable {
         }
     }
 
+    /** An edit from the canvas's right click menu of the project at `root`; a removed element selects its parent. */
+    async apply(root: string, operation: EditOperation): Promise<void> {
+        if (!await this.edit(operation, root) || operation.op !== 'remove') return;
+        const parent = operation.target.slice(0, operation.target.lastIndexOf('.'));
+        if (parent) this.host.post(root, { type: 'element', qn: parent });
+    }
+
     /** Runs an edit operation on the texts of VS Code's documents (unsaved ones as they are), applies and saves it. */
-    private async edit(operation: EditOperation): Promise<boolean> {
-        const current = this.current();
+    private async edit(operation: EditOperation, root = this.active): Promise<boolean> {
+        const entry = root ? this.states.get(root) : undefined;
+        const current = entry && { root: root!, ...entry };
         const server = current && this.host.server(current.root);
         if (!current || !server) return false;
         const documents = await Promise.all(current.state.snapshot.files.map(f => workspace.openTextDocument(Uri.parse(f.uri))));

@@ -18,5 +18,5 @@ export async function buildSnapshot(root: string, files: SourceFile[]): Promise<
     for (const { address, node } of subAnchors(qns)) {
         if (node.$cstNode) locations[address] = { uri: AstUtils.getDocument(node).uri.toString(), start: node.$cstNode.offset, end: node.$cstNode.end };
     }
-    return { root, files, graph, dependencies: dependencies(graph), locations, code: {}, implementation: {}, anchors: {}, targets: [], tasks: [], errors: errorsOf(workspace) };
+    return { root, files, graph, dependencies: dependencies(graph), locations, code: {}, implementation: {}, anchors: {}, targets: [], tasks: [], requests: [], errors: errorsOf(workspace) };
 }

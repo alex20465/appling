@@ -8,7 +8,7 @@ import { createConnection } from 'vscode-languageserver/node';
 import { WebSocketMessageReader, WebSocketMessageWriter, type IWebSocket } from 'vscode-ws-jsonrpc';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { createApplingLspServices } from '@appling/lang/lsp';
-import { createMcpServer, handleMcpRequest, MemoryPlaybookStore, MemorySessionStore, touchedBy, type AppHost, type PlaybookStore, type SessionStore } from '@appling/ai';
+import { addRequest, createMcpServer, handleMcpRequest, MemoryPlaybookStore, MemorySessionStore, removeRequest, REQUESTS, touchedBy, updateRequest, type AppHost, type PlaybookStore, type SessionStore } from '@appling/ai';
 import { applyEdit, latestRelease, readReleases, REFERENCES, type EditOperation, type LineMark } from '@appling/model';
 import { addTarget, CONFIG, GENERATIONS, readConfig, REGISTRY, STACKS, type Stack } from '@appling/codegen';
 import type { Snapshot } from '../shared/snapshot.js';
@@ -183,7 +183,7 @@ export async function startIde(root: string, port = 0, options: IdeOptions = {})
 
     let timer: NodeJS.Timeout | undefined;
     /** Besides the model files: the config, the code references, the generation records and the targets' registries. */
-    const state = () => [CONFIG, REFERENCES, GENERATIONS, ...(readConfig(root).generate ?? []).map(t => relative(root, resolve(root, t.out, REGISTRY)))];
+    const state = () => [CONFIG, REFERENCES, GENERATIONS, REQUESTS, ...(readConfig(root).generate ?? []).map(t => relative(root, resolve(root, t.out, REGISTRY)))];
     const report = (current: Snapshot) => options.onImplementation?.({ marks: fileMarks(current), links: codeLinks(root, current) });
     refresh = () => {
         clearTimeout(timer);
@@ -365,6 +365,18 @@ async function handle(request: IncomingMessage, response: ServerResponse, root: 
         writeView(root, JSON.parse(await body(request)));
         return send(response, 204, '');
     }
+    if (url.pathname === '/api/requests' && request.method === 'POST') {
+        const { name, description, parent } = JSON.parse(await body(request)) as { name?: string, description?: string, parent?: string };
+        if (!name?.trim()) return send(response, 400, 'A name is required.');
+        return json(response, addRequest(root, { name: name.trim(), description: description?.trim() ?? '', parent }));
+    }
+    const requestId = url.pathname.match(/^\/api\/requests\/([\w-]+)$/)?.[1];
+    if (requestId && request.method === 'PUT') {
+        const { name, description } = JSON.parse(await body(request)) as { name?: string, description?: string };
+        const updated = updateRequest(root, requestId, { ...name?.trim() ? { name: name.trim() } : {}, ...description !== undefined ? { description: description.trim() } : {} });
+        return updated ? json(response, updated) : send(response, 404, 'No such request.');
+    }
+    if (requestId && request.method === 'DELETE') return removeRequest(root, requestId) ? send(response, 204, '') : send(response, 404, 'No such request.');
     if (url.pathname === '/api/edit' && request.method === 'POST') {
         const { sources, operation } = JSON.parse(await body(request)) as { sources: Record<string, string>, operation: EditOperation };
         return json(response, await applyEdit(sources, operation, { release: latestRelease(readReleases(root)) }));

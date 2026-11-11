@@ -239,6 +239,7 @@ export class Workbench implements Disposable {
             else if (action.type === 'showPanel') this.sidePanels.show(action.name);
             else if (action.type === 'error') window.showErrorMessage(`Appling: ${action.message}`);
             else if (action.type === 'chooseStack') void this.sidePanels.chooseStack(root, action.selection);
+            else if (action.type === 'edit') await this.sidePanels.apply(root, action.operation);
             else if (this.projects.has(action.repo)) await this.show(action.repo, { type: 'showChanges', ...action.session ? { session: action.session } : {} });
         } catch (error) {
             window.showErrorMessage(`Appling: ${(error as Error).message}`);

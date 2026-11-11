@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { diffMessage, openMessage, type DiffMessage, type OpenMessage } from '@appling/ide/host-requests';
 import { PANELS, type PanelName, type PanelState } from '@appling/ide/panels';
 import type { GenerationSelection } from '@appling/codegen';
+import type { EditOperation } from '@appling/model';
 import { inside } from './projects.js';
 
 /**
@@ -23,7 +24,9 @@ export type PanelAction =
     | { type: 'showPanel', name: PanelName }
     | { type: 'error', message: string }
     /** Generate without a target: ask for a stack first (`panels.ts`). */
-    | { type: 'chooseStack', selection: GenerationSelection };
+    | { type: 'chooseStack', selection: GenerationSelection }
+    /** An edit from the canvas's right click menu, on VS Code's documents (`panels.ts`). */
+    | { type: 'edit', operation: EditOperation };
 
 /** A request of the IDE client of the project at `root`, checked: files stay inside the project (code also next to it). */
 export function panelAction(root: string, message: unknown): PanelAction | undefined {
@@ -54,8 +57,19 @@ export function panelAction(root: string, message: unknown): PanelAction | undef
             const valid = s?.mode === 'outstanding' || s?.mode === 'all' || (s?.mode === 'elements' && Array.isArray(s.elements) && s.elements.every(e => typeof e === 'string'));
             return valid ? { type: 'chooseStack', selection: s as GenerationSelection } : undefined;
         }
+        case 'edit':
+            return isOperation(m.operation) ? { type: 'edit', operation: m.operation } : undefined;
     }
     return undefined;
+}
+
+/** The fields of each edit operation (`EditOperation` of `@appling/model`), all strings. */
+const OPERATION_FIELDS: Record<EditOperation['op'], string[]> = { add: ['parent', 'source'], rename: ['target', 'name'], retype: ['target', 'type'], remove: ['target'], set: ['target', 'property', 'value'] };
+
+function isOperation(value: unknown): value is EditOperation {
+    const o = value as Record<string, unknown> | undefined;
+    const fields = o && typeof o === 'object' && Object.hasOwn(OPERATION_FIELDS, o.op as string) ? OPERATION_FIELDS[o.op as EditOperation['op']] : undefined;
+    return !!fields && fields.every(f => typeof o![f] === 'string');
 }
 
 /** The URL of the IDE client in the tab: the server's (as VS Code reaches it) with the workspace it plays. */

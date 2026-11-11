@@ -32,6 +32,10 @@ test('the client hands its side panels to the extension: their state, which one 
     expect(panelAction('/repo', { type: 'error', message: 'No targets' })).toEqual({ type: 'error', message: 'No targets' });
     expect(panelAction('/repo', { type: 'chooseStack', selection: { mode: 'elements', elements: ['sales.Order'] } })).toEqual({ type: 'chooseStack', selection: { mode: 'elements', elements: ['sales.Order'] } });
     expect(panelAction('/repo', { type: 'chooseStack', selection: { mode: 'elements', elements: [1] } })).toBeUndefined();
+    // the canvas's right click menu edits through VS Code's documents
+    expect(panelAction('/repo', { type: 'edit', operation: { op: 'remove', target: 'sales.Order' } })).toEqual({ type: 'edit', operation: { op: 'remove', target: 'sales.Order' } });
+    expect(panelAction('/repo', { type: 'edit', operation: { op: 'rename', target: 'sales.Order' } })).toBeUndefined();
+    expect(panelAction('/repo', { type: 'edit', operation: { op: 'drop', target: 'sales.Order' } })).toBeUndefined();
 });
 
 test("the tab sends VS Code's theme to the IDE: its colours and fonts for the IDE's theme tokens", () => {

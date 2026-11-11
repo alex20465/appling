@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { URI } from 'langium';
+import { readRequests } from '@appling/ai';
 import { workspaceImplementation } from '@appling/codegen';
 import { findApplingFiles, lineMarks, resolveReferences, type LineMark } from '@appling/model';
 import { buildSnapshot } from '../shared/model.js';
@@ -13,7 +14,7 @@ export async function snapshot(root: string): Promise<Snapshot> {
         ...r, text: r.status === 'broken' || !existsSync(resolve(root, r.file)) ? '' : readFileSync(resolve(root, r.file), 'utf8').split('\n').slice(r.start - 1, r.end).join('\n')
     })), r => r.qn) as Record<string, CodeLocation[]>;
     const { states, anchors, targets, tasks } = workspaceImplementation(root, snapshot.graph);
-    return { ...snapshot, code, implementation: states, anchors, targets, tasks };
+    return { ...snapshot, code, implementation: states, anchors, targets, tasks, requests: readRequests(root) };
 }
 
 /** The implementation marks of the model files, by absolute path, for Appling Desktop's code view. */

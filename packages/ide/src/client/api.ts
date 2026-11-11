@@ -1,4 +1,4 @@
-import type { Playbook, PlaybookPosition, ResponseKind } from '@appling/ai';
+import type { ElementRequest, Playbook, PlaybookPosition } from '@appling/ai';
 import type { EditOperation, EditResult } from '@appling/model';
 import type { FileDiff, Review, Revision } from '../shared/review.js';
 import type { Decision, LiveChanges } from '../shared/live.js';
@@ -120,11 +120,21 @@ export async function movePlaybook(workspace: string, position: PlaybookPosition
     return response.json();
 }
 
-/** Approves, rejects or comments on a playbook step; the session that wrote it gets it as a message. */
-export async function respondToStep(chapter: string, step: number, kind: ResponseKind, text?: string): Promise<{ delivered: boolean }> {
-    const response = await fetch('/api/playbook/respond', { method: 'POST', body: JSON.stringify({ chapter, step, kind, text }) });
+/** Asks an agent for an element by name and description (`.appling/requests.json`); the snapshot shows it. */
+export async function addRequest(request: { name: string, description: string, parent?: string }): Promise<ElementRequest> {
+    const response = await fetch('/api/requests', { method: 'POST', body: JSON.stringify(request) });
     if (!response.ok) throw new Error(await response.text());
     return response.json();
+}
+
+export async function updateRequest(id: string, change: { name?: string, description?: string }): Promise<void> {
+    const response = await fetch(`/api/requests/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(change) });
+    if (!response.ok) throw new Error(await response.text());
+}
+
+export async function removeRequest(id: string): Promise<void> {
+    const response = await fetch(`/api/requests/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error(await response.text());
 }
 
 export async function requestEdit(sources: Record<string, string>, operation: EditOperation): Promise<EditResult> {

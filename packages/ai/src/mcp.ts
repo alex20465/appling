@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { Project } from './project.js';
 import { MCP_INSTRUCTIONS, REGISTRY_PROMPT, REVERSE_PROMPT } from './prompts.js';
-import { AUTHORING_TOOLS, diskContext, MODEL_TOOLS, REFERENCE_TOOLS, REGISTRY_TOOLS, type Tools } from './tools.js';
+import { AUTHORING_TOOLS, diskContext, MODEL_TOOLS, REFERENCE_TOOLS, REGISTRY_TOOLS, REQUEST_TOOLS, type Tools } from './tools.js';
 import { VISUAL_INSTRUCTIONS, visualTools, type VisualHost } from './visual.js';
 import { conflictWarning, SESSION_INSTRUCTIONS, sessionTools, touchedBy, type SessionScope } from './session-tools.js';
 import { findConflicts } from './sessions.js';
@@ -30,7 +30,7 @@ export function createMcpServer(root: string, options: McpServerOptions = {}): M
     const server = new McpServer({ name: 'appling', version: '0.1.0' }, { instructions });
     const visual = visualizer ? visualTools(visualizer) : {};
     const sessions = session ? { ...sessionTools(session), ...session.playbook ? playbookTools(session.id, session.store, session.playbook) : {} } : {};
-    for (const [name, tool] of Object.entries({ ...MODEL_TOOLS, ...AUTHORING_TOOLS, ...REGISTRY_TOOLS, ...REFERENCE_TOOLS, ...visual, ...sessions } as Tools)) {
+    for (const [name, tool] of Object.entries({ ...MODEL_TOOLS, ...AUTHORING_TOOLS, ...REGISTRY_TOOLS, ...REQUEST_TOOLS, ...REFERENCE_TOOLS, ...visual, ...sessions } as Tools)) {
         server.registerTool(name, { description: tool.description, inputSchema: tool.input }, async (input: Record<string, unknown>) => {
             const raw = await tool.run(context, input);
             try {

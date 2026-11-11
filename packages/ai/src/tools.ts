@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Simulator, UNKNOWN, type EditOperation } from '@appling/model';
 import { Project, queryGraph, type Sources } from './project.js';
 import { languageReference } from './prompts.js';
+import { readRequests, removeRequest, takeRequest } from './requests.js';
 
 export const operationSchema = z.discriminatedUnion('op', [
     z.object({ op: z.literal('add'), parent: z.string().describe('Qualified name of the element to add to, such as sales.Order'), source: z.string().describe('Appling source of the new member, such as "note: Text?"') }),
@@ -151,6 +152,23 @@ export const REGISTRY_TOOLS = {
         description: "Run the generated project's tests and return whether they passed with the end of the output.",
         input: { target: z.string().optional() },
         run: async (context, input) => context.project.runTests(input.target) ?? { error: 'No generated project with a test command.' }
+    })
+};
+
+/** Tools for the elements the person asked for on the canvas by name and description, for an agent to model. */
+export const REQUEST_TOOLS = {
+    request_next: define({
+        description: 'The next element the person asked for on the canvas: a name, a description in their words and the element or module it belongs under (parent). Model it: decide its kind, write its Appling source in the parent\'s module (or under the parent) with edit_model or write_model_file, then call request_done with its qualified name. Returns nothing when no request is open.',
+        input: {},
+        run: async context => takeRequest(context.project.root) ?? { done: 'No open requests.' }
+    }),
+    request_done: define({
+        description: 'Mark a request done once its element is in the model, or drop it (without qn) when it cannot be modeled; say why to the person then.',
+        input: { id: z.string(), qn: z.string().optional().describe('Qualified name of the element that now models the request') },
+        run: async (context, input) => {
+            if (input.qn && !(await context.project.graph()).nodes.some(n => n.qn === input.qn)) return { error: `The model has no ${input.qn} yet.` };
+            return removeRequest(context.project.root, input.id) ? { ok: true, open: readRequests(context.project.root).length } : { error: `No request ${input.id}.` };
+        }
     })
 };
 

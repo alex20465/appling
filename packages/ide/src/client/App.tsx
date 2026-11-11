@@ -11,7 +11,7 @@ import { elementTextDiff, type Review as ReviewData, type Revision } from '../sh
 import type { PanelAction, PanelName } from '../shared/panels.js';
 import { openTextDiff } from './hooks.js';
 import type { AgentView, LiveChanges, Proposal } from '../shared/live.js';
-import { acceptChanges, addTarget, connectLanguageServer, SOURCE_OPEN, decideProposal, loadCode, loadPlaybook, loadRelease, loadReview, loadRevisions, loadSnapshot, loadView, movePlaybook, onEvents, requestEdit, respondToStep, revertChange, saveFile, saveView, startGeneration } from './api.js';
+import { acceptChanges, addRequest, addTarget, connectLanguageServer, SOURCE_OPEN, decideProposal, loadCode, loadPlaybook, loadRelease, loadReview, loadRevisions, loadSnapshot, loadView, movePlaybook, onEvents, removeRequest, requestEdit, revertChange, saveFile, saveView, startGeneration, updateRequest } from './api.js';
 import { Implementation } from './Implementation.js';
 import type { OpenCode } from './CodeView.js';
 import { AgentCanvas, AgentStrip } from './AgentView.js';
@@ -19,7 +19,7 @@ import { Live } from './Live.js';
 import { PlaybookPanel, PlaybookPlayer } from './Playbook.js';
 import { unwatchedCounts } from '../shared/player.js';
 import { Editor, type Reveal } from './Editor.js';
-import { ModelCanvas } from '@appling/viz/canvas';
+import { ModelCanvas, type NodeMenu } from '@appling/viz/canvas';
 import { elementAt, GraphIndex, type SessionMark } from '@appling/viz/views';
 import { Inspector } from './Inspector.js';
 import { Review } from './Review.js';
@@ -242,6 +242,22 @@ export function App() {
         return [];
     }, [snapshot]);
 
+    /** The right click menu of the canvas nodes: edits go through the host's editors where it has them (VS Code). */
+    const nodeMenu = useMemo<NodeMenu>(() => ({
+        onEdit: qn => {
+            select(qn);
+            show('inspector');
+        },
+        onRemove: qn => {
+            const operation: EditOperation = { op: 'remove', target: qn };
+            if (desktop?.edit) return desktop.edit(operation);
+            edit(operation).then(errors => { if (errors.length) fail(new Error(`Could not remove ${qn}: ${errors.join('; ')}`)); }, fail);
+        },
+        onRequest: request => { addRequest(request).catch(fail); },
+        onEditRequest: (id, change) => { updateRequest(id, change).catch(fail); },
+        onRemoveRequest: id => { removeRequest(id).catch(fail); }
+    }), [select, edit]);
+
     /** Jumps to an element's code: in Desktop's code view when there is one, else read only in place of the model. */
     const openCode = useCallback((qn: string) => {
         const reference = snapshot?.code[qn]?.find(c => c.status !== 'broken') ?? snapshot?.code[qn]?.[0];
@@ -383,11 +399,11 @@ export function App() {
                 <div className="canvas-area">
                     {playing && playbook?.position.chapter
                         ? <PlaybookPlayer index={canvasIndex} playbook={playbook} settings={view} selected={element} repo={decodeURIComponent(snapshot.root.replace('file://', ''))}
-                            onMove={movePlay} onRespond={async (chapter, step, kind, text) => { await respondToStep(chapter, step, kind, text).catch(fail); }}
+                            onMove={movePlay}
                             onSelect={qn => select(qn, false)} onClose={() => setPlaying(false)} onSession={toSession} onDiff={toDiff} />
                         : watched?.show
                         ? <AgentCanvas key={watched.session} index={canvasIndex} view={watched} session={sessions.find(s => s.id === watched.session)} settings={view} selected={element} changes={canvasChanges} onSelect={qn => select(qn, false)} onClose={() => setWatching(undefined)} onOpenFile={openFile} />
-                        : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={element} settings={view} sessions={sessionMarks} onSession={desktop?.focusSession} implementation={snapshot.implementation} action={canvasAction} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
+                        : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={element} settings={view} sessions={sessionMarks} onSession={desktop?.focusSession} implementation={snapshot.implementation} requests={snapshot.requests} menu={nodeMenu} action={canvasAction} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
                     {!playing && unwatchedCount > 0 && (
                         <button className="playbook-chip" onClick={() => show('playbook')}>{unwatchedCount} playbook chapter{unwatchedCount > 1 ? 's' : ''} to watch</button>
                     )}

@@ -217,13 +217,31 @@ button:focus-visible { outline: 2px solid var(--appling-leaf); outline-offset: 2
 .chapter-meta { font-size: 11.5px; margin-top: 2px; }
 .chapter-meta .link { word-break: normal; }
 .chapter-result { margin: 4px 0 0; font-size: 12px; color: var(--appling-ink-soft); }
-.player { grid-template-rows: auto auto auto 1fr; }
-.player-progress { position: relative; height: 18px; background: var(--appling-surface); border-bottom: 1px solid var(--appling-line); font: 11px var(--appling-font-mono); color: var(--appling-ink-muted); }
-.player-progress > div { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--session, var(--appling-leaf)) 25%, transparent); transition: width 100ms linear; }
-.player-progress > span { position: relative; padding: 0 10px; line-height: 18px; }
-.player-step { padding: 6px 10px; border-bottom: 1px solid var(--appling-line); background: var(--appling-surface); font-size: 12.5px; display: grid; gap: 4px; }
-.player-step p { margin: 0; }
-.player-comment { flex: 1; min-width: 120px; padding: 4px 8px; border: 1px solid var(--appling-line); border-radius: 4px; background: var(--appling-surface-raised); color: var(--appling-ink); font: 12px var(--appling-font-sans); }
+.player { grid-template-rows: auto minmax(0, 1fr) auto; }
+.player > .tree-canvas { min-height: 0; }
+.agent-bar-end { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.agent-bar-end .button { margin-left: 0; }
+/* Below the canvas: the step's note as a caption over a control bar, as in a video player. */
+.player-dock { border-top: 1px solid var(--appling-line); background: var(--appling-surface-raised); font-size: 12.5px; }
+.player-caption { display: grid; gap: 3px; padding: 8px 14px 6px; max-height: 30vh; overflow: auto; }
+.player-caption p { margin: 0; }
+.player-controls { display: flex; align-items: center; gap: 4px; padding: 4px 8px 6px; }
+.player-icon { display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--appling-ink-soft); cursor: pointer; }
+.player-icon:hover:not(:disabled) { background: color-mix(in srgb, var(--appling-ink) 10%, transparent); color: var(--appling-ink); }
+.player-icon:focus-visible { outline: 2px solid var(--session, var(--appling-leaf)); outline-offset: 1px; }
+.player-icon:disabled { opacity: 0.35; cursor: default; }
+.player-icon.play { width: 36px; height: 36px; background: var(--session, var(--appling-leaf)); color: var(--appling-surface); }
+.player-icon.play:hover { background: color-mix(in srgb, var(--session, var(--appling-leaf)) 85%, var(--appling-ink)); color: var(--appling-surface); }
+/* One segment per position (the plan, then each step): the past filled, the current one filling while it plays. */
+.player-track { flex: 1; display: flex; align-items: center; height: 14px; gap: 3px; min-width: 80px; margin: 0 8px; padding: 0; list-style: none; }
+.player-track li { position: relative; flex: 1; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--appling-ink) 14%, transparent); overflow: hidden; }
+.player-track li.past { background: var(--session, var(--appling-leaf)); }
+.player-track li.here { background: color-mix(in srgb, var(--session, var(--appling-leaf)) 45%, transparent); }
+.player-track li > span { position: absolute; inset: 0 auto 0 0; background: var(--session, var(--appling-leaf)); transition: width 100ms linear; pointer-events: none; }
+.player-track button { position: absolute; inset: -8px 0; width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.player-track li:hover { height: 8px; }
+.player-status { font: 11px var(--appling-font-mono); color: var(--appling-ink-muted); white-space: nowrap; }
+@media (max-width: 640px) { .player-status { display: none; } }
 .step-state, .step-change { font: 600 10px var(--appling-font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
 .step-state.planned { color: var(--appling-ink-muted); }
 .step-state.done { color: var(--appling-leaf); }

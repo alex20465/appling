@@ -126,6 +126,17 @@ In an [agent session](#agent-sessions), `registry_next` passes over the entries 
 
 The entry from `registry_next` carries everything an agent needs: the element's qualified name, kind and layer, the steps and files that produced it, and for each missing task its description with the element's properties and related elements.
 
+### Request tools
+
+These two tools work on the elements the person asked for on the [canvas](ide.md#the-right-click-menu) by name and description only, kept in `.appling/requests.json` in the workspace folder. The canvas draws each as a requested ghost until it is done.
+
+| Tool | Input | Returns |
+|---|---|---|
+| `request_next` | none | `{ id, name, description, parent?, at, taken }`: the oldest request no agent took yet, else the oldest one, marked taken now; `parent` is the element or module it was asked for under. Or `{ done: "No open requests." }` |
+| `request_done` | `id` (string), `qn?` (string): the element that now models it | `{ ok: true, open }` with the count of requests left. With `qn` the model must have that element, else `{ error: "The model has no <qn> yet." }`; without `qn` the request is dropped |
+
+The agent decides the element's kind from the description and the parent, writes it with `edit` or `write_model_file`, then calls `request_done`.
+
 ### Reference tools
 
 These tools read and write the [code references](references.md) of the workspace (`.appling/references.json`), where each element is implemented by file and line range, and tell how far the model is implemented.

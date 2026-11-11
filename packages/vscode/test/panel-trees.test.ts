@@ -94,6 +94,12 @@ test('the tasks view lists every open registry task with what it misses; without
     expect(tree[0]).toMatchObject({ label: 'sales.PlaceOrder', description: 'todo · 1 attempt', run: { type: 'action', action: { type: 'select', qn: 'sales.PlaceOrder' } } });
     expect(labels(tree[0].children!)).toEqual(['the action body', 'tried once']);
     expect(PANEL_TREES.tasks(base, index)).toEqual([]);
+    // elements requested on the canvas come first, waiting for an agent, and even without a stack
+    const request = { id: 'r1', name: 'Invoice', description: 'billed per order', parent: 'sales.Order', at: '2026-11-11T00:00:00Z' };
+    const requested = PANEL_TREES.tasks({ ...base, snapshot: { ...snapshot, requests: [request] } }, index);
+    expect(requested[0]).toMatchObject({ label: 'Requested elements', description: '1' });
+    expect(requested[0].children![0]).toMatchObject({ label: 'Invoice', description: 'under sales.Order · waiting for an agent', tooltip: 'billed per order', run: { type: 'action', action: { type: 'select', qn: 'sales.Order' } } });
+    expect(labels(PANEL_TREES.tasks({ ...base, snapshot: { ...base.snapshot, requests: [request] } }, index))).toEqual(['Requested elements']);
     // the inspector lists the element's tasks and generates it; without a stack it asks for one
     const inspector = PANEL_TREES.inspector({ ...base, snapshot: { ...snapshot, implementation: { 'sales.PlaceOrder': { state: 'partial', tasks: 1 } } } as never, selected: 'sales.PlaceOrder' }, index);
     expect(find(inspector, 'the action body')).toBeDefined();

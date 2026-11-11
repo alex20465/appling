@@ -42,7 +42,7 @@ A project without `appling.config.json` is not set up yet: the Projects view mar
 
 ## The IDE tab
 
-Each project's tab shows the [repo view](ide.md)'s canvas, without its own source pane and side panels: there is no **Source** button, because the text is in VS Code, and the panels are in the sidebar. The tab keeps its state while it is in the background. Everything that opens a file opens it in VS Code, in the editor group beside the tab. Selecting an element on the canvas changes nothing in your editors: you open its source or its code when you ask for it.
+Each project's tab shows the [repo view](ide.md)'s canvas, without its own source pane and side panels: there is no **Source** button, because the text is in VS Code, and the panels are in the sidebar. The tab keeps its state while it is in the background. Everything that opens a file opens it in VS Code, in the editor group beside the tab. Selecting an element on the canvas changes nothing in your editors: you open its source or its code when you ask for it. A removal from the canvas's [right click menu](ide.md#the-right-click-menu) is applied to VS Code's documents, unsaved text included, and saved, as the Inspector's edits are; **Edit in the inspector** focuses the **Inspector** view.
 
 ### The panels
 
@@ -55,7 +55,7 @@ The sidebar shows the panels of the IDE tab you used last, as VS Code trees. A c
 | **Playbook** | The chapters with their steps; the badge counts the unwatched ones | A chapter or step plays it on the canvas; replay, the session's terminal and the session's changes are its buttons |
 | **Review** | The model changes and the changed files since a revision | Compare with any commit, mark on the canvas or not; text diffs open in VS Code's diff editor |
 | **Code** | The implementation counts, the targets, the elements changed since the last generation (with check boxes) and the running generation | **Generate…** picks what: the outstanding elements, the selected one, the checked ones or everything; the log opens in the **Appling Generation** output |
-| **Tasks** | The open tasks of every target's [registry](../codegen/registry.md): each element with its status, attempts and claiming session, what it still misses and its notes; the badge counts them | A task selects its element; the Inspector lists the selected element's tasks too |
+| **Tasks** | The elements [requested](ide.md#the-right-click-menu) on the canvas, waiting for an agent, then the open tasks of every target's [registry](../codegen/registry.md): each element with its status, attempts and claiming session, what it still misses and its notes; the badge counts them | A request selects the node it was asked under; a task selects its element; the Inspector lists the selected element's tasks too |
 
 | In the tab or a panel | Opens in VS Code |
 |---|---|

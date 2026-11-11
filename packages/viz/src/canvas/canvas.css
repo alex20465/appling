@@ -47,8 +47,52 @@
 .impl-unimplemented { fill: transparent; stroke: var(--appling-ink-muted) !important; stroke-dasharray: 2 1.5; }
 .impl-shifted { fill: var(--appling-info); }
 .impl-broken { fill: var(--appling-danger); }
-/* no code yet: a hollow circle with a dashed ring */
-.tree-item.not-generated .ring { fill: var(--appling-surface); stroke-dasharray: 4 3; }
+/* no code yet: a hollow circle; its tag says so in words, so dashes stay for planned and requested */
+.tree-item.not-generated .ring { fill: var(--appling-surface); }
+.impl-requested { fill: transparent; stroke: var(--appling-copper) !important; stroke-dasharray: 2 1.5; }
+/* The state in words under a node's labels, in the colour of its dot. */
+.tree-item .tag text { font: 600 10px var(--appling-font-mono); letter-spacing: 0.04em; fill: var(--tag, var(--appling-ink-muted)); }
+.tag-implemented { --tag: var(--appling-leaf); }
+.tag-partial { --tag: var(--appling-amber); }
+.tag-shifted { --tag: var(--appling-info); }
+.tag-broken { --tag: var(--appling-danger); }
+.tag-requested { --tag: var(--appling-copper); }
+/* A requested element: a ghost until an agent models it. */
+.tree-item.request .ring { fill: transparent; stroke: var(--appling-copper); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.tree-item.request .name { fill: var(--appling-copper); font-style: italic; }
+
+/* The right click menu of a node, and the form of a request. */
+.node-menu { position: absolute; z-index: 3; display: grid; gap: 2px; min-width: 200px; max-width: 280px; padding: 4px; border: 1px solid var(--appling-line-strong); border-radius: 6px; background: var(--appling-surface-raised); box-shadow: 0 6px 18px var(--appling-shadow); font: 12.5px var(--appling-font-sans); color: var(--appling-ink); cursor: default; user-select: text; }
+.node-menu > button, .node-menu-row button { padding: 5px 10px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.node-menu > button:hover, .node-menu > button:focus-visible, .node-menu-row button:hover { background: var(--appling-surface-hover); outline: none; }
+.node-menu .danger { color: var(--appling-danger); }
+.node-menu p { margin: 4px 6px; }
+.node-menu-row { display: flex; gap: 6px; justify-content: flex-end; padding: 2px; }
+.node-menu-row button[type="submit"] { background: var(--appling-leaf); color: var(--appling-surface); font-weight: 600; }
+.node-menu-row button:disabled { opacity: 0.5; cursor: default; }
+.node-form { gap: 6px; padding: 8px; width: 280px; }
+.node-form input, .node-form textarea { padding: 5px 8px; border: 1px solid var(--appling-line); border-radius: 4px; background: var(--appling-surface); color: var(--appling-ink); font: inherit; resize: vertical; }
+.node-form input:focus, .node-form textarea:focus { outline: 1px solid var(--appling-leaf); border-color: var(--appling-leaf); }
+.node-menu-hint { font-size: 11px; color: var(--appling-ink-muted); }
+
+/* What the marks mean, above the bottom bar. */
+.tree-legend { position: absolute; z-index: 2; right: 12px; bottom: 44px; max-width: min(340px, calc(100% - 24px)); max-height: calc(100% - 140px); overflow: auto; padding: 8px 12px; border: 1px solid var(--appling-line-strong); border-radius: 6px; background: var(--appling-surface-raised); box-shadow: 0 6px 18px var(--appling-shadow); font: 12px var(--appling-font-sans); color: var(--appling-ink-soft); cursor: default; }
+.tree-legend h4 { margin: 6px 0 2px; font: 600 10px var(--appling-font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--appling-ink-muted); }
+.tree-legend h4:first-child { margin-top: 0; }
+.tree-legend ul { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+.tree-legend li { display: flex; align-items: center; gap: 8px; }
+.tree-legend svg, .legend-glyph { flex: none; width: 18px; text-align: center; }
+.tree-legend .impl { stroke: var(--appling-surface); stroke-width: 1.5; }
+.tree-legend .added { --change: var(--appling-change-added); }
+.tree-legend .changed { --change: var(--appling-change-changed); }
+.tree-legend .removed { --change: var(--appling-change-removed); }
+.tree-legend .change-badge circle { fill: var(--change); }
+.tree-legend .change-badge text { fill: var(--appling-surface); font: 700 10px var(--appling-font-mono); text-anchor: middle; }
+.tree-legend .legend-ring { fill: none; stroke: var(--appling-branch); stroke-width: 1.5; }
+.tree-legend .legend-ring.planned { stroke: var(--appling-change-added); stroke-dasharray: 3 2; }
+.tree-legend .legend-ring.session { stroke: var(--appling-info); stroke-width: 2; stroke-dasharray: 3 2; }
+.tree-legend .bud { fill: var(--appling-sprout); }
+.tree-legend p { margin: 8px 0 0; font-size: 11px; color: var(--appling-ink-muted); }
 /* a folded node shrinks into the node it hangs from */
 .tree-item.leaving { opacity: 0; pointer-events: none; transition: transform 380ms ease-in, opacity 380ms ease-in; }
 .tree-item.leaving .grow { transform: scale(0.3); transition: transform 380ms ease-in; animation: none; }

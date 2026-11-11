@@ -30,9 +30,11 @@ export const DEFAULT_VIEW: ViewSettings = { lens: 'domain', linkEntities: false 
 export interface TreeNode {
     /** The path from the seed, unique in the tree. */
     id: string;
-    type: 'seed' | 'module' | 'group' | 'element';
+    type: 'seed' | 'module' | 'group' | 'element' | 'request';
     /** The module or the element. */
     qn?: string;
+    /** For a request: its id. */
+    request?: string;
     /** The element kind, or the kind of a group's elements. */
     kind?: string;
     layer?: string;
@@ -49,11 +51,21 @@ export interface TreeNode {
     children?: TreeNode[];
 }
 
+/** An element asked for by name and description, for an agent to model (`ElementRequest` of `@appling/ai`). */
+export interface TreeRequest {
+    id: string;
+    name: string;
+    description: string;
+    /** The element or module it was asked for under; none for the model as a whole. */
+    parent?: string;
+}
+
 /**
  * Grows the tree of a lens: the seed and every node whose id is in `unfolded` show their children. A node on the
- * `trail` shows only the children in `unfolded` or on the trail.
+ * `trail` shows only the children in `unfolded` or on the trail. `requests` hang under the node they were asked for
+ * under, after its own children.
  */
-export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Set<string>, name = 'model', trail = new Set<string>()): TreeNode {
+export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Set<string>, name = 'model', trail = new Set<string>(), requests: TreeRequest[] = []): TreeNode {
     const shown = (n: GraphNode) => settings.linkEntities || !n.props.link;
     const roots = index.graph.nodes.filter(n => LENSES[settings.lens].kinds.includes(n.kind) && index.declaration(n.qn) === n.qn && shown(n));
     const modules = [...new Set(roots.map(n => n.module))];
@@ -65,6 +77,9 @@ export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Se
         }
         return dependents.get(qn)!;
     };
+    const asked = (qn: string | undefined, parent: string): TreeNode[] => requests.filter(r => r.parent === qn).map(r => (
+        { id: `${parent}/?${r.id}`, type: 'request', request: r.id, label: r.name, fact: r.description, count: 0, relevance: 0.5 }
+    ));
     const childrenOf = (id: string, grow: () => TreeNode[]) => {
         if (unfolded.has(id)) return grow();
         if (trail.has(id)) return grow().filter(child => unfolded.has(child.id) || trail.has(child.id));
@@ -73,9 +88,10 @@ export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Se
         const id = `${parent}/${node.qn}`;
         const cycle = path.includes(node.qn);
         const used = cycle ? [] : dependentsOf(node.qn);
+        const wanted = cycle ? [] : asked(node.qn, id);
         const label = node.module === module ? localName(node.qn, index) : node.qn;
-        const tree: TreeNode = { id, type: 'element', qn: node.qn, kind: node.kind, layer: node.layer, label, fact: factOf(index, node), count: used.length, relevance: index.relevanceOf(node.qn), cycle };
-        if (used.length) tree.children = childrenOf(id, () => grouped(used, id, node.module, [...path, node.qn]));
+        const tree: TreeNode = { id, type: 'element', qn: node.qn, kind: node.kind, layer: node.layer, label, fact: factOf(index, node), count: used.length + wanted.length, relevance: index.relevanceOf(node.qn), cycle };
+        if (tree.count) tree.children = childrenOf(id, () => [...used.length ? grouped(used, id, node.module, [...path, node.qn]) : [], ...wanted]);
         return tree;
     };
     /** Elements directly when they are of one kind, else one group per kind; the most relevant first. */
@@ -90,15 +106,17 @@ export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Se
             return group;
         });
     };
-    const seed: TreeNode = { id: '~', type: 'seed', label: name, fact: `${modules.length} module${modules.length === 1 ? '' : 's'}`, count: modules.length, relevance: 1 };
+    const loose = asked(undefined, '~');
+    const seed: TreeNode = { id: '~', type: 'seed', label: name, fact: `${modules.length} module${modules.length === 1 ? '' : 's'}`, count: modules.length + loose.length, relevance: 1 };
     seed.children = childrenOf(seed.id, () => modules.sort((a, b) => index.relevanceOf(b) - index.relevanceOf(a)).map(module => {
             const members = roots.filter(n => n.module === module);
             const id = `~/${module}`;
             const kinds = [...Map.groupBy(members, n => n.kind)].sort(([a], [b]) => rank(a) - rank(b)).map(([kind, list]) => `${list.length} ${list.length === 1 ? kindLabel(kind) : plural(kind).toLowerCase()}`);
-            const tree: TreeNode = { id, type: 'module', qn: module, label: module, fact: kinds.join(' · '), count: members.length, relevance: index.relevanceOf(module) };
-            tree.children = childrenOf(id, () => grouped(members, id, module, []));
+            const wanted = asked(module, id);
+            const tree: TreeNode = { id, type: 'module', qn: module, label: module, fact: kinds.join(' · '), count: members.length + wanted.length, relevance: index.relevanceOf(module) };
+            tree.children = childrenOf(id, () => [...grouped(members, id, module, []), ...wanted]);
             return tree;
-        }));
+        }).concat(loose));
     return seed;
 }
 
@@ -322,6 +340,11 @@ export function changeMarks(index: GraphIndex, changes: MarkedChanges, modules =
 /** Words for the implementation states, for marks and their tooltips. */
 export const IMPLEMENTATION_LABELS: Record<ImplementationState, string> = {
     implemented: 'implemented', partial: 'partly implemented: open registry tasks', unimplemented: 'not implemented', shifted: 'code reference shifted', broken: 'code reference broken'
+};
+
+/** The short words of the implementation states, for the tag line under a node's name. */
+export const IMPLEMENTATION_TAGS: Record<ImplementationState, string> = {
+    implemented: 'implemented', partial: 'partly implemented', unimplemented: 'not implemented', shifted: 'code moved', broken: 'code missing'
 };
 
 /**

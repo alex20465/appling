@@ -3,7 +3,7 @@ import { layoutTree, type Placed } from '../layout.js';
 import { relevanceLevel } from '@appling/model/relevance';
 import type { Bubble } from '../protocol.js';
 import type { ImplementationState } from '@appling/model/implementation';
-import { anchorOf, changeMarks, growOrder, growTree, IMPLEMENTATION_LABELS, implementationMarks, sessionMarks, kindLabel, LENSES, revealPath, trailOf, type GraphIndex, type Lens, type MarkedChanges, type SessionMark, type TreeNode, type ViewSettings } from '../views.js';
+import { anchorOf, changeMarks, growOrder, growTree, IMPLEMENTATION_LABELS, IMPLEMENTATION_TAGS, implementationMarks, sessionMarks, kindLabel, LENSES, revealPath, trailOf, type GraphIndex, type Lens, type MarkedChanges, type SessionMark, type TreeNode, type TreeRequest, type ViewSettings } from '../views.js';
 import { BubbleView, LooseBubbles, memberOf, type BubbleStep } from './Bubble.js';
 
 interface CanvasProps {
@@ -21,8 +21,12 @@ interface CanvasProps {
     sessions?: SessionMark[];
     /** A click on a claim ring: jump to that session (its tab in Appling Desktop). Without it the ring is not clickable. */
     onSession?(session: string): void;
-    /** How far each element is implemented (`@appling/model/implementation`): declarations and modules get a dot in the colour of their rolled up state. */
+    /** How far each element is implemented (`@appling/model/implementation`): declarations and modules get a dot and a tag in the colour of their rolled up state. */
     implementation?: Record<string, { state: ImplementationState }>;
+    /** Elements asked for by name and description, drawn as ghosts under the node they were asked for under. */
+    requests?: TreeRequest[];
+    /** The right click menu of the nodes; without it there is none. */
+    menu?: NodeMenu;
     /** The place of the shown bubble among all, for its back and next buttons. */
     step?: BubbleStep;
     /** Changing it plays the marks of `changes` once more, such as on every step of the playbook player. */
@@ -40,6 +44,28 @@ interface CanvasProps {
     onOpenFile?(file: string, line: number): void;
 }
 
+/** What the right click menu of a node does. */
+export interface NodeMenu {
+    /** Shows the element or module in the inspector, to edit it there. */
+    onEdit(qn: string): void;
+    /** Removes the element or module, once the person confirmed it in the menu. */
+    onRemove(qn: string): void;
+    /** Asks an agent for a new element under `parent` (none: the model as a whole). */
+    onRequest(request: { name: string, description: string, parent?: string }): void;
+    onEditRequest(id: string, change: { name: string, description: string }): void;
+    onRemoveRequest(id: string): void;
+}
+
+/** The open menu: on which node, where (in the canvas), and whether it shows its actions, a confirmation or a form. */
+interface OpenMenu {
+    node: TreeNode;
+    /** The qn new elements go under. */
+    parent?: string;
+    x: number;
+    y: number;
+    mode: 'actions' | 'remove' | 'request' | 'editRequest';
+}
+
 interface Camera {
     x: number;
     y: number;
@@ -47,7 +73,7 @@ interface Camera {
 }
 
 /** The smallest and the largest circle of each node type; relevance decides in between. */
-const RADIUS: Record<TreeNode['type'], [number, number]> = { seed: [34, 34], module: [10, 22], group: [11, 18], element: [13, 30] };
+const RADIUS: Record<TreeNode['type'], [number, number]> = { seed: [34, 34], module: [10, 22], group: [11, 18], element: [13, 30], request: [14, 14] };
 
 function radius(node: TreeNode): number {
     const [low, high] = RADIUS[node.type];
@@ -62,27 +88,36 @@ const UNFOLD = 900;
 /** How long a folded node takes to shrink back into the node it hangs from (`.leaving` in canvas.css). */
 const FOLD = 380;
 
-/** The nodes that were placed and are no more, moved onto the nearest of their ancestors that stays. */
-function folded(before: Placed[], now: Map<string, Placed>): Placed[] {
-    return before.filter(p => !now.has(p.node.id)).flatMap(p => {
+type Drawn = Placed & { leaving?: boolean };
+
+/**
+ * The nodes placed now plus those placed before and no more, moved onto the nearest of their ancestors that stays.
+ * All in one list in the order drawn before: React remounts a node that changes lists and moves one met out of
+ * order, and either way its transition is lost.
+ */
+function folding(before: Placed[], now: Map<string, Placed>): Drawn[] {
+    const kept = before.flatMap((p): Drawn[] => {
+        if (now.has(p.node.id)) return [now.get(p.node.id)!];
         let stays = p.parent;
         while (stays && !now.has(stays.node.id)) stays = stays.parent;
         const to = stays && now.get(stays.node.id)!;
-        return to ? [{ ...p, x: to.x, y: to.y, parent: to }] : [];
+        return to ? [{ ...p, x: to.x, y: to.y, parent: to, leaving: true }] : [];
     });
+    const drawn = new Set(before.map(p => p.node.id));
+    return [...kept, ...[...now.values()].filter(p => !drawn.has(p.node.id))];
 }
 
 /** The letter of a change on its circle, as Source Control marks files. */
 const CHANGE_LETTERS: Record<string, string> = { added: 'A', changed: 'M', removed: 'D' };
 
 /** How far the labels reach right of the circle, so a press anywhere on them counts. */
-const LABEL: Record<TreeNode['type'], number> = { seed: 0, module: 210, group: 140, element: 190 };
+const LABEL: Record<TreeNode['type'], number> = { seed: 0, module: 210, group: 140, element: 190, request: 190 };
 
 /**
  * The model as a tree that grows from a seed: modules first, then the declarations of the lens, then on every
  * unfold what uses the unfolded declaration. Only what you unfold is drawn.
  */
-export function ModelCanvas({ index, name, focus, selected, settings, bubbles = [], changes, sessions, onSession, implementation, action, onSelect, onSettings, onOpenFile, step, beat, grow, onGrown }: CanvasProps) {
+export function ModelCanvas({ index, name, focus, selected, settings, bubbles = [], changes, sessions, onSession, implementation, requests, menu, action, onSelect, onSettings, onOpenFile, step, beat, grow, onGrown }: CanvasProps) {
     const box = useRef<HTMLDivElement>(null);
     const drag = useRef<{ x: number, y: number, moved: boolean }>(undefined);
     const [camera, setCamera] = useState<Camera>({ x: 0, y: 0, k: 1 });
@@ -100,20 +135,23 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
     const grown = useRef(onGrown);
     grown.current = onGrown;
 
-    const tree = useMemo(() => growTree(index, settings, unfolded, name, trail), [index, settings, unfolded, name, trail]);
+    const [opened, setOpened] = useState<OpenMenu>();
+    const [legend, setLegend] = useState(false);
+    const tree = useMemo(() => growTree(index, settings, unfolded, name, trail, requests), [index, settings, unfolded, name, trail, requests]);
     const placed = useMemo(() => layoutTree(tree), [tree]);
     const byId = useMemo(() => new Map(placed.map(p => [p.node.id, p])), [placed]);
     // folded nodes shrink back into the nearest node that stays, then go (same keys, so the transition runs)
     const previous = useRef<Placed[]>([]);
     const [settled, setSettled] = useState(placed);
-    const leaving = useMemo(() => folded(previous.current, byId), [placed]);
+    const folds = useMemo(() => folding(previous.current, byId), [placed]);
+    const leaving = folds.some(p => p.leaving);
     useEffect(() => {
         previous.current = placed;
-        if (!leaving.length) return;
+        if (!leaving) return;
         const timer = setTimeout(() => setSettled(placed), FOLD);
         return () => clearTimeout(timer);
     }, [placed]);
-    const gone = settled === placed ? [] : leaving;
+    const drawing: Drawn[] = leaving && settled !== placed ? folds : placed;
     const here = byId.get(current) ?? byId.get('~')!;
     const lit = new Set(lineage(here).map(p => p.node.id));
     const chosen = selected && index.declaration(selected);
@@ -129,12 +167,17 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
             setUnfolded(next.unfolded);
             setTrail(next.trail);
             setCurrent(next.last ?? '~');
+            if (added.length) return void (growing.current = setTimeout(() => grown.current?.(), UNFOLD));
             if (next.last) setFollow({ id: next.last, glide: grow ? SLOW_GLIDE : undefined });
             else setFitting(true);
-            growing.current = setTimeout(() => grown.current?.(), added.length ? SLOW_GLIDE : 0);
+            growing.current = setTimeout(() => grown.current?.(), 0);
         };
         if (!added.length) return land();
-        // what stays folds back at once; the rest grows one node after another, the camera gliding to each
+        // The camera glides once to where the new nodes will stand, and stays there while they grow one after another,
+        // so the eye follows the growth instead of a camera that chases each node.
+        const final = layoutTree(growTree(index, settings, next.unfolded, name, next.trail));
+        const target = new Set([...added, next.last]);
+        frame(final.filter(p => target.has(p.node.id)), Math.max(seen.current.k, 1), SLOW_GLIDE);
         let shown = new Set([...unfolded].filter(id => next.unfolded.has(id)));
         let path = new Set([...trail].filter(id => next.trail.has(id)));
         setUnfolded(shown);
@@ -146,7 +189,6 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
             setUnfolded(shown);
             setTrail(path);
             setCurrent(id);
-            setFollow({ id, glide: SLOW_GLIDE });
             growing.current = setTimeout(() => i + 1 < added.length ? unfold(i + 1) : land(), UNFOLD);
         };
         growing.current = setTimeout(() => unfold(0), UNFOLD / 2);
@@ -280,13 +322,32 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
         ? `${here.node.qn} · ${kindLabel(here.node.kind!)} · ${relevanceLevel(here.node.relevance)}${here.node.fact ? ` · ${here.node.fact}` : ''}${here.node.cycle ? ' · already on this branch' : here.node.count ? ` · used by ${here.node.count}` : ' · used by nothing'}`
         : here.node.type === 'module' ? `module ${here.node.qn} · ${relevanceLevel(here.node.relevance)} · ${here.node.fact}`
         : here.node.type === 'group' ? `${here.node.count} ${here.node.label.toLowerCase()} · ${here.parent?.node.qn ?? ''}`
+        : here.node.type === 'request' ? `requested: ${here.node.label} · waits for an agent to model it${here.node.fact ? ` · ${here.node.fact}` : ''}`
         : `${here.node.label} · ${here.node.fact}`;
+
+    /** Opens the right click menu at the pointer, kept inside the canvas. */
+    const openMenu = (node: TreeNode, event: React.MouseEvent) => {
+        if (!menu || !box.current) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const rect = box.current.getBoundingClientRect();
+        const placedAt = byId.get(node.id);
+        const parent = node.type === 'group' ? placedAt?.parent?.node.qn : node.qn;
+        const x = Math.max(8, Math.min(event.clientX - rect.left, rect.width - 290));
+        const y = Math.max(8, Math.min(event.clientY - rect.top, rect.height - 250));
+        setOpened({ node, parent, x, y, mode: 'actions' });
+    };
 
     return (
         <div
             className="tree-canvas"
             ref={box}
-            onPointerDown={event => { if (event.button === 0) drag.current = { x: event.clientX, y: event.clientY, moved: false }; }}
+            onPointerDown={event => {
+                if ((event.target as Element).closest('.node-menu')) return;
+                setOpened(undefined);
+                if (event.button === 0) drag.current = { x: event.clientX, y: event.clientY, moved: false };
+            }}
+            onContextMenu={event => openMenu(byId.get('~')!.node, event)}
             onPointerMove={event => {
                 const start = drag.current;
                 if (!start || !(event.buttons & 1)) return;
@@ -303,14 +364,12 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
                 <g transform={`translate(${camera.x} ${camera.y}) scale(${camera.k})`}>
                     <line className="ground" x1={-6000} x2={6000} y1={48} y2={48} />
                     <path className="roots" d="M 0 34 C -6 54, -26 60, -44 74 M 0 34 C 6 54, 26 60, 44 74 M 0 34 C 0 56, -4 70, -6 86" />
-                    {placed.filter(p => p.parent).map(p => (
-                        <path key={`branch ${p.node.id}`} className={`branch${lit.has(p.node.id) ? ' lit' : ''}`} pathLength={1} style={{ d: `path("${branch(p)}")` } as React.CSSProperties} />
+                    {drawing.filter(p => p.parent).map(p => (
+                        <path key={`branch ${p.node.id}`} className={`branch${p.leaving ? ' leaving' : lit.has(p.node.id) ? ' lit' : ''}`} pathLength={1} style={{ d: `path("${branch(p)}")` } as React.CSSProperties} />
                     ))}
-                    {gone.map(p => <path key={`branch ${p.node.id}`} className="branch leaving" pathLength={1} style={{ d: `path("${branch(p)}")` } as React.CSSProperties} />)}
-                    {placed.map(p => (
-                        <TreeItem key={p.node.id} placed={p} current={p.node.id === current} chosen={!!chosen && p.node.qn === chosen} unfolded={!!p.node.children} mark={p.node.qn && marks.get(p.node.qn) && [marks.get(p.node.qn), changes?.planned && 'planned', beat !== undefined && `beat-${beat % 2}`].filter(Boolean).join(' ')} session={p.node.qn ? claimed.get(p.node.qn) : undefined} onSession={onSession} implementation={p.node.qn && p.node.type !== 'group' ? implemented.get(p.node.qn) : undefined} onPress={press} />
+                    {drawing.map(p => p.leaving ? <TreeItem key={p.node.id} placed={p} current={false} chosen={false} unfolded={false} leaving onPress={() => {}} /> : (
+                        <TreeItem key={p.node.id} placed={p} current={p.node.id === current} chosen={!!chosen && p.node.qn === chosen} unfolded={!!p.node.children} mark={p.node.qn && marks.get(p.node.qn) && [marks.get(p.node.qn), changes?.planned && 'planned', beat !== undefined && `beat-${beat % 2}`].filter(Boolean).join(' ')} session={p.node.qn ? claimed.get(p.node.qn) : undefined} onSession={onSession} implementation={p.node.qn && p.node.type !== 'group' ? implemented.get(p.node.qn) : undefined} onPress={press} onMenu={menu ? openMenu : undefined} />
                     ))}
-                    {gone.map(p => <TreeItem key={p.node.id} placed={p} current={false} chosen={false} unfolded={false} leaving onPress={() => {}} />)}
                 </g>
             </svg>
             {anchored.filter(a => a.anchor).map(({ bubble, anchor }, i) => {
@@ -323,6 +382,8 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
                 return <BubbleView key={`${i} ${bubble.target} ${bubble.text}`} bubble={bubble} member={memberOf(bubble, anchor!)} style={style} tail="up" step={step} onOpenFile={onOpenFile} />;
             })}
             <LooseBubbles bubbles={anchored.filter(a => !a.anchor).map(a => a.bubble)} step={step} onOpenFile={onOpenFile} />
+            {opened && menu && <MenuView key={`${opened.node.id} ${opened.mode}`} at={opened} menu={menu} requests={requests} onMode={mode => setOpened({ ...opened, mode })} onClose={() => setOpened(undefined)} />}
+            {legend && <Legend />}
             <div className="tree-top">
                 <nav className="lenses" aria-label="Lens">
                     {(Object.keys(LENSES) as Lens[]).map(key => (
@@ -343,17 +404,21 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
                 <button onClick={() => zoom(1.25)} aria-label="Zoom in">+</button>
                 <button onClick={fit}>Fit</button>
                 <button onClick={replant}>Replant</button>
+                <button onClick={() => setLegend(!legend)} aria-pressed={legend}>Legend</button>
             </div>
         </div>
     );
 }
 
-function TreeItem({ placed, current, chosen, unfolded, mark, session, onSession, implementation, leaving, onPress }: { placed: Placed, current: boolean, chosen: boolean, unfolded: boolean, mark?: string, session?: SessionMark, onSession?(session: string): void, implementation?: ImplementationState, leaving?: boolean, onPress(node: TreeNode): void }) {
+function TreeItem({ placed, current, chosen, unfolded, mark, session, onSession, implementation, leaving, onPress, onMenu }: { placed: Placed, current: boolean, chosen: boolean, unfolded: boolean, mark?: string, session?: SessionMark, onSession?(session: string): void, implementation?: ImplementationState, leaving?: boolean, onPress(node: TreeNode): void, onMenu?(node: TreeNode, event: React.MouseEvent): void }) {
     const { node, x, y } = placed;
     const r = radius(node);
     const bud = node.count > 0 && !node.cycle && !unfolded;
     const classes = ['tree-item', node.type, node.type !== 'seed' && relevanceLevel(node.relevance), node.layer && `layer-${node.layer}`, current && 'current', chosen && 'chosen', node.cycle && 'cycle', unfolded && 'open', implementation === 'unimplemented' && 'not-generated', leaving && 'leaving', mark];
     const change = mark?.split(' ').find(c => c in CHANGE_LETTERS);
+    // The state in words under the labels: requested, or how far the code is.
+    const tag = node.type === 'request' ? { name: 'requested', text: 'requested · for an agent' } : implementation && { name: implementation, text: IMPLEMENTATION_TAGS[implementation] };
+    const tagY = node.type === 'module' ? 28 : node.type === 'request' ? 21 : node.fact ? 34 : 21;
     return (
         <g
             className={classes.filter(Boolean).join(' ')}
@@ -363,6 +428,7 @@ function TreeItem({ placed, current, chosen, unfolded, mark, session, onSession,
             aria-label={`${node.label}${node.kind && node.type === 'element' ? `, ${kindLabel(node.kind)}` : ''}${node.fact ? `, ${node.fact}` : ''}`}
             tabIndex={0}
             onClick={() => onPress(node)}
+            onContextMenu={onMenu ? event => onMenu(node, event) : undefined}
             onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onPress(node); } }}
         >
             <g className="grow">
@@ -393,6 +459,11 @@ function TreeItem({ placed, current, chosen, unfolded, mark, session, onSession,
                                 <text className="name" x={r + 10} y={-1}>{clip(node.label, 24)}</text>
                                 <text className="fact" x={r + 10} y={14}>{clip(node.fact, 30)}</text>
                             </>
+                            : node.type === 'request'
+                            ? <>
+                                <text className="name" x={r + 10} y={-7}>{clip(node.label, 24)}</text>
+                                {node.fact && <text className="fact" x={r + 10} y={7}>{clip(node.fact, 30)}</text>}
+                            </>
                             : <>
                                 <text className="name" x={r + 10} y={-7}>{clip(node.label, 24)}</text>
                                 <text className="kind" x={r + 10} y={7}>{kindLabel(node.kind!)}</text>
@@ -402,8 +473,99 @@ function TreeItem({ placed, current, chosen, unfolded, mark, session, onSession,
                 )}
                 {bud && <circle className="bud" cy={-r} r={4} />}
                 {implementation && <circle className={`impl impl-${implementation}`} cx={r * 0.72} cy={r * 0.72} r={4.5} />}
+                {tag && (
+                    <g className={`tag tag-${tag.name}`} transform={`translate(${r + 10} ${tagY})`}>
+                        <circle className={`impl impl-${tag.name}`} cx={3.5} cy={-3.5} r={3.5} />
+                        <text x={11}>{tag.text}</text>
+                    </g>
+                )}
             </g>
         </g>
+    );
+}
+
+/** The right click menu: the node's actions, the confirmation of a removal, or the form of a request. */
+function MenuView({ at, menu, requests, onMode, onClose }: { at: OpenMenu, menu: NodeMenu, requests?: TreeRequest[], onMode(mode: OpenMenu['mode']): void, onClose(): void }) {
+    const { node } = at;
+    const request = node.request ? requests?.find(r => r.id === node.request) : undefined;
+    const [name, setName] = useState(at.mode === 'editRequest' ? request?.name ?? '' : '');
+    const [description, setDescription] = useState(at.mode === 'editRequest' ? request?.description ?? '' : '');
+    const done = (run: () => void) => {
+        run();
+        onClose();
+    };
+    const props = { className: 'node-menu', style: { left: at.x, top: at.y }, onKeyDown: (event: React.KeyboardEvent) => { if (event.key === 'Escape') onClose(); } };
+    if (at.mode === 'remove') return (
+        <div {...props} role="dialog" aria-label={`Remove ${node.qn}`}>
+            <p>Remove <strong>{node.qn}</strong> from the model?</p>
+            <div className="node-menu-row">
+                <button className="danger" autoFocus onClick={() => done(() => menu.onRemove(node.qn!))}>Remove</button>
+                <button onClick={onClose}>Keep</button>
+            </div>
+        </div>
+    );
+    if (at.mode === 'request' || at.mode === 'editRequest') return (
+        <form {...props} className="node-menu node-form" aria-label="Request an element" onSubmit={event => {
+            event.preventDefault();
+            const asked = { name: name.trim(), description: description.trim() };
+            if (asked.name) done(() => at.mode === 'request' ? menu.onRequest({ ...asked, parent: at.parent }) : menu.onEditRequest(node.request!, asked));
+        }}>
+            <p>{at.mode === 'editRequest' ? 'Edit the request' : `New element ${at.parent ? `under ${at.parent}` : 'in the model'}`}</p>
+            <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Name, such as Invoice" aria-label="Name" />
+            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} placeholder="What it is and what it does, in your words" aria-label="Description" />
+            <p className="node-menu-hint">An agent session models it from this and the place in the tree. Until then it shows as requested.</p>
+            <div className="node-menu-row">
+                <button type="submit" disabled={!name.trim()}>{at.mode === 'editRequest' ? 'Save' : 'Request it'}</button>
+                <button type="button" onClick={onClose}>Cancel</button>
+            </div>
+        </form>
+    );
+    const editable = node.qn && node.type !== 'group';
+    return (
+        <div {...props} role="menu" aria-label={node.label}>
+            {node.type === 'request' ? (
+                <>
+                    <button role="menuitem" autoFocus onClick={() => onMode('editRequest')}>Edit request…</button>
+                    <button role="menuitem" className="danger" onClick={() => done(() => menu.onRemoveRequest(node.request!))}>Remove request</button>
+                </>
+            ) : (
+                <>
+                    {editable && <button role="menuitem" autoFocus onClick={() => done(() => menu.onEdit(node.qn!))}>Edit in the inspector</button>}
+                    <button role="menuitem" autoFocus={!editable} onClick={() => onMode('request')}>New element…</button>
+                    {editable && <button role="menuitem" className="danger" onClick={() => onMode('remove')}>Remove…</button>}
+                </>
+            )}
+        </div>
+    );
+}
+
+/** What every mark on the canvas means. */
+function Legend() {
+    const dot = (state: string, text: string) => <li key={state}><svg width="14" height="14" viewBox="-7 -7 14 14"><circle className={`impl impl-${state}`} r={4.5} /></svg>{text}</li>;
+    const badge = (change: string, text: string) => <li key={change} className={change}><svg width="18" height="18" viewBox="-9 -9 18 18"><g className="change-badge"><circle r={8} /><text y={3.5}>{CHANGE_LETTERS[change]}</text></g></svg>{text}</li>;
+    return (
+        <div className="tree-legend" role="note" aria-label="Legend">
+            <h4>Code</h4>
+            <ul>
+                {(Object.keys(IMPLEMENTATION_LABELS) as ImplementationState[]).map(state => dot(state, IMPLEMENTATION_LABELS[state]))}
+                {dot('requested', 'requested: an agent models it from your description')}
+            </ul>
+            <h4>Changes</h4>
+            <ul>
+                {badge('added', 'added')}
+                {badge('changed', 'changed')}
+                {badge('removed', 'removed')}
+                <li><svg width="18" height="18" viewBox="-9 -9 18 18"><circle className="legend-ring planned" r={7} /></svg>dashed: planned in a playbook step</li>
+            </ul>
+            <h4>Tree</h4>
+            <ul>
+                <li><svg width="18" height="18" viewBox="-9 -9 18 18"><circle className="legend-ring" r={6} /><circle className="bud" cy={-6} r={2.5} /></svg>bud: click to unfold what uses it</li>
+                <li><span className="legend-glyph">↺</span>already on this branch</li>
+                <li><svg width="18" height="18" viewBox="-9 -9 18 18"><circle className="legend-ring session" r={7} /></svg>ring in a session's colour: claimed by that agent session</li>
+                <li><span className="legend-glyph">◯</span>bigger and bolder: more relevant; faded: peripheral</li>
+            </ul>
+            <p>Right click a node to edit, remove or request a new element.</p>
+        </div>
     );
 }
 
