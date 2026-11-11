@@ -31,20 +31,22 @@ for (const dir of ['skills', 'language']) cpSync(join(packages, 'ai', dir), join
 cpSync(join(packages, 'ai/out/agents/hook.cjs'), join(out, 'hook.cjs'));
 cpSync(join(packages, 'ide/public/appling-icon.svg'), join(out, 'appling-icon.svg'));
 
-// ESM bundles of CommonJS dependencies still call require and read __dirname.
+// ESM bundles of CommonJS dependencies still call require and read __dirname. The banner keeps its own names and
+// `define` points the free __filename and __dirname at them, so an ESM dependency declaring its own (`open`) does not clash.
 const banner = [
     "import { createRequire as __appling_createRequire } from 'node:module';",
     "import { fileURLToPath as __appling_fileURLToPath } from 'node:url';",
     "import { dirname as __appling_dirname } from 'node:path';",
     'const require = __appling_createRequire(import.meta.url);',
-    'const __filename = __appling_fileURLToPath(import.meta.url);',
-    'const __dirname = __appling_dirname(__filename);'
+    'const __appling_file = __appling_fileURLToPath(import.meta.url);',
+    'const __appling_dir = __appling_dirname(__appling_file);'
 ].join('\n');
+const define = { __filename: '__appling_file', __dirname: '__appling_dir' };
 const ide = join(out, 'ide');
 for (const file of ['main.js', 'generation-worker.js']) {
     await build({
         entryPoints: [join(packages, 'ide/out/server', file)], outfile: join(ide, 'out/server', file), bundle: true, platform: 'node', format: 'esm', target: 'node20',
-        banner: { js: banner }, logLevel: 'warning', legalComments: 'none'
+        banner: { js: banner }, define, logLevel: 'warning', legalComments: 'none'
     });
 }
 cpSync(join(packages, 'ide/dist/client'), join(ide, 'dist/client'), { recursive: true });
@@ -53,6 +55,6 @@ writeFileSync(join(ide, 'package.json'), `${JSON.stringify({ type: 'module' })}\
 // the `appling` command line that Initialize Appling runs (`appling init`)
 await build({
     entryPoints: [join(packages, 'cli/out/main.js')], outfile: join(out, 'cli/main.js'), bundle: true, platform: 'node', format: 'esm', target: 'node20',
-    banner: { js: banner }, logLevel: 'warning', legalComments: 'none'
+    banner: { js: banner }, define, logLevel: 'warning', legalComments: 'none'
 });
 writeFileSync(join(out, 'cli/package.json'), `${JSON.stringify({ type: 'module' })}\n`);
