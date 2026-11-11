@@ -21,15 +21,17 @@ const desktop = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 rmSync(app, { recursive: true, force: true });
 mkdirSync(app, { recursive: true });
 
-// ESM bundles of CommonJS dependencies still call require and read __dirname.
+// ESM bundles of CommonJS dependencies still call require and read __dirname. The banner keeps its own names and
+// `define` points the free __filename and __dirname at them, so an ESM dependency declaring its own (`open`) does not clash.
 const banner = [
     "import { createRequire as __appling_createRequire } from 'node:module';",
     "import { fileURLToPath as __appling_fileURLToPath } from 'node:url';",
     "import { dirname as __appling_dirname } from 'node:path';",
     'const require = __appling_createRequire(import.meta.url);',
-    'const __filename = __appling_fileURLToPath(import.meta.url);',
-    'const __dirname = __appling_dirname(__filename);'
+    'const __appling_file = __appling_fileURLToPath(import.meta.url);',
+    'const __appling_dir = __appling_dirname(__appling_file);'
 ].join('\n');
+const define = { __filename: '__appling_file', __dirname: '__appling_dir' };
 
 /** node-pty stays a runtime import of the copy in `native/`, relative to the bundle. */
 const nodePty = (from) => ({
@@ -42,7 +44,7 @@ const nodePty = (from) => ({
 async function bundle(entry, out, plugins = []) {
     await build({
         entryPoints: [entry], outfile: join(app, out), bundle: true, platform: 'node', format: 'esm', target: 'node24',
-        external: ['electron'], banner: { js: banner }, plugins, logLevel: 'warning', legalComments: 'none'
+        external: ['electron'], banner: { js: banner }, define, plugins, logLevel: 'warning', legalComments: 'none'
     });
 }
 
@@ -72,6 +74,7 @@ aiFiles('ai');
 await bundle(join(packages, 'lang/out/language-server.js'), 'lang/out/language-server.js');
 // the `appling` command line of the built in tasks (src/tasks/builtin.ts)
 await bundle(join(packages, 'cli/out/main.js'), 'cli/out/main.js');
+aiFiles('cli'); // `appling ide` pulls in @appling/ai through @appling/ide
 await bundle(join(packages, 'pty-host/out/main.js'), 'pty-host/out/main.js', [nodePty('../../native/node-pty/lib/index.js')]);
 // The agent that runs the remote side of remote repos (src/remote/agent.ts); with the IDE server, the pty host,
 // node-pty and the Appling extension it is the server bundle that src/remote/install.ts uploads (BUNDLE_PARTS).
