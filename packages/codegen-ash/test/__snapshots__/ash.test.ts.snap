@@ -112,6 +112,14 @@ end
     update :place_order do
       require_atomic? false
       change set_attribute(:placed_at, &DateTime.utc_now/0)
+      change after_transaction(fn
+        _changeset, {:ok, record}, _context ->
+          Shop.Sales.OrderPlaced.publish(%Shop.Sales.OrderPlaced{order: record})
+          {:ok, record}
+
+        _changeset, result, _context ->
+          result
+      end)
       change transition_state(:placed)
     end
 
@@ -226,6 +234,28 @@ end
   json_api do
     type "order"
   end
+end
+",
+  "lib/shop/sales/order_placed.ex": "defmodule Shop.Sales.OrderPlaced do
+  @enforce_keys [:order]
+  defstruct [:order]
+
+  @doc "The telemetry event name handlers attach to."
+  def name, do: [:shop, :sales, :order_placed]
+
+  @doc "Runs the handlers attached to \`name/0\`, with the event as metadata \`:event\`."
+  def publish(%__MODULE__{} = event), do: :telemetry.execute(name(), %{}, %{event: event})
+end
+",
+  "lib/shop/sales/payment_received.ex": "defmodule Shop.Sales.PaymentReceived do
+  @enforce_keys [:order]
+  defstruct [:order]
+
+  @doc "The telemetry event name handlers attach to."
+  def name, do: [:shop, :sales, :payment_received]
+
+  @doc "Runs the handlers attached to \`name/0\`, with the event as metadata \`:event\`."
+  def publish(%__MODULE__{} = event), do: :telemetry.execute(name(), %{}, %{event: event})
 end
 ",
   "lib/shop/sales/shopper.ex": "defmodule Shop.Sales.Shopper do
@@ -455,7 +485,7 @@ end
 
 exports[`examples plan domains, enums, embedded resources, resources and relationships 1`] = `
 [
-  "(project): mix igniter.new shop --with phx.new --with-args=--no-install --install ash,ash_postgres,simple_sat,ash_phoenix,ash_state_machine,ash_oban,ash_json_api --yes --no-git",
+  "(project): mix igniter.new shop --with phx.new --with-args=--no-install --install ash,ash_postgres,simple_sat,ash_phoenix,ash_state_machine,ash_oban,telemetry,ash_json_api --yes --no-git",
   "crm: mix ash.gen.domain Shop.Crm --yes",
   "sales: mix ash.gen.domain Shop.Sales --yes",
   "crm.Account: mix ash.gen.resource Shop.Crm.Account --domain Shop.Crm --default-actions read,create,update,destroy --uuid-primary-key id --attribute name:string:required:public,email:string:required:public --extend postgres --timestamps --yes",
@@ -470,6 +500,8 @@ exports[`examples plan domains, enums, embedded resources, resources and relatio
   "sales.Order.policy[read fields total]: test/shop/sales/order_test.exs",
   "crm.Employee: mix ash.gen.resource Shop.Crm.Employee --domain Shop.Crm --default-actions read,create,update,destroy --uuid-primary-key id --attribute roles:atom:array --extend postgres --timestamps --yes",
   "sales.Shopper: mix ash.gen.resource Shop.Sales.Shopper --domain Shop.Sales --default-actions read,create,update,destroy --uuid-primary-key id --attribute roles:atom:array --extend postgres --timestamps --yes",
+  "sales.OrderPlaced: lib/shop/sales/order_placed.ex",
+  "sales.PaymentReceived: lib/shop/sales/payment_received.ex",
   "sales.OrderFlow.transition[placed->paid]: test/shop/sales/order_test.exs",
   "sales.ClerkCancelsDraft: test/shop/sales/scenarios_test.exs",
   "sales.EmptyOrderIsRefused: test/shop/sales/scenarios_test.exs",

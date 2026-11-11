@@ -2,6 +2,7 @@ import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
 import { ashExpr, constant, lastOf, parentOf, validation } from './elixir.js';
 import { addAuthorizer, addExtension, addToSection, prependToSection } from './resource.js';
+import { emitChange } from './events.js';
 import { enforced } from './roles.js';
 import { coveredByScenario } from './scenario-tests.js';
 import { preconditionTests } from './model-tests.js';
@@ -37,9 +38,10 @@ export function actionSteps(action: GraphNode, context: MapContext): Step[] {
     }
     const effects = [...children(action, context), ...transitions.flatMap(t => children(t, context))].filter(c => c.kind.endsWith('Effect') && c !== destroy);
     for (const effect of effects) {
-        const change = effectChange(effect, context);
-        if (change) lines.push(`  change ${change}`);
-        else tasks.push(task(`apply the effect ${lastOf(effect.qn)} in ${lastOf(action.qn)}, for example with ${effect.kind === 'EmitEffect' || effect.kind === 'SetEffect' ? 'an Ash notifier or a change' : 'an after_action change that writes the related records'}`));
+        const change = effect.kind === 'EmitEffect' ? emitChange(effect, entity, context) : effectChange(effect, context);
+        if (Array.isArray(change)) lines.push(`  change ${change[0]}`, ...change.slice(1).map(line => line && `  ${line}`));
+        else if (change) lines.push(`  change ${change}`);
+        else tasks.push(task(`apply the effect ${lastOf(effect.qn)} in ${lastOf(action.qn)}, for example with ${effect.kind === 'EmitEffect' ? `an after_transaction change that calls ${typeModule(context.node(effect.data.event as string)!, context)}.publish/1` : effect.kind === 'SetEffect' ? 'a change' : 'an after_action change that writes the related records'}`));
     }
     const targets = [...new Set(transitions.map(t => t.data.to as string))];
     if (targets.length === 1) lines.push(`  change transition_state(:${targets[0]})`);

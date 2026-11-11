@@ -4,7 +4,7 @@
     "generated": 1,
     "partial": 2,
     "todo": 1,
-    "tasks": 9,
+    "tasks": 7,
     "left": 1
   },
   {
@@ -81,10 +81,10 @@
   },
   {
     "kind": "Event",
-    "generated": 0,
+    "generated": 2,
     "partial": 0,
-    "todo": 2,
-    "tasks": 2,
+    "todo": 0,
+    "tasks": 0,
     "left": 0
   },
   {
@@ -313,10 +313,10 @@
   },
   {
     "kind": "total",
-    "generated": 120,
+    "generated": 122,
     "partial": 19,
-    "todo": 16,
-    "tasks": 53,
+    "todo": 14,
+    "tasks": 49,
     "left": 9
   }
 ]

@@ -191,9 +191,65 @@ test('behavior, queries and the JSON:API are patched into the generated modules'
     const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
     expect(entries['sales.PlaceOrder'].missing.map(m => m.what)).toEqual([
         'check the precondition requires { lines.size() > 0 } else EmptyOrder in PlaceOrder',
-        // The scenarios that run PlaceOrder replace its guessed precondition tests.
-        'apply the effect effect[emit OrderPlaced] in PlaceOrder, for example with an Ash notifier or a change'
+        // The scenarios that run PlaceOrder replace its guessed precondition tests; its emit became a change.
     ]);
+});
+
+test('events become telemetry publishers, and emit effects publish them after the action committed', async () => {
+    const result = await planFor({
+        'shop.appling': `module shop {
+            enum Channel { web, phone }
+            entity Order {
+                reference: String
+                total: Int
+            }
+            event Placed {
+                order: Order
+                reference: String
+                channel: Channel
+                note: String?
+                by: String?
+            }
+            event Audited {
+                order: Order
+                reason: String
+            }
+            action Place on Order {
+                input {
+                    note: String
+                }
+                effect {
+                    emit Placed { order = this, reference = this.reference, channel = phone, note = note }
+                }
+            }
+            action Audit on Order {
+                effect {
+                    emit Audited { order = this }
+                }
+            }
+        }`
+    });
+    const write = (file: string, text?: string) => result.steps.reduce<string | undefined>((current, { step }) => step.kind === 'template' && step.file === file ? step.write(current) : current, text);
+    const event = write('lib/shop/shop/placed.ex')!;
+    expect(event).toContain('  @enforce_keys [:order, :reference, :channel]\n  defstruct [:order, :reference, :channel, :note, :by]\n');
+    expect(event).toContain('  def name, do: [:shop, :shop, :placed]\n');
+    const order = write('lib/shop/shop/order.ex', 'defmodule Shop.Shop.Order do\n  use Ash.Resource\nend\n')!;
+    expect(order).toContain([
+        '      change after_transaction(fn',
+        '        changeset, {:ok, record}, _context ->',
+        '          Shop.Shop.Placed.publish(%Shop.Shop.Placed{order: record, reference: record.reference, channel: :phone, note: Ash.Changeset.get_argument(changeset, :note)})',
+        '          {:ok, record}',
+        '',
+        '        _changeset, result, _context ->',
+        '          result',
+        '      end)'
+    ].join('\n'));
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['shop.Placed'].status).toBe('generated');
+    expect(entries['shop.Place'].missing).toEqual([]);
+    // A required field without a value leaves the effect to a task.
+    expect(entries['shop.Audit'].missing.map(m => m.what)).toEqual(['apply the effect effect[emit Audited] in Audit, for example with an after_transaction change that calls Shop.Shop.Audited.publish/1']);
+    expect(result.steps[0].step.kind === 'command' && result.steps[0].step.run.join(' ')).toContain(',telemetry');
 });
 
 test('roles become policy checks on the actor resource, and policies that only name roles authorize with them', async () => {
