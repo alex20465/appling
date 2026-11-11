@@ -11,7 +11,7 @@ Generation goes through installable extensions. Each extension is a map from mod
 |---|---|
 | [`@appling/codegen-django`](django.md) | Django 6.1 with uv, REST framework for interfaces |
 | [`@appling/codegen-ash`](ash.md) | Ash 3 on Elixir with AshPostgres, created through Igniter |
-| [`@appling/codegen-go`](go.md) | Plain Go packages for the domain and behavior layers |
+| [`@appling/codegen-go`](go.md) | Plain Go packages for the domain and behavior layers, with Postgres storage for the entities |
 | [`@appling/codegen-rust`](rust.md) | A Rust library crate for the domain and behavior layers |
 
 You can write your own; see [writing an extension](extensions.md).

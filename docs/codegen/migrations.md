@@ -126,6 +126,21 @@ The table name comes from the `table "..."` line of the resource; without one, t
 
 Apply the migration with `mix ash.migrate`.
 
+## Go
+
+The Go extension writes each step as SQL into the goose migration `internal/storage/migrations/<stamp>_appling_<block>.sql` (one timestamp per run), which `storage.Migrate` applies after the initial schema. The statements name tables and columns as they are when the step runs, so a later rename in the same block does not break an earlier step.
+
+| Model step | SQL |
+|---|---|
+| rename a field of an entity | `RENAME COLUMN`, for a record the `<field>_id` column, for a list of records the link table |
+| retype a field of an entity | `ALTER COLUMN ... TYPE ... USING`, with `SET NOT NULL` or `DROP NOT NULL`; to or from a record, a task |
+| remove a field of an entity | `DROP COLUMN IF EXISTS` of the column and the reference column, `DROP TABLE IF EXISTS` of the link table |
+| rename an entity | `RENAME TO` of its table and its link tables |
+| remove an entity | `DROP TABLE IF EXISTS ... CASCADE` |
+| rename an enum value | an `UPDATE` of the stored value for every entity field of that enum that is not a list |
+
+The Go code keeps the generated names: each mapped step adds the task `carry the <kind> of <target> into the Go code that names it; the schema migration is written`. Any other step becomes the task `carry the <kind> of <target> into the database and the code`.
+
 ## What stays open
 
 Migrations and model code are done after `--migrate`; the code that uses the changed element is not. Every change adds a task to the registry entry of the element, so the next pass through the [registry](registry.md) updates actions, serializers, queries and tests that still use the old name or type.
