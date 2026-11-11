@@ -1,13 +1,13 @@
 ---
 title: Go
-description: Generate plain Go packages for the domain and behavior layers of a model, ready to put behind your own storage and HTTP code.
+description: Generate plain Go packages for the domain and behavior layers of a model, with Postgres storage and goose migrations for its entities.
 ---
 
-The `@appling/codegen-go` extension writes one Go package per module, without a framework. It covers what Go can express without choosing libraries for you: types, invariants, derived fields, actions with their state transitions, errors and events, and access: actors, roles, the tenant and the policies as pure checks. The rest becomes [registry](registry.md) tasks.
+The `@appling/codegen-go` extension writes one Go package per module, without a framework. It covers what Go can express without choosing libraries for you: types, invariants, derived fields, actions with their state transitions, errors and events, and access: actors, roles, the tenant and the policies as pure checks. Entities are stored in Postgres through [pgx](https://github.com/jackc/pgx), with the schema in [goose](https://github.com/pressly/goose) migrations. The rest becomes [registry](registry.md) tasks.
 
 ## Requirements
 
-Go 1.22 or later on the `PATH`. Decimal and money values use [shopspring/decimal](https://github.com/shopspring/decimal), which setup adds with `go get`.
+Go 1.25 or later on the `PATH`. Decimal and money values use [shopspring/decimal](https://github.com/shopspring/decimal), and a model with entities uses pgx 5 and goose 3; setup adds them with `go get`. The store tests need a Postgres database, see [Storage](#storage).
 
 ## Configuration
 
@@ -95,6 +95,37 @@ func PlaceOrder(actor access.Actor, order *Order) ([]any, error) {
 }
 ```
 
+## Storage
+
+A model with entities gets the package `internal/storage` (`appstorage` when a module is named `storage`) and one `store.go` per module.
+
+| Part | Go |
+|---|---|
+| `storage.Open(ctx, url)` | a `*pgxpool.Pool` on the database at the URL |
+| `storage.Migrate(ctx, config)` | applies the goose migrations of `internal/storage/migrations/`, embedded in the binary, that the database has not applied yet |
+| `storage.Querier` | what the store functions run on: a pool, a `*pgx.Conn` or a `pgx.Tx` |
+| `storage.ErrNotFound` | wrapped by `Get`, `Update` and `Delete` when no record has the ID |
+| `Insert<Entity>(ctx, db, x)` | inserts the record and sets `x.ID` |
+| `Get<Entity>(ctx, db, id)`, `List<Entity>(ctx, db)` | load one record or all of them in ID order |
+| `Update<Entity>(ctx, db, x)`, `Delete<Entity>(ctx, db, x)` | write or remove a stored record |
+
+The schema of the whole model is the migration `00001_appling_initial.sql`: one table per entity, named after the module and the entity (`sales_order`), with the foreign keys added once every table exists.
+
+| Field | Column |
+|---|---|
+| `String`, `Text`, `File`, enums | `text` |
+| `Int`, `Bool`, `Decimal`, `Money` | `bigint`, `boolean`, `numeric` |
+| `Date`, `DateTime`, `Duration`, `Uuid` | `date`, `timestamptz`, `interval`, `uuid` |
+| a value type, a list of values | `jsonb` |
+| a record | `<field>_id bigint` with a foreign key, `ON DELETE CASCADE` for `owned`, else `RESTRICT`; it loads as a record with only its `ID` set |
+| a list of records | a link table `<table>_<field>` with `owner_id` and `item_id`, written by `Insert` and `Update` and read by `Get` and `List` |
+
+A required field is `NOT NULL`, `unique` is `UNIQUE`; a list of values takes `NULL` for an empty list, the way pgx writes a nil slice. The actions stay free of storage: pass the store functions to their store parameters, such as `func(o *Order) error { return InsertOrder(ctx, tx, o) }`.
+
+Each entity whose valid record the extension can build gets `TestStore<Entity>` in `<module>_test.go`: it stores a valid record of the same module for each required reference first, then runs `Insert`, `Get`, `List`, `Update` and `Delete`. Entities with a required reference into another module or back to themselves get no store test. `storagetest.Open(t)` gives each test a new schema of the database at `DATABASE_URL`, migrated and dropped at the end; without `DATABASE_URL` the store tests are skipped.
+
+[Migration steps](migrations.md#go) of the model become further goose migrations in the same folder.
+
 ## Access
 
 [Roles, actors and the tenant](../language/access.md) become the package `internal/access` (`accessctl` when the model has a module named `access`). It imports none of the model's packages, so every module can import it without a cycle; that is why fields holding records hold their ID.
@@ -181,13 +212,13 @@ A scenario stays a skipped test with a registry task on its entry when the simul
 
 ## What becomes a task
 
-Queries, projections, interfaces, pages, flows, messages, use cases, external systems and jobs: they need storage, HTTP and scheduling decisions that the model leaves open. Queries and use cases still get their `Can...` check, and a query whose filter translates gets `In<Query>(record, inputs...) bool` in `queries.go`, which says whether a record belongs to its results, so the storage layer can apply it. Also derived fields, defaults, preconditions, guards, policies and effects that have no Go translation, such as `actor` outside a policy or a role, a `create`, `update` or `delete` effect that runs in a transition on an event, a `create` effect that leaves a required field without default unset, and an `emit` effect that leaves a required field of its event unset. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
+Queries, projections, interfaces, pages, flows, messages, use cases, external systems and jobs: they are not generated yet; the [storage](#storage) of the entities is. Queries and use cases still get their `Can...` check, and a query whose filter translates gets `In<Query>(record, inputs...) bool` in `queries.go`, which says whether a record belongs to its results, so the storage layer can apply it. Also derived fields, defaults, preconditions, guards, policies and effects that have no Go translation, such as `actor` outside a policy or a role, a `create`, `update` or `delete` effect that runs in a transition on an event, a `create` effect that leaves a required field without default unset, and an `emit` effect that leaves a required field of its event unset. Queries, the REST layer, jobs and use cases follow in later steps of [#92](https://github.com/alex20465/appling/issues/92), on `net/http`.
 
 ## Run the generated project
 
 ```sh
 cd build/shop
-go test ./...
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable go test ./...
 ```
 
 `go test ./...` is also the command the registry stores for the [AI tools](../tools/ai.md).

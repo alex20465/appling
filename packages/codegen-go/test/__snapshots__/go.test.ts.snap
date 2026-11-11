@@ -121,9 +121,49 @@ func InTenant(actor Actor, record Tenanted) bool {
   "internal/crm/crm_test.go": "package crm
 
 import (
+	"context"
+	"errors"
+	"shop/internal/storage"
+	"shop/internal/storage/storagetest"
 	"testing"
 )
 
+
+// validAccount returns an Account with the defaults of the model and a sample value for every other required field.
+func validAccount() *Account {
+	x := NewAccount()
+	x.Name = "name-1"
+	x.Email = "email-1"
+	return x
+}
+
+func TestStoreAccount(t *testing.T) {
+	db := storagetest.Open(t)
+	ctx := context.Background()
+	x := validAccount()
+	if err := InsertAccount(ctx, db, x); err != nil {
+		t.Fatalf("InsertAccount: %v", err)
+	}
+	got, err := GetAccount(ctx, db, x.ID)
+	if err != nil {
+		t.Fatalf("GetAccount: %v", err)
+	}
+	if got.ID != x.ID {
+		t.Fatalf("GetAccount: want ID %d, got %d", x.ID, got.ID)
+	}
+	if err := UpdateAccount(ctx, db, got); err != nil {
+		t.Fatalf("UpdateAccount: %v", err)
+	}
+	if all, err := ListAccount(ctx, db); err != nil || len(all) != 1 {
+		t.Fatalf("ListAccount: want 1 record, got %d (%v)", len(all), err)
+	}
+	if err := DeleteAccount(ctx, db, got); err != nil {
+		t.Fatalf("DeleteAccount: %v", err)
+	}
+	if _, err := GetAccount(ctx, db, x.ID); !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("GetAccount after DeleteAccount: want storage.ErrNotFound, got %v", err)
+	}
+}
 
 func TestAccountPolicyRead(t *testing.T) {
 	t.Skip("registry task: crm.Account.policy[read]")
@@ -164,6 +204,83 @@ func CanDeleteAccount(actor access.Actor, account *Account) bool {
 // accountPolicyRead is the policy crm.Account.policy[read]: actor.is(Clerk) || (actor.is(sales.Customer) && actor.account == this)
 func accountPolicyRead(actor access.Actor, account *Account) bool {
 	return access.IsClerk(actor) || (access.IsCustomer(actor) && access.Same(actor.Account, account.ID))
+}
+",
+  "internal/crm/store.go": "package crm
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"shop/internal/storage"
+	"github.com/jackc/pgx/v5"
+)
+
+
+// InsertAccount stores a new Account and sets its ID.
+func InsertAccount(ctx context.Context, db storage.Querier, x *Account) error {
+	if err := db.QueryRow(ctx, \`INSERT INTO "crm_account" ("name", "email") VALUES ($1, $2) RETURNING "id"\`, x.Name, x.Email).Scan(&x.ID); err != nil {
+		return fmt.Errorf("insert Account: %w", err)
+	}
+	return nil
+}
+
+// scanAccount reads a row of "id", "name", "email"; referenced records get their ID only.
+func scanAccount(row pgx.Row) (*Account, error) {
+	x := &Account{}
+	if err := row.Scan(&x.ID, &x.Name, &x.Email); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// GetAccount loads the Account with the ID, or returns storage.ErrNotFound.
+func GetAccount(ctx context.Context, db storage.Querier, id int64) (*Account, error) {
+	x, err := scanAccount(db.QueryRow(ctx, \`SELECT "id", "name", "email" FROM "crm_account" WHERE "id" = $1\`, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("Account %d: %w", id, storage.ErrNotFound)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get Account %d: %w", id, err)
+	}
+	return x, nil
+}
+
+// ListAccount loads every Account in the order of their IDs.
+func ListAccount(ctx context.Context, db storage.Querier) ([]*Account, error) {
+	rows, err := db.Query(ctx, \`SELECT "id", "name", "email" FROM "crm_account" ORDER BY "id"\`)
+	if err != nil {
+		return nil, fmt.Errorf("list Account: %w", err)
+	}
+	found, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (*Account, error) { return scanAccount(row) })
+	if err != nil {
+		return nil, fmt.Errorf("list Account: %w", err)
+	}
+	return found, nil
+}
+
+// UpdateAccount writes the fields of a stored Account, or returns storage.ErrNotFound.
+func UpdateAccount(ctx context.Context, db storage.Querier, x *Account) error {
+	tag, err := db.Exec(ctx, \`UPDATE "crm_account" SET "name" = $2, "email" = $3 WHERE "id" = $1\`, x.ID, x.Name, x.Email)
+	if err != nil {
+		return fmt.Errorf("update Account %d: %w", x.ID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("Account %d: %w", x.ID, storage.ErrNotFound)
+	}
+	return nil
+}
+
+// DeleteAccount removes a stored Account, or returns storage.ErrNotFound.
+func DeleteAccount(ctx context.Context, db storage.Querier, x *Account) error {
+	tag, err := db.Exec(ctx, \`DELETE FROM "crm_account" WHERE "id" = $1\`, x.ID)
+	if err != nil {
+		return fmt.Errorf("delete Account %d: %w", x.ID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("Account %d: %w", x.ID, storage.ErrNotFound)
+	}
+	return nil
 }
 ",
   "internal/crm/support.go": "package crm
@@ -556,6 +673,96 @@ func TestScenarioOnlyOwnOrders(t *testing.T) {
 	}
 }
 ",
+  "internal/sales/store.go": "package sales
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"shop/internal/crm"
+	"shop/internal/storage"
+	"github.com/jackc/pgx/v5"
+)
+
+
+// InsertOrder stores a new Order and sets its ID.
+func InsertOrder(ctx context.Context, db storage.Querier, x *Order) error {
+	var customerID *int64
+	if x.Customer != nil {
+		customerID = &x.Customer.ID
+	}
+	if err := db.QueryRow(ctx, \`INSERT INTO "sales_order" ("reference", "customer_id", "lines", "status", "created_at", "placed_at", "paid_at") VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING "id"\`, x.Reference, customerID, x.Lines, x.Status, x.CreatedAt, x.PlacedAt, x.PaidAt).Scan(&x.ID); err != nil {
+		return fmt.Errorf("insert Order: %w", err)
+	}
+	return nil
+}
+
+// scanOrder reads a row of "id", "reference", "customer_id", "lines", "status", "created_at", "placed_at", "paid_at"; referenced records get their ID only.
+func scanOrder(row pgx.Row) (*Order, error) {
+	x := &Order{}
+	var customerID *int64
+	if err := row.Scan(&x.ID, &x.Reference, &customerID, &x.Lines, &x.Status, &x.CreatedAt, &x.PlacedAt, &x.PaidAt); err != nil {
+		return nil, err
+	}
+	if customerID != nil {
+		x.Customer = &crm.Account{ID: *customerID}
+	}
+	return x, nil
+}
+
+// GetOrder loads the Order with the ID, or returns storage.ErrNotFound.
+func GetOrder(ctx context.Context, db storage.Querier, id int64) (*Order, error) {
+	x, err := scanOrder(db.QueryRow(ctx, \`SELECT "id", "reference", "customer_id", "lines", "status", "created_at", "placed_at", "paid_at" FROM "sales_order" WHERE "id" = $1\`, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("Order %d: %w", id, storage.ErrNotFound)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get Order %d: %w", id, err)
+	}
+	return x, nil
+}
+
+// ListOrder loads every Order in the order of their IDs.
+func ListOrder(ctx context.Context, db storage.Querier) ([]*Order, error) {
+	rows, err := db.Query(ctx, \`SELECT "id", "reference", "customer_id", "lines", "status", "created_at", "placed_at", "paid_at" FROM "sales_order" ORDER BY "id"\`)
+	if err != nil {
+		return nil, fmt.Errorf("list Order: %w", err)
+	}
+	found, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (*Order, error) { return scanOrder(row) })
+	if err != nil {
+		return nil, fmt.Errorf("list Order: %w", err)
+	}
+	return found, nil
+}
+
+// UpdateOrder writes the fields of a stored Order, or returns storage.ErrNotFound.
+func UpdateOrder(ctx context.Context, db storage.Querier, x *Order) error {
+	var customerID *int64
+	if x.Customer != nil {
+		customerID = &x.Customer.ID
+	}
+	tag, err := db.Exec(ctx, \`UPDATE "sales_order" SET "reference" = $2, "customer_id" = $3, "lines" = $4, "status" = $5, "created_at" = $6, "placed_at" = $7, "paid_at" = $8 WHERE "id" = $1\`, x.ID, x.Reference, customerID, x.Lines, x.Status, x.CreatedAt, x.PlacedAt, x.PaidAt)
+	if err != nil {
+		return fmt.Errorf("update Order %d: %w", x.ID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("Order %d: %w", x.ID, storage.ErrNotFound)
+	}
+	return nil
+}
+
+// DeleteOrder removes a stored Order, or returns storage.ErrNotFound.
+func DeleteOrder(ctx context.Context, db storage.Querier, x *Order) error {
+	tag, err := db.Exec(ctx, \`DELETE FROM "sales_order" WHERE "id" = $1\`, x.ID)
+	if err != nil {
+		return fmt.Errorf("delete Order %d: %w", x.ID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("Order %d: %w", x.ID, storage.ErrNotFound)
+	}
+	return nil
+}
+",
   "internal/sales/support.go": "package sales
 
 
@@ -628,6 +835,136 @@ func (o *Order) TenantID() (int64, bool) {
 		return 0, false
 	}
 	return o.Customer.ID, true
+}
+",
+  "internal/storage/migrations/00001_appling_initial.sql": "-- +goose Up
+-- crm.Account
+CREATE TABLE "crm_account" (
+	"id" bigserial PRIMARY KEY,
+	"name" text NOT NULL UNIQUE,
+	"email" text NOT NULL
+);
+
+-- sales.Order
+CREATE TABLE "sales_order" (
+	"id" bigserial PRIMARY KEY,
+	"reference" text NOT NULL UNIQUE,
+	"customer_id" bigint NOT NULL,
+	"lines" jsonb,
+	"status" text NOT NULL,
+	"created_at" timestamptz NOT NULL,
+	"placed_at" timestamptz,
+	"paid_at" timestamptz
+);
+
+-- appling: foreign keys, once every table exists
+ALTER TABLE "sales_order" ADD FOREIGN KEY ("customer_id") REFERENCES "crm_account" ("id") ON DELETE RESTRICT;
+
+-- +goose Down
+DROP TABLE IF EXISTS "sales_order" CASCADE;
+DROP TABLE IF EXISTS "crm_account" CASCADE;
+",
+  "internal/storage/storage.go": "// Package storage opens the Postgres database and migrates it with the goose migrations of the migrations folder.
+package storage
+
+import (
+	"context"
+	"embed"
+	"errors"
+	"fmt"
+	"io/fs"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
+)
+
+//go:embed migrations/*.sql
+var migrations embed.FS
+
+// ErrNotFound is returned when no record has the ID.
+var ErrNotFound = errors.New("not found")
+
+// Querier runs SQL: a *pgxpool.Pool, a *pgx.Conn or a pgx.Tx.
+type Querier interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// Open connects a pool to the database at url, such as postgres://user:password@localhost:5432/app.
+func Open(ctx context.Context, url string) (*pgxpool.Pool, error) {
+	return pgxpool.New(ctx, url)
+}
+
+// Migrate applies the migrations the database has not applied yet.
+func Migrate(ctx context.Context, config *pgx.ConnConfig) error {
+	db := stdlib.OpenDB(*config)
+	defer db.Close()
+	dir, err := fs.Sub(migrations, "migrations")
+	if err != nil {
+		return err
+	}
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, dir)
+	if err != nil {
+		return fmt.Errorf("migrations: %w", err)
+	}
+	if _, err := provider.Up(ctx); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	return nil
+}
+",
+  "internal/storage/storagetest/storagetest.go": "// Package storagetest gives each test a fresh, migrated schema of the test database named by DATABASE_URL.
+package storagetest
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"testing"
+	"time"
+
+	"shop/internal/storage"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// Open returns a pool on a new schema of the database at DATABASE_URL with every migration applied, dropped
+// when the test ends. Without DATABASE_URL the test is skipped.
+func Open(t testing.TB) *pgxpool.Pool {
+	t.Helper()
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		t.Skip("DATABASE_URL is not set")
+	}
+	ctx := context.Background()
+	admin, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { _ = admin.Close(ctx) })
+	schema := fmt.Sprintf("test_%d_%d", os.Getpid(), time.Now().UnixNano())
+	if _, err := admin.Exec(ctx, \`CREATE SCHEMA "\`+schema+\`"\`); err != nil {
+		t.Fatalf("create schema: %v", err)
+	}
+	t.Cleanup(func() { _, _ = admin.Exec(ctx, \`DROP SCHEMA "\`+schema+\`" CASCADE\`) })
+	config, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		t.Fatalf("parse DATABASE_URL: %v", err)
+	}
+	config.ConnConfig.RuntimeParams["search_path"] = schema
+	if err := storage.Migrate(ctx, config.ConnConfig); err != nil {
+		t.Fatalf("%v", err)
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		t.Fatalf("pool: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	return pool
 }
 ",
 }

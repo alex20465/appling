@@ -6,7 +6,7 @@
 // Each model (default: both) is copied into its own workspace under --out (default: a new temp folder) with an
 // appling.config.json for the target, generated with the built CLI (packages/cli/out/main.js) and then built.
 // Needs the workspace built (`pnpm build`) and the target's toolchain on PATH: uv (Django), Elixir with Mix and
-// Postgres on localhost (Ash), Go, or Rust. scripts/ci/codegen-e2e-docker.sh runs it in the official images.
+// Postgres on localhost (Ash), Go and Postgres on localhost (Go), or Rust. scripts/ci/codegen-e2e-docker.sh runs it in the official images.
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -52,7 +52,9 @@ const TARGETS = {
             ['go', 'build', './...'],
             ['go', 'vet', './...'],
             ['go', 'test', './...']
-        ]
+        ],
+        // The store tests migrate a fresh schema each; without DATABASE_URL they skip.
+        env: { DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable' }
     },
     rust: {
         checks: [

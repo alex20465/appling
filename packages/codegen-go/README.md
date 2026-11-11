@@ -1,6 +1,6 @@
 # @appling/codegen-go
 
-Appling code generation extension for Go. It turns the domain and behavior layers of an Appling model into plain Go packages, one per module, with no framework, so you can put them behind the storage and HTTP libraries you choose.
+Appling code generation extension for Go. It turns the domain and behavior layers of an Appling model into plain Go packages, one per module, with no framework, and stores the entities in Postgres through pgx with goose migrations.
 
 ```json
 {
@@ -10,7 +10,7 @@ Appling code generation extension for Go. It turns the domain and behavior layer
 }
 ```
 
-Requires Go 1.22 or later. Money and decimals use [shopspring/decimal](https://github.com/shopspring/decimal).
+Requires Go 1.25 or later. Money and decimals use [shopspring/decimal](https://github.com/shopspring/decimal); storage uses [pgx](https://github.com/jackc/pgx) 5 and [goose](https://github.com/pressly/goose) 3.
 
 ## What it generates
 
@@ -22,6 +22,8 @@ Requires Go 1.22 or later. Money and decimals use [shopspring/decimal](https://g
 | `entity` | a struct with an `ID`, `New<Entity>()` with the defaults, a method per derived field, and `Validate()` that checks the invariants |
 | optional fields, entity references, lists | pointers, `*Entity`, slices |
 | `action` | a function on the entity that checks the preconditions (returning the declared errors), takes the state transition (`ErrInvalidTransition` otherwise), applies the effects and returns the emitted events; a `create` effect builds the record, checks it and hands it to a `create<Entity>` parameter that stores it; `for` loops over a collection relationship, and `update` and `delete` effects check the record and hand it to `update<Entity>` and `delete<Entity>` parameters |
+| entity storage | `internal/storage` (`Open`, `Migrate`, `Querier`, `ErrNotFound`), the schema in the goose migration `internal/storage/migrations/00001_appling_initial.sql` (a table per entity, `<field>_id` foreign keys, link tables for lists of records, `jsonb` for value types and lists), and `Insert`, `Get`, `List`, `Update` and `Delete<Entity>` in `store.go`; `TestStore<Entity>` runs them on a fresh schema of the database at `DATABASE_URL` and skips without it |
+| migration steps | `appling generate --migrate` writes renames, retypes and removals as SQL into `internal/storage/migrations/<stamp>_appling_<block>.sql`, keeping the data |
 | `machine` | for transitions on an event, a function `<Machine>On<Event>(event)` |
 | `errors` | `Err<Name>` variables |
 | `role`, `actor`, `tenant` | the package `internal/access`: `Actor` (type, roles, tenant, the actor fields, records by ID), `Is<Role>(actor)` checks, `New<Actor>()`, `System()` (a call the system makes, which the actions do not check), and `InTenant` with `TenantID()` on every entity that belongs to the tenant |
@@ -32,7 +34,7 @@ Requires Go 1.22 or later. Money and decimals use [shopspring/decimal](https://g
 | preconditions | skipped tests in `<module>_test.go`; writing their bodies is a registry task |
 | `scenario` | a test `TestScenario<Name>` in `scenarios_test.go` (package `<module>_test`): the given rows with an ID each, the actor (`access.System()` without `as`), one call of the action, and the assertions of `then`. It replaces the transition and precondition tests of the action it calls. A scenario that calls a use case, or an action or policy Go does not fully translate, stays a skipped test with a registry task |
 
-Queries, projections, interfaces, pages, use cases, external systems and jobs become registry tasks (a query whose filter translates still gets `In<Query>(record, inputs...)`, which says whether a record belongs to its results), as do policies Go cannot translate (their check returns false until written): they need storage, HTTP and scheduling choices the model does not make. The project ends with `gofmt -w .`, and `go test ./...` is the registry's test command. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
+Queries, projections, interfaces, pages, use cases, external systems and jobs become registry tasks (a query whose filter translates still gets `In<Query>(record, inputs...)`, which says whether a record belongs to its results), as do policies Go cannot translate (their check returns false until written); queries, the REST layer, jobs and use cases come next. The project ends with `gofmt -w .`, and `go test ./...` is the registry's test command.
 
 ## License
 

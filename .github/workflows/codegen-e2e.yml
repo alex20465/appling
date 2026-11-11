@@ -36,10 +36,10 @@ jobs:
         target: [django, ash, go, rust]
 
     services:
-      # The generated Ash project uses AshPostgres; its test config connects to postgres:postgres@localhost.
-      # An empty image skips the service for the other targets.
+      # The generated Ash project uses AshPostgres; its test config connects to postgres:postgres@localhost, as
+      # the Go store tests do through DATABASE_URL. An empty image skips the service for the other targets.
       postgres:
-        image: ${{ matrix.target == 'ash' && 'postgres:16-alpine' || '' }}
+        image: ${{ (matrix.target == 'ash' || matrix.target == 'go') && 'postgres:16-alpine' || '' }}
         env:
           POSTGRES_PASSWORD: postgres
         ports:

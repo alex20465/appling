@@ -2,6 +2,7 @@ import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
 import { coveredByScenarios, scenarioCall, Simulator, throughPath, UNKNOWN, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
 import { accessFile, accessOf, accessSteps, actorFields, actorFieldType, tenantOf, tenantPaths } from './access.js';
 import { camel, enumConstant, goExpr, goTerm, pascal, PRIMITIVES, qualify, type GoScope } from './golang.js';
+import { GOOSE, GOOSE_VERSION, migrationSteps, PGX, PGX_VERSION, storageSteps, stores as hasEntities, type Helpers } from './storage.js';
 
 const DECIMAL = 'github.com/shopspring/decimal';
 const OPERATIONS = ['read', 'create', 'update', 'delete'];
@@ -10,13 +11,17 @@ const extension: CodegenExtension = {
     name: '@appling/codegen-go',
     test: ['go', 'test', './...'],
     syncExclude: ['go.sum'],
-    prerequisites: [{ name: 'Go', command: ['go', 'version'], expect: /go1\.(2[2-9]|[3-9]\d)/, hint: 'install Go 1.22 or later' }],
+    prerequisites: [{ name: 'Go', command: ['go', 'version'], expect: /go1\.(2[5-9]|[3-9]\d)/, hint: 'install Go 1.25 or later' }],
 
     setup: context => [
         { kind: 'command', run: ['go', 'mod', 'init', context.name], creates: ['go.mod'] },
         { kind: 'command', run: ['go', 'get', `${DECIMAL}@v1.6.0`], creates: ['go.sum'] },
+        // The storage package's imports, by package so go.sum gets every module they need.
+        ...(hasEntities(context) ? [{ kind: 'command' as const, run: ['go', 'get', ...['pgxpool', 'stdlib'].map(p => `${PGX}/${p}@${PGX_VERSION}`), `${GOOSE}@${GOOSE_VERSION}`] }] : []),
         { kind: 'command', run: ['gofmt', '-w', '.'], phase: 3 }
     ],
+
+    migrate: (change, context) => migrationSteps(change, context),
 
     steps(node, context) {
         switch (node.kind) {
@@ -72,6 +77,9 @@ const extension: CodegenExtension = {
 
 export default extension;
 
+/** What the storage generator shares with the domain generator. */
+const HELPERS: Helpers = { fieldsOf, goFile, goScope, typeOf, validRecord };
+
 function enumSteps(node: GraphNode, context: MapContext): Step {
     const name = last(node.qn);
     const values = context.children(node.qn).map(l => `\t${name}${pascal(last(l.qn))} ${name} = ${JSON.stringify(last(l.qn))}`);
@@ -87,7 +95,7 @@ function structStep(node: GraphNode, context: MapContext, file: string): Step {
 
 /** An entity becomes a struct with an ID, a constructor with the defaults, methods for derived fields, and Validate for the invariants. */
 function entitySteps(entity: GraphNode, context: MapContext): Step[] {
-    return [entityStep(entity, context), ...guardSteps(entity, context)];
+    return [entityStep(entity, context), ...guardSteps(entity, context), ...storageSteps(entity, context, HELPERS)];
 }
 
 function entityStep(entity: GraphNode, context: MapContext): Step {

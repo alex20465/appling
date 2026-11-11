@@ -4,7 +4,7 @@
 #
 #   scripts/ci/codegen-e2e-docker.sh <django|ash|go|rust> [examples|constructs ...]
 #
-# The generated projects stay in .e2e/<target>/ of the repository (gitignored), the toolchains' caches in .e2e/home/. Ash also starts a Postgres container
+# The generated projects stay in .e2e/<target>/ of the repository (gitignored), the toolchains' caches in .e2e/home/. Ash and Go also start a Postgres container
 # and shares its network namespace, so the generated config's localhost database works unchanged.
 set -euo pipefail
 
@@ -28,7 +28,7 @@ rm -rf "$out"
 mkdir -p "$out" "$home"
 
 network=()
-if [ "$target" = ash ]; then
+if [ "$target" = ash ] || [ "$target" = go ]; then
   pg="appling-e2e-postgres-$$"
   docker run -d --rm --name "$pg" -e POSTGRES_PASSWORD=postgres postgres:16-alpine >/dev/null
   trap 'docker rm -f "$pg" >/dev/null' EXIT
