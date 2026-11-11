@@ -13,6 +13,7 @@ import { check, defaultValue, invariantTests, transitionTests } from './model-te
 import { policyTests } from './policy-tests.js';
 import { coveredByScenario, scenarioSteps } from './scenario-tests.js';
 import { externalKeySteps, secretPlaceholders } from './vendors.js';
+import { useCaseSteps } from './usecases.js';
 import { app, attributeType, calculation, fieldPolicyOf, fieldsOf, fileOf, mix, moduleName, patch, relationTarget, leftToCode, task, typeModule } from './naming.js';
 
 const extension: CodegenExtension = {
@@ -76,7 +77,7 @@ const extension: CodegenExtension = {
             case 'Event': return [task(`publish ${lastOf(node.qn)} with an Ash notifier, for example Ash.Notifier.PubSub`)];
             case 'External': return [leftToCode(`implement ${lastOf(node.qn)} as a client module or generic actions`)];
             case 'ExternalKey': return externalKeySteps(node, context);
-            case 'UseCase': return [task(`implement ${lastOf(node.qn)} as a Reactor or a generic action`)];
+            case 'UseCase': return useCaseSteps(node, context);
             case 'Role': return roleSteps(node, context);
             case 'Actor': return [...actorSteps(node, context, patchResource), ...actorCheckSteps(node, context)];
             case 'Tenant': return tenantSteps(node, context);

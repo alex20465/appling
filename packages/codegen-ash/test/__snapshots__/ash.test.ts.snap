@@ -253,6 +253,15 @@ end
   end
 end
 ",
+  "lib/shop/sales/use_cases.ex": "defmodule Shop.Sales.UseCases do
+  def checkout(order, opts \\\\ []) do
+    actor = Keyword.get(opts, :actor)
+    tenant = Keyword.get(opts, :tenant)
+    Ash.update!(order, %{}, action: :place_order, actor: actor, tenant: tenant)
+    :ok
+  end
+end
+",
   "lib/shop_web/ash_json_api_router.ex": "defmodule ShopWeb.AshJsonApiRouter do
   use AshJsonApi.Router,
     domains: [Shop.Sales],
@@ -498,6 +507,7 @@ exports[`examples plan domains, enums, embedded resources, resources and relatio
   "sales.OpenOrders: lib/shop/sales/order.ex",
   "sales.OrdersOf: lib/shop/sales/order.ex",
   "sales.OrderSummary.customer_name: lib/shop/sales/order.ex",
+  "sales.Checkout: lib/shop/sales/use_cases.ex",
   "sales.PublicApi: lib/shop/sales/order.ex",
   "sales.PublicApi: lib/shop/sales.ex",
   "sales.PublicApi: lib/shop_web/ash_json_api_router.ex",
