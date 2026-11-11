@@ -6,7 +6,8 @@
     "build": "pnpm -r build",
     "check": "appling check",
     "fmt": "appling fmt",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sandbox": "node scripts/sandbox/start.mjs"
   },
   "devDependencies": {
     "@appling/cli": "workspace:*",

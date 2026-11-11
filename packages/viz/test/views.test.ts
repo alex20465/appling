@@ -2,9 +2,10 @@ import { expect, test } from 'vitest';
 import type { Model } from '@appling/lang';
 import { buildGraph, diffGraphs, Simulator, withRemoved } from '@appling/model';
 import { buildWorkspace, examples } from '../../lang/test/workspace.js';
-import { layoutFlow } from '../src/layout.js';
+import { layoutFlow, layoutTree } from '../src/layout.js';
+import { loads, sproutDelays } from '../src/canvas/plant.js';
 import {
-    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, implementationMarks, sessionMarks, entityActions, factOf, flowView, GraphIndex, growOrder, growTree, lensOf, policyText, relations, revealPath, search, trailOf, viewFor,
+    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, implementationMarks, sessionMarks, entityActions, factOf, flowView, GraphIndex, growOrder, growTree, lensOf, modelPulse, policyText, relations, revealPath, search, trailOf, viewFor,
     type Card, type Flow, type TreeNode
 } from '../src/views.js';
 
@@ -330,4 +331,26 @@ test('a growing focus adds each element after its path from the seed, along the 
         '~/crm', '~/crm/#Entity', '~/crm/#Entity/crm.Customer'
     ]);
     expect(growOrder(next, next)).toEqual([]);
+});
+
+test('a new model pulses the elements it added or changed inside', async () => {
+    const before = await indexOf({ 'm.appling': 'module m {\n  entity A {\n    x: String\n  }\n  entity B {\n    y: String\n  }\n}' });
+    const after = await indexOf({ 'm.appling': 'module m {\n  entity A {\n    renamed: String\n  }\n  entity B {\n    y: String\n  }\n  entity C {\n    z: String\n  }\n}' });
+    expect(Object.fromEntries(modelPulse(before, after, ['m', 'm.A', 'm.B', 'm.C', 'm.A']))).toEqual({ m: 'changed', 'm.A': 'changed', 'm.C': 'added' });
+    expect(modelPulse(after, after, ['m', 'm.A']).size).toBe(0);
+});
+
+test('new nodes sprout generation by generation, siblings one after another', async () => {
+    const index = await indexOf(examples());
+    const first = layoutTree(growTree(index, DOMAIN, new Set(['~'])));
+    const seedOnly = sproutDelays(first, new Map());
+    expect(seedOnly.get('~')).toBe(0);
+    expect(first.filter(p => p.parent).map(p => seedOnly.get(p.node.id))).toEqual(expect.arrayContaining([240, 285]));
+    const module = first.find(p => p.node.type === 'module')!.node.id;
+    const next = layoutTree(growTree(index, DOMAIN, new Set(['~', module])));
+    const delays = sproutDelays(next, seedOnly);
+    expect(delays.get(module)).toBe(seedOnly.get(module));
+    const shoots = next.filter(p => p.parent?.node.id === module);
+    expect(Math.min(...shoots.map(p => delays.get(p.node.id)!))).toBe(0);
+    expect(loads(next).get(module)).toBe(shoots.length);
 });

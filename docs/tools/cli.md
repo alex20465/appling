@@ -1,9 +1,9 @@
 ---
 title: Command line
-description: The appling command checks, formats, inspects, releases and generates code from your models.
+description: The appling command checks, formats, inspects, releases and generates code from your models and opens them in the IDE.
 ---
 
-The `appling` command line tool is the package `@appling/cli`. It validates `.appling` files, rewrites them into canonical form, prints the semantic graph, records releases and runs code generation. Every command reads the files you give it as one workspace, so references between modules resolve across files.
+The `appling` command line tool is the package `@appling/cli`. It validates `.appling` files, rewrites them into canonical form, prints the semantic graph, records releases, runs code generation and opens the IDE in your browser. Every command reads the files you give it as one workspace, so references between modules resolve across files.
 
 ## Install
 
@@ -21,6 +21,7 @@ npx @appling/cli check models
 
 ```sh
 appling init [folder] [--name <name>] [--agents <agents>] [--stack <stack>]
+appling ide [folder]
 appling check [files or folders...]
 appling fmt   [files or folders...]
 appling graph [files or folders...]
@@ -77,6 +78,21 @@ npx @appling/cli init todo --name todo --agents claude,codex --stack none
 ```
 Appling is set up for Claude Code, Codex. Start your agent in todo and describe the application you want.
 ```
+
+## ide
+
+Opens the [repo view](ide.md) of a folder in your browser, the same view Appling Desktop and the VS Code extension show: the model canvas, the search, the inspector and the editor behind **Source**. It starts the IDE server for the folder (the current folder without one) on a free port of `127.0.0.1`, prints its address and opens it in your default browser. It runs until you press Ctrl+C.
+
+```sh
+appling ide examples
+```
+
+```
+Appling IDE for /home/you/project/examples at http://127.0.0.1:38543
+Press Ctrl+C to stop.
+```
+
+If no browser opens, open the printed address yourself. The browser tab has no terminals, agent sessions or code view; those come with [Desktop](desktop.md).
 
 ## check
 
@@ -339,7 +355,7 @@ $ appling refs --check
 | Code | Meaning |
 |---|---|
 | 0 | No errors |
-| 1 | `init` was cancelled or the installation failed; `check`, `graph`, `release`, `generate` or `refs` found errors in the model; `refs --check` found a reference that is not current; `release` got an invalid or existing version; `generate` has no targets, a missing prerequisite, a non empty output folder, a failing step, or (with `--migrate`) a target that was not generated; `fmt` skipped a file with syntax errors |
+| 1 | `init` was cancelled or the installation failed; `ide` got a folder that does not exist or its server failed; `check`, `graph`, `release`, `generate` or `refs` found errors in the model; `refs --check` found a reference that is not current; `release` got an invalid or existing version; `generate` has no targets, a missing prerequisite, a non empty output folder, a failing step, or (with `--migrate`) a target that was not generated; `fmt` skipped a file with syntax errors |
 | 2 | Unknown command, `init` with an unknown flag or an invalid `--name`, `--agents` or `--stack`, or without a terminal and not every flag given, `release` without a version, `refs` without a qualified name or `--check`, or `simulate` without a known question and its arguments |
 
 Exit code 2 also prints the usage.

@@ -116,6 +116,19 @@ Every key in the generated `.env.example` gets the placeholder `0`, the way a de
 
 On GitHub the `Codegen end to end` workflow (`.github/workflows/codegen-e2e.yml`) runs the script once per target on pull requests that touch the codegen packages, `lang`, `model`, `cli`, `examples/` or the script, every night and on demand. A failing job uploads the generated projects as an artifact. When a generated project does not build, fix the generator in its extension and add a snapshot or unit test for the fix.
 
+## UI sandbox
+
+`pnpm sandbox <target>` starts the IDE in a sandbox an AI agent can see and use: it copies `examples/` into `.sandbox/workspace` (a git repo with one commit) and opens it with Chrome DevTools listening on `127.0.0.1:9222`. The `sandbox` MCP server in `.mcp.json` (Playwright MCP) connects there, and the `ui-sandbox` skill tells the agent how to walk the UI, take screenshots and fix what is plainly broken.
+
+| Target | Opens |
+|---|---|
+| `ide` | the IDE server at `127.0.0.1:4410` in a Chrome app window |
+| `openvscode` | openvscode-server at `127.0.0.1:4411` with the built `appling.vsix`, in a Chrome app window |
+| `vscode` | VS Code with its own profile and the extension from `packages/vscode` |
+| `desktop` | Appling Desktop with its own user data and pty host |
+
+Build the targets first (`pnpm build`). Every target keeps its profile under `.sandbox/<target>`, apart from your own editors and app data; the workspace starts fresh on every start. One target runs at a time, since they share the DevTools port.
+
 ## Language size
 
 The language stays small enough for an assistant to read all of it ([design concept, section 8](../concept.md#8-what-belongs-in-the-model)). Two checks hold it there:

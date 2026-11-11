@@ -1,6 +1,6 @@
 # @appling/cli
 
-Command line tool to set up, check, format and inspect Appling models (`.appling` files).
+Command line tool to set up, check, format and inspect Appling models (`.appling` files) and open them in the IDE.
 
 Appling is a declarative language that describes a business or web application in five layers: domain, behavior, application, interfaces and experience. The language itself lives in [`@appling/lang`](https://www.npmjs.com/package/@appling/lang).
 
@@ -20,6 +20,7 @@ npx @appling/cli check models
 
 ```sh
 appling init [folder] [--name <name>] [--agents <agents>] [--stack <stack>]
+appling ide [folder]
 appling check [files or folders...]
 appling fmt   [files or folders...]
 appling graph [files or folders...]
@@ -41,6 +42,14 @@ Sets up a new project: writes `package.json` if missing, installs `@appling/cli`
 
 ```sh
 npx @appling/cli init todo --name todo --agents claude,codex --stack django
+```
+
+### ide
+
+Opens the repo view of a folder (the current folder by default) in your browser: the model canvas, the search, the inspector and the editor behind **Source**. It starts the IDE server of `@appling/ide` on a free port of `127.0.0.1`, prints its address, opens it in the default browser and runs until Ctrl+C. Terminals, agent sessions and the code view come with Appling Desktop.
+
+```sh
+npx appling ide models
 ```
 
 ### check
@@ -117,7 +126,7 @@ $ appling refs --check
 | Code | Meaning |
 |---|---|
 | 0 | No errors |
-| 1 | `init` was cancelled or the installation failed, `check`, `graph`, `release`, `generate` or `refs` found errors, `refs --check` found a reference that is not current, `release` found an invalid or existing version, `generate` failed, or `fmt` skipped a file with syntax errors |
+| 1 | `init` was cancelled or the installation failed, `ide` got a folder that does not exist or its server failed, `check`, `graph`, `release`, `generate` or `refs` found errors, `refs --check` found a reference that is not current, `release` found an invalid or existing version, `generate` failed, or `fmt` skipped a file with syntax errors |
 | 2 | Unknown command, `init` with an invalid flag or without a terminal and not every flag given, `release` without a version, or `refs` without a qualified name or `--check` |
 
 ## License

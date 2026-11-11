@@ -304,6 +304,21 @@ export class GraphIndex {
     }
 }
 
+/** An element as it reads: its own properties and those of everything inside it. */
+function reading(index: GraphIndex, qn: string): string {
+    return JSON.stringify(index.nodes.get(qn)?.props) + index.children(qn).map(child => child.qn + reading(index, child.qn)).join('');
+}
+
+/** What a new model did to these elements: `added` when it is new, `changed` when it or something inside it reads differently. */
+export function modelPulse(before: GraphIndex, after: GraphIndex, qns: Iterable<string>): Map<string, 'added' | 'changed'> {
+    const pulse = new Map<string, 'added' | 'changed'>();
+    for (const qn of new Set(qns)) {
+        if (!before.nodes.has(qn)) pulse.set(qn, 'added');
+        else if (reading(before, qn) !== reading(after, qn)) pulse.set(qn, 'changed');
+    }
+    return pulse;
+}
+
 export type ChangeMark = 'added' | 'changed' | 'removed';
 
 /** Model changes to mark on the canvas, such as a model diff (`@appling/model/diff`) or the changes of an AI session. */
