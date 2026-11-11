@@ -634,8 +634,83 @@ test('scenarios become ExUnit tests that seed the given rows, run the action as 
     expect(text).toMatchSnapshot();
     const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
     for (const name of ['EmptyFails', 'ClosedFails', 'GuestRefused']) expect(entries[`shop.${name}`].status).toBe('generated');
-    expect(entries['shop.Batched'].missing.map(m => m.what)).toEqual([`write the test "scenario Batched" in ${file}: the use case Batch is not generated yet (its own registry task)`]);
+    expect(entries['shop.Batched'].missing.map(m => m.what)).toEqual([`write the test "scenario Batched" in ${file}: the scenario runs the use case Batch, which the generated tests do not call yet`]);
     // The scenarios replace the guessed tests of the action and of the transition it triggers.
     expect(entries['shop.Close'].missing).toEqual([]);
     expect(entries['shop.Flow.transition[open->done]'].steps).toEqual([]);
+});
+
+test('use cases become functions of the module UseCases that run their steps in order', async () => {
+    const result = await planFor({
+        'shop.appling': `module shop {
+            enum Status { draft placed cancelled }
+            entity Order {
+                reference: String
+                total: Money
+                status: Status state default draft
+            }
+            machine OrderFlow on Order.status {
+                transition draft -> placed via PlaceOrder
+                transition draft, placed -> cancelled via Cancel
+            }
+            action PlaceOrder on Order {
+                input { note: String? }
+            }
+            action Cancel on Order { }
+            event PaymentReceived { order: Order }
+            query OrdersLike from Order {
+                input { code: String }
+                where { reference == code }
+            }
+            external Payments {
+                op Charge (amount: Money, reference: String) returns String errors Declined, Timeout
+                op Refund (amount: Money)
+            }
+            usecase Checkout (order: Order) does "Places and pays" {
+                step PlaceOrder(order, "gift")
+                step Payments.Charge(order.total, order.reference) on Declined do Cancel(order) on Timeout do Payments.Refund(order.total)
+                step OrdersLike(order.reference)
+                await PaymentReceived timeout "24h" do Cancel(order)
+                step Cancel(order)
+            }
+            usecase Reorder (order: Order) {
+                step Checkout(order)
+            }
+            usecase Nothing (order: Order) {
+            }
+        }`
+    });
+    const file = 'lib/shop/shop/use_cases.ex';
+    const text = result.steps.reduce<string | undefined>((current, { step }) => step.kind === 'template' && step.file === file ? step.write(current) : current, undefined);
+    expect(text).toBe([
+        'defmodule Shop.Shop.UseCases do',
+        '  @doc "Places and pays"',
+        '  def checkout(order, opts \\\\ []) do',
+        '    actor = Keyword.get(opts, :actor)',
+        '    payments = Keyword.fetch!(opts, :payments)',
+        '    order = Ash.update!(order, %{note: "gift"}, action: :place_order, actor: actor)',
+        '    case payments.charge(order.total, order.reference) do',
+        '      {:error, :declined} -> Ash.update!(order, %{}, action: :cancel, actor: actor)',
+        '      {:error, :timeout} -> payments.refund(order.total)',
+        '      result -> result',
+        '    end',
+        '    Ash.read!(Ash.Query.for_read(Shop.Shop.Order, :orders_like, %{code: order.reference}, actor: actor))',
+        '    :ok',
+        '  end',
+        '',
+        '  def reorder(order, opts \\\\ []) do',
+        '    checkout(order, opts)',
+        '    :ok',
+        '  end',
+        '',
+        '  def nothing(_order, _opts \\\\ []) do',
+        '    :ok',
+        '  end',
+        'end',
+        ''
+    ].join('\n'));
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['shop.Checkout'].status).toBe('partial');
+    expect(entries['shop.Checkout'].missing.map(m => m.what)).toContain('continue Checkout when PaymentReceived happens, or after 24h with the timeout call; the steps from here on are not generated');
+    expect(entries['shop.Reorder'].status).toBe('generated');
 });

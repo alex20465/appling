@@ -84,7 +84,8 @@ Modules are named `<App>.<Module>`, with nested modules as `<App>.<A>.<B>`; a ty
 | `actor` | the record that acts: the resource of its `is` entity, a resource of its own or a struct (see [actors](#actors)) |
 | `role` | an `Ash.Policy.SimpleCheck` module `<App>.<Module>.Checks.<Role>` in `lib/<app>/<module>/checks/<role>.ex` (see [roles](#roles)) |
 | `tenant` | attribute multitenancy on the resources that belong to the tenant's entity (see [tenants](#tenants)) |
-| `event`, `external`, `usecase` | tasks: an Ash notifier, a client module or generic actions, a Reactor or generic action |
+| `event`, `external` | tasks: an Ash notifier, a client module or generic actions |
+| `usecase` | a function of `<App>.<Module>.UseCases` in `lib/<app>/<module>/use_cases.ex` that runs its steps in order (see [use cases](#use-cases)) |
 | `setting`, `secret` of an external | a `config` line in `config/runtime.exs` read from the environment and a line in `.env.example` (see [settings and secrets](#settings-and-secrets)) |
 | `interface webhook` | tasks: register each endpoint at the vendor, receive it and verify its signature |
 | `scenario` | an ExUnit test in `test/<app>/<module>/scenarios_test.exs` (see [scenarios](#scenarios)) |
@@ -186,6 +187,33 @@ defmodule Shop.Sales.Order do
   end
 end
 ```
+
+### Use cases
+
+A use case becomes a function of its module's `<App>.<Module>.UseCases`, named in snake case, that takes the use case's inputs and a keyword list of options: `actor`, `tenant` and one client module per external system it calls, such as `payments: MyApp.Payments`. Its steps run in order:
+
+- an action on a record runs `Ash.update!` (or `Ash.destroy!` for an action that deletes its record) with the action's name, the actor and, for a resource of a tenant, the tenant; the record is rebound to the result when a later step reads it;
+- a query runs its read action through `Ash.Query.for_read` and `Ash.read!`; an input that names a record takes its id, such as `order.buyer_id`;
+- an external operation calls the function of the client module, which answers `{:error, :declined}` for a declared error `Declined`; each `on <Error> do <call>` becomes a `case` clause that runs the recovery;
+- another use case is called with the same options.
+
+```elixir
+defmodule Shop.Shop.UseCases do
+  def checkout(order, opts \\ []) do
+    actor = Keyword.get(opts, :actor)
+    payments = Keyword.fetch!(opts, :payments)
+    order = Ash.update!(order, %{note: "gift"}, action: :place_order, actor: actor)
+    case payments.charge(order.total, order.reference) do
+      {:error, :declined} -> Ash.update!(order, %{}, action: :cancel, actor: actor)
+      {:error, :timeout} -> payments.refund(order.total)
+      result -> result
+    end
+    :ok
+  end
+end
+```
+
+An `await` step, a step whose arguments do not translate (a derived field, a record as an action input), a call to an action without an entity and error handlers on an action stay tasks, and so do the steps after them. The use case's policies are tasks of their own.
 
 ### Pages
 
@@ -487,7 +515,7 @@ Whatever cannot be translated is listed in the [registry](registry.md):
 - invariants, preconditions and guards over calculations, relationships or other resources, and guards when an action has several transitions
 - effects that create rows or emit events, loops (`for`), updates and deletes of related records, `delete self` in an action with a transition, and actions with several target states
 - actions with `consistency eventual`, and actions without an entity
-- policies that do not translate, which deny until written, and writes of field policies (see [policies](#policies)), role conditions that do not translate, telling apart actors bound to the same entity, resources that reach the tenant only through relationships, events, externals and use cases
+- policies that do not translate, which deny until written, and writes of field policies (see [policies](#policies)), role conditions that do not translate, telling apart actors bound to the same entity, resources that reach the tenant only through relationships, events, externals, use case policies and the use case steps that do not translate (see [use cases](#use-cases))
 - jobs on events, and jobs whose filter does not translate
 - authentication, rate limits and CORS of interfaces, and endpoints that do not fit the route patterns
 - flows, and interfaces with a protocol other than `rest`

@@ -89,7 +89,7 @@ const RESERVED = new Set(['and', 'or', 'not', 'in', 'when', 'fn', 'do', 'end', '
 function scenarioBody(scenario: GraphNode, context: MapContext): string[] {
     const call = scenarioCall(scenario);
     const action = context.node(call.target)!;
-    if (action.kind === 'UseCase') fail(`the use case ${lastOf(action.qn)} is not generated yet (its own registry task)`);
+    if (action.kind === 'UseCase') fail(`the scenario runs the use case ${lastOf(action.qn)}, which the generated tests do not call yet`);
     const entity = action.data.entity ? context.node(action.data.entity as string) : undefined;
     if (!entity) fail(`${lastOf(action.qn)} is not generated yet, it has no entity (its own registry task)`);
     const result = simulator(context).scenario(scenario.qn);
