@@ -2,7 +2,7 @@ import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
 import { annotation, children, docstring, hasKind, leftToCode, pythonFile, task, template } from './files.js';
 import { enforced, fieldGuards, policyImport, queryGuard, useCaseGuard } from './access.js';
-import { scope, storedFields } from './models.js';
+import { property, scope, storedFields } from './models.js';
 import { appOf, lastOf, parentOf, python, q, snake, type PythonScope } from './python.js';
 
 /** The code of a query function, or undefined when its filter cannot be translated. */
@@ -114,22 +114,34 @@ export function projectionSteps(projection: GraphNode, context: MapContext): Ste
     const derived = new Set(children(entity, context, 'Field').filter(f => f.data.derived).map(f => lastOf(f.qn)));
     const imports = new Set(['from rest_framework import serializers', `from ${appOf(entity.module)}.models import ${lastOf(entity.qn)}`]);
     const declared: string[] = [];
+    const methods: string[] = [];
     const fields: string[] = [];
     const hidden: string[] = [];
     const guards = fieldGuards(entity, context);
     for (const field of children(projection, context, 'ProjectionField')) {
         const name = lastOf(field.qn);
-        if (field.data.value) {
-            const path = sourcePath(field.data.value as ExprData, context);
-            if (!path) continue;
-            declared.push(`    ${name} = serializers.ReadOnlyField(source=${JSON.stringify(path)})`);
+        const value = field.data.value as ExprData | undefined;
+        // The entity fields the value reads; a guard on any of them hides the projected field.
+        let reads = [name];
+        if (value) {
+            const path = sourcePath(value, context);
+            if (path) {
+                declared.push(`    ${name} = serializers.ReadOnlyField(source=${JSON.stringify(path)})`);
+                reads = [path.split('.')[0]];
+            } else {
+                const code = computedValue(value, context, imports);
+                if (!code) continue;
+                declared.push(`    ${name} = serializers.SerializerMethodField()`);
+                methods.push('', `    def get_${name}(self, obj):`, `        return ${code}`);
+                reads = rootFields(value, entity, context);
+            }
         } else if (derived.has(name)) {
             declared.push(`    ${name} = serializers.ReadOnlyField()`);
         }
         fields.push(JSON.stringify(name));
-        const path = field.data.value ? sourcePath(field.data.value as ExprData, context) : name;
-        const guard = path && guards.get(path.split('.')[0]);
-        if (guard) hidden.push(`        if ${JSON.stringify(name)} in data and not ${policyImport(entity, guard, imports)}(actor, instance):`, `            data[${JSON.stringify(name)}] = None`);
+        for (const guard of new Set(reads.map(r => guards.get(r)).filter(g => g !== undefined))) {
+            hidden.push(`        if ${JSON.stringify(name)} in data and not ${policyImport(entity, guard, imports)}(actor, instance):`, `            data[${JSON.stringify(name)}] = None`);
+        }
     }
     const code = [
         `class ${lastOf(projection.qn)}(serializers.ModelSerializer):`,
@@ -139,6 +151,7 @@ export function projectionSteps(projection: GraphNode, context: MapContext): Ste
         '    class Meta:',
         `        model = ${lastOf(entity.qn)}`,
         `        fields = [${fields.join(', ')}]`,
+        ...methods,
         ...(hidden.length ? [
             '',
             '    def to_representation(self, instance):',
@@ -155,7 +168,43 @@ export function projectionSteps(projection: GraphNode, context: MapContext): Ste
 }
 
 export function projectionFieldSteps(field: GraphNode, context: MapContext): Step[] {
-    return field.data.value && !sourcePath(field.data.value as ExprData, context) ? [task(`add the computed field ${lastOf(field.qn)} = ${field.props.value} to the serializer`)] : [];
+    const value = field.data.value as ExprData | undefined;
+    if (!value || sourcePath(value, context) || computedValue(value, context, new Set())) return [];
+    return [task(`add the computed field ${lastOf(field.qn)} = ${field.props.value} to the serializer`)];
+}
+
+/** A computed projection value as Python over the serialized instance `obj`, or undefined when it does not translate. */
+function computedValue(expr: ExprData, context: MapContext, imports: Set<string>): string | undefined {
+    // A derived field without a generated property has no attribute on the model to read.
+    if (readFields(expr, context).some(f => f.data.derived && !property(f, context, new Set()))) return undefined;
+    return python(expr, { ...scope(context, imports), self: 'obj' });
+}
+
+/** Every entity field an expression names, at its root or through members. */
+function readFields(expr: ExprData, context: MapContext): GraphNode[] {
+    const found: GraphNode[] = [];
+    walk(expr, e => {
+        const field = e.target ? context.node(e.target) : undefined;
+        if (field?.kind === 'Field' && context.node(parentOf(field.qn))?.kind === 'Entity') found.push(field);
+    });
+    return found;
+}
+
+function walk(value: unknown, visit: (expr: ExprData) => void): void {
+    if (Array.isArray(value)) return value.forEach(v => walk(v, visit));
+    if (!value || typeof value !== 'object') return;
+    const expr = value as ExprData;
+    if (expr.$type) visit(expr);
+    for (const [key, child] of Object.entries(expr)) if (key !== '$type') walk(child, visit);
+}
+
+/** The names of the entity's own fields an expression reads at its root (`heavy`, `address` of `address.to`). */
+function rootFields(expr: ExprData, entity: GraphNode, context: MapContext): string[] {
+    const found = new Set<string>();
+    walk(expr, e => {
+        if (e.$type === 'NameExpr' && e.target && parentOf(e.target) === entity.qn && context.node(e.target)?.kind === 'Field') found.add(e.name!);
+    });
+    return [...found];
 }
 
 /** `customer.name` over entity fields, as a dotted serializer source; undefined for anything else. */

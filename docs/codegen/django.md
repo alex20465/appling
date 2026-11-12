@@ -68,7 +68,7 @@ The app of a module is its qualified name with dots replaced by underscores: the
 | scheduled `job` | a `django.tasks` task in `<app>/jobs.py` and a management command named after the job |
 | `job` on an event | a signal receiver in `<app>/handlers.py` |
 | `query` | a function in `<app>/queries.py` returning a queryset with filter and ordering, plus a `<QUERY>_PAGE_SIZE` constant for `paginate`; its inputs are parameters, required ones first and optional ones defaulting to `None`, and callers pass them by name. A query with inputs also gets `<Query>Input` in `<app>/serializers.py`, a REST framework serializer that parses the inputs from URL parameters (entities by primary key, enums by value, lists from repeated parameters) |
-| `projection` | a REST framework `ModelSerializer` in `<app>/serializers.py`; derived fields and computed fields that follow references, such as `customer.name`, become read only fields |
+| `projection` | a REST framework `ModelSerializer` in `<app>/serializers.py`; derived fields and computed fields that follow references, such as `customer.name`, become read only fields; other computed fields, such as `total * 2` or `address.to`, become a `SerializerMethodField` with a `get_<field>(self, obj)` method. A computed field that reads a field guarded by a read policy is hidden like that field |
 | `external` | a `typing.Protocol` in `<app>/externals.py` |
 | `setting`, `secret` of an external | a constant in `config/settings.py` read from the environment and a line in `.env.example` (see [settings and secrets](#settings-and-secrets)) |
 | `interface webhook` | tasks: register each endpoint at the vendor, receive it and verify its signature |
@@ -427,7 +427,7 @@ Whatever cannot be translated is listed in the [registry](registry.md):
 - the cron schedule of jobs, and jobs that do not fit the patterns above
 - use cases from their first `await` on, or from the first call that cannot be translated
 - authentication and CORS of interfaces, and endpoints that do not fit the view patterns
-- computed projection fields that are not a path over entity fields
+- computed projection fields without a Python translation (or that read a derived field without one), and computed fields shown on pages that are not a path over entity fields
 - row actions that need inputs, details and forms on pages without `{id}` in the route, navigation items to such pages, and flows
 - scenarios that call incomplete code or give values without a Python translation or a sample (see [scenarios](#scenarios))
 - the tenant of a request when the user model has no field of the tenant's entity, actor fields when actors are bound to several entities, and interfaces with a protocol other than `rest`

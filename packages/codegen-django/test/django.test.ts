@@ -535,6 +535,56 @@ const QUERY_INPUTS = `module shop {
     page Orders route "/orders" { list OrdersOf as OrderView }
 }`;
 
+const COMPUTED = `module shop {
+    role Clerk
+    actor human Employee roles Clerk
+    value Address { to: String }
+    entity Order {
+        total: Money
+        address: Address
+        big: Bool = total > 100
+        policy read { true }
+        policy read fields total { actor.is(Clerk) }
+    }
+    projection OrderView from Order {
+        flagged = big == false
+        rounded = 1.5
+        ship_to = address.to
+        doubled = total * 2
+    }
+}`;
+
+test('computed projection fields become method fields over the instance, hidden with the fields they read', async () => {
+    const { files, entries } = await generate({ 'shop.appling': COMPUTED });
+    for (const name of ['flagged', 'rounded', 'ship_to', 'doubled']) expect(entries[`shop.OrderView.${name}`].status, name).toBe('generated');
+    expect(files['shop/serializers.py']).toContain([
+        'class OrderView(serializers.ModelSerializer):',
+        '    flagged = serializers.SerializerMethodField()',
+        '    rounded = serializers.SerializerMethodField()',
+        '    ship_to = serializers.SerializerMethodField()',
+        '    doubled = serializers.SerializerMethodField()',
+        '',
+        '    class Meta:',
+        '        model = Order',
+        '        fields = ["flagged", "rounded", "ship_to", "doubled"]',
+        '',
+        '    def get_flagged(self, obj):',
+        '        return obj.big == False',
+        '',
+        '    def get_rounded(self, obj):',
+        '        return 1.5',
+        '',
+        '    def get_ship_to(self, obj):',
+        '        return obj.address["to"]',
+        '',
+        '    def get_doubled(self, obj):',
+        '        return obj.total * 2'
+    ].join('\n'));
+    // Only the field that reads the guarded total is hidden.
+    expect(files['shop/serializers.py']).toContain('        if "doubled" in data and not can_read_order_total(actor, instance):\n            data["doubled"] = None');
+    expect(files['shop/serializers.py']).not.toContain('"flagged" in data');
+});
+
 test('query inputs become parameters, read from the path and the query string by a serializer', async () => {
     const { files, entries } = await generate({ 'shop.appling': QUERY_INPUTS });
     expect(entries['shop.OrdersOf'].missing).toEqual([]);
