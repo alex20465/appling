@@ -23,7 +23,8 @@ export function python(expr: ExprData, scope: PythonScope): string | undefined {
     switch (expr.$type) {
         case 'StringExpr': return JSON.stringify(expr.value);
         case 'NumberExpr': return String(expr.value);
-        case 'BoolExpr': return expr.value ? 'True' : 'False';
+        // The graph keeps the literal's text, "true" or "false".
+        case 'BoolExpr': return String(expr.value) === 'true' ? 'True' : 'False';
         case 'NullExpr': return 'None';
         case 'ListExpr': return joined((expr.items ?? []).map(sub), items => `[${items.join(', ')}]`);
         case 'UnaryExpr': {
