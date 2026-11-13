@@ -173,7 +173,7 @@ export class Panels implements Disposable {
         const live = (state.live?.files.length ?? 0) + state.proposals.length;
         const badge = (count: number, what: string) => count ? { value: count, tooltip: `${count} ${what}` } : undefined;
         this.trees.changes.view.badge = badge(live, 'unseen changes and proposals');
-        this.trees.tasks.view.badge = badge(state.snapshot.tasks.length, 'open registry tasks');
+        this.trees.tasks.view.badge = badge(state.snapshot.tasks.filter(t => t.status !== 'done').length, 'open registry tasks');
         this.trees.tasks.view.description = state.snapshot.targets.length ? undefined : 'no stack yet';
         this.trees.changes.view.description = state.live?.files.length ? diffSummary(state.live.diff) : undefined;
         const review = state.review.result;

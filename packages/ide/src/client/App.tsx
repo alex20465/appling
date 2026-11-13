@@ -13,6 +13,7 @@ import { openTextDiff } from './hooks.js';
 import type { AgentView, LiveChanges, Proposal } from '../shared/live.js';
 import { acceptChanges, addRequest, addTarget, connectLanguageServer, SOURCE_OPEN, decideProposal, loadCode, loadRelease, loadReview, loadRevisions, loadSnapshot, loadView, onEvents, removeRequest, requestEdit, revertChange, saveFile, saveView, startGeneration, updateRequest } from './api.js';
 import { Implementation } from './Implementation.js';
+import { TaskBoard } from './TaskBoard.js';
 import type { OpenCode } from './CodeView.js';
 import { AgentCanvas, AgentStrip } from './AgentView.js';
 import { Live } from './Live.js';
@@ -61,6 +62,8 @@ export function App() {
     const [marked, setMarked] = useState(true);
     /** The review loads once its tab opens, then follows every snapshot and revision change. */
     const [reviewing, setReviewing] = useState(false);
+    /** Whether the task board lies over the canvas. */
+    const [board, setBoard] = useState(false);
     const reportUnsaved = useRef<(files: string[]) => void>(() => undefined);
 
     const locations = useRef<Snapshot['locations']>({});
@@ -243,6 +246,16 @@ export function App() {
         }, fail);
     }, [snapshot, select]);
 
+    /** Go to Implementation in the source: the code of the element there, or of the nearest element around it that has code. */
+    const implementationAt = (uri: string, offset: number) => {
+        const at = snapshot && elementAt(snapshot.locations, uri, offset);
+        if (!at || !snapshot || !index) return;
+        const declared = at.split('#')[0];
+        const coded = [at, ...index.lineage(declared)].find(qn => snapshot.code[qn]?.length);
+        if (coded) return openCode(coded);
+        fail(new Error(`${declared} has no code yet. Generate it from the Code tab.`));
+    };
+
     // the Appling extension's CodeLens in Desktop's code view: from code back to its element
     const selectRef = useRef(select);
     selectRef.current = select;
@@ -311,6 +324,7 @@ export function App() {
     const steps = pending.reduce((count, m) => count + ((m.props.steps as string[] | undefined)?.length ?? 0), 0);
     const watched = watching ? agentViews[watching] : undefined;
     const unseenCount = live?.files.length ?? 0;
+    const openTasks = snapshot.tasks.filter(t => t.status !== 'done').length;
     return (
         <div className="app">
             <header className="bar">
@@ -336,13 +350,15 @@ export function App() {
                     onDirty={uris => reportUnsaved.current(snapshot.files.filter(f => uris.includes(f.uri)).map(f => f.path))}
                     marks={marks}
                     onMark={openCode}
+                    references={snapshot.code}
+                    onImplementationAt={implementationAt}
                     code={code}
                     onCloseCode={() => setCode(undefined)}
                 />
                 <div className="canvas-area">
                     {watched?.show
                         ? <AgentCanvas key={watched.session} index={canvasIndex} view={watched} session={sessions.find(s => s.id === watched.session)} settings={view} selected={element} changes={canvasChanges} onSelect={qn => select(qn, false)} onClose={() => setWatching(undefined)} onOpenFile={openFile} />
-                        : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={element} settings={view} sessions={sessionMarks} onSession={desktop?.focusSession} implementation={snapshot.implementation} requests={snapshot.requests} menu={nodeMenu} action={canvasAction} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
+                        : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={element} settings={view} sessions={sessionMarks} onSession={desktop?.focusSession} implementation={snapshot.implementation} requests={snapshot.requests} menu={nodeMenu} action={canvasAction} buttons={[{ label: openTasks ? `Tasks ${openTasks}` : 'Tasks', pressed: board, run: () => setBoard(!board) }]} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
                     {picking && (
                         <div className="stack-picker" role="dialog" aria-label="Choose a stack">
                             <h3>Generate with which stack?</h3>
@@ -353,6 +369,7 @@ export function App() {
                             </div>
                         </div>
                     )}
+                    {board && !watched?.show && <TaskBoard tasks={snapshot.tasks} sessions={sessions} selected={element} onSelect={qn => select(qn, false)} onClose={() => setBoard(false)} />}
                     <AgentStrip views={Object.values(agentViews)} sessions={sessions} watching={watching} onWatch={setWatching} />
                     {offer > 0 && !(run && !run.ended) && (
                         <div className="generate-offer" role="status">
@@ -371,7 +388,7 @@ export function App() {
                         <button className={side === 'inspector' ? 'active' : ''} onClick={() => setSide('inspector')}>Inspector</button>
                         <button className={side === 'changes' ? 'active' : ''} onClick={() => setSide('changes')}>Changes{unseenCount + proposals.length > 0 && <span className="tab-count">{unseenCount + proposals.length}</span>}</button>
                         <button className={side === 'review' ? 'active' : ''} onClick={() => { setSide('review'); setReviewing(true); }}>Review</button>
-                        <button className={side === 'code' ? 'active' : ''} onClick={() => setSide('code')}>Code{snapshot.tasks.length > 0 && <span className="tab-count">{snapshot.tasks.length}</span>}</button>
+                        <button className={side === 'code' ? 'active' : ''} onClick={() => setSide('code')}>Code{openTasks > 0 && <span className="tab-count">{openTasks}</span>}</button>
                     </nav>
                     <div hidden={side !== 'search'} className="side-panel"><Search index={index} onSelect={select} /></div>
                     <div hidden={side !== 'inspector'} className="side-panel"><Inspector index={index} qn={element} code={element ? snapshot.code[element] ?? [] : []} implementation={element ? snapshot.implementation[element] : undefined}

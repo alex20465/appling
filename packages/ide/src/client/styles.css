@@ -94,7 +94,7 @@ button:focus-visible { outline: 2px solid var(--appling-leaf); outline-offset: 2
 .panes.no-source.no-side { grid-template-columns: 0 1fr; }
 .panes.no-source > .editor { visibility: hidden; border: 0; overflow: hidden; }
 
-.editor { display: grid; grid-template-rows: auto 1fr; min-width: 0; border-right: 1px solid var(--appling-line); }
+.editor { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; border-right: 1px solid var(--appling-line); }
 .tabs { display: flex; overflow-x: auto; border-bottom: 1px solid var(--appling-line); background: var(--appling-surface-raised); }
 .tabs button { padding: 8px 14px; font: 12px var(--appling-font-mono); color: var(--appling-ink-muted); border-bottom: 2px solid transparent; white-space: nowrap; }
 .tabs button.active { color: var(--appling-ink); border-bottom-color: var(--appling-leaf); }
@@ -235,10 +235,32 @@ button:focus-visible { outline: 2px solid var(--appling-leaf); outline-offset: 2
 .run pre.log { max-height: 240px; overflow: auto; font: 11.5px/1.5 var(--appling-font-mono); white-space: pre-wrap; }
 .run pre.errors { white-space: pre-wrap; }
 .generate-offer { position: absolute; left: 50%; bottom: 84px; z-index: 2; translate: -50% 0; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border: 1px solid var(--appling-leaf); border-radius: 16px; background: var(--appling-surface-raised); font-size: 12.5px; }
-.code-view { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+.code-view { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; min-width: 0; }
 .code-view header { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--appling-line); font: 12px var(--appling-font-mono); }
 .code-view header .button { margin-left: auto; }
-.code-body { overflow: auto; font: 13px/21px var(--appling-font-mono); padding: 8px 0; }
+.code-body { min-height: 0; overflow: auto; font: 13px/21px var(--appling-font-mono); padding: 8px 0; }
 .code-line { display: flex; white-space: pre; }
 .code-line.marked { background: var(--appling-leaf-soft); }
 .code-number { flex: none; width: 48px; padding-right: 12px; text-align: right; color: var(--appling-line-strong); user-select: none; }
+
+/* The task board over the canvas: in progress, pending and done. */
+.task-board { position: absolute; z-index: 2; top: 92px; right: 12px; bottom: 44px; width: min(360px, calc(100% - 24px)); overflow: auto; padding: 10px 12px; border: 1px solid var(--appling-line-strong); border-radius: 8px; background: var(--appling-surface-raised); box-shadow: 0 6px 18px var(--appling-shadow); font-size: 12.5px; }
+.task-board header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.task-board h3 { margin: 0; font-size: 13px; }
+.task-board header .link { margin-left: auto; font-size: 16px; }
+.task-group h4 { margin: 12px 0 4px; font: 600 10.5px var(--appling-font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--appling-ink-muted); }
+.task-group.progress h4 > span:first-child { color: var(--appling-info); }
+.task-group.pending h4 > span:first-child { color: var(--appling-amber); }
+.task-group.done h4 > span:first-child { color: var(--appling-leaf); }
+.task-group ol { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.task-group li button { display: grid; gap: 2px; width: 100%; padding: 5px 8px; border: 0; border-left: 3px solid var(--appling-line); border-radius: 0 4px 4px 0; background: none; color: var(--appling-ink); font: inherit; text-align: left; cursor: pointer; }
+.task-group.progress li button { border-left-color: var(--appling-info); }
+.task-group.pending li button { border-left-color: var(--appling-amber); }
+.task-group.done li button { border-left-color: var(--appling-leaf); opacity: 0.75; }
+.task-group li button:hover, .task-group li.selected button { background: var(--appling-surface-hover); opacity: 1; }
+.task-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.task-line strong { font: 600 12px var(--appling-font-mono); word-break: break-all; }
+.task-line .task-status { margin-left: 0; }
+.task-line .claim { padding: 0 6px; border: 1.5px solid; border-radius: 10px; font-size: 11px; }
+.task-missing { font-size: 12px; color: var(--appling-ink-soft); }
+.task-meta { font-size: 11px; }

@@ -27,7 +27,7 @@ An element is **outstanding** when it is new or changed since the last generatio
 
 ## From the model to the code and back
 
-- **To the code.** Click a gutter mark, or **Open code** in the inspector. In Appling Desktop the code view opens the file at the element's lines; elsewhere the IDE shows the file read only in place of the model, with the lines marked, until **Back to the model**.
+- **To the code.** In the repo view's editor, a line whose element has code carries a code lens such as `code: out/sales/models.py:41`; click it, a gutter mark, or **Open code** in the inspector. **Go to Implementation** (Ctrl+F12, or the editor's context menu) opens the code of the element at the cursor, or of the nearest element around it that has code, such as a field's entity. In Appling Desktop the code view opens the file at the element's lines; elsewhere the IDE shows the file read only and highlighted in place of the model, with the lines marked, until **Back to the model**.
 - **Back to the model.** In the Code OSS code view, each referenced range has a CodeLens **Appling: sales.Order** above its first line; it selects the element on the canvas. Model lines with code get an **Open code** CodeLens, and the command **Appling: Open the code of this element** does the same for the element at the cursor.
 
 ## Generate from the IDE
@@ -71,7 +71,7 @@ Code a framework command writes without declaring it (such as the files `startap
 
 ## Registry tasks and agent sessions
 
-The **Code** tab lists the open registry tasks of every target with their status, attempts, notes and what is missing. Agent sessions pick them over MCP with [`registry_next`](ai.md#registry-tools): in a session it passes over tasks other sessions claimed and claims the task's element for the session, so the task shows the session's label in its colour; `registry_update` with `done`, or the last attempt, releases the claim.
+The **Code** tab lists the open registry tasks of every target with their status, attempts, notes and what is missing. **Tasks** in the bar under the model canvas lays every task over the canvas in order: **In progress** (claimed by an agent session), **Pending** (waiting, `partly written` when the element has code already) and **Done**, each in the order of the plan; a click on a task selects its element. Agent sessions pick them over MCP with [`registry_next`](ai.md#registry-tools): in a session it passes over tasks other sessions claimed and claims the task's element for the session, so the task shows the session's label in its colour; `registry_update` with `done`, or the last attempt, releases the claim.
 
 ## Existing code
 

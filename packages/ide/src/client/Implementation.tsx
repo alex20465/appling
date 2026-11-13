@@ -27,6 +27,7 @@ export function Implementation({ snapshot, run, sessions, selected, onSelect, on
     const states = Object.entries(snapshot.implementation);
     const counts = useMemo(() => Object.fromEntries(IMPLEMENTATION_STATES.map(s => [s, states.filter(([, i]) => i.state === s).length])), [snapshot]);
     const outstanding = states.filter(([, i]) => i.outstanding).map(([qn]) => qn);
+    const open = snapshot.tasks.filter(t => t.status !== 'done');
     /** Outstanding elements without their outstanding parents: a parent brings its members. */
     const tops = outstanding.filter(qn => !outstanding.some(other => qn.startsWith(`${other}.`)));
     const running = !!run && !run.ended;
@@ -94,8 +95,8 @@ export function Implementation({ snapshot, run, sessions, selected, onSelect, on
             )}
             <section>
                 <h3>Registry tasks</h3>
-                {snapshot.tasks.length === 0 && <p className="muted">No open tasks.</p>}
-                <ul className="tasks">{snapshot.tasks.map(task => {
+                {!open.length && <p className="muted">No open tasks.</p>}
+                <ul className="tasks">{open.map(task => {
                     const claim = claimOf(sessions, task.qn);
                     return (
                         <li key={`${task.target} ${task.qn}`}>

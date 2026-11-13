@@ -209,7 +209,7 @@ Generation with code references and the implementation state, as the IDE does it
 | `generateElements({ root, graph, selection, targets?, load?, onEvent? })` | Generates the selection (`{ mode: 'outstanding' }`, `{ mode: 'all' }` or `{ mode: 'elements', elements }`) into every target: creates a target without a registry, merges the selected elements' files into an existing one, records references and fingerprints, and calls back with every `GenerationEvent` |
 | `recordWritten(root, out, graph, written, elements)` | Records the references of collected code and the fingerprints of the elements for one target |
 | `readGenerations(root)`, `recordGeneration(root, out, graph, elements)`, `GENERATIONS` | `<root>/.appling/generation.json`: the fingerprints of each target's last generation |
-| `workspaceImplementation(root, graph)` | The implementation state of every element of a workspace, its targets (`TargetState`) and the open tasks of their registries (`TargetTask`) |
+| `workspaceImplementation(root, graph)` | The implementation state of every element of a workspace, its targets (`TargetState`) and the tasks of their registries, open and done (`TargetTask`) |
 | `GenerationSelection`, `GenerationEvent`, `GenerationOptions`, `MergeScope` | The generation types; `mergeGeneration(out, next, exclude, scope?)` merges only a scope's files and registry entries |
 
 How to write an extension is described in [Writing extensions](../codegen/extensions.md).

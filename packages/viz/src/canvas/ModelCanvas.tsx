@@ -31,6 +31,8 @@ interface CanvasProps {
     menu?: NodeMenu;
     /** The place of the shown bubble among all, for its back and next buttons. */
     step?: BubbleStep;
+    /** More buttons in the bottom bar, such as one that opens a panel over the canvas (`pressed` while it is open). */
+    buttons?: { label: string, pressed?: boolean, run(): void }[];
     /** A button in the top bar, beside the current node's line, such as generating the selected element (`hint` under it). */
     action?: { label: string, hint?: string, run(): void };
     onSelect(qn: string): void;
@@ -120,7 +122,7 @@ const LABEL: Record<TreeNode['type'], number> = { seed: 0, module: 210, group: 1
  * The model as a tree that grows from a seed: modules first, then the declarations of the lens, then on every
  * unfold what uses the unfolded declaration. Only what you unfold is drawn.
  */
-export function ModelCanvas({ index, name, focus, selected, settings, bubbles = [], changes, sessions, onSession, implementation, requests, menu, action, onSelect, onSettings, onOpenFile, step }: CanvasProps) {
+export function ModelCanvas({ index, name, focus, selected, settings, bubbles = [], changes, sessions, onSession, implementation, requests, menu, action, buttons = [], onSelect, onSettings, onOpenFile, step }: CanvasProps) {
     const box = useRef<HTMLDivElement>(null);
     const drag = useRef<{ x: number, y: number, moved: boolean }>(undefined);
     const [camera, setCamera] = useState<Camera>({ x: 0, y: 0, k: 1 });
@@ -414,6 +416,7 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
                 <span className="zoom">{Math.round(camera.k * 100)}%</span>
                 <button onClick={() => zoom(1 / 1.25)} aria-label="Zoom out">−</button>
                 <button onClick={() => zoom(1.25)} aria-label="Zoom in">+</button>
+                {buttons.map(b => <button key={b.label} onClick={b.run} aria-pressed={b.pressed}>{b.label}</button>)}
                 <button onClick={fit}>Fit</button>
                 <button onClick={replant}>Replant</button>
                 <button onClick={() => setLegend(!legend)} aria-pressed={legend}>Legend</button>

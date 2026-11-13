@@ -96,7 +96,7 @@ export function workspaceImplementation(root: string, graph: Graph): WorkspaceIm
         anchors: anchorStates(graph, references, states),
         targets: registries.map(({ target, registry }) => ({ extension: target.extension, out: target.out, generated: !!registry, at: records[target.out]?.at })),
         tasks: registries.flatMap(({ target, registry }) => Object.values(registry?.entries ?? {})
-            .filter(e => e.status !== 'done' && e.missing.length)
+            .filter(e => e.status === 'done' || e.missing.length)
             .map(e => ({ target: target.out, qn: e.qn, kind: e.kind, status: e.status, missing: e.missing.map(m => m.what), attempts: e.attempts ?? 0, notes: e.notes ?? [] })))
     };
 }

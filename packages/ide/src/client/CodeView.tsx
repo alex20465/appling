@@ -20,8 +20,9 @@ export function CodeView({ code, onClose }: { code: OpenCode, onClose(): void })
     const body = useRef<HTMLDivElement>(null);
     useEffect(() => {
         let current = true;
-        const extension = code.path.slice(code.path.lastIndexOf('.'));
-        const language = monaco.languages.getLanguages().find(l => l.extensions?.includes(extension))?.id ?? 'plaintext';
+        const name = code.path.slice(code.path.lastIndexOf('/') + 1);
+        const extension = name.includes('.') ? name.slice(name.lastIndexOf('.')) : undefined;
+        const language = monaco.languages.getLanguages().find(l => l.filenames?.includes(name) || (extension && l.extensions?.includes(extension)))?.id ?? 'plaintext';
         monaco.editor.colorize(code.text, language, { tabSize: 4 }).then(result => current && setHtml(result), () => current && setHtml(undefined));
         return () => { current = false; };
     }, [code.path, code.text]);

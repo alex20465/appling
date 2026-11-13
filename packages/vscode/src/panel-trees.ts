@@ -75,7 +75,8 @@ function tasksTree(state: PanelState, index: GraphIndex): PanelNode[] {
 
 function registryTasks(state: PanelState, index: GraphIndex): PanelNode[] {
     const snapshot = state.snapshot;
-    const byTarget = (target: string) => snapshot.tasks.filter(t => t.target === target).map(task => {
+    const open = snapshot.tasks.filter(t => t.status !== 'done');
+    const byTarget = (target: string) => open.filter(t => t.target === target).map(task => {
         const claim = claimOf(state.sessions, task.qn);
         return {
             ...element(`task/${task.target}/${task.qn}`, index, task.qn, [task.status, `${task.attempts} attempt${task.attempts === 1 ? '' : 's'}`, claim && (claim.label ?? claim.name)].filter(Boolean).join(' · ')),
@@ -88,7 +89,7 @@ function registryTasks(state: PanelState, index: GraphIndex): PanelNode[] {
         };
     });
     if (snapshot.targets.length === 1) return byTarget(snapshot.targets[0].out);
-    return snapshot.targets.flatMap(t => group(`target/${t.out}`, `${t.extension} → ${t.out}`, byTarget(t.out), true, String(snapshot.tasks.filter(task => task.target === t.out).length)));
+    return snapshot.targets.flatMap(t => group(`target/${t.out}`, `${t.extension} → ${t.out}`, byTarget(t.out), true, String(open.filter(task => task.target === t.out).length)));
 }
 
 export const PANEL_TREES: Record<ViewName, Builder> = {
@@ -186,7 +187,7 @@ function inspectorTree(state: PanelState, index: GraphIndex): PanelNode[] {
         // the application comes first: until it exists, only that generates
         const generated = snapshot.targets.some(t => t.generated);
         const generate = running || !generated ? undefined : generateRun(selection);
-        const tasks = snapshot.tasks.filter(t => t.qn === qn);
+        const tasks = snapshot.tasks.filter(t => t.qn === qn && t.status !== 'done');
         nodes.push({
             id: 'implementation', label: IMPLEMENTATION_LABELS[implementation.state], icon: 'circle-filled', color: STATE_COLORS[implementation.state],
             description: [implementation.tasks && `${implementation.tasks} open task${implementation.tasks > 1 ? 's' : ''}`, implementation.outstanding && 'changed since the last generation'].filter(Boolean).join(' · '),

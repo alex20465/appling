@@ -38,7 +38,7 @@ export interface Snapshot {
     anchors: Record<string, ElementImplementation>;
     /** The generate targets of `appling.config.json`. */
     targets: TargetState[];
-    /** The open registry tasks of every target. */
+    /** The registry tasks of every target, open and done, in plan order. */
     tasks: TargetTask[];
     /** The elements asked for on the canvas by name and description, for an agent to model (`.appling/requests.json`). */
     requests: ElementRequest[];

@@ -71,6 +71,12 @@ test('a first generation creates the project, records the code references of wha
     expect(states['m.Close'].state).toBe('unimplemented');
     expect(tasks).toMatchObject([{ target: 'out', qn: 'm.Close', missing: ['implement m.Close'], attempts: 0 }]);
     expect(targets).toMatchObject([{ extension: 'classes', out: 'out', generated: true }]);
+
+    // a task an agent finished stays listed as done; elements without tasks are none
+    const registry = readRegistry(join(root, 'out'))!;
+    registry.entries['m.Close'] = { ...registry.entries['m.Close'], status: 'done', missing: [] };
+    writeFileSync(join(root, 'out/.appling/tasks.json'), JSON.stringify(registry));
+    expect(workspaceImplementation(root, graph).tasks).toMatchObject([{ qn: 'm.Close', status: 'done' }]);
 });
 
 test('a changed element is unimplemented at once; generating it merges only its files and keeps the rest', async () => {
