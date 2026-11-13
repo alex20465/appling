@@ -1,27 +1,27 @@
 import { randomBytes } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
 import { MemorySessionStore, type AppHost } from '@appling/ai';
-import { startIdeProcess, type CodeMarks, type IdeProcess } from '@appling/ide/process';
+import { startInspectProcess, type CodeMarks, type InspectProcess } from '@appling/inspect/process';
 import {
     commands, env, EventEmitter, ThemeIcon, TreeItem, TreeItemCollapsibleState, Uri, ViewColumn, window, workspace,
     type Disposable, type ExtensionContext, type TreeDataProvider, type WebviewPanel
 } from 'vscode';
-import { openDiff, openLines, revealOffsets } from './editor.js';
+import { openDiff, revealOffsets } from './editor.js';
 import { clientUrl, panelAction, panelHtml } from './frame.js';
 import type { ImplementationState } from './implementation.js';
 import { ImplementationView } from './implementation-view.js';
 import { Panels } from './panels.js';
-import type { PanelAction } from '@appling/ide/panels';
+import type { PanelAction } from '@appling/inspect/panels';
 import { projectOf, projectRoots } from './projects.js';
 
-/** What the IDE client is told: select an element, the element at a model file's offset, a panel's action. */
+/** What the inspector client is told: select an element, the element at a model file's offset, a panel's action. */
 type FrameEvent = { type: 'element', qn: string } | { type: 'cursor', uri: string, offset: number } | { type: 'panel', action: PanelAction };
 
 interface Project {
     root: string;
-    ide?: IdeProcess;
+    ide?: InspectProcess;
     /** Set while the server starts or after it failed. */
-    starting?: Promise<IdeProcess>;
+    starting?: Promise<InspectProcess>;
     error?: string;
     modules: string[];
     errors?: number;
@@ -40,10 +40,10 @@ export interface AgentHost {
 }
 
 /**
- * Appling in a plain VS Code window (Desktop's code view has its own canvas): the Appling projects of the workspace,
- * one IDE server per project (`@appling/ide`, sharing one session store, as Desktop's repos do), the
- * Projects view with each project's modules, the IDE tab per project (the IDE client in a webview, without its own
- * source pane), the jump from a `.appling` editor into the IDE, the implementation marks and code links in the
+ * Appling in a VS Code window: the Appling projects of the workspace,
+ * one inspect server per project (`@appling/inspect`, sharing one session store), the
+ * Projects view with each project's modules, the inspector tab per project (the inspector client in a webview, without its own
+ * source pane), the jump from a `.appling` editor into the inspector, the implementation marks and code links in the
  * editor, and `Initialize Appling` (`appling init` in a terminal).
  */
 export class Workbench implements Disposable {
@@ -57,14 +57,13 @@ export class Workbench implements Disposable {
     private readonly sidePanels: Panels;
     private agents?: AgentHost;
     private active?: string;
-    /** A folder `appling init` runs in: its IDE opens once it is a project. */
+    /** A folder `appling init` runs in: its inspector opens once it is a project. */
     private initializing?: string;
 
     constructor(private readonly context: ExtensionContext) {
         this.implementation = new ImplementationView(qn => this.showElement(qn));
         this.sidePanels = new Panels({
             post: (root, event) => void this.panels.get(root)?.webview.postMessage(event),
-            server: root => this.projects.get(root)?.ide?.url
         });
         this.disposables.push(this.sidePanels);
         const watcher = workspace.createFileSystemWatcher('**/{*.appling,appling.config.json}', false, true, false);
@@ -74,14 +73,14 @@ export class Workbench implements Disposable {
             watcher.onDidDelete(() => void this.refresh()),
             workspace.onDidChangeWorkspaceFolders(() => void this.refresh()),
             window.registerTreeDataProvider('appling.projects', new ProjectsTree(this)),
-            commands.registerCommand('appling.openIde', (root?: string, qn?: string) => this.openIde(root, qn)),
-            commands.registerCommand('appling.openInIde', (uri?: Uri) => this.openInIde(uri)),
+            commands.registerCommand('appling.openInspect', (root?: string, qn?: string) => this.openInspect(root, qn)),
+            commands.registerCommand('appling.showInInspect', (uri?: Uri) => this.showInInspect(uri)),
             commands.registerCommand('appling.init', (target?: string | Project) => this.init(target)),
             commands.registerCommand('appling.refresh', () => this.refresh())
         );
     }
 
-    /** The agent sessions, for the IDE's jumps to a session and their IDE context. */
+    /** The agent sessions, for the inspector's jumps to a session and their inspector context. */
     attach(agents: AgentHost): void {
         this.agents = agents;
     }
@@ -92,7 +91,7 @@ export class Workbench implements Disposable {
         return [...this.projects.values()].sort((a, b) => a.root.localeCompare(b.root));
     }
 
-    /** The MCP endpoint of a project's IDE server, while it runs. */
+    /** The MCP endpoint of a project's inspect server, while it runs. */
     mcp(root: string): string | undefined {
         return this.projects.get(root)?.ide?.mcp;
     }
@@ -121,7 +120,7 @@ export class Workbench implements Disposable {
         this.changed.fire();
         for (const project of this.projects.values()) if (!project.setUp) void this.suggestInit(project.root);
         if (this.initializing && this.projects.get(this.initializing)?.setUp) {
-            void this.openIde(this.initializing);
+            void this.openInspect(this.initializing);
             this.initializing = undefined;
         }
         this.updateMarks();
@@ -129,16 +128,16 @@ export class Workbench implements Disposable {
         for (const root of roots) this.server(root).catch(() => undefined);
     }
 
-    /** The project's IDE server, started on first use. */
-    server(root: string): Promise<IdeProcess> {
+    /** The project's inspect server, started on first use. */
+    server(root: string): Promise<InspectProcess> {
         const project = this.projects.get(root);
         if (!project) return Promise.reject(new Error(`${root} is no Appling project.`));
         if (project.ide) return Promise.resolve(project.ide);
-        project.starting ??= startIdeProcess(root, {
+        project.starting ??= startInspectProcess(root, {
             node: process.execPath,
             // VS Code's own binary runs as Node, as for its language servers
             env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-            main: this.context.asAbsolutePath(join('out', 'ide', 'out', 'server', 'main.js')),
+            main: this.context.asAbsolutePath(join('out', 'inspect', 'out', 'server', 'main.js')),
             sessions: this.store, host: this.host(),
             onStatus: status => {
                 if (status.errors === undefined) return;
@@ -152,7 +151,7 @@ export class Workbench implements Disposable {
             onExit: (code, stderr) => {
                 project.ide = undefined;
                 project.starting = undefined;
-                project.error = `The IDE server ended with code ${code}.`;
+                project.error = `The inspect server ended with code ${code}.`;
                 console.error(stderr);
                 this.changed.fire();
             }
@@ -171,24 +170,24 @@ export class Workbench implements Disposable {
         return project.starting;
     }
 
-    /** Opens the project's IDE tab (a picked one when none is given), optionally with an element selected. */
-    async openIde(root?: string, qn?: string): Promise<void> {
+    /** Opens the project's inspector tab (a picked one when none is given), optionally with an element selected. */
+    async openInspect(root?: string, qn?: string): Promise<void> {
         root ??= await this.pickProject();
         if (root) await this.show(root, qn ? { type: 'element', qn } : undefined);
     }
 
-    /** From a `.appling` editor into the IDE: the element at the cursor is selected there. */
-    async openInIde(uri?: Uri): Promise<void> {
+    /** From a `.appling` editor into the inspector: the element at the cursor is selected there. */
+    async showInInspect(uri?: Uri): Promise<void> {
         const editor = window.activeTextEditor;
         const document = uri && editor?.document.uri.toString() !== uri.toString() ? await workspace.openTextDocument(uri) : editor?.document;
-        if (!document) return this.openIde();
+        if (!document) return this.openInspect();
         const root = projectOf(this.roots(), document.uri.fsPath);
         if (!root) return void window.showInformationMessage(`${basename(document.uri.fsPath)} belongs to no Appling project of this workspace.`);
         const offset = editor?.document === document ? document.offsetAt(editor.selection.active) : 0;
         await this.show(root, { type: 'cursor', uri: document.uri.toString(), offset });
     }
 
-    /** Shows the project's IDE tab, creating it with the server's client, and passes it the event. */
+    /** Shows the project's inspector tab, creating it with the server's client, and passes it the event. */
     private async show(root: string, event?: FrameEvent): Promise<void> {
         const existing = this.panels.get(root);
         if (existing) {
@@ -197,7 +196,7 @@ export class Workbench implements Disposable {
             return;
         }
         const ide = await this.server(root).catch((error: Error) => {
-            window.showErrorMessage(`The Appling IDE of ${basename(root)} did not start: ${error.message}`);
+            window.showErrorMessage(`The Appling inspector of ${basename(root)} did not start: ${error.message}`);
             return undefined;
         });
         if (!ide) return;
@@ -205,7 +204,7 @@ export class Workbench implements Disposable {
         const origin = new URL(external.toString(true)).origin;
         // in a remote window the client reaches the server at a forwarded port
         if (origin !== new URL(ide.url).origin && ide.child.connected) ide.child.send({ type: 'trust', origin });
-        const panel = window.createWebviewPanel('appling.ide', `Appling: ${basename(root)}`, ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] });
+        const panel = window.createWebviewPanel('appling.inspect', `Appling: ${basename(root)}`, ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] });
         panel.iconPath = Uri.file(this.context.asAbsolutePath(join('out', 'appling-icon.svg')));
         panel.webview.html = panelHtml(clientUrl(origin), randomBytes(16).toString('base64'));
         this.panels.set(root, panel);
@@ -224,26 +223,22 @@ export class Workbench implements Disposable {
         if (event) void panel.webview.postMessage(event);
     }
 
-    /** Does what the IDE client asked for, after the checks of `panelAction`. */
+    /** Does what the inspector client asked for, after the checks of `panelAction`. */
     private async act(root: string, message: unknown): Promise<void> {
         const action = panelAction(root, message);
         if (!action) return;
         try {
             if (action.type === 'source') await revealOffsets(Uri.file(action.path), action.start, action.end, ViewColumn.Beside);
-            else if (action.type === 'open') await openLines(action.path, action.start, action.end, ViewColumn.Beside);
             else if (action.type === 'diff') await openDiff(action.path, action.before, action.rev, action.line, ViewColumn.Beside);
             else if (action.type === 'focusSession') this.agents?.focus(action.session);
             else if (action.type === 'panels') this.sidePanels.update(root, action.state);
-            else if (action.type === 'showPanel') this.sidePanels.show(action.name);
-            else if (action.type === 'error') window.showErrorMessage(`Appling: ${action.message}`);
-            else if (action.type === 'chooseStack') void this.sidePanels.chooseStack(root, action.selection);
-            else await this.sidePanels.apply(root, action.operation);
+            else this.sidePanels.show(action.name);
         } catch (error) {
             window.showErrorMessage(`Appling: ${(error as Error).message}`);
         }
     }
 
-    /** A CodeLens on code shows its element in the IDE tab of the project that has it. */
+    /** A CodeLens on code shows its element in the inspector tab of the project that has it. */
     private showElement(qn: string): boolean {
         const project = this.list().find(p => Object.values(p.marks?.marks ?? {}).some(marks => marks.some(m => m.qn === qn)));
         if (!project) return false;
@@ -272,7 +267,7 @@ export class Workbench implements Disposable {
         this.changed.fire();
     }
 
-    /** The IDE context VS Code adds for the sessions: the workspace, the project shown and the agent terminals. */
+    /** The inspector context VS Code adds for the sessions: the workspace, the project shown and the agent terminals. */
     private host(): AppHost {
         return {
             context: async () => ({ workspace: this.workspaceId, activeRepo: this.active, tabs: this.agents?.tabs() ?? [] }),
@@ -290,7 +285,7 @@ export class Workbench implements Disposable {
     /**
      * Runs `appling init` (the CLI bundled with the extension, on VS Code's own Node) in a terminal in a workspace
      * folder: it asks for the project name, the coding agents and the stack, then writes the starter module,
-     * `appling.config.json` and the agents' configuration and installs the packages. The IDE opens once the folder is
+     * `appling.config.json` and the agents' configuration and installs the packages. The inspector opens once the folder is
      * a project.
      */
     private async init(target?: string | Project): Promise<void> {
@@ -332,7 +327,7 @@ export class Workbench implements Disposable {
     }
 }
 
-/** The Projects view: each project with its modules; a click opens the IDE tab there. */
+/** The Projects view: each project with its modules; a click opens the inspector tab there. */
 class ProjectsTree implements TreeDataProvider<Project | { project: Project, qn: string }> {
     readonly onDidChangeTreeData;
 
@@ -349,7 +344,7 @@ class ProjectsTree implements TreeDataProvider<Project | { project: Project, qn:
         if ('qn' in element) {
             const item = new TreeItem(element.qn, TreeItemCollapsibleState.None);
             item.iconPath = new ThemeIcon('symbol-namespace');
-            item.command = { command: 'appling.openIde', title: 'Open in the Appling IDE', arguments: [element.project.root, element.qn] };
+            item.command = { command: 'appling.openInspect', title: 'Open in the Appling inspector', arguments: [element.project.root, element.qn] };
             item.contextValue = 'module';
             return item;
         }
@@ -358,7 +353,7 @@ class ProjectsTree implements TreeDataProvider<Project | { project: Project, qn:
         item.tooltip = element.error ?? element.root;
         item.description = element.error ? 'not running' : !element.ide ? 'starting' : element.errors ? `${element.errors} error(s)` : !element.setUp ? 'not set up' : workspace.asRelativePath(element.root, false);
         item.iconPath = new ThemeIcon(element.error ? 'error' : 'project');
-        item.command = { command: 'appling.openIde', title: 'Open in the Appling IDE', arguments: [element.root] };
+        item.command = { command: 'appling.openInspect', title: 'Open in the Appling inspector', arguments: [element.root] };
         item.contextValue = element.setUp ? 'project' : 'project new';
         return item;
     }

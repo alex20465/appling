@@ -5,7 +5,7 @@ description: Where each model element is implemented in the application code, by
 
 Once a model is implemented, by a generated project and the work done on its registry, or by an existing application you derived the model from, each element lives somewhere in the code. A code reference records where: a file and a line range for a qualified name. A policy of `sales.Order`, for example, may live in `shop/sales/permissions.py` from line 12 to line 24.
 
-References answer "where is this implemented" for you, for the [IDE](ide.md#the-inspector) and for an AI agent, without searching the code.
+References answer "where is this implemented" for you, for your editor and for an AI agent, without searching the code.
 
 ## The references file
 
@@ -34,7 +34,7 @@ AI agents record references while they implement through the [MCP server](ai.md#
 - The [registry skill](ai.md#registry-skill) records the lines of every element it finishes, before it marks the entry `done`.
 - The [reverse engineering skill](ai.md#reverse-engineering-skill) records the code each element describes while it writes the model.
 
-Both call `record_code_references`. [Generation](implementation.md#generation-records) records the references of the code it writes itself, from the IDE and with `appling generate`, and keeps the references an element has elsewhere. It replaces the element's references, takes the first line of each range as its anchor, and refuses a missing file, a range outside the file, a range that starts on an empty line, or an element the model does not have.
+Both call `record_code_references`. [Generation](implementation.md#generation-records) records the references of the code it writes itself, with `appling generate`, and keeps the references an element has elsewhere. It replaces the element's references, takes the first line of each range as its anchor, and refuses a missing file, a range outside the file, a range that starts on an empty line, or an element the model does not have.
 
 ## How they stay correct
 
@@ -59,7 +59,7 @@ $ appling refs sales.Order
 ../shop/sales/permissions.py:12-24 sales.Order.policy[update] (shifted)
 ```
 
-In the IDE, the inspector lists the references of the selected element under **Code**; expand one to read its lines. An agent calls `code_references` with the qualified name.
+In VS Code, a CodeLens on each model line with code opens it (see [Implementation marks](editors.md#implementation-marks)); the Inspector panel of the [VS Code extension](vscode.md#the-panels) lists them too. An agent calls `code_references` with the qualified name.
 
 ## Check them
 
@@ -76,4 +76,4 @@ The `code_references` tool without a qualified name returns the same list, so an
 
 ## Implementation state
 
-References decide how far an element counts as implemented: the IDE marks every model line and the canvas with it, see [Seed to code](implementation.md).
+References decide how far an element counts as implemented: the editor marks every model line and the [inspector](inspect.md) marks the canvas with it, see [Seed to code](implementation.md).

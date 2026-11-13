@@ -8,8 +8,8 @@ import {
 } from '@appling/ai/agents';
 
 /**
- * Agent sessions in VS Code terminals, as Appling Desktop runs them in its own (#10): each one an MCP session of the
- * shared store and a terminal running a preset's agent, wired to its project's IDE server through the gateway. The
+ * Agent sessions in VS Code terminals (#10): each one an MCP session of the
+ * shared store and a terminal running a preset's agent, wired to its project's inspect server through the gateway. The
  * status comes from MCP, the agent's hooks, its terminal notifications (OSC 9, OSC 777) and its exit. VS Code free:
  * the terminals are injected (`agent-terminals.ts` in the extension, fakes in the tests).
  */
@@ -58,7 +58,7 @@ export interface AgentsOptions {
     terminals: AgentTerminals;
     /** Where each session's configuration files go, one folder per session. */
     folder: string;
-    /** The MCP endpoint of the project's IDE server; undefined while it is not running. */
+    /** The MCP endpoint of the project's inspect server; undefined while it is not running. */
     ideMcp(repo: string): string | undefined;
     hookScript: string;
     /** The workspace the sessions belong to. */
@@ -109,7 +109,7 @@ export class Agents extends EventEmitter<Events> {
 
     /** Starts a preset's agent in a new terminal of the project, with its own MCP session. */
     async create(repo: string, preset: AgentPreset): Promise<AgentRecord> {
-        if (!this.options.ideMcp(repo)) throw new Error('The project\'s IDE server is not running yet; start the session once it is.');
+        if (!this.options.ideMcp(repo)) throw new Error('The project\'s inspect server is not running yet; start the session once it is.');
         const { session, token } = await this.options.store.open({ name: preset.name, repo, workspace: this.options.workspace });
         const record: AgentRecord = { id: session.id, name: preset.name, color: session.color, repo, preset, status: 'working', started: session.started };
         const dir = join(this.options.folder, session.id);
@@ -187,7 +187,7 @@ export class Agents extends EventEmitter<Events> {
         return sessionTitle(record);
     }
 
-    /** Applies a signal; a change of status goes to the MCP session, so its peers and the IDE see it too. */
+    /** Applies a signal; a change of status goes to the MCP session, so its peers and the inspector see it too. */
     private signal(record: AgentRecord, signal: Signal): void {
         const was = record.status;
         const next = reduce(record, signal);

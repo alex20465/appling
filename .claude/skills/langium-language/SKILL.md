@@ -57,7 +57,7 @@ The printer keeps comments because the hidden terminal whose regex matches white
 
 ## LSP rename is partial
 
-`lsp.ts` overrides only `Formatter` and `HoverProvider`, so Langium's `DefaultRenameProvider` handles F2 in the IDE. It changes cross references and the declaration but misses expression names, transition states, export lists, message keys and bound projection fields. Source: `packages/lang/src/lsp.ts`, `renameSplices` in `packages/model/src/edit.ts`.
+`lsp.ts` overrides only `Formatter` and `HoverProvider`, so Langium's `DefaultRenameProvider` handles F2 in the editor. It changes cross references and the declaration but misses expression names, transition states, export lists, message keys and bound projection fields. Source: `packages/lang/src/lsp.ts`, `renameSplices` in `packages/model/src/edit.ts`.
 
 ## Relevance is a plain string property
 

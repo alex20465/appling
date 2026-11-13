@@ -3,9 +3,9 @@ title: Introduction
 description: Appling describes a business application as one validated model in plain text, then visualizes it, edits it with AI and generates a draft project from it.
 ---
 
-Appling is a declarative language for business applications. You write `.appling` files that describe what exists, what can happen, how capabilities are organized, how programs reach them and how people use them. Appling parses and links those files into one validated model, and every tool works on that model: the CLI, the IDE with its model canvas and search, the AI assistants and the code generators.
+Appling is a declarative language for business applications. You write `.appling` files that describe what exists, what can happen, how capabilities are organized, how programs reach them and how people use them. Appling parses and links those files into one validated model, and every tool works on that model: the CLI, the inspector with its model canvas and task board, the AI assistants and the code generators.
 
-The text is the single source of truth. The graph you see, the edits the AI proposes and the project the generator writes all come from it and go back to it.
+The text is the single source of truth. The graph you inspect, the edits the AI makes and the project the generator writes all come from it and go back to it.
 
 ```appling graph
 module sales {
@@ -38,14 +38,14 @@ flowchart LR
   text[".appling files"] --> lang["Parse, link, validate"]
   lang --> semantic["Semantic graph"]
   semantic --> cli["CLI: check, fmt, graph, release"]
-  semantic --> ide["Desktop: canvas, search, inspector, text"]
+  semantic --> inspect["Inspect: canvas, inspector, task board"]
   semantic --> ai["AI: MCP server and agent sessions"]
   semantic --> gen["Code generation: Django, Ash"]
-  ide -- "edit operations" --> text
-  ai -- "reviewable proposals" --> text
+  ai -- "edit operations" --> text
+  text -- "live marks" --> inspect
 ```
 
-Every change, whether you type it, make it in the inspector or accept it from an agent, is an edit of the text. Edits are validated before they land, so the model never holds an error you did not write yourself.
+Every change, whether you type it or an agent makes it, is an edit of the text. An agent's edits are validated before they land, so the model never holds an error you did not write yourself.
 
 ## The model in five layers
 
@@ -63,8 +63,8 @@ Each concept is defined once, in the layer that owns it. References only point d
 ## What you can do with it
 
 - **Validate** the whole model on every build: references, types, layer rules, exports and migrations. See [the CLI](tools/cli.md).
-- **Explore and edit** it in [Appling Desktop](tools/desktop.md): the [model canvas](tools/ide.md) of every repo with a search over every element, an inspector that edits, and the text with a language server one click away.
-- **Work with AI** through [the MCP server](tools/ai.md), from any agent or as agent sessions in Desktop that show their work on the canvas. AI changes pass the same validation and arrive as reviewable diffs.
+- **Inspect** it next to your AI coding tool with [the inspector](tools/inspect.md), in [VS Code](tools/vscode.md) or the browser: the model canvas, a floating inspector for the selected element, live marks of every change and the task board of the agent's work.
+- **Work with AI** through [the MCP server](tools/ai.md), from any agent or as agent sessions that show their work on the canvas. AI changes pass the same validation and are marked live on the canvas.
 - **Generate** a draft [Django](codegen/django.md) or [Ash](codegen/ash.md) project, or the domain and behavior layers as [Go](codegen/go.md) packages or a [Rust](codegen/rust.md) crate. What the generator cannot write becomes a task in a [registry](codegen/registry.md) for you or an AI.
 - **Evolve** it safely: once you cut a [release](language/migrations.md), renames and type changes of stored data are recorded as migration steps and [carried into generated projects](codegen/migrations.md).
 

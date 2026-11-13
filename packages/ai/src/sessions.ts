@@ -1,12 +1,12 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { isAbsolute, posix, resolve } from 'node:path';
+import { resolve } from 'node:path';
 
 /**
  * Agent sessions: the terminals in which coding agents work on a repo. Each one has an identity that its MCP
  * connection carries (a bearer token), a label and a status it keeps current, and the elements and files it claims.
- * The store is shared by the IDE servers of a workspace's repos: Appling Desktop holds one `MemorySessionStore` in its
- * main process and serves it to every IDE server child over IPC (`serveSessionStore`, `RemoteSessionStore`); a lone
- * IDE server keeps its own.
+ * The store is shared by the inspect servers of a workspace's repos: the VS Code extension holds one `MemorySessionStore`
+ * and serves it to every inspect server child over IPC (`serveSessionStore`, `RemoteSessionStore`); a lone inspect server keeps
+ * its own.
  */
 
 export const SESSION_STATUSES = ['working', 'blocked', 'needs-input', 'done', 'failed'] as const;
@@ -121,34 +121,14 @@ export function findConflicts(sessions: AgentSession[], self: AgentSession, touc
             }
         }
         for (const file of touched.files ?? []) {
-            const path = absolute(self.repo, file);
+            const path = resolve(self.repo, file);
             for (const claimed of other.claims.files) if (claimed === path) conflicts.push({ session: other.id, label, claimed, touched: path });
         }
     }
     return conflicts;
 }
 
-/** A repo id such as `ssh://host/srv/shop`: a remote repo that Appling Desktop names by its location. */
-const LOCATION = /^[a-z][a-z\d+.-]*:\/\//i;
-
-/**
- * A repo folder as sessions keep it. A local folder is resolved; a remote one is kept as it is on its machine: a
- * location id (`ssh://...`) unchanged, a POSIX folder (`/srv/shop`, the folder an IDE server there serves) with POSIX
- * rules, so a Windows Desktop never turns it into `C:\srv\shop`.
- */
-export function repoFolder(repo: string): string {
-    if (LOCATION.test(repo)) return repo;
-    return repo.startsWith('/') ? posix.resolve(repo) : resolve(repo);
-}
-
-/** A file of a repo as an absolute path, by the rules of the repo's machine (see `repoFolder`). */
-export function absolute(repo: string, file: string): string {
-    if (LOCATION.test(repo)) return LOCATION.test(file) || file.startsWith('/') ? file : `${repo.replace(/\/+$/, '')}/${file.replaceAll('\\', '/')}`;
-    if (repo.startsWith('/')) return posix.resolve(repo, file.replaceAll('\\', '/'));
-    return isAbsolute(file) ? resolve(file) : resolve(repo, file);
-}
-
-/** Sessions in memory, for one process: the IDE server on its own, or Appling Desktop's main process. */
+/** Sessions in memory, for one process: the inspect server on its own, or the VS Code extension. */
 export class MemorySessionStore implements SessionStore {
 
     private sessions = new Map<string, AgentSession>();
@@ -160,7 +140,7 @@ export class MemorySessionStore implements SessionStore {
     async open(input: OpenSession): Promise<{ session: AgentSession, token: string }> {
         const session: AgentSession = {
             id: randomUUID(), name: input.name ?? 'Agent', label: input.label, status: 'working',
-            color: SESSION_COLORS[this.opened++ % SESSION_COLORS.length], repo: repoFolder(input.repo), workspace: input.workspace,
+            color: SESSION_COLORS[this.opened++ % SESSION_COLORS.length], repo: resolve(input.repo), workspace: input.workspace,
             claims: { elements: [], files: [] }, started: new Date().toISOString(), unread: 0
         };
         const token = randomBytes(24).toString('base64url');
@@ -169,21 +149,6 @@ export class MemorySessionStore implements SessionStore {
         this.messages.set(session.id, []);
         this.changed();
         return { session: structuredClone(session), token };
-    }
-
-    /**
-     * Takes back a session with the token it was handed before, such as one whose agent kept running in a terminal
-     * while Appling Desktop restarted: its agent goes on with the same bearer token. Its claims are taken as saved.
-     */
-    adopt(session: AgentSession, token: string): AgentSession {
-        const adopted: AgentSession = { ...structuredClone(session), repo: repoFolder(session.repo), unread: 0 };
-        this.sessions.set(adopted.id, adopted);
-        for (const [known, owner] of this.tokens) if (owner === adopted.id) this.tokens.delete(known);
-        this.tokens.set(token, adopted.id);
-        this.messages.set(adopted.id, []);
-        this.opened++;
-        this.changed();
-        return structuredClone(adopted);
     }
 
     async authenticate(token: string): Promise<string | undefined> {
@@ -226,7 +191,7 @@ export class MemorySessionStore implements SessionStore {
     async claim(id: string, claims: Partial<Claims>): Promise<AgentSession> {
         const session = this.session(id);
         session.claims.elements = [...new Set([...session.claims.elements, ...claims.elements ?? []])];
-        session.claims.files = [...new Set([...session.claims.files, ...(claims.files ?? []).map(f => absolute(session.repo, f))])];
+        session.claims.files = [...new Set([...session.claims.files, ...(claims.files ?? []).map(f => resolve(session.repo, f))])];
         this.changed();
         return structuredClone(session);
     }
@@ -235,7 +200,7 @@ export class MemorySessionStore implements SessionStore {
         const session = this.session(id);
         if (!claims) session.claims = { elements: [], files: [] };
         else {
-            const files = new Set((claims.files ?? []).map(f => absolute(session.repo, f)));
+            const files = new Set((claims.files ?? []).map(f => resolve(session.repo, f)));
             session.claims.elements = session.claims.elements.filter(e => !claims.elements?.includes(e));
             session.claims.files = session.claims.files.filter(f => !files.has(f));
         }

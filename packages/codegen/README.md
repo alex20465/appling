@@ -71,7 +71,7 @@ Every graph node has an entry, so the registry is also the coverage report and t
 
 ## Code references and the implementation state
 
-Generation collects what each step writes (`runPlan(plan, out, log, written)`) and records it as code references in the workspace's `.appling/references.json` (`recordWritten`), with a fingerprint per generated element in `.appling/generation.json`. `workspaceImplementation(root, graph)` turns references, registries and fingerprints into a state per element (implemented, partial, unimplemented, shifted, broken) and the elements new or changed since the last generation. `generateElements` generates a selection (what changed, some elements, everything) into every target, as the IDE does.
+Generation collects what each step writes (`runPlan(plan, out, log, written)`) and records it as code references in the workspace's `.appling/references.json` (`recordWritten`), with a fingerprint per generated element in `.appling/generation.json`. `workspaceImplementation(root, graph)` turns references, registries and fingerprints into a state per element (implemented, partial, unimplemented, shifted, broken) and the elements new or changed since the last generation. `generateElements` generates a selection (what changed, some elements, everything) into every target.
 
 ## API
 

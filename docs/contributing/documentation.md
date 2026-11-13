@@ -82,7 +82,7 @@ GitHub alerts become callouts:
 
 ## Keeping docs current
 
-A change to anything a user can see updates the pages that describe it in the same commit: commands and flags, keywords and validation rules, the graph, edit operations, configuration, generated code, MCP tools, IDE features and public exports. Package READMEs and the docs cover the same ground and must agree.
+A change to anything a user can see updates the pages that describe it in the same commit: commands and flags, keywords and validation rules, the graph, edit operations, configuration, generated code, MCP tools, inspector features and public exports. Package READMEs and the docs cover the same ground and must agree.
 
 For AI assistants working in the repository, `.claude/rules/documentation.md` maps each source path to the pages it feeds and loads automatically when those files are touched, and the `documentation` skill in `.claude/skills/` describes this page format.
 

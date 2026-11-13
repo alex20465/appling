@@ -1,7 +1,7 @@
 {
   "name": "@appling/cli",
   "version": "0.2.2",
-  "description": "Command line tool to check, format, inspect, release and generate Appling models and open them in the IDE",
+  "description": "Command line tool to check, format, inspect, release and generate Appling models and open them in the read only inspector",
   "homepage": "https://www.appling.tools/docs/",
   "repository": {
     "type": "git",
@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@appling/codegen": "workspace:*",
-    "@appling/ide": "workspace:*",
+    "@appling/inspect": "workspace:*",
     "@appling/lang": "workspace:*",
     "@appling/model": "workspace:*",
     "@clack/prompts": "1.8.1",

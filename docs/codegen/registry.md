@@ -160,6 +160,6 @@ The AI tools automate that loop. The Appling MCP server (`appling-mcp`) offers t
 
 The agent repeats: take the next entry, read the generated files and the element's Appling source, implement what is missing, run the tests until they pass, record where the element is implemented as [code references](../tools/references.md), then record `done`. When it cannot finish, it records `partial` with a note on what is left.
 
-In an [agent session](../tools/ai.md#agent-sessions), `registry_next` claims the entry's element for the session and passes over entries other sessions claimed, so several sessions work through one registry without doing the same work twice; the IDE lists the tasks with the session that claimed each (see [Seed to code](../tools/implementation.md#registry-tasks-and-agent-sessions)).
+In an [agent session](../tools/ai.md#agent-sessions), `registry_next` claims the entry's element for the session and passes over entries other sessions claimed, so several sessions work through one registry without doing the same work twice; the inspector's task board lists the tasks with the session that claimed each (see [Seed to code](../tools/implementation.md#registry-tasks-and-agent-sessions)).
 
 After three attempts without `done`, an entry stops coming back from `registry_next`, and a note `stopped after 3 attempts` is added. The notes are what the next person reads. Decisions only a person can make, such as credentials or product choices, belong in such a note.

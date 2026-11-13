@@ -70,7 +70,7 @@ The agent then works through these steps:
    | Permission check | `policy` |
 
 4. **Write and validate.** It writes one module per file with `write_model_file`, domain layer first, and checks the model after each file. A file that would add an error is not written; the agent gets the errors and fixes them.
-5. **Record where it lives.** For each element it records the lines of the code it describes as [code references](../tools/references.md), so you, the IDE and later agents find the implementation of any element without searching.
+5. **Record where it lives.** For each element it records the lines of the code it describes as [code references](../tools/references.md), so you, the inspector and later agents find the implementation of any element without searching.
 6. **Compare behavior.** It asks the simulator whether each state is reachable the way the code reaches it and whether the right actors pass the policies.
 7. **Report.** Where the code does something the model cannot say exactly, such as a rule spread over several functions or raw SQL, it models the closest correct form with a `//` comment that names the source file, and lists these places in its summary. When the code allows two readings, it asks you.
 
@@ -79,7 +79,7 @@ The agent then works through these steps:
 
 ## 4. Review the result
 
-Check the model, then open the project in [Appling Desktop](../tools/desktop.md) to explore it on the canvas:
+Check the model, then open the project in the [inspector](../tools/inspect.md) (`npx appling inspect`) to explore it on the canvas:
 
 ```sh
 npx appling check models

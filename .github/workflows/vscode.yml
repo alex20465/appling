@@ -8,7 +8,6 @@ on:
     paths:
       - "packages/**"
       - "!packages/landing/**"
-      - "!packages/desktop/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/vscode.yml"
   push:
@@ -17,7 +16,6 @@ on:
     paths:
       - "packages/**"
       - "!packages/landing/**"
-      - "!packages/desktop/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/vscode.yml"
   workflow_dispatch:
@@ -34,8 +32,6 @@ jobs:
     name: Build the extension
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - name: Cloning
         uses: actions/checkout@v4

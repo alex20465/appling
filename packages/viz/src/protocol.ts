@@ -18,13 +18,6 @@ export interface Bubble {
     line?: number;
 }
 
-/** A proposed model change, as `@appling/ai` builds it, with the summary of what and why. */
-export interface Review {
-    summary: string;
-    hunks: { file: string, line: number, removed: string[], added: string[] }[];
-    graph: { added: string[], removed: string[], changed: string[] };
-}
-
 /** What the agent works on now; with `done` and `total`, how far along it is. */
 export interface Status {
     text: string;
@@ -38,8 +31,6 @@ export interface Selection {
     qn?: string;
     view?: Show;
 }
-
-export type Decision = { accepted: true } | { accepted: false, comment?: string };
 
 /**
  * The view on screen after `next`: a node view on a node view adds its elements to the ones drawn. The bubbles stay

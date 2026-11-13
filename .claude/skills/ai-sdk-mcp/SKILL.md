@@ -1,6 +1,6 @@
 ---
 name: ai-sdk-mcp
-description: MCP SDK 1.32 and zod 4 as used by packages/ai (tools, MCP server, agent session and visual tools, registry tools) and the IDE server's /mcp. Use when adding or changing a tool, the MCP server or its HTTP transport, or the registry workflow.
+description: MCP SDK 1.32 and zod 4 as used by packages/ai (tools, MCP server, agent session and visual tools, registry tools) and the inspector server's /mcp. Use when adding or changing a tool, the MCP server or its HTTP transport, or the registry workflow.
 metadata:
   anchors:
     - name: "@modelcontextprotocol/sdk"
@@ -13,7 +13,7 @@ metadata:
 
 # MCP
 
-Version deltas and internal contracts of the tools and the MCP server. The AI SDK chat of the browser IDE is gone (decision 7C of #15); proposals (`proposal.ts`) remain for `propose_edits`.
+Version deltas and internal contracts of the tools and the MCP server. The AI SDK chat of the browser IDE is gone (decision 7C of #15), and so are proposals.
 
 ## Stateless Streamable HTTP
 
@@ -23,14 +23,12 @@ With `sessionIdGenerator: undefined` a transport cannot be reused ("Stateless tr
 
 Results are `JSON.stringify(result, null, 2)` as one text content item, with no `outputSchema` or `structuredContent`. Tests read them with `JSON.parse(content[0].text)`. Source: `packages/ai/src/mcp.ts`.
 
-## Proposals
+## Edits
 
-- `propose_edits` builds a `ProposalContext` from the current sources and applies every operation to it; the first rejected one ends the call with its errors.
-- `proposal(project, context)` returns the operations, one text hunk per changed file and the graph diff; the host shows it and resolves with the decision.
-- On Accept the operations are replayed through the tool context, so they are validated again against the files as they are then.
 - A `dryRun` edit is validated and never recorded.
+- There are no proposals: `propose_edits` and `proposal.ts` are gone with the read only inspector. Agents change the model with `edit`, and the inspector marks every change live.
 
-Source: `packages/ai/src/proposal.ts`, `visual.ts`, `tools.ts`, `packages/ide/src/server/visuals.ts`.
+Source: `packages/ai/src/tools.ts`, `packages/inspect/src/server/visuals.ts`.
 
 ## Registry tools
 

@@ -1,7 +1,7 @@
 import { basename } from 'node:path';
 import { commands, Range, Selection, TextEditorRevealType, Uri, ViewColumn, window, workspace } from 'vscode';
 
-/** Opening files natively in VS Code: for Desktop's bridge and for the IDE tab. */
+/** Opening files natively in VS Code for the inspector tab. */
 
 /** Opens a file and puts the cursor at the offset `start`, showing `start` to `end`. */
 export async function revealOffsets(uri: Uri, start: number, end: number, column?: ViewColumn): Promise<void> {

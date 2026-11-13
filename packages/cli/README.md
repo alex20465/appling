@@ -1,6 +1,6 @@
 # @appling/cli
 
-Command line tool to set up, check, format and inspect Appling models (`.appling` files) and open them in the IDE.
+Command line tool to set up, check, format and inspect Appling models (`.appling` files) and open them in the read only inspector.
 
 Appling is a declarative language that describes a business or web application in five layers: domain, behavior, application, interfaces and experience. The language itself lives in [`@appling/lang`](https://www.npmjs.com/package/@appling/lang).
 
@@ -20,7 +20,7 @@ npx @appling/cli check models
 
 ```sh
 appling init [folder] [--name <name>] [--agents <agents>] [--stack <stack>]
-appling ide [folder]
+appling inspect [folder]
 appling check [files or folders...]
 appling fmt   [files or folders...]
 appling graph [files or folders...]
@@ -44,12 +44,12 @@ Sets up a new project: writes `package.json` if missing, installs `@appling/cli`
 npx @appling/cli init todo --name todo --agents claude,codex --stack django
 ```
 
-### ide
+### inspect
 
-Opens the repo view of a folder (the current folder by default) in your browser: the model canvas, the search, the inspector and the editor behind **Source**. It starts the IDE server of `@appling/ide` on a free port of `127.0.0.1`, prints its address, opens it in the default browser and runs until Ctrl+C. Terminals, agent sessions and the code view come with Appling Desktop.
+Opens the read only inspector of a folder (the current folder by default) in your browser: the model canvas and the floating inspector of the selected element, to debug and inspect the model. It starts the server of `@appling/inspect` on a free port of `127.0.0.1`, prints its address, opens it in the default browser and runs until Ctrl+C.
 
 ```sh
-npx appling ide models
+npx appling inspect models
 ```
 
 ### check
@@ -90,7 +90,7 @@ When the model has errors, they are printed to stderr instead and nothing is wri
 
 Writes a snapshot of the semantic graph to `.appling/releases/<version>.json` in the current folder. The version looks like `1.2.3`. A model with errors is not released, and an existing version is never overwritten.
 
-Once a release exists, tools that edit the model (the IDE, the AI) record renames, type changes and removals of released domain elements as migration steps, in one block per module named after the release, such as `migration since_v1_0_0`.
+Once a release exists, tools that edit the model (the AI) record renames, type changes and removals of released domain elements as migration steps, in one block per module named after the release, such as `migration since_v1_0_0`.
 
 ### generate
 
@@ -126,7 +126,7 @@ $ appling refs --check
 | Code | Meaning |
 |---|---|
 | 0 | No errors |
-| 1 | `init` was cancelled or the installation failed, `ide` got a folder that does not exist or its server failed, `check`, `graph`, `release`, `generate` or `refs` found errors, `refs --check` found a reference that is not current, `release` found an invalid or existing version, `generate` failed, or `fmt` skipped a file with syntax errors |
+| 1 | `init` was cancelled or the installation failed, `inspect` got a folder that does not exist or its server failed, `check`, `graph`, `release`, `generate` or `refs` found errors, `refs --check` found a reference that is not current, `release` found an invalid or existing version, `generate` failed, or `fmt` skipped a file with syntax errors |
 | 2 | Unknown command, `init` with an invalid flag or without a terminal and not every flag given, `release` without a version, or `refs` without a qualified name or `--check` |
 
 ## License

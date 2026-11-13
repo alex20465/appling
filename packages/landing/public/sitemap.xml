@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://appling.tools/</loc></url>
-  <url><loc>https://appling.tools/ide/</loc></url>
+  <url><loc>https://appling.tools/inspect/</loc></url>
   <url><loc>https://appling.tools/docs/</loc></url>
   <url><loc>https://appling.tools/docs/getting-started/installation/</loc></url>
   <url><loc>https://appling.tools/docs/getting-started/new-project/</loc></url>
@@ -23,8 +23,7 @@
   <url><loc>https://appling.tools/docs/language/migrations/</loc></url>
   <url><loc>https://appling.tools/docs/language/validation/</loc></url>
   <url><loc>https://appling.tools/docs/tools/cli/</loc></url>
-  <url><loc>https://appling.tools/docs/tools/ide/</loc></url>
-  <url><loc>https://appling.tools/docs/tools/desktop/</loc></url>
+  <url><loc>https://appling.tools/docs/tools/inspect/</loc></url>
   <url><loc>https://appling.tools/docs/tools/editors/</loc></url>
   <url><loc>https://appling.tools/docs/tools/vscode/</loc></url>
   <url><loc>https://appling.tools/docs/tools/ai/</loc></url>

@@ -1,23 +1,23 @@
 import { cpSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startIdeProcess, type IdeProcess } from '@appling/ide/process';
-import type { PanelState } from '@appling/ide/panels';
+import { startInspectProcess, type InspectProcess } from '@appling/inspect/process';
+import type { PanelState } from '@appling/inspect/panels';
 import { GraphIndex } from '@appling/viz/views';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { PANEL_TREES, type PanelNode } from '../src/panel-trees.js';
 
-// the trees of a real snapshot: the IDE server's on the examples
-let ide: IdeProcess;
+// the trees of a real snapshot: the inspect server's on the examples
+let ide: InspectProcess;
 let base: PanelState;
 let index: GraphIndex;
 
 beforeAll(async () => {
     const root = mkdtempSync(join(tmpdir(), 'appling-panels-'));
     cpSync(join(import.meta.dirname, '../../../examples'), root, { recursive: true });
-    ide = await startIdeProcess(root, { main: join(import.meta.dirname, '../../ide/out/server/main.js') });
+    ide = await startInspectProcess(root, { main: join(import.meta.dirname, '../../inspect/out/server/main.js') });
     const snapshot = await (await fetch(`${ide.url}/api/snapshot`)).json();
-    base = { snapshot, proposals: [], sessions: [], review: { on: false, rev: 'HEAD', marked: true, revisions: [] } };
+    base = { snapshot, sessions: [], review: { on: false, rev: 'HEAD', marked: true, revisions: [] } };
     index = new GraphIndex(snapshot.graph);
 }, 60000);
 afterAll(() => ide?.close());
@@ -42,28 +42,27 @@ test('the inspector shows what an action does, who may trigger it, its propertie
     expect(PANEL_TREES.inspector(base, index)).toEqual([]);
 });
 
-test('the inspector edits a list property line by line', () => {
+test('the inspector shows a list property line by line, read only', () => {
     const tree = PANEL_TREES.inspector({ ...base, selected: 'sales.PlaceOrder' }, index);
     const list = find(tree, 'Properties')!.children!.find(p => p.children?.length)!;
-    expect(list.actions?.add).toMatchObject({ type: 'line', qn: 'sales.PlaceOrder', property: list.label, line: undefined, separator: '\n' });
-    expect(list.children![0].actions?.remove).toMatchObject({ line: 0, remove: true });
+    expect(list.description).toBe(String(list.children!.length));
+    expect(ids(tree.filter(n => n.actions))).toEqual([]);
 });
 
-test('changes list proposals and every changed file with its elements, accept and revert', () => {
+test('changes list every changed file with its elements and its diff', () => {
     const file = { path: 'sales.appling', status: 'modified' as const, before: 'a', after: 'b', elements: ['sales.Order'], sessions: ['s1'], at: new Date().toISOString() };
     const change = { qn: 'sales.Order', kind: 'Entity', status: 'changed' as const, props: ['doc'], edges: { added: [], removed: [] } };
     const state: PanelState = {
         ...base,
         sessions: [{ id: 's1', name: 'Claude Code', label: 'orders', color: '#fff' } as PanelState['sessions'][number]],
-        live: { files: [file], diff: { added: [], changed: ['sales.Order'], removed: [], changes: [change] } as never, ghosts: { nodes: [], edges: [] } },
-        proposals: [{ id: 'p1', session: 's1', at: '', review: { summary: 'Add a note', hunks: [{ file: 'sales.appling', line: 3, added: ['x'], removed: [] }], graph: { added: ['sales.Note'], changed: [], removed: [] } } as never }]
+        live: { files: [file], diff: { added: [], changed: ['sales.Order'], removed: [], changes: [change] } as never, ghosts: { nodes: [], edges: [] } }
     };
     const tree = PANEL_TREES.changes(state, index);
-    expect(labels(tree)).toEqual(['Proposed changes', 'sales.appling']);
-    expect(tree[0].children![0].actions).toMatchObject({ accept: { action: { type: 'decide', id: 'p1', decision: { accepted: true } } }, reject: { type: 'reject', proposal: 'p1' } });
-    expect(tree[1]).toMatchObject({ run: { type: 'liveDiff', path: 'sales.appling' }, actions: { revert: { action: { type: 'revert', path: 'sales.appling' } } } });
-    expect(tree[1].description).toContain('orders');
-    expect(tree[1].children![0].label).toBe('sales.Order');
+    expect(labels(tree)).toEqual(['sales.appling']);
+    expect(tree[0]).toMatchObject({ run: { type: 'liveDiff', path: 'sales.appling' } });
+    expect(tree[0].actions).toBeUndefined();
+    expect(tree[0].description).toContain('orders');
+    expect(tree[0].children![0].label).toBe('sales.Order');
 });
 
 test('the review lists the model changes and files since the revision', () => {
@@ -82,26 +81,13 @@ test('the tasks view lists every open registry task with what it misses; without
     expect(tree[0]).toMatchObject({ label: 'sales.PlaceOrder', description: 'todo · 1 attempt', run: { type: 'action', action: { type: 'select', qn: 'sales.PlaceOrder' } } });
     expect(labels(tree[0].children!)).toEqual(['the action body', 'tried once']);
     expect(PANEL_TREES.tasks(base, index)).toEqual([]);
-    // elements requested on the canvas come first, waiting for an agent, and even without a stack
-    const request = { id: 'r1', name: 'Invoice', description: 'billed per order', parent: 'sales.Order', at: '2026-11-11T00:00:00Z' };
-    const requested = PANEL_TREES.tasks({ ...base, snapshot: { ...snapshot, requests: [request] } }, index);
-    expect(requested[0]).toMatchObject({ label: 'Requested elements', description: '1' });
-    expect(requested[0].children![0]).toMatchObject({ label: 'Invoice', description: 'under sales.Order · waiting for an agent', tooltip: 'billed per order', run: { type: 'action', action: { type: 'select', qn: 'sales.Order' } } });
-    expect(labels(PANEL_TREES.tasks({ ...base, snapshot: { ...base.snapshot, requests: [request] } }, index))).toEqual(['Requested elements']);
-    // the inspector lists the element's tasks and generates it; without a stack it asks for one
+    // the inspector lists the element's tasks
     const inspector = PANEL_TREES.inspector({ ...base, snapshot: { ...snapshot, implementation: { 'sales.PlaceOrder': { state: 'partial', tasks: 1 } } } as never, selected: 'sales.PlaceOrder' }, index);
     expect(find(inspector, 'the action body')).toBeDefined();
-    const bare = PANEL_TREES.inspector({ ...base, snapshot: { ...base.snapshot, implementation: { 'sales.PlaceOrder': { state: 'unimplemented' } } } as never, selected: 'sales.PlaceOrder' }, index);
-    // before the application exists, only it generates, asking for a stack without one
-    const implementation = bare.find(n => n.id === 'implementation')!;
-    expect(implementation.actions?.generate).toBeUndefined();
-    expect(find(implementation.children!, 'Generate the application first')?.run).toEqual({ type: 'stack', selection: { mode: 'all' } });
-    expect(inspector.find(n => n.id === 'implementation')?.actions?.generate).toEqual({ type: 'action', action: { type: 'generate', selection: { mode: 'elements', elements: ['sales.PlaceOrder'] } } });
+    expect(inspector.find(n => n.id === 'implementation')?.actions).toBeUndefined();
 });
 
-test('code shows the implementation, the targets, the run with its log and the registry tasks', () => {
-    const tree = PANEL_TREES.code({ ...base, run: { id: 'r1', title: 'Generate everything', selection: { mode: 'all' }, started: '', events: [{ type: 'log', target: 'app', line: 'hello' }] } as never }, index);
-    expect(labels(tree)).toEqual(expect.arrayContaining(['Implementation', 'No targets', 'Generate everything']));
-    expect(find(tree, 'Log')?.run).toEqual({ type: 'log' });
+test('code shows the implementation and the targets', () => {
+    const tree = PANEL_TREES.code(base, index);
+    expect(labels(tree)).toEqual(expect.arrayContaining(['Implementation', 'No targets']));
 });
-

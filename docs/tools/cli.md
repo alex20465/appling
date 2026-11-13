@@ -1,9 +1,9 @@
 ---
 title: Command line
-description: The appling command checks, formats, inspects, releases and generates code from your models and opens them in the IDE.
+description: The appling command checks, formats, releases and generates code from your models and opens them in the read only inspector.
 ---
 
-The `appling` command line tool is the package `@appling/cli`. It validates `.appling` files, rewrites them into canonical form, prints the semantic graph, records releases, runs code generation and opens the IDE in your browser. Every command reads the files you give it as one workspace, so references between modules resolve across files.
+The `appling` command line tool is the package `@appling/cli`. It validates `.appling` files, rewrites them into canonical form, prints the semantic graph, records releases, runs code generation and opens the read only [inspector](inspect.md) in your browser. Every command reads the files you give it as one workspace, so references between modules resolve across files.
 
 ## Install
 
@@ -21,7 +21,7 @@ npx @appling/cli check models
 
 ```sh
 appling init [folder] [--name <name>] [--agents <agents>] [--stack <stack>]
-appling ide [folder]
+appling inspect [folder]
 appling check [files or folders...]
 appling fmt   [files or folders...]
 appling graph [files or folders...]
@@ -79,20 +79,20 @@ npx @appling/cli init todo --name todo --agents claude,codex --stack none
 Appling is set up for Claude Code, Codex. Start your agent in todo and describe the application you want.
 ```
 
-## ide
+## inspect
 
-Opens the [repo view](ide.md) of a folder in your browser, the same view Appling Desktop and the VS Code extension show: the model canvas, the search, the inspector and the editor behind **Source**. It starts the IDE server for the folder (the current folder without one) on a free port of `127.0.0.1`, prints its address and opens it in your default browser. It runs until you press Ctrl+C.
+Opens the read only [inspector](inspect.md) of a folder in your browser, the same view the VS Code extension shows: the model canvas, the floating inspector of the selected element, the task board and the live marks of every change. Keep it open next to your AI coding tool while the agent works. It starts the inspector server for the folder (the current folder without one) on a free port of `127.0.0.1`, prints its address and opens it in your default browser. It runs until you press Ctrl+C.
 
 ```sh
-appling ide examples
+appling inspect examples
 ```
 
 ```
-Appling IDE for /home/you/project/examples at http://127.0.0.1:38543
+Appling Inspect for /home/you/project/examples at http://127.0.0.1:38543
 Press Ctrl+C to stop.
 ```
 
-If no browser opens, open the printed address yourself. The browser tab has no terminals, agent sessions or code view; those come with [Desktop](desktop.md).
+If no browser opens, open the printed address yourself.
 
 ## check
 
@@ -163,7 +163,7 @@ released 1.0.0 to .appling/releases/1.0.0.json
 
 The version must have the form `major.minor.patch` with numbers only, such as `1.2.3`. `release` refuses a model with errors, an invalid version and a version that already exists; it never overwrites a release.
 
-Once a release exists, the tools that edit the model (the [IDE](ide.md) and the [AI tools](ai.md)) record renames, type changes and removals of released domain elements as migration steps in one block per module named after the release, such as `migration since_v1_0_0`. See [Edit operations](../reference/edit-operations.md#release-aware-edits) and [Migrations](../language/migrations.md). The file format is on [Configuration](../reference/configuration.md#releases).
+Once a release exists, the tools that edit the model (the [AI tools](ai.md)) record renames, type changes and removals of released domain elements as migration steps in one block per module named after the release, such as `migration since_v1_0_0`. See [Edit operations](../reference/edit-operations.md#release-aware-edits) and [Migrations](../language/migrations.md). The file format is on [Configuration](../reference/configuration.md#releases).
 
 ## generate
 
@@ -187,7 +187,7 @@ For each target, `generate`:
 2. Checks the tools the extension needs (for example `uv` for Django) and stops with a hint for each one that is missing.
 3. Refuses to run when the `out` folder exists and is not empty. Generation creates a new draft project once.
 4. Runs the planned steps into `out`, printing one line per step, and writes the task registry `.appling/tasks.json` into it.
-5. Records the [code references](references.md) of the code it wrote in `.appling/references.json` and the fingerprints of the generated elements in `.appling/generation.json`, both in the current folder, so the IDE knows what is [implemented and what changed since](implementation.md#generation-records).
+5. Records the [code references](references.md) of the code it wrote in `.appling/references.json` and the fingerprints of the generated elements in `.appling/generation.json`, both in the current folder, so the inspector knows what is [implemented and what changed since](implementation.md#generation-records).
 6. Prints a summary such as `12 element(s): 11 generated, 1 partial, 0 todo`.
 
 Without targets in the configuration, `generate` prints how to add one and exits with 1. The extensions are described in [Code generation](../codegen/overview.md), the configuration in [Configuration](../reference/configuration.md).
@@ -298,8 +298,6 @@ build/shop: synced, 1 file(s) with conflict markers (registry tasks)
 
 The target must have been generated with a version of appling that stores the generation baseline in `.appling/baseline/`. Like a first generation, sync records the code references and the fingerprints of what it generated.
 
-The IDE generates the same way from its [Code tab](implementation.md#generate-from-the-ide), also for single elements or what changed since the last generation.
-
 `--plan`, `--coverage` (with `--json` right after it), `--migrate` and `--sync` must come directly after `generate`, before any path.
 
 ## simulate
@@ -355,7 +353,7 @@ $ appling refs --check
 | Code | Meaning |
 |---|---|
 | 0 | No errors |
-| 1 | `init` was cancelled or the installation failed; `ide` got a folder that does not exist or its server failed; `check`, `graph`, `release`, `generate` or `refs` found errors in the model; `refs --check` found a reference that is not current; `release` got an invalid or existing version; `generate` has no targets, a missing prerequisite, a non empty output folder, a failing step, or (with `--migrate`) a target that was not generated; `fmt` skipped a file with syntax errors |
+| 1 | `init` was cancelled or the installation failed; `inspect` got a folder that does not exist or its server failed; `check`, `graph`, `release`, `generate` or `refs` found errors in the model; `refs --check` found a reference that is not current; `release` got an invalid or existing version; `generate` has no targets, a missing prerequisite, a non empty output folder, a failing step, or (with `--migrate`) a target that was not generated; `fmt` skipped a file with syntax errors |
 | 2 | Unknown command, `init` with an unknown flag or an invalid `--name`, `--agents` or `--stack`, or without a terminal and not every flag given, `release` without a version, `refs` without a qualified name or `--check`, or `simulate` without a known question and its arguments |
 
 Exit code 2 also prints the usage.
@@ -384,6 +382,6 @@ Release, keep editing, then bring a generated project up to date:
 
 ```sh
 appling release 1.0.0 models
-# rename or retype released fields in the IDE or with the AI tools
+# rename or retype released fields with the AI tools
 appling generate --migrate models
 ```

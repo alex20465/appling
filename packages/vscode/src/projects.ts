@@ -2,7 +2,7 @@ import { dirname, isAbsolute, relative } from 'node:path';
 
 /**
  * The Appling projects of a VS Code workspace, without VS Code so it is tested on its own: a project is a folder whose
- * `.appling` files form one model, the folder its IDE server serves. A folder with `appling.config.json` is one; a
+ * `.appling` files form one model, the folder its inspect server serves. A folder with `appling.config.json` is one; a
  * workspace folder with model files outside such a folder is another. Paths are absolute.
  */
 export function projectRoots(folders: string[], configs: string[], models: string[]): string[] {

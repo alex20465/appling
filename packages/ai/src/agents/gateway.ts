@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 export interface GatewayOptions {
     /** The session a bearer token belongs to. */
     authenticate(token: string): Promise<string | undefined>;
-    /** The MCP endpoint of the IDE server of the session's repo; undefined while that server is not up. */
+    /** The MCP endpoint of the inspect server of the session's repo; undefined while that server is not up. */
     target(session: string): string | undefined;
     /** A hook event an agent posted (`/hooks/<event>`), with its JSON body. */
     onHook(session: string, event: string, body: unknown): void;
@@ -14,16 +14,13 @@ const MAX_HOOK_BODY = 1024 * 1024;
 
 /**
  * The one local endpoint every agent session talks to (#10): `/mcp` forwards to the MCP server of the session's
- * repo (the IDE server, whose port changes with every start) and `/hooks/<event>` takes the agents' hook events.
- * Its own port is kept between starts (`listen(port)`), so an agent that kept running in the pty host while the app
- * restarted still reaches both. Binds 127.0.0.1, checks the Host header, refuses browser requests (any Origin) and
+ * repo (the inspect server, whose port changes with every start) and `/hooks/<event>` takes the agents' hook events.
+ * Binds 127.0.0.1, checks the Host header, refuses browser requests (any Origin) and
  * needs a session's bearer token on every request.
  */
 export class Gateway {
     private server?: Server;
     port?: number;
-    /** The ports agents on other machines reach the gateway at (reverse forwards of remote repos), for the Host check. */
-    private readonly forwarded = new Set<number>();
 
     constructor(private readonly options: GatewayOptions) {}
 
@@ -35,31 +32,19 @@ export class Gateway {
         return `http://127.0.0.1:${this.port}/hooks`;
     }
 
-    /** The URLs of the gateway for an agent that reaches it at another port (a reverse forward on its machine). */
-    urlsAt(port: number): { mcpUrl: string, hookUrl: string } {
-        return { mcpUrl: `http://127.0.0.1:${port}/mcp`, hookUrl: `http://127.0.0.1:${port}/hooks` };
-    }
-
-    /** Accepts requests whose Host names this port: a reverse forward to the gateway on a remote repo's machine. */
-    allowPort(port: number): void {
-        this.forwarded.add(port);
-    }
-
-    /** Listens on the given port, else (taken, or none given) on a free one; resolves with the port. */
-    async listen(port = 0): Promise<number> {
+    /** Listens on a free port; resolves with the port. */
+    async listen(): Promise<number> {
         const server = createServer((req, res) => void this.handle(req, res).catch(() => {
             if (!res.headersSent) res.writeHead(500);
             res.end();
         }));
-        const bind = (p: number) => new Promise<number>((resolve, reject) => {
-            const failed = (error: Error) => reject(error);
-            server.once('error', failed);
-            server.listen(p, '127.0.0.1', () => {
-                server.off('error', failed);
+        this.port = await new Promise<number>((resolve, reject) => {
+            server.once('error', reject);
+            server.listen(0, '127.0.0.1', () => {
+                server.off('error', reject);
                 resolve((server.address() as AddressInfo).port);
             });
         });
-        this.port = await bind(port).catch((error: NodeJS.ErrnoException): Promise<number> => port && error.code === "EADDRINUSE" ? bind(0) : Promise.reject(error));
         this.server = server;
         return this.port;
     }
@@ -73,7 +58,7 @@ export class Gateway {
     private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
         const host = req.headers.host ?? '';
         const [, name, port] = /^(127\.0\.0\.1|localhost):(\d+)$/.exec(host) ?? [];
-        if (!name || (Number(port) !== this.port && !this.forwarded.has(Number(port)))) return deny(res, 403, 'Unknown host');
+        if (!name || Number(port) !== this.port) return deny(res, 403, 'Unknown host');
         if (req.headers.origin !== undefined) return deny(res, 403, 'No browser requests');
         const token = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization ?? '')?.[1];
         const session = token ? await this.options.authenticate(token) : undefined;
@@ -97,7 +82,7 @@ export class Gateway {
         }
         if (url.pathname !== '/mcp') return deny(res, 404, 'Not found');
         const target = this.options.target(session);
-        if (!target) return deny(res, 503, 'The repo\'s IDE server is not running');
+        if (!target) return deny(res, 503, 'The repo\'s inspect server is not running');
         this.forward(req, res, new URL(target));
     }
 
@@ -108,7 +93,7 @@ export class Gateway {
             res.writeHead(answer.statusCode ?? 502, answer.headers);
             answer.pipe(res);
         });
-        upstream.on('error', () => deny(res, 502, 'The repo\'s IDE server did not answer'));
+        upstream.on('error', () => deny(res, 502, 'The repo\'s inspect server did not answer'));
         res.on('close', () => upstream.destroy());
         req.pipe(upstream);
     }

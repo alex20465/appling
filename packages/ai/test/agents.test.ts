@@ -65,20 +65,6 @@ describe('presets', () => {
         expect(OPENCODE_PLUGIN).toContain('session.idle');
     });
 
-    test('an agent on a remote repo\'s machine gets POSIX paths there, the forwarded URLs and the Node binary there for hooks', () => {
-        const remote: LaunchContext = {
-            ...context, mcpUrl: 'http://127.0.0.1:47000/mcp', hookUrl: 'http://127.0.0.1:47000/hooks', dir: '/home/dev/.appling-server/agent-sessions/s1',
-            hookScript: '/home/dev/.appling-server/1.0.0-abc/remote/hook.cjs', node: '/home/dev/.appling-server/node/v24/bin/node', posix: true
-        };
-        const claude = launch(preset('Claude Code'), remote);
-        expect(claude.args).toEqual(['--mcp-config', '/home/dev/.appling-server/agent-sessions/s1/mcp.json', '--settings', '/home/dev/.appling-server/agent-sessions/s1/settings.json']);
-        const gemini = launch(preset('Gemini CLI'), remote);
-        const settings = JSON.parse(gemini.files['/home/dev/.appling-server/agent-sessions/s1/gemini-settings.json']);
-        expect(settings.mcpServers.appling.httpUrl).toBe('http://127.0.0.1:47000/mcp');
-        expect(settings.hooks.AfterAgent[0].hooks[0].command).toBe('/home/dev/.appling-server/node/v24/bin/node /home/dev/.appling-server/1.0.0-abc/remote/hook.cjs http://127.0.0.1:47000/hooks/AfterAgent /home/dev/.appling-server/agent-sessions/s1/token');
-        expect(Object.keys(launch(preset('opencode'), remote).files)).toContain('/home/dev/.appling-server/agent-sessions/s1/opencode/plugin/appling-status.js');
-    });
-
     test('custom presets come from settings.json, fill placeholders and may replace a built in one', () => {
         const { presets, problems } = agentPresets({
             'agents.presets': [
@@ -196,16 +182,7 @@ describe('gateway', () => {
             expect((await post(`${gateway.hookUrl}/Stop`, { authorization: 'Bearer good', origin: 'https://evil.example' })).status).toBe(403);
             expect((await post(`${gateway.hookUrl}/Stop`, { authorization: 'Bearer good', host: `evil.example:${port}` })).status).toBe(403);
             expect((await post(gateway.mcpUrl, { authorization: 'Bearer good' })).status).toBe(503);
-            // an agent on a remote repo's machine names the port of the reverse forward there
             expect((await post(`${gateway.hookUrl}/Stop`, { authorization: 'Bearer good', host: '127.0.0.1:47123' })).status).toBe(403);
-            gateway.allowPort(47123);
-            expect(gateway.urlsAt(47123)).toEqual({ mcpUrl: 'http://127.0.0.1:47123/mcp', hookUrl: 'http://127.0.0.1:47123/hooks' });
-            expect((await post(`${gateway.hookUrl}/Stop`, { authorization: 'Bearer good', host: '127.0.0.1:47123' })).status).toBe(200);
-            hooks.pop();
-            // the next start takes the same port, or another one when it is taken
-            const second = new Gateway({ authenticate: async () => undefined, target: () => undefined, onHook: () => undefined });
-            expect(await second.listen(port)).not.toBe(port);
-            second.close();
         } finally {
             gateway.close();
         }

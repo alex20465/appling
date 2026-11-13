@@ -1,7 +1,7 @@
 {
   "name": "appling-vscode",
   "displayName": "Appling",
-  "description": "Appling for VS Code: language support, the model IDE in a tab per project, implementation marks and agent sessions",
+  "description": "Appling for VS Code: language support, the read only model inspector in a tab per project, implementation marks and agent sessions",
   "version": "0.1.0",
   "publisher": "techthos",
   "private": true,
@@ -38,40 +38,35 @@
       {
         "command": "appling.openCode",
         "title": "Appling: Open the code of this element",
-        "enablement": "appling.desktop || appling.projects > 0"
+        "enablement": "appling.projects > 0"
       },
       {
-        "command": "appling.openIde",
-        "title": "Appling: Open the IDE",
-        "icon": "$(type-hierarchy)",
-        "enablement": "!appling.desktop"
+        "command": "appling.openInspect",
+        "title": "Appling: Open the inspector",
+        "icon": "$(type-hierarchy)"
       },
       {
-        "command": "appling.openInIde",
-        "title": "Appling: Show in the IDE",
+        "command": "appling.showInInspect",
+        "title": "Appling: Show in the inspector",
         "icon": {
           "light": "out/appling-icon.svg",
           "dark": "out/appling-icon.svg"
-        },
-        "enablement": "!appling.desktop"
+        }
       },
       {
         "command": "appling.init",
         "title": "Appling: Initialize Appling in this project",
-        "enablement": "!appling.desktop",
         "icon": "$(gear)"
       },
       {
         "command": "appling.refresh",
         "title": "Appling: Find the projects again",
-        "icon": "$(refresh)",
-        "enablement": "!appling.desktop"
+        "icon": "$(refresh)"
       },
       {
         "command": "appling.agents.new",
         "title": "Appling: New agent session",
-        "icon": "$(add)",
-        "enablement": "!appling.desktop"
+        "icon": "$(add)"
       },
       {
         "command": "appling.agents.focus",
@@ -93,44 +88,9 @@
         "title": "Appling: Open"
       },
       {
-        "command": "appling.panel.accept",
-        "title": "Accept",
-        "icon": "$(check)"
-      },
-      {
-        "command": "appling.panel.revert",
-        "title": "Revert",
-        "icon": "$(discard)"
-      },
-      {
-        "command": "appling.panel.reject",
-        "title": "Reject",
-        "icon": "$(close)"
-      },
-      {
         "command": "appling.panel.diff",
         "title": "Text diff",
         "icon": "$(diff)"
-      },
-      {
-        "command": "appling.panel.generate",
-        "title": "Generate",
-        "icon": "$(run-all)"
-      },
-      {
-        "command": "appling.panel.edit",
-        "title": "Edit",
-        "icon": "$(edit)"
-      },
-      {
-        "command": "appling.panel.add",
-        "title": "Add a line",
-        "icon": "$(add)"
-      },
-      {
-        "command": "appling.panel.remove",
-        "title": "Remove the line",
-        "icon": "$(trash)"
       },
       {
         "command": "appling.inspector.openSource",
@@ -143,30 +103,8 @@
         "icon": "$(code)"
       },
       {
-        "command": "appling.inspector.rename",
-        "title": "Appling: Rename…"
-      },
-      {
-        "command": "appling.inspector.retype",
-        "title": "Appling: Change the type…"
-      },
-      {
-        "command": "appling.inspector.add",
-        "title": "Appling: Add a member…",
-        "icon": "$(add)"
-      },
-      {
-        "command": "appling.inspector.remove",
-        "title": "Appling: Remove…"
-      },
-      {
-        "command": "appling.changes.acceptAll",
-        "title": "Appling: Accept all",
-        "icon": "$(check-all)"
-      },
-      {
         "command": "appling.review.compare",
-        "title": "Appling: Compare with…",
+        "title": "Appling: Compare with\u2026",
         "icon": "$(git-compare)"
       },
       {
@@ -178,11 +116,6 @@
         "command": "appling.review.unmark",
         "title": "Appling: Stop marking on the canvas",
         "icon": "$(eye)"
-      },
-      {
-        "command": "appling.code.generate",
-        "title": "Appling: Generate…",
-        "icon": "$(run-all)"
       }
     ],
     "grammars": [
@@ -205,36 +138,35 @@
       "appling": [
         {
           "id": "appling.projects",
-          "name": "Projects",
-          "when": "!appling.desktop"
+          "name": "Projects"
         },
         {
           "id": "appling.agents",
           "name": "Agent Sessions",
-          "when": "!appling.desktop && appling.projects > 0"
+          "when": "appling.projects > 0"
         },
         {
           "id": "appling.inspector",
           "name": "Inspector",
-          "when": "appling.ide && !appling.desktop"
+          "when": "appling.inspect"
         },
         {
           "id": "appling.changes",
           "name": "Changes",
-          "when": "appling.ide && !appling.desktop"
+          "when": "appling.inspect"
         },
         {
           "id": "appling.review",
           "name": "Review",
-          "when": "appling.ide && !appling.desktop"
+          "when": "appling.inspect"
         },
         {
           "id": "appling.code",
           "name": "Code",
-          "when": "appling.ide && !appling.desktop"
+          "when": "appling.inspect"
         },
         {
-          "when": "appling.ide && !appling.desktop",
+          "when": "appling.inspect",
           "id": "appling.tasks",
           "name": "Tasks"
         }
@@ -257,7 +189,7 @@
       },
       {
         "view": "appling.changes",
-        "contents": "No unseen changes. Every change to the model, by an agent session or anything else that writes the files, is listed here and marked on the canvas until you accept it."
+        "contents": "No changed model files. Every change to the model since the last commit, by an agent session or anything else that writes the files, is listed here and marked on the canvas."
       },
       {
         "view": "appling.inspector",
@@ -265,14 +197,14 @@
       },
       {
         "view": "appling.tasks",
-        "contents": "No open registry tasks. The registry lists what generated code still misses, once a stack generated the application.\n[Generate…](command:appling.code.generate)"
+        "contents": "No open registry tasks. The registry lists what generated code still misses, for your coding agent to finish, once `appling generate` created the application."
       }
     ],
     "menus": {
       "editor/title": [
         {
-          "command": "appling.openInIde",
-          "when": "resourceLangId == appling && !appling.desktop",
+          "command": "appling.showInInspect",
+          "when": "resourceLangId == appling",
           "group": "navigation"
         }
       ],
@@ -293,31 +225,6 @@
           "group": "navigation@2"
         },
         {
-          "command": "appling.inspector.rename",
-          "when": "view == appling.inspector && appling.inspector.named",
-          "group": "1_edit@1"
-        },
-        {
-          "command": "appling.inspector.retype",
-          "when": "view == appling.inspector && appling.inspector.typed",
-          "group": "1_edit@2"
-        },
-        {
-          "command": "appling.inspector.add",
-          "when": "view == appling.inspector && appling.inspector.element",
-          "group": "1_edit@3"
-        },
-        {
-          "command": "appling.inspector.remove",
-          "when": "view == appling.inspector && appling.inspector.removable",
-          "group": "2_remove"
-        },
-        {
-          "command": "appling.changes.acceptAll",
-          "when": "view == appling.changes",
-          "group": "navigation"
-        },
-        {
           "command": "appling.review.compare",
           "when": "view == appling.review",
           "group": "navigation@1"
@@ -331,11 +238,6 @@
           "command": "appling.review.unmark",
           "when": "view == appling.review && appling.review.marked",
           "group": "navigation@2"
-        },
-        {
-          "command": "appling.code.generate",
-          "when": "view == appling.code",
-          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -350,43 +252,8 @@
           "group": "inline"
         },
         {
-          "command": "appling.panel.accept",
-          "when": "view =~ /^appling\\.(inspector|changes|review|code)$/ && viewItem =~ /\\baccept\\b/",
-          "group": "inline"
-        },
-        {
-          "command": "appling.panel.revert",
-          "when": "view =~ /^appling\\.(inspector|changes|review|code)$/ && viewItem =~ /\\brevert\\b/",
-          "group": "inline"
-        },
-        {
-          "command": "appling.panel.reject",
-          "when": "view =~ /^appling\\.(inspector|changes|review|code)$/ && viewItem =~ /\\breject\\b/",
-          "group": "inline"
-        },
-        {
           "command": "appling.panel.diff",
-          "when": "view =~ /^appling\\.(inspector|changes|review|code)$/ && viewItem =~ /\\bdiff\\b/",
-          "group": "inline"
-        },
-        {
-          "command": "appling.panel.generate",
-          "when": "view =~ /^appling\\.(inspector|changes|review|code)$/ && viewItem =~ /\\bgenerate\\b/",
-          "group": "inline"
-        },
-        {
-          "command": "appling.panel.edit",
-          "when": "view =~ /^appling\\.(inspector|changes|review|code)$/ && viewItem =~ /\\bedit\\b/",
-          "group": "inline"
-        },
-        {
-          "command": "appling.panel.add",
-          "when": "view =~ /^appling\\.(inspector|changes|review|code)$/ && viewItem =~ /\\badd\\b/",
-          "group": "inline"
-        },
-        {
-          "command": "appling.panel.remove",
-          "when": "view =~ /^appling\\.(inspector|changes|review|code)$/ && viewItem =~ /\\bremove\\b/",
+          "when": "view =~ /^appling\\.(inspector|changes|review|code|tasks)$/ && viewItem =~ /\\bdiff\\b/",
           "group": "inline"
         },
         {
@@ -413,35 +280,7 @@
           "when": "false"
         },
         {
-          "command": "appling.panel.accept",
-          "when": "false"
-        },
-        {
-          "command": "appling.panel.revert",
-          "when": "false"
-        },
-        {
-          "command": "appling.panel.reject",
-          "when": "false"
-        },
-        {
           "command": "appling.panel.diff",
-          "when": "false"
-        },
-        {
-          "command": "appling.panel.generate",
-          "when": "false"
-        },
-        {
-          "command": "appling.panel.edit",
-          "when": "false"
-        },
-        {
-          "command": "appling.panel.add",
-          "when": "false"
-        },
-        {
-          "command": "appling.panel.remove",
           "when": "false"
         },
         {
@@ -450,22 +289,6 @@
         },
         {
           "command": "appling.inspector.openCode",
-          "when": "false"
-        },
-        {
-          "command": "appling.inspector.rename",
-          "when": "false"
-        },
-        {
-          "command": "appling.inspector.retype",
-          "when": "false"
-        },
-        {
-          "command": "appling.inspector.add",
-          "when": "false"
-        },
-        {
-          "command": "appling.inspector.remove",
           "when": "false"
         },
         {
@@ -479,14 +302,6 @@
         {
           "command": "appling.review.unmark",
           "when": "false"
-        },
-        {
-          "command": "appling.changes.acceptAll",
-          "when": "appling.ide"
-        },
-        {
-          "command": "appling.code.generate",
-          "when": "appling.ide"
         }
       ]
     },
@@ -496,7 +311,7 @@
         "appling.agents.presets": {
           "type": "array",
           "default": [],
-          "markdownDescription": "More agents for **New agent session**, as in Appling Desktop's `agents.presets`: each needs `name` and `command`; `args`, `env`, `wiring` (`claude`, `codex`, `gemini`, `opencode` or `env`, the default) and `answers` are optional. A preset with a built in one's name replaces it.",
+          "markdownDescription": "More agents for **New agent session**: each needs `name` and `command`; `args`, `env`, `wiring` (`claude`, `codex`, `gemini`, `opencode` or `env`, the default) and `answers` are optional. A preset with a built in one's name replaces it.",
           "items": {
             "type": "object",
             "required": [
@@ -564,7 +379,7 @@
     "@appling/ai": "workspace:*",
     "@appling/cli": "workspace:*",
     "@appling/codegen": "workspace:*",
-    "@appling/ide": "workspace:*",
+    "@appling/inspect": "workspace:*",
     "@appling/lang": "workspace:*",
     "@appling/model": "workspace:*",
     "@appling/pty-host": "workspace:*",

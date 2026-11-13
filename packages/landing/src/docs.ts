@@ -21,7 +21,7 @@ export const SECTIONS = [
       "language/validation",
     ],
   },
-  { label: "Tools", pages: ["tools/cli", "tools/desktop", "tools/ide", "tools/editors", "tools/vscode", "tools/ai", "tools/simulator", "tools/references", "tools/implementation"] },
+  { label: "Tools", pages: ["tools/cli", "tools/inspect", "tools/editors", "tools/vscode", "tools/ai", "tools/simulator", "tools/references", "tools/implementation"] },
   { label: "Code generation", pages: ["codegen/overview", "codegen/registry", "codegen/migrations", "codegen/sync", "codegen/django", "codegen/ash", "codegen/go", "codegen/rust", "codegen/extensions"] },
   { label: "Reference", pages: ["reference/configuration", "reference/graph", "reference/edit-operations", "reference/api"] },
   { label: "Contributing", pages: ["contributing/development", "contributing/architecture", "contributing/documentation"] },

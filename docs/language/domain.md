@@ -79,7 +79,7 @@ module sales {
 
 ### Link entities
 
-Some entities exist only to connect others, such as the join record of a many to many relationship. Mark them with `link` after `entity`. A link entity is an ordinary entity in every other respect: it has fields, invariants and policies, and code generation treats it like any other entity. The marker tells tools that it is secondary to the business logic, so the [IDE](../tools/ide.md#the-entity-view) hides it by default.
+Some entities exist only to connect others, such as the join record of a many to many relationship. Mark them with `link` after `entity`. A link entity is an ordinary entity in every other respect: it has fields, invariants and policies, and code generation treats it like any other entity. The marker tells tools that it is secondary to the business logic, so the [inspector](../tools/inspect.md#the-model-canvas) hides it by default.
 
 ```appling check
 module catalog {

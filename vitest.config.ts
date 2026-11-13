@@ -1,4 +1,4 @@
 import { defineConfig } from 'vitest/config';
 
-// Only the packages' own tests: a local Desktop build (packages/desktop/app, release) holds copies of dependencies with theirs.
+// Only the packages' own tests: worktrees, sandboxes and e2e projects in the repo hold copies with theirs.
 export default defineConfig({ test: { include: ['packages/*/test/**/*.test.{ts,tsx}'] } });

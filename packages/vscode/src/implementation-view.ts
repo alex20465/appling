@@ -7,8 +7,8 @@ import { codeLenses, codeOf, hoverText, MARK_STATES, markIcon, marksByState, mod
 
 /**
  * The implementation state in the editor (thin VS Code glue over `implementation.ts`): gutter marks on the model
- * lines, a CodeLens on implementing code that shows its element on the canvas (`appling.showElement`: Desktop's, or
- * the IDE tab's) and one on model lines with code that opens it (`appling.openCode`).
+ * lines, a CodeLens on implementing code that shows its element on the canvas (`appling.showElement` of
+ * the inspector tab) and one on model lines with code that opens it (`appling.openCode`).
  */
 export class ImplementationView implements Disposable {
     private state?: ImplementationState;
@@ -33,7 +33,7 @@ export class ImplementationView implements Disposable {
             languages.registerCodeLensProvider({ scheme: 'file' }, lenses),
             window.onDidChangeVisibleTextEditors(editors => editors.forEach(e => this.decorate(e))),
             commands.registerCommand('appling.showElement', (qn: string) => {
-                if (!this.showElement(qn)) window.showInformationMessage(`No Appling IDE is running for ${qn}; it cannot be shown on the canvas.`);
+                if (!this.showElement(qn)) window.showInformationMessage(`No Appling inspector is running for ${qn}; it cannot be shown on the canvas.`);
             }),
             commands.registerCommand('appling.openCode', async (qn?: string) => {
                 const element = qn ?? this.elementAtCursor();

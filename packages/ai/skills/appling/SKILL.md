@@ -28,7 +28,7 @@ Appling is a new language, so never write it from memory. Call `language_referen
 
 A request such as "I want to design a todo app" is a modeling task. The draft is the model, not code.
 
-1. When the visual tools are there (an agent session of Appling Desktop), report the start with `visual_status`, such as "Designing the todo app", and each following step the same way, with done and total when you know them.
+1. When the visual tools are there (an Appling agent session), report the start with `visual_status`, such as "Designing the todo app", and each following step the same way, with done and total when you know them.
 2. Ask the person only what the business decides: who uses the application, what they need to do, which rules must always hold. Decide the modeling yourself.
 3. Split the application into modules by bounded context, such as `tasks` and `accounts`.
 4. Write each module with `write_model_file`, in layer order: enums, value types and entities; then actions, state machines, events and jobs; then queries, projections and use cases; then interfaces and pages. Add roles, actors and policies for every action and query someone runs. Add a `does` text only where the structure leaves something unclear, such as the vendor call behind an external operation or the format of a value; never restate what names, types and effects already say.

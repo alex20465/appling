@@ -24,9 +24,6 @@ jobs:
     name: Build and test
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      # No test starts Electron, and pnpm runs no build script of electron (it is not in allowBuilds); this keeps it so
-      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - name: Cloning
         uses: actions/checkout@v4
@@ -39,15 +36,6 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: pnpm
-
-      # packages/desktop/test/remote-integration.test.ts runs against a real sshd of this user and a docker container,
-      # and skips each without them. The runner has docker; sshd is added so both remote transports are tested.
-      - name: sshd for the remote tests
-        run: |
-          if [ ! -x /usr/sbin/sshd ]; then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq --no-install-recommends openssh-server
-          fi
 
       - run: pnpm install --frozen-lockfile
 
@@ -67,8 +55,6 @@ jobs:
     name: Codegen coverage
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - name: Cloning
         uses: actions/checkout@v4

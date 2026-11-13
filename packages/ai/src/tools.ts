@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { Simulator, UNKNOWN, type EditOperation } from '@appling/model';
 import { Project, queryGraph, type Sources } from './project.js';
 import { languageReference } from './prompts.js';
-import { readRequests, removeRequest, takeRequest } from './requests.js';
 
 export const operationSchema = z.discriminatedUnion('op', [
     z.object({ op: z.literal('add'), parent: z.string().describe('Qualified name of the element to add to, such as sales.Order'), source: z.string().describe('Appling source of the new member, such as "note: Text?"') }),
@@ -12,10 +11,7 @@ export const operationSchema = z.discriminatedUnion('op', [
     z.object({ op: z.literal('set'), target: z.string(), property: z.string().describe('Property name as shown by graph_query, such as default, condition or modifiers'), value: z.string().describe('Appling source of the value; empty removes the property') })
 ]);
 
-/**
- * Where tools read and write: the files on disk, or a working copy whose edits are collected
- * as a proposal for a human to review.
- */
+/** Where tools read and write: the files on disk. */
 export interface ToolContext {
     project: Project;
     sources(): Sources;
@@ -36,33 +32,6 @@ export function diskContext(project: Project): ToolContext {
             return { ok: true, changed: dryRun ? changed : project.write(result.sources) };
         }
     };
-}
-
-/** A working copy that collects accepted edits instead of writing them. */
-export class ProposalContext implements ToolContext {
-
-    readonly original: Sources;
-    readonly operations: EditOperation[] = [];
-    private working: Sources;
-
-    constructor(readonly project: Project, sources = project.sources()) {
-        this.original = sources;
-        this.working = sources;
-    }
-
-    sources(): Sources {
-        return this.working;
-    }
-
-    async edit(operation: EditOperation, dryRun: boolean): Promise<{ ok: boolean, errors?: string[], changed?: string[] }> {
-        const result = await this.project.edit(operation, this.working);
-        if (!result.ok) return { ok: false, errors: result.errors };
-        if (!dryRun) {
-            this.working = result.sources;
-            this.operations.push(operation);
-        }
-        return { ok: true, changed: [...new Set(result.edits.map(e => e.uri))] };
-    }
 }
 
 interface ToolDefinition<SHAPE extends z.ZodRawShape> {
@@ -154,26 +123,6 @@ export const REGISTRY_TOOLS = {
         description: "Run the generated project's tests and return whether they passed with the end of the output.",
         input: { target: z.string().optional() },
         run: async (context, input) => context.project.runTests(input.target) ?? { error: 'No generated project with a test command.' }
-    })
-};
-
-/** Tools for the elements the person asked for on the canvas by name and description, for an agent to model. */
-export const REQUEST_TOOLS = {
-    request_next: define({
-        description: 'The next element the person asked for on the canvas: a name, a description in their words, the kind they chose (kind, such as Entity or Action; decide it yourself when missing) and the element or module it belongs under (parent; a Module request without parent is a top level module). Model it: write its Appling source in the parent\'s module (or under the parent) with edit_model or write_model_file, then call request_done with its qualified name. Requests built on another request wait until that one is done. Returns nothing when no request is open.',
-        input: {},
-        run: async context => takeRequest(context.project.root, context.session) ?? { done: 'No open requests.' }
-    }),
-    request_done: define({
-        description: 'Mark a request done once its element is in the model; the requests built on it then go under that element. Or drop it (without qn) when it cannot be modeled, with the requests built on it; say why to the person then.',
-        input: { id: z.string(), qn: z.string().optional().describe('Qualified name of the element that now models the request') },
-        run: async (context, input) => {
-            if (input.qn && !(await context.project.graph()).nodes.some(n => n.qn === input.qn)) return { error: `The model has no ${input.qn} yet.` };
-            const removed = removeRequest(context.project.root, input.id, input.qn);
-            if (!removed.length) return { error: `No request ${input.id}.` };
-            const dropped = removed.slice(1).map(r => r.name);
-            return { ok: true, open: readRequests(context.project.root).length, ...dropped.length ? { dropped } : {} };
-        }
     })
 };
 

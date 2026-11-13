@@ -6,7 +6,7 @@
 !out/hook.cjs
 !out/appling-icon.svg
 !out/appling.tmLanguage.json
-!out/ide/**
+!out/inspect/**
 !out/cli/**
 !package.json
 !language-configuration.json

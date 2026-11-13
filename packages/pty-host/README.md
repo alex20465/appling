@@ -1,6 +1,6 @@
 # @appling/pty-host
 
-The Appling pty host: a per user background process that owns the terminals of Appling Desktop, so they keep running when the app closes or crashes and come back with their scrollback when it reattaches. It works the way VS Code's pty host does: [`node-pty`](https://github.com/microsoft/node-pty) runs the shells, every terminal is mirrored into an [`@xterm/headless`](https://www.npmjs.com/package/@xterm/headless) terminal, and on attach the [serialize addon](https://www.npmjs.com/package/@xterm/addon-serialize) replays its screen and scrollback as escape sequences for xterm.js.
+The Appling pty host: a per user background process that owns an app's terminals, so they keep running when the app closes or crashes and come back with their scrollback when it reattaches. It works the way VS Code's pty host does: [`node-pty`](https://github.com/microsoft/node-pty) runs the shells, every terminal is mirrored into an [`@xterm/headless`](https://www.npmjs.com/package/@xterm/headless) terminal, and on attach the [serialize addon](https://www.npmjs.com/package/@xterm/addon-serialize) replays its screen and scrollback as escape sequences for xterm.js.
 
 In development (issues #9 and #18); the package is private.
 
@@ -21,7 +21,7 @@ host.close();                                     // detaches; the shell keeps r
 
 `PtyHostClient` methods: `spawn(options)`, `spawnAttached(options)` (spawn and attach in one, with the output from the first byte as `data`, so nothing a program prints at once lands only in the scrollback), `list(group?)`, `attach(id, { cols, rows }?)`, `write(id, data)`, `resize(id, cols, rows)`, `kill(id, signal?)` (without a signal ends and removes the terminal, with one only sends it), `detach(id)`, `update(id, { meta, title })` (merges into the metadata, `null` removes a key), `subscribe()` (resolves with every terminal, then emits `terminal`, `status` and `removed` for all of them, attached or not), `unsubscribe()`, `shutdown()` (ends every terminal and the host) and `close()`. `spawn` takes `cwd`, `shell` (default `$SHELL`, `%COMSPEC%` on Windows), `args`, `env` (default the caller's environment; `TERM=xterm-256color` and `COLORTERM=truecolor` are set), `addEnv` (instead of `env`: variables added to the host's own environment, `null` removes one, for a client on another machine), `cols`, `rows`, `group` (a free label such as the repo folder, which `list` filters by), `title`, `scrollback` (lines, default 10000), `attach` (queue the output for the spawning client until its `attach`) and `meta` (free string metadata, such as an agent session's `preset` and `label`). A terminal whose process ended stays listed with its `exit` and its scrollback until it is killed.
 
-`connectPtyHost({ dir, start, host: { node, main, env, idleTimeout, timeout, open, notify } })`: `start: false` only connects. `main` is the host's entry (default this package's `out/main.js`; the packaged Desktop passes its bundled copy). A host it starts runs detached in its own session with `node` (default the current executable, run as Node through `ELECTRON_RUN_AS_NODE`, so Electron can pass its own binary) and exits after `idleTimeout` milliseconds (default 60000, 0 never) without connected clients and without running terminals. `open` is the program a click on a notification runs, `{terminal}` standing for the terminal's id (Desktop passes `Appling --session {terminal}`); `notify: false` starts the host without notifications.
+`connectPtyHost({ dir, start, host: { node, main, env, idleTimeout, timeout, open, notify } })`: `start: false` only connects. `main` is the host's entry (default this package's `out/main.js`; a bundling app passes its bundled copy). A host it starts runs detached in its own session with `node` (default the current executable, run as Node through `ELECTRON_RUN_AS_NODE`, so Electron can pass its own binary) and exits after `idleTimeout` milliseconds (default 60000, 0 never) without connected clients and without running terminals. `open` is the program a click on a notification runs, `{terminal}` standing for the terminal's id; `notify: false` starts the host without notifications.
 
 ## Status and notifications
 
@@ -58,7 +58,7 @@ Newline delimited JSON. Requests carry an `id` and get one `response` with it: `
 
 ## Not yet
 
-Flow control for fast output to a slow client and remote hosts (#17). Desktop does its own shell integration and ends the terminals with the app (`terminal.endWithApp`).
+Flow control for fast output to a slow client and remote hosts (#17).
 
 ## License
 

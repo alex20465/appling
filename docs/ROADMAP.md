@@ -35,9 +35,9 @@ Done when `pnpm test` passes, the CLI can dump the graph of `examples/`, `exampl
 
 ## Track A: IDE
 
-`@appling/ide`, `@appling/ai`
+`@appling/inspect` (formerly `@appling/ide`), `@appling/ai`
 
-Appling Desktop (`@appling/desktop`, epic #15) replaced the browser IDE: `@appling/ide` lives on as Desktop's repo view and the landing demo, and the built in chat was removed in favour of agent sessions (decision 7C).
+Appling Desktop (`@appling/desktop`, epic #15) replaced the browser IDE, and the built in chat was removed in favour of agent sessions (decision 7C). Desktop was removed again later. The IDE then became `@appling/inspect` (`appling inspect`), a read only inspector next to an AI coding tool: canvas, floating inspector, task board and live marks, without editor, edits, requests, proposals or generation.
 
 - [x] A1 Read only IDE: `npx @appling/ide` starts a local server on the workspace. Browser UI (React, React Flow, Monaco) with a text editor backed by the LSP, the zoomable graph at the three levels of `concept.md` section 4, and selection synced between text and graph. Layout lives in `.appling/layout.json`, outside the model.
 - [x] A2 Editing: edit elements and attributes in the graph through the edit operations. Migration entries appear when a release exists.
@@ -74,7 +74,7 @@ Extensions are configured in `appling.config.json` by package name. Third party 
 
 `@appling/viz`, `@appling/ai`
 
-The floating window was removed with decision 7C of #15: the same views, bubbles and proposals now draw on the repo's canvas in Appling Desktop for agent sessions.
+The floating window was removed with decision 7C of #15: the same views, bubbles and proposals now draw on the repo's canvas in the inspector for agent sessions.
 
 - [x] C1 Show one node: `visualize` draws the element that was asked for and unfolds it in place, so the AI can guide through the model one node at a time instead of drawing a whole view.
 - [x] C2 Flowcharts: the machine and use case views draw a flowchart, with states and steps as nodes and transitions and step order as edges, instead of a list of cards or steps.
@@ -95,9 +95,8 @@ The floating window was removed with decision 7C of #15: the same views, bubbles
 |---|---|---|---|
 | `@appling/lang` | exists | langium | grammar, scoping, validation, printer, expression typing, `/lsp` export |
 | `@appling/model` | new | lang | semantic graph, edit operations, release snapshots, migration steps |
-| `@appling/cli` | exists | lang, model, codegen | `check`, `fmt`, `release`, `generate` |
-| `@appling/ide` | private | lang, model, ai, viz | Desktop's repo view and the landing demo |
-| `@appling/desktop` | private | ide, ai, pty-host | Appling Desktop |
+| `@appling/cli` | exists | lang, model, codegen, inspect | `check`, `fmt`, `release`, `generate`, `inspect` |
+| `@appling/inspect` | private | lang, model, ai, viz | the read only inspector, `appling inspect` and the landing demo |
 | `@appling/ai` | new | model, viz | MCP server, agent sessions, skills |
 | `@appling/codegen` | new | model | plan, step runner, map contract, registry |
 | `@appling/codegen-django` | new | codegen | Django map and templates |

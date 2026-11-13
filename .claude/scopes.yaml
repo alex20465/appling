@@ -69,7 +69,7 @@ scopes:
       imports: ["@modelcontextprotocol/sdk", zod]
       files:
         - packages/ai/**
-        - packages/ide/src/server/server.ts
+        - packages/inspect/src/server/server.ts
     footprint: 7
     density: 0.06
     confidence: high
@@ -77,31 +77,22 @@ scopes:
     researched_at: 2026-10-23
     outputs: [rule, skill]
 
-  - id: ide-client
-    knowledge: React Flow 12 graph view, ELK layout, Monaco 0.57 with its bundled LSP client over vscode-ws-jsonrpc websockets, applyTextEdits as undoable steps, dirty tracking
+  - id: inspect-client
+    knowledge: the own SVG model tree of @appling/viz, the floating read only inspector and the task board of the inspector client, snapshots and live marks over /events, selection
     anchors:
-      - name: "@xyflow/react"
-        version: 12.12.0
-        manifest: packages/ide/package.json
-      - name: elkjs
-        version: 0.12.0
-        manifest: packages/ide/package.json
-      - name: monaco-editor
-        version: 0.57.0
-        manifest: packages/ide/package.json
-      - name: vscode-ws-jsonrpc
-        version: 4.0.3
-        manifest: packages/ide/package.json
+      - name: react
+        version: 19.3.1
+        manifest: packages/inspect/package.json
     activation:
-      imports: ["@xyflow/react", elkjs, monaco-editor, vscode-ws-jsonrpc]
+      imports: [react]
       files:
-        - packages/ide/src/client/**
-        - packages/ide/src/server/server.ts
-    footprint: 9
+        - packages/inspect/src/client/**
+        - packages/inspect/src/server/server.ts
+    footprint: 6
     density: 0.08
     confidence: high
     evidence: [manifest, imports]
-    researched_at: 2026-10-23
+    researched_at: 2026-11-13
     outputs: [rule, skill]
 
   - id: landing-site
@@ -180,4 +171,4 @@ ambient:
     density: 0.14
     note: every test file; idiomatic use, CLAUDE.md covers commands
   - name: react
-    note: folds into ide-client, idiomatic use
+    note: folds into inspect-client, idiomatic use

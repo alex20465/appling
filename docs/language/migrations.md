@@ -73,9 +73,9 @@ The validator checks only that the paths exist or are gone. It does not compare 
 
 `appling release <version>` writes a snapshot of the semantic graph to `.appling/releases/<version>.json`. See the [CLI](../tools/cli.md#release).
 
-Once a release exists, tools that edit the model through [edit operations](../reference/edit-operations.md), such as the [IDE](../tools/ide.md) and the [AI tools](../tools/ai.md), record the steps for you. When an edit renames, retypes or removes a domain (L1) element that the latest release contains, the tool appends the matching step to a migration block named after that release, `since_v<version>` with dots turned into underscores. It creates the block in the element's module when it does not exist yet.
+Once a release exists, tools that edit the model through [edit operations](../reference/edit-operations.md), such as the [AI tools](../tools/ai.md), record the steps for you. When an edit renames, retypes or removes a domain (L1) element that the latest release contains, the tool appends the matching step to a migration block named after that release, `since_v<version>` with dots turned into underscores. It creates the block in the element's module when it does not exist yet.
 
-For example, after `appling release 1.0.0`, renaming `Order.code` to `reference`, changing `Order.total` from `Decimal` to `Money` and then renaming `Order.reference` to `ref` in the IDE leaves:
+For example, after `appling release 1.0.0`, renaming `Order.code` to `reference`, changing `Order.total` from `Decimal` to `Money` and then renaming `Order.reference` to `ref` through the AI tools leaves:
 
 ```appling check
 module sales {

@@ -14,7 +14,7 @@ const ICONS: Record<AgentStatus, [string, string]> = {
 /**
  * The agent sessions in VS Code (thin glue over `agents.ts`): the Agent Sessions view, the commands to start, show,
  * answer and end a session, and a notification when one waits for the user out of view. Presets are the built in
- * ones plus `appling.agents.presets`, the same shape as Appling Desktop's `agents.presets`.
+ * ones plus `appling.agents.presets`.
  */
 export class AgentsView implements Disposable, AgentHost {
     readonly agents: Agents;

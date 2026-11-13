@@ -14,7 +14,7 @@ The simulator evaluates the behavior a model describes against sample data and a
 | What does running an action do? | Policies, preconditions, the transition taken, the effects, emitted events and violated invariants |
 | Does a scenario hold? | Whether its `then` holds for its given rows, actor and call, and why not |
 
-`appling check` runs every [scenario](../language/scenarios.md) through it and reports a failing one as an error. You reach the other questions through `appling simulate` in the [CLI](cli.md#simulate), the `simulate` tool of the [MCP server](ai.md#model-tools), and the [inspector](ide.md#the-inspector) of Appling Desktop, which shows the answers for the selected action or machine.
+`appling check` runs every [scenario](../language/scenarios.md) through it and reports a failing one as an error. You reach the other questions through `appling simulate` in the [CLI](cli.md#simulate), the `simulate` tool of the [MCP server](ai.md#model-tools), and the [inspector](inspect.md#the-inspector), which shows the answers for the selected action or machine.
 
 ## An example
 
@@ -149,4 +149,4 @@ simulator.scenario('shop.CloseOwnCart'); // { passed, failures, outcome, errors,
 
 `runScenarios(graph)` runs every scenario of a graph, `checkScenarios(models, services)` returns the failures as problems located at the scenario names (what `appling check` prints), `scenarioCall(node)` gives a scenario's call, and `coveredByScenarios(graph)` lists the actions, use cases and transitions the scenarios cover, which the code generators use to replace their guessed tests.
 
-`@appling/model/simulator` exports the same class without the language dependencies, for the browser. The repo view of Appling Desktop and its browser demo use it this way.
+`@appling/model/simulator` exports the same class without the language dependencies, for the browser. The inspector and its browser demo use it this way.

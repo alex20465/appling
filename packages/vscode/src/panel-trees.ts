@@ -1,17 +1,17 @@
-import type { GenerationEvent, GenerationSelection } from '@appling/codegen';
 import { IMPLEMENTATION_STATES } from '@appling/model/implementation';
 import { anchorOwner, isAnchorAddress } from '@appling/model/anchors';
 import type { ElementChange, GraphDiff } from '@appling/model/diff';
 import { Simulator, type Access, type Verdict } from '@appling/model/simulator';
-import { claimOf, type PanelAction, type PanelState } from '@appling/ide/panels';
+import { claimOf, type PanelAction, type PanelState } from '@appling/inspect/panels';
 import {
     abilities, actionSummary, entityActions, IMPLEMENTATION_LABELS, kindLabel, LAYER_LABELS, memberText, policyText, relations,
     type GraphIndex
 } from '@appling/viz/views';
 
 /**
- * The side panels of the IDE as trees for the Appling sidebar in VS Code, VS Code free: each panel's nodes from the state the IDE
- * client sends (`@appling/ide/panels`). A node's `run` is what a click does, its `actions` what its inline buttons do.
+ * The side panels of the inspector as trees for the Appling sidebar in VS Code, VS Code free and read only: each
+ * panel's nodes from the state the inspector client sends (`@appling/inspect/panels`). A node's `run` is what a click
+ * does, its `actions` what its inline buttons do.
  */
 
 export interface PanelNode {
@@ -31,10 +31,9 @@ export interface PanelNode {
     actions?: Partial<Record<Verb, Run>>;
     children?: PanelNode[];
     expanded?: boolean;
-    checked?: boolean;
 }
 
-export const VERBS = ['accept', 'revert', 'reject', 'diff', 'generate', 'edit', 'add', 'remove'] as const;
+export const VERBS = ['diff'] as const;
 export type Verb = typeof VERBS[number];
 
 export type Run =
@@ -45,13 +44,7 @@ export type Run =
     /** The text diff of a changed element: from the revision while the review marks, else the live file's. */
     | { type: 'textDiff', qn: string }
     | { type: 'liveDiff', path: string }
-    | { type: 'reviewDiff', path: string, from?: string }
-    | { type: 'reject', proposal: string }
-    /** Edit, add or remove one line of a property (`line` undefined adds one; a plain value has one line). */
-    | { type: 'line', qn: string, property: string, lines: string[], line?: number, remove?: boolean, separator: string }
-    | { type: 'log' }
-    /** Generate without a target: ask for the stack first. */
-    | { type: 'stack', selection: GenerationSelection };
+    | { type: 'reviewDiff', path: string, from?: string };
 
 type Builder = (state: PanelState, index: GraphIndex) => PanelNode[];
 
@@ -59,18 +52,9 @@ type Builder = (state: PanelState, index: GraphIndex) => PanelNode[];
 export const VIEWS = ['inspector', 'changes', 'review', 'code', 'tasks'] as const;
 export type ViewName = typeof VIEWS[number];
 
-/**
- * The elements asked for on the canvas, waiting for an agent to model them, then the open tasks of every target's
- * registry: what the generated code still misses, for an agent or you to finish.
- */
+/** The open tasks of every target's registry: what the generated code still misses, for an agent or you to finish. */
 function tasksTree(state: PanelState, index: GraphIndex): PanelNode[] {
-    const snapshot = state.snapshot;
-    const requests = group('requests', 'Requested elements', snapshot.requests.map(r => ({
-        id: `request/${r.id}`, label: r.name, description: `${r.kind ? `${kindLabel(r.kind)} ` : ''}${r.parentRequest ? `on the requested ${snapshot.requests.find(p => p.id === r.parentRequest)?.name}` : r.parent ? `under ${r.parent}` : 'in the model'} · ${r.taken ? 'taken by an agent' : 'waiting for an agent'}`,
-        tooltip: r.description, icon: 'lightbulb', ...r.parent ? { run: { type: 'action', action: { type: 'select', qn: r.parent } } as Run } : {}
-    })), true, String(snapshot.requests.length));
-    if (!snapshot.targets.length) return requests;
-    return [...requests, ...registryTasks(state, index)];
+    return state.snapshot.targets.length ? registryTasks(state, index) : [];
 }
 
 function registryTasks(state: PanelState, index: GraphIndex): PanelNode[] {
@@ -146,8 +130,8 @@ export function inspected(state: PanelState, index: GraphIndex): { qn?: string, 
 const TYPED = new Set(['Field', 'Param']);
 const VERDICTS: Record<Verdict, string> = { yes: 'may', no: 'may not', depends: 'depends on the data' };
 
-/** The editable properties of an element, as the inspector's form has them. */
-export function editableProps(index: GraphIndex, qn: string): [string, unknown][] {
+/** The properties of an element, without its flags and the type of a field or parameter (its description has it). */
+export function properties(index: GraphIndex, qn: string): [string, unknown][] {
     const node = index.nodes.get(qn);
     return node ? Object.entries(node.props).filter(([key, value]) => typeof value !== 'boolean' && !(TYPED.has(node.kind) && key === 'type')) : [];
 }
@@ -160,7 +144,6 @@ function inspectorTree(state: PanelState, index: GraphIndex): PanelNode[] {
     const code = snapshot.code[qn] ?? [];
     const implementation = snapshot.implementation[qn];
     const change = canvasChanges(state)?.changes.find(c => c.qn === qn);
-    const running = !!state.run && !state.run.ended;
     const nodes: PanelNode[] = [{
         id: 'head', label: qn, description: `${node.props.link ? 'link ' : ''}${kindLabel(node.kind)} · ${LAYER_LABELS[node.layer]}`, tooltip: 'Open the source',
         icon: iconOf(node.kind), run: { type: 'source', qn }
@@ -182,22 +165,15 @@ function inspectorTree(state: PanelState, index: GraphIndex): PanelNode[] {
         });
     }
     if (implementation) {
-        const selection = { mode: 'elements' as const, elements: [qn] };
-        const generateRun = (selection: GenerationSelection): Run => snapshot.targets.length ? { type: 'action', action: { type: 'generate', selection } } : { type: 'stack', selection };
-        // the application comes first: until it exists, only that generates
-        const generated = snapshot.targets.some(t => t.generated);
-        const generate = running || !generated ? undefined : generateRun(selection);
         const tasks = snapshot.tasks.filter(t => t.qn === qn && t.status !== 'done');
         nodes.push({
             id: 'implementation', label: IMPLEMENTATION_LABELS[implementation.state], icon: 'circle-filled', color: STATE_COLORS[implementation.state],
             description: [implementation.tasks && `${implementation.tasks} open task${implementation.tasks > 1 ? 's' : ''}`, implementation.outstanding && 'changed since the last generation'].filter(Boolean).join(' · '),
-            actions: generate && { generate },
             children: [
                 ...code.map((c, i) => ({
                     id: `code/${i}`, label: `${c.file}:${c.start}-${c.end}`, description: c.status === 'current' ? undefined : c.status, file: c.file, tooltip: c.text,
                     run: { type: 'code', path: c.file, start: c.start, end: c.end } as Run
                 })),
-                ...!generated && !running ? [{ id: 'generate-application', label: 'Generate the application first', description: 'then elements one by one', icon: 'run-all', run: generateRun({ mode: 'all' }) }] : [],
                 ...tasks.flatMap(t => t.missing.map((m, i) => ({ id: `task/${t.target}/${i}`, label: m, description: `task · ${t.target}`, icon: 'circle-large-outline', run: { type: 'action', action: { type: 'select', qn } } as Run })))
             ],
             expanded: true
@@ -242,15 +218,10 @@ function inspectorTree(state: PanelState, index: GraphIndex): PanelNode[] {
             return { id: `state/${s}`, label: s, description: reach ? (reach.path.length ? `via ${reach.path.map(p => p.trigger).join(', ')}` : 'initial') : 'unreachable' };
         })));
     }
-    nodes.push(...group('props', 'Properties', editableProps(index, qn).map(([key, value]) => {
-        const separator = key === 'modifiers' ? ' ' : '\n';
+    nodes.push(...group('props', 'Properties', properties(index, qn).map(([key, value]) => {
         const lines = Array.isArray(value) ? value.map(String) : [String(value)];
-        const edit = (line?: number, remove?: boolean): Run => ({ type: 'line', qn, property: key, lines, line, remove, separator });
-        if (!Array.isArray(value) || separator === ' ') return { id: `prop/${key}`, label: key, description: lines.join(separator), tooltip: lines.join(separator), run: edit(0), actions: { edit: edit(0) } };
-        return {
-            id: `prop/${key}`, label: key, description: String(lines.length), actions: { add: edit() }, expanded: true,
-            children: lines.map((text, i) => ({ id: `prop/${key}/${i}`, label: text, tooltip: text, run: edit(i), actions: { edit: edit(i), remove: edit(i, true) } }))
-        };
+        if (!Array.isArray(value) || key === 'modifiers') return { id: `prop/${key}`, label: key, description: lines.join(' '), tooltip: lines.join(' ') };
+        return { id: `prop/${key}`, label: key, description: String(lines.length), expanded: true, children: lines.map((text, i) => ({ id: `prop/${key}/${i}`, label: text, tooltip: text })) };
     }), false));
     nodes.push(...group('members', 'Members', index.children(qn).map(c => link(`member/${c.qn}`, c.qn, kindLabel(c.kind), memberText(c, index)))));
     for (const [direction, title] of [['usedBy', 'Used by'], ['uses', 'Uses']] as const) {
@@ -276,30 +247,15 @@ function changeNodes(prefix: string, index: GraphIndex, changes: (ElementChange 
 }
 
 function changesTree(state: PanelState, index: GraphIndex): PanelNode[] {
-    const proposals = state.proposals.map((p): PanelNode => ({
-        id: `proposal/${p.id}`, label: p.review.summary, description: `${sessionName(state, p.session)} proposes`, icon: 'git-pull-request', tooltip: p.review.summary, expanded: true,
-        actions: { accept: { type: 'action', action: { type: 'decide', id: p.id, decision: { accepted: true } } }, reject: { type: 'reject', proposal: p.id } },
-        children: [
-            ...p.review.hunks.map((h, i) => ({
-                id: `proposal/${p.id}/hunk/${i}`, label: `${h.file}:${h.line}`, file: h.file, description: `+${h.added.length} −${h.removed.length}`,
-                tooltip: [...h.removed.map(l => `- ${l}`), ...h.added.map(l => `+ ${l}`)].join('\n')
-            })),
-            ...p.review.graph.added.map(qn => ({ ...element(`proposal/${p.id}/added/${qn}`, index, qn), status: 'added' as const })),
-            ...p.review.graph.changed.map(qn => ({ ...element(`proposal/${p.id}/changed/${qn}`, index, qn), status: 'changed' as const })),
-            ...p.review.graph.removed.map(qn => ({ id: `proposal/${p.id}/removed/${qn}`, label: qn, icon: 'symbol-misc', status: 'removed' as const }))
-        ]
-    }));
     const live = state.live;
     const changes = new Map((live?.diff.changes ?? []).map(c => [c.qn, c]));
     const files = live?.files ?? [];
     return [
-        ...group('proposals', 'Proposed changes', proposals),
         ...files.map((f): PanelNode => ({
             id: `file/${f.path}`, label: f.path, file: f.path, status: f.status,
             description: `${f.sessions.length ? f.sessions.map(id => sessionName(state, id)).join(', ') : 'written to disk'} · ${new Date(f.at).toLocaleTimeString()}`,
             tooltip: `${f.path}\n${new Date(f.at).toLocaleString()}`,
             run: { type: 'liveDiff', path: f.path },
-            actions: { accept: { type: 'action', action: { type: 'accept', paths: [f.path] } }, revert: { type: 'action', action: { type: 'revert', path: f.path } } },
             children: changeNodes(`file/${f.path}`, index, f.elements.map(qn => changes.get(qn)),
                 c => `${c.status} ${kindLabel(c.kind)}${c.status === 'changed' && c.props.length ? ` · ${c.props.join(', ')}` : ''}`),
             expanded: true
@@ -336,7 +292,6 @@ function codeTree(state: PanelState, index: GraphIndex): PanelNode[] {
     const states = Object.entries(snapshot.implementation);
     const outstanding = states.filter(([, i]) => i.outstanding).map(([qn]) => qn);
     const tops = outstanding.filter(qn => !outstanding.some(other => qn.startsWith(`${other}.`)));
-    const run = state.run;
     const nodes: PanelNode[] = [{
         id: 'implementation', label: 'Implementation',
         children: IMPLEMENTATION_STATES.map(s => ({ id: `state/${s}`, label: IMPLEMENTATION_LABELS[s], description: String(states.filter(([, i]) => i.state === s).length), icon: 'circle-filled', color: STATE_COLORS[s] })),
@@ -346,25 +301,7 @@ function codeTree(state: PanelState, index: GraphIndex): PanelNode[] {
         ? { id: 'targets', label: 'Targets', expanded: true, children: snapshot.targets.map(t => ({ id: `target/${t.out}`, label: `${t.extension} → ${t.out}`, icon: 'package', description: t.generated ? (t.at ? `generated ${new Date(t.at).toLocaleString()}` : 'generated') : 'not generated yet' })) }
         : { id: 'targets', label: 'No targets', icon: 'info', tooltip: 'Add "generate": [{ "extension": "@appling/codegen-django", "out": "app" }] to appling.config.json.' });
     nodes.push(...group('outstanding', 'New or changed since the last generation', tops.slice(0, 300).map(qn => ({
-        ...element(`outstanding/${qn}`, index, qn, IMPLEMENTATION_LABELS[snapshot.implementation[qn].state]), checked: false
+        ...element(`outstanding/${qn}`, index, qn, IMPLEMENTATION_LABELS[snapshot.implementation[qn].state])
     })), false, String(tops.length)));
-    if (run) {
-        const of = <T extends GenerationEvent['type']>(type: T) => run.events.filter((e): e is Extract<GenerationEvent, { type: T }> => e.type === type);
-        const failed = of('failed');
-        const generated = of('generated').flatMap(e => e.elements);
-        const tasks = of('tasks').flatMap(e => e.tasks);
-        const steps = of('planned').reduce((sum, e) => sum + e.steps.length, 0);
-        const bad = !!of('done')[0]?.failed || failed.length > 0;
-        nodes.push({
-            id: `run/${run.id}`, label: run.title, icon: !run.ended ? 'loading~spin' : bad ? 'error' : 'pass', color: bad ? 'errorForeground' : undefined, expanded: true,
-            description: `${!run.ended ? 'running' : bad ? 'failed' : 'done'} · ${steps} planned · ${generated.length} generated · ${tasks.length} with open tasks`,
-            children: [
-                ...failed.map((f, i) => ({ id: `run/failed/${i}`, label: `${f.target ? `${f.target}: ` : ''}${f.message}`, tooltip: f.message, icon: 'error', color: 'errorForeground' })),
-                ...of('skipped').map(s => ({ id: `run/skipped/${s.target}`, label: s.target, description: s.reason, icon: 'debug-step-over' })),
-                ...tasks.map(t => element(`run/task/${t.qn}`, index, t.qn, t.missing.join('; '))),
-                { id: 'run/log', label: 'Log', icon: 'output', run: { type: 'log' } }
-            ]
-        });
-    }
     return nodes;
 }

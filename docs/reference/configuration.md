@@ -24,9 +24,9 @@ Each tool looks for the file in a specific place:
 |---|---|---|
 | `appling generate` | `generate` | `./appling.config.json` in the current folder |
 | MCP server registry tools | `generate` | `appling.config.json` in the server's workspace folder |
-| The Code tab of the [repo view](../tools/ide.md#the-code-tab) | `generate` | `appling.config.json` in the repo's workspace folder |
+| The [inspector](../tools/inspect.md#the-task-board), for the implementation marks and the task board | `generate` | `appling.config.json` in the repo's workspace folder |
 
-Keep the file in the folder you run the CLI from and open in Appling Desktop, so all tools agree.
+Keep the file in the folder you run the CLI from and open in your editor, so all tools agree.
 
 ### generate
 
@@ -68,7 +68,7 @@ Next to your models, in the workspace folder:
 
 ### View
 
-`.appling/view.json` holds the lens and the option of the IDE's [model canvas](../tools/ide.md#the-model-canvas). The IDE writes it whenever you change one. It never affects the model. Missing keys take their default.
+`.appling/view.json` holds the lens and the option of the inspector's [model canvas](../tools/inspect.md#the-model-canvas). The inspector writes it whenever you change one; it is the only file the inspector writes. It never affects the model. Missing keys take their default.
 
 ```json
 {
@@ -107,7 +107,7 @@ Next to your models, in the workspace folder:
 | `created` | When the release was written, as an ISO timestamp |
 | `graph` | The [semantic graph](graph.md) at that point: `nodes` and `edges`, without `dependencies` |
 
-Appling Desktop and the MCP server use the release with the highest version. When you rename, retype or remove a domain element that exists in it, the edit appends a migration step to the module's `since_v<version>` block. See [Edit operations](edit-operations.md#release-aware-edits).
+The inspector and the MCP server use the release with the highest version. When you rename, retype or remove a domain element that exists in it, the edit appends a migration step to the module's `since_v<version>` block. See [Edit operations](edit-operations.md#release-aware-edits).
 
 Commit the releases folder: it is the record of what your generated projects and databases were built from.
 

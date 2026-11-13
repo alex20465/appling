@@ -1,9 +1,9 @@
-import { join as nativeJoin, posix } from 'node:path';
+import { join } from 'node:path';
 
 /**
  * Agent presets (#10): which program an agent session runs and how it reaches the repo's Appling MCP server with
  * no manual setup. Every agent gets the MCP server through its own CLI flags, environment or a configuration file
- * the app (Appling Desktop, the VS Code extension) writes into the session's own folder, never through the user's configuration files. Pure: `launch`
+ * the app (the VS Code extension) writes into the session's own folder, never through the user's configuration files. Pure: `launch`
  * returns the command, arguments, environment and files, which `AgentSessions` writes and starts in a terminal.
  */
 
@@ -54,7 +54,7 @@ export const BUILTIN_PRESETS: readonly AgentPreset[] = [
     { name: 'opencode', command: 'opencode', args: [], env: {}, wiring: 'opencode', answers: KEYS, builtin: true }
 ];
 
-/** The key of the custom presets in the app's settings (Desktop's `settings.json`, VS Code's `appling.agents.presets`). */
+/** The key of the custom presets in the app's settings (VS Code's `appling.agents.presets`). */
 export const PRESETS_KEY = 'agents.presets';
 
 /**
@@ -99,7 +99,7 @@ export function geminiSystemSettingsFile(): string {
 export interface LaunchContext {
     /** The session id, also in `APPLING_SESSION`. */
     session: string;
-    /** The gateway's MCP endpoint, which forwards to the repo's IDE server. */
+    /** The gateway's MCP endpoint, which forwards to the repo's inspect server. */
     mcpUrl: string;
     /** The gateway's hook endpoint; an event goes to `<hookUrl>/<event>`. */
     hookUrl: string;
@@ -111,13 +111,6 @@ export interface LaunchContext {
     hookScript: string;
     /** For Gemini CLI: the machine's system settings, merged under the session's. */
     geminiSystemSettings?: Record<string, unknown>;
-    /**
-     * The agent runs on another machine (a remote repo): paths and hook command lines are POSIX ones there, whatever
-     * this machine is.
-     */
-    posix?: boolean;
-    /** The Node binary that runs the hook script; `node` from the PATH by default. */
-    node?: string;
 }
 
 export interface Launch {
@@ -150,8 +143,7 @@ export function launch(preset: AgentPreset, context: LaunchContext): Launch {
     const files: Record<string, string> = {};
     const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;
     const authorization = `Bearer ${context.token}`;
-    const join = context.posix ? posix.join : nativeJoin;
-    const quote = (value: string) => shellWord(value, context.posix ? 'posix' : process.platform === 'win32' ? 'cmd' : 'posix');
+    const quote = (value: string) => shellWord(value, process.platform === 'win32' ? 'cmd' : 'posix');
     switch (preset.wiring) {
         case 'claude': {
             const mcp = join(context.dir, 'mcp.json');
@@ -180,7 +172,7 @@ export function launch(preset: AgentPreset, context: LaunchContext): Launch {
             const token = join(context.dir, 'token');
             files[token] = context.token;
             const base = context.geminiSystemSettings ?? {};
-            const hook = (event: string) => ({ hooks: [{ name: `appling-${event}`, type: 'command', command: `${quote(context.node ?? 'node')} ${quote(context.hookScript)} ${quote(`${context.hookUrl}/${event}`)} ${quote(token)}`, timeout: 5000 }] });
+            const hook = (event: string) => ({ hooks: [{ name: `appling-${event}`, type: 'command', command: `node ${quote(context.hookScript)} ${quote(`${context.hookUrl}/${event}`)} ${quote(token)}`, timeout: 5000 }] });
             const hooks = { ...(base.hooks as Record<string, unknown[]> | undefined) ?? {} };
             for (const event of GEMINI_HOOKS) hooks[event] = [...hooks[event] ?? [], hook(event)];
             files[settings] = json({

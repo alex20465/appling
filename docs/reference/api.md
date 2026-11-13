@@ -12,7 +12,7 @@ Every tool in Appling is built on six public packages. Use them to build your ow
 | `@appling/model` | Semantic graph, edit operations, releases |
 | `@appling/codegen` | Code generation core: plans, registry, migrations |
 | `@appling/ai` | Workspace access for AI, MCP server, agent sessions |
-| `@appling/viz` | Model views, the canvases of Appling Desktop's repo view and the types of the visual tools |
+| `@appling/viz` | Model views, the canvases of the inspector and the types of the visual tools |
 
 ## Language: @appling/lang
 
@@ -202,7 +202,7 @@ Migrations:
 | `readApplied(out)` | The ids in `<out>/.appling/migrations.json` |
 | `MigrationChange`, `ProjectFiles`, `APPLIED` | The change type, read access to the project for extensions, and the applied file path |
 
-Generation with code references and the implementation state, as the IDE does it:
+Generation with code references and the implementation state, as `appling generate` does it:
 
 | Export | Purpose |
 |---|---|
@@ -242,39 +242,29 @@ Tools and MCP:
 
 | Export | Purpose |
 |---|---|
-| `MODEL_TOOLS`, `AUTHORING_TOOLS`, `REGISTRY_TOOLS`, `REQUEST_TOOLS`, `REFERENCE_TOOLS`, `Tools` | The tool definitions: description, zod input shape and `run(context, input)` |
+| `MODEL_TOOLS`, `AUTHORING_TOOLS`, `REGISTRY_TOOLS`, `REFERENCE_TOOLS`, `Tools` | The tool definitions: description, zod input shape and `run(context, input)` |
 | `operationSchema` | The zod schema of an edit operation |
-| `ToolContext`, `diskContext(project)`, `ProposalContext` | Where tools read and write: the files on disk, or a working copy that collects operations |
+| `ToolContext`, `diskContext(project)` | Where tools read and write: the files on disk |
 | `createMcpServer(root, { visualizer?, onToolCall? })`, `McpServerOptions` | An MCP server with all tools, the `implement_next_task` and `derive_model` prompts and `MCP_INSTRUCTIONS`; with a visualizer also the visual tools; `onToolCall(tool, input, result)` sees every call, such as to attribute the files it wrote |
-| `visualTools(host)`, `VisualHost`, `VISUAL_INSTRUCTIONS` | The visual tools over a host, what they need from it (the IDE server's canvas host of an agent session), and their server instructions |
+| `visualTools(host)`, `VisualHost`, `VISUAL_INSTRUCTIONS` | The visual tools over a host, what they need from it (the inspector server's canvas host of an agent session), and their server instructions |
 | `createMcpServer(root, { session })`, `SessionScope`, `sessionTools(scope)`, `SESSION_INSTRUCTIONS` | With a session (`{ id, store, host? }`): the session tools, every call attributed to the session, conflict warnings on edits, and the instructions for coordinating with other sessions |
 | `SessionStore`, `MemorySessionStore`, `AgentSession`, `SessionMessage`, `ClaimConflict`, `SESSION_STATUSES`, `SESSION_COLORS` | The [agent sessions](../tools/ai.md#agent-sessions): open (with its bearer token), authenticate, end, update label and status, claim, release, touch, send, post (a message from the user or the app), inbox, onChange |
-| `serveSessionStore(store, channel)`, `RemoteSessionStore`, `ipcChannel(process)`, `Channel` | A store served to another process, such as an IDE server child of Appling Desktop, and reached from there |
-| `IdeHost`, `IdeContext`, `IdeAction`, `AppHost`, `serveAppHost`, `remoteAppHost` | What `ide_context` and `ide_act` go through, and the part the app around the IDE server adds, also over IPC |
+| `serveSessionStore(store, channel)`, `RemoteSessionStore`, `ipcChannel(process)`, `Channel` | A store served to another process, such as an inspector server child of the VS Code extension, and reached from there |
+| `IdeHost`, `IdeContext`, `IdeAction`, `AppHost`, `serveAppHost`, `remoteAppHost` | What `ide_context` and `ide_act` go through, and the part the app around the inspector server adds, also over IPC |
 | `findConflicts(sessions, self, touched)`, `overlaps(a, b)`, `peers(sessions, self)`, `sessionTitle(session)` | The claim rules and a session's display name |
-| `repoFolder(repo)`, `absolute(repo, file)` | A session's repo folder and a claimed file as the store keeps them: a local folder resolved, a remote one as it is on its machine (`ssh://` ids unchanged, POSIX folders by POSIX rules, also on Windows) |
-| `ElementRequest`, `REQUESTS`, `readRequests(root)`, `addRequest(root, request)`, `updateRequest(root, id, change)`, `removeRequest(root, id, qn?)`, `takeRequest(root, session?)` | The elements [requested on the canvas](../tools/ide.md#the-right-click-menu) by kind, name and description, possibly built on another request, in `<root>/.appling/requests.json` |
-| `handleMcpRequest(server, request, response, hosts?)` | Answers one Streamable HTTP request with a fresh server, as `serveHttp` and the IDE server do |
+| `handleMcpRequest(server, request, response, hosts?)` | Answers one Streamable HTTP request with a fresh server, as `serveHttp` and the inspector server do |
 | `serveHttp(root, port)` | The MCP server over Streamable HTTP on `127.0.0.1`; returns `{ url, close() }` |
 | `REGISTRY_PROMPT`, `MCP_INSTRUCTIONS` | The registry skill text and the MCP server instructions that make the model the source of truth for business logic |
 
-Agent sessions in an app's terminals, `@appling/ai/agents` (what Appling Desktop and the VS Code extension start):
+Agent sessions in an app's terminals, `@appling/ai/agents` (what the VS Code extension starts):
 
 | Export | Purpose |
 |---|---|
 | `BUILTIN_PRESETS`, `agentPresets(settings)`, `PRESETS_KEY`, `AgentPreset`, `Wiring`, `WIRINGS`, `AnswerKeys` | The agents a session can run: the built in ones plus the custom ones of `agents.presets`, with the problems found in them |
 | `launch(preset, context)`, `LaunchContext`, `Launch`, `SERVER`, `CLAUDE_HOOKS`, `GEMINI_HOOKS`, `OPENCODE_EVENTS`, `OPENCODE_PLUGIN`, `geminiSystemSettingsFile()` | The command, arguments, environment and files that start a preset's agent wired to its session's MCP server and hooks |
-| `Gateway`, `GatewayOptions` | The one local endpoint the agents reach: `/mcp` forwarded to the session's IDE server, `/hooks/<event>`, both with the session's bearer token |
+| `Gateway`, `GatewayOptions` | The one local endpoint the agents reach: `/mcp` forwarded to the session's inspector server, `/hooks/<event>`, both with the session's bearer token |
 | `reduce(state, signal)`, `hookSignal(wiring, event, body)`, `notificationSignal(wiring, notification)`, `answers(state, data)`, `waiting(status)`, `AgentStatus`, `StatusState`, `Signal`, `AgentPrompt`, `TerminalNotification`, `STATUS_COLORS`, `STATUS_LABELS` | A session's status from its hooks, its terminal notifications and its exit |
 | `answerKeys(keys, answer)`, `isAnswer(value)`, `Answer` | The keys that answer a waiting agent in its terminal |
-
-Proposals:
-
-| Export | Purpose |
-|---|---|
-| `proposal(project, context)` | The operations a `ProposalContext` collected, with their text and graph differences, as `propose_edits` shows them |
-| `Proposal`, `Hunk` | The proposal types |
-| `hunks(root, before, after)`, `graphDiff(before, after)` | The text and graph differences of a proposal |
 
 The tools are described in [AI tools](../tools/ai.md).
 
@@ -284,7 +274,7 @@ The root export (also `@appling/viz/protocol`) has the types the [visual tools](
 
 | Export | Purpose |
 |---|---|
-| `Show`, `Bubble`, `Review`, `Decision`, `Selection`, `Status` | A view of focused elements with a title and note, a note or code example on an element, a proposal to decide, the decision, the person's selection and view, the step the agent works on with its progress |
+| `Show`, `Bubble`, `Selection`, `Status` | A view of focused elements with a title and note, a note or code example on an element, the person's selection and view, the step the agent works on with its progress |
 | `nextShow(current, next)` | The view after the next one: a `node` view on a `node` view adds its elements, and whether the bubbles stay |
 
 `@appling/viz/views` holds the pure view logic, without React or DOM imports:
@@ -292,19 +282,17 @@ The root export (also `@appling/viz/protocol`) has the types the [visual tools](
 | Export | Purpose |
 |---|---|
 | `GraphIndex` | The graph with children, parents and lineage by qualified name, and `relevanceOf(qn)`, the relevance of the declaration an element belongs to |
-| `requestKinds(node)`, `REQUEST_KINDS` | The kinds a new element may take under a tree node: a module under the seed, any declaration in a module, else the kinds that may reference the node's kind |
-| `growTree(index, settings, unfolded, name?, trail?, requests?)` | The dependency tree of `settings.lens` as a `TreeNode`: the seed holds the modules, a module the declarations of the lens, a declaration the declarations that use it, grouped by kind when there is more than one; only the node ids in `unfolded` have children, the most relevant first; a node id in `trail` shows only its children in `unfolded` or `trail` |
+| `growTree(index, settings, unfolded, name?, trail?)` | The dependency tree of `settings.lens` as a `TreeNode`: the seed holds the modules, a module the declarations of the lens, a declaration the declarations that use it, grouped by kind when there is more than one; only the node ids in `unfolded` have children, the most relevant first; a node id in `trail` shows only its children in `unfolded` or `trail` |
 | `trailOf(index, settings, focus)`, `lensOf(kind)` | The `unfolded` and `trail` sets that draw the focused elements one after another, each unfolded in place, with the node id of each; the lens that starts from a kind |
-| `growOrder(now, next)` | The nodes a focus adds from one `trailOf` state to the next, each element after its path from the seed, in focus order |
 | `changeMarks(index, changes, modules?)`, `MarkedChanges`, `ChangeMark` | The declarations that added, changed and removed elements belong to, each `added` or `removed` when the declaration itself is new or gone, else `changed`; removed elements count only when the index has them (see `withRemoved`); with `modules`, the modules that hold a marked declaration are `changed` too |
-| `sessionMarks(index, marks)`, `SessionMark` | The declarations that the elements claimed or highlighted by agent sessions belong to, each with the first session's mark; a mark on `?<id>` rings the request an agent session took |
+| `sessionMarks(index, marks)`, `SessionMark` | The declarations that the elements claimed or highlighted by agent sessions belong to, each with the first session's mark |
 | `revealPath(index, settings, qn)` | The node ids to unfold so that an element's declaration shows in its module |
 | `factOf(index, node)` | The short fact a tree node shows under its name, such as `on Order · draft, placed → cancelled` |
 | `LENSES`, `Lens` | The lenses (`domain`, `behavior`, `application`, `interfaces`, `access`) with their label and the kinds the tree starts from |
 | `cardView(index, view, focus)` | The `action` or `event` view of the focused elements as `Card`s: a title, a tag and sections of rows, each row selecting an element |
 | `flowView(index, view, focus)` | The `machine` or `usecase` view as a `Flow`: nodes for the states or steps, edges for the transitions or the step order |
 | `viewFor(kind)`, `VIEW_KINDS`, `ViewKind`, `anchorOf(index, qn, drawn)` | The view that draws an element kind; the innermost of an element and its ancestors that a view draws |
-| `search`, `relations`, `entityActions`, `actionSummary`, `memberText`, `kindLabel`, `elementAt` | The search, relations and summaries the IDE side panel shows |
+| `relations`, `entityActions`, `actionSummary`, `memberText`, `kindLabel`, `elementAt` | The relations and summaries the inspector shows |
 | `ViewSettings`, `DEFAULT_VIEW` | The canvas options, the lens included |
 
-`@appling/viz/canvas` exports the SVG tree `ModelCanvas` (one lens at a time, unfolded node by node, circles sized by relevance, only trails when given a `focus`), the SVG flowchart `FlowCanvas` and the card grid `CardCanvas`, each with optional `bubbles`; `ModelCanvas` also marks the declarations and modules of optional `changes` (any `MarkedChanges`, such as a `GraphDiff`), draws removed ones ghosted (dashed while `changes.planned`, and played once more each time the optional `beat` changes) and rings those of optional `sessions` (`SessionMark[]`) in the session's colour; with `grow` a changed `focus` unfolds node by node (`growOrder` of `@appling/viz/views`) with a slow camera and calls `onGrown` when done; import `@appling/viz/canvas.css` with them; it takes its colours from the `--appling-*` theme tokens. They need `react` as a peer dependency.
+`@appling/viz/canvas` exports the SVG tree `ModelCanvas` (one lens at a time, unfolded node by node, circles sized by relevance, only trails when given a `focus`), the SVG flowchart `FlowCanvas` and the card grid `CardCanvas`, each with optional `bubbles`; `ModelCanvas` also marks the declarations and modules of optional `changes` (any `MarkedChanges`, such as a `GraphDiff`), draws removed ones ghosted and rings those of optional `sessions` (`SessionMark[]`) in the session's colour; import `@appling/viz/canvas.css` with them; it takes its colours from the `--appling-*` theme tokens. They need `react` as a peer dependency.

@@ -5,7 +5,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { expect, test } from 'vitest';
 import {
-    absolute, createMcpServer, findConflicts, MemorySessionStore, overlaps, remoteAppHost, RemoteSessionStore, repoFolder, serveAppHost, serveSessionStore,
+    createMcpServer, findConflicts, MemorySessionStore, overlaps, remoteAppHost, RemoteSessionStore, serveAppHost, serveSessionStore,
     type AgentSession, type Channel, type IdeHost
 } from '../src/index.js';
 
@@ -40,34 +40,6 @@ test('element claims overlap with their members and ancestors only', () => {
     expect(overlaps('sales.Order', 'sales.Order.status')).toBe(true);
     expect(overlaps('sales.Order.status', 'sales.Order')).toBe(true);
     expect(overlaps('sales.Order', 'sales.OrderFlow')).toBe(false);
-});
-
-test('remote repo folders stay as they are on their machine: location ids unchanged, POSIX folders by POSIX rules', async () => {
-    expect(repoFolder('ssh://box/srv/shop')).toBe('ssh://box/srv/shop');
-    expect(repoFolder('/srv/shop/../crm/')).toBe('/srv/crm');
-    expect(absolute('/srv/shop', 'sales.appling')).toBe('/srv/shop/sales.appling');
-    expect(absolute('/srv/shop', 'a\\b.appling')).toBe('/srv/shop/a/b.appling');
-    expect(absolute('ssh://box/srv/shop/', 'sales.appling')).toBe('ssh://box/srv/shop/sales.appling');
-    expect(absolute('ssh://box/srv/shop', '/srv/shop/x.appling')).toBe('/srv/shop/x.appling');
-    const store = new MemorySessionStore();
-    const { session } = await store.open({ repo: 'ssh://box/srv/shop' });
-    expect(session.repo).toBe('ssh://box/srv/shop');
-    expect((await store.claim(session.id, { files: ['sales.appling'] })).claims.files).toEqual(['ssh://box/srv/shop/sales.appling']);
-});
-
-test('a store takes back a session with its earlier token', async () => {
-    const first = new MemorySessionStore();
-    const { session, token } = await first.open({ name: 'Claude Code', repo: '/r/shop' });
-    await first.claim(session.id, { elements: ['sales.Order'] });
-    const saved = (await first.get(session.id))!;
-    const second = new MemorySessionStore();
-    const changes: number[] = [];
-    second.onChange(list => changes.push(list.length));
-    expect(second.adopt({ ...saved, label: 'Orders' }, token)).toMatchObject({ id: session.id, label: 'Orders', claims: { elements: ['sales.Order'] } });
-    expect(await second.authenticate(token)).toBe(session.id);
-    expect(changes).toEqual([1]);
-    await second.end(session.id);
-    expect(await second.authenticate(token)).toBeUndefined();
 });
 
 test('a session claims, sets label and status, messages and ends with its claims', async () => {

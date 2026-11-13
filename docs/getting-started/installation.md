@@ -1,9 +1,9 @@
 ---
 title: Installation
-description: Install the Appling CLI and Appling Desktop, connect an AI assistant and prepare the toolchains for code generation.
+description: Install the Appling CLI, connect an AI assistant and prepare the toolchains for code generation.
 ---
 
-Appling is a set of npm packages. You only install what you use: the CLI is enough to write and check models; Appling Desktop, the MCP server and the code generators come on top.
+Appling is a set of npm packages. You only install what you use: the CLI is enough to write and check models; the VS Code extension, the MCP server and the code generators come on top.
 
 ## Requirements
 
@@ -32,9 +32,9 @@ npx appling check
 
 Without a path it checks every `.appling` file below the current folder. See [the CLI reference](../tools/cli.md) for every command.
 
-## Appling Desktop
+## The inspector
 
-Appling Desktop is the app to explore and edit models: it opens your repos with the model canvas as the main area of each, next to a search, an inspector that edits, the source, a code view and terminals for agents. Download it for Linux, Windows or macOS from the releases of the repository; see [Desktop](../tools/desktop.md) for the install steps. To try the canvas first, open the [demo](https://appling.tools/ide/) in your browser.
+`npx appling inspect` opens the [inspector](../tools/inspect.md) of the current folder in your browser, to follow the model next to your AI coding tool. In VS Code the [Appling extension](../tools/vscode.md) shows it in a tab per project. To try the canvas first, open the [demo](https://appling.tools/inspect/) in your browser.
 
 ## AI assistants
 
@@ -47,7 +47,7 @@ npm install --save-dev @appling/ai
 claude mcp add appling -- npx appling-mcp .
 ```
 
-In [Appling Desktop](../tools/desktop.md), agents in the repo's terminals connect as [agent sessions](../tools/ai.md#agent-sessions) and show their work on the canvas. See [AI](../tools/ai.md).
+In [VS Code](../tools/vscode.md#agent-sessions), agents started from the extension connect as [agent sessions](../tools/ai.md#agent-sessions) and show their work on the canvas. See [AI](../tools/ai.md).
 
 ## Code generators
 

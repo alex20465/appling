@@ -5,7 +5,7 @@ import { buildWorkspace, examples } from '../../lang/test/workspace.js';
 import { layoutFlow, layoutTree } from '../src/layout.js';
 import { loads, sproutDelays } from '../src/canvas/plant.js';
 import {
-    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, implementationMarks, sessionMarks, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, requestKinds, modelPulse, policyText, relations, revealPath, search, trailOf, viewFor,
+    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, implementationMarks, sessionMarks, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, modelPulse, policyText, relations, revealPath, trailOf, viewFor,
     type Card, type Flow, type TreeNode
 } from '../src/views.js';
 
@@ -61,56 +61,12 @@ test('the tree starts folded at the seed and unfolds modules, then the lens decl
     expect(growTree(index, DOMAIN, open).children!.find(m => m.label === 'sales')!.fact).toBe('1 entity · 1 value · 1 enum');
 });
 
-test('requested elements hang as ghosts under the node they were asked for under, and count for its bud', async () => {
-    const index = await indexOf(examples());
-    const requests = [
-        { id: 'r1', name: 'Invoice', description: 'billed per order', parent: 'sales.Order' },
-        { id: 'r2', name: 'billing', description: 'a module for invoices' }
-    ];
-    const open = new Set(['~', '~/sales', '~/sales/#Entity', '~/sales/#Entity/sales.Order']);
-    const tree = growTree(index, DOMAIN, open, 'shop', undefined, requests);
-    expect(tree.count).toBe(3);
-    expect(tree.children!.at(-1)).toMatchObject({ id: '~/?r2', type: 'request', request: 'r2', label: 'billing' });
-    const order = tree.children![0].children![0].children![0];
-    expect(order.count).toBe(14);
-    expect(order.children!.at(-1)).toMatchObject({ id: '~/sales/#Entity/sales.Order/?r1', type: 'request', fact: 'billed per order' });
-});
-
-test('a request built on another request hangs under it, with the kind and layer asked for', async () => {
-    const index = await indexOf(examples());
-    const requests = [
-        { id: 'r1', name: 'Invoice', description: '', kind: 'Entity', parent: 'sales.Order' },
-        { id: 'r2', name: 'Bill', description: 'bills an invoice', kind: 'Action', parentRequest: 'r1' }
-    ];
-    const open = new Set(['~', '~/sales', '~/sales/#Entity', '~/sales/#Entity/sales.Order', '~/sales/#Entity/sales.Order/?r1']);
-    const order = growTree(index, DOMAIN, open, 'shop', undefined, requests).children![0].children![0].children![0];
-    const invoice = order.children!.at(-1)!;
-    expect(invoice).toMatchObject({ type: 'request', kind: 'Entity', layer: 'domain', count: 1 });
-    expect(invoice.children).toMatchObject([{ id: '~/sales/#Entity/sales.Order/?r1/?r2', type: 'request', kind: 'Action', layer: 'behavior' }]);
-    expect(growTree(index, DOMAIN, open, 'shop', undefined, requests.slice(1)).children!.find(m => m.type === 'request')).toBeUndefined();
-});
-
-test('an empty module and a module with requests show in every lens, so the person can build on them', async () => {
+test('an empty module shows in every lens', async () => {
     const index = await indexOf({ ...examples(), 'billing.appling': 'module billing {\n}\n' });
-    const requests = [{ id: 'r1', name: 'Invoice', description: '', kind: 'Entity', parent: 'billing' }, { id: 'r2', name: 'Hint', description: '', kind: 'Page', parent: 'crm' }];
     const open = new Set(['~', '~/billing']);
-    const behavior = growTree(index, { ...DOMAIN, lens: 'behavior' }, open, 'shop', undefined, requests);
-    expect(behavior.children!.map(m => m.label)).toEqual(expect.arrayContaining(['billing', 'crm']));
-    expect(behavior.children!.find(m => m.label === 'billing')).toMatchObject({ fact: 'empty', count: 1, children: [{ type: 'request', label: 'Invoice' }] });
-    expect(growTree(index, { ...DOMAIN, lens: 'behavior' }, open).children!.map(m => m.label)).toEqual(expect.arrayContaining(['billing']));
-    expect(growTree(index, { ...DOMAIN, lens: 'behavior' }, open).children!.map(m => m.label)).not.toContain('crm');
-});
-
-test('a new element may take a module in the model, any kind in a module, else a kind that may use the element', () => {
-    const node = (type: TreeNode['type'], kind?: string): TreeNode => ({ id: 'x', type, kind, label: 'x', fact: '', count: 0, relevance: 0 });
-    expect(requestKinds(node('seed'))).toEqual(['Module']);
-    expect(requestKinds(node('module'))).toEqual(expect.arrayContaining(['Entity', 'Enum', 'Action', 'Page', 'Module']));
-    expect(requestKinds(node('request', 'Module'))).toContain('Enum');
-    expect(requestKinds(node('element', 'Entity'))).toEqual(expect.arrayContaining(['Entity', 'Action', 'Query', 'Actor']));
-    expect(requestKinds(node('element', 'Entity'))).not.toContain('Interface');
-    expect(requestKinds(node('element', 'Entity'))).not.toContain('Enum');
-    expect(requestKinds(node('element', 'Action'))).not.toContain('Entity');
-    expect(requestKinds(node('request', 'Query'))).toEqual(['Query', 'Projection', 'External', 'UseCase', 'Interface', 'Page', 'Navigation', 'Flow', 'Messages', 'Scenario']);
+    const behavior = growTree(index, { ...DOMAIN, lens: 'behavior' }, open);
+    expect(behavior.children!.find(m => m.label === 'billing')).toMatchObject({ fact: 'empty', count: 0 });
+    expect(behavior.children!.map(m => m.label)).not.toContain('crm');
 });
 
 test('a trail draws only the elements shown one after another, each unfolded where the tree already has it', async () => {
@@ -190,17 +146,6 @@ test('an action summary says what it takes, requires and changes', async () => {
         consistency: undefined
     });
     expect(actionSummary(index, 'sales.Cancel').inputs).toEqual(['reason: String?']);
-});
-
-test('search finds elements of the chosen layers by name or kind', async () => {
-    const index = await indexOf(examples());
-    const all = ['domain', 'behavior', 'application', 'interface', 'experience', 'cross'];
-    expect(search(index, 'placeorder', all).map(n => n.qn)).toEqual([
-        'sales.PlaceOrder', 'sales.PlaceOrder.effect[set placed_at]', 'sales.PlaceOrder.EmptyOrder', 'sales.PlaceOrder.policy[]'
-    ]);
-    expect(search(index, 'machine', all).map(n => n.qn)).toEqual(['sales.OrderFlow']);
-    expect(search(index, 'order', ['experience']).map(n => n.qn)).toEqual(['sales.Orders', 'sales.OrderDetail']);
-    expect(search(index, '', ['domain']).map(n => n.qn)).toEqual(['crm.Account', 'sales.OrderStatus', 'sales.Line', 'sales.Order']);
 });
 
 test('relations lift members to declarations and group them by layer', async () => {

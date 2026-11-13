@@ -3,7 +3,7 @@ title: Semantic graph
 description: "The JSON that appling graph prints: nodes, edges and module dependencies, with every field, node kind and edge kind."
 ---
 
-The semantic graph is the model as data. Every element becomes a node identified by its qualified name, every reference becomes an edge, and module dependencies are computed from the edges. The IDE draws it, the AI tools query it, code generation extensions read it and releases store it. `appling graph` prints it as JSON; in code, `buildGraph` from `@appling/model` builds it (see [API](api.md)).
+The semantic graph is the model as data. Every element becomes a node identified by its qualified name, every reference becomes an edge, and module dependencies are computed from the edges. The inspector draws it, the AI tools query it, code generation extensions read it and releases store it. `appling graph` prints it as JSON; in code, `buildGraph` from `@appling/model` builds it (see [API](api.md)).
 
 ## Example
 
@@ -188,7 +188,7 @@ Both hold the element's own properties, without its name and without the element
 
 | | `props` | `data` |
 |---|---|---|
-| Purpose | Display, such as the IDE inspector | Tools, such as code generation extensions and AI |
+| Purpose | Display, such as the inspector | Tools, such as code generation extensions and AI |
 | Scalars (`label`, `modifiers`, `kind`, `verb`, `path`, the [`does`](../language/descriptions.md) text, and `link: true` on a [link entity](../language/domain.md#link-entities)) | As they are | As they are |
 | Nested parts that are not elements (types, expressions, preconditions, steps, sorts) | Canonical source text, such as `"total >= 0"` | Objects with `$type` and their own properties |
 | References | Left out, they become edges | The qualified name of the target, or `null` when it does not resolve |

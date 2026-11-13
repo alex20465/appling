@@ -1,6 +1,6 @@
 // Writes the extension's files to `out/`, which `vsce package` packs (see .vscodeignore): the extension and the language
-// server (CommonJS, as VS Code loads extensions), the IDE server each project runs with its generation worker, client
-// and the AI package's skills and language pages (ESM under `out/ide/`, at the paths `@appling/ide` reads them from),
+// server (CommonJS, as VS Code loads extensions), the inspect server each project runs with its client and the AI
+// package's skills and language pages (ESM under `out/inspect/`, at the paths `@appling/inspect` reads them from),
 // the `appling` command line, the command hook of agent sessions and the Appling icon. Run after `pnpm build` of the
 // upstream packages.
 import { build } from 'esbuild';
@@ -29,27 +29,26 @@ await build({
 cpSync(join(packages, 'lang/src/syntaxes/appling.tmLanguage.json'), join(out, 'appling.tmLanguage.json'));
 for (const dir of ['skills', 'language']) cpSync(join(packages, 'ai', dir), join(out, dir), { recursive: true });
 cpSync(join(packages, 'ai/out/agents/hook.cjs'), join(out, 'hook.cjs'));
-cpSync(join(packages, 'ide/public/appling-icon.svg'), join(out, 'appling-icon.svg'));
+cpSync(join(packages, 'inspect/public/appling-icon.svg'), join(out, 'appling-icon.svg'));
 
 // ESM bundles of CommonJS dependencies still call require and read __dirname.
 const banner = [
     "import { createRequire as __appling_createRequire } from 'node:module';",
     "import { fileURLToPath as __appling_fileURLToPath } from 'node:url';",
     "import { dirname as __appling_dirname } from 'node:path';",
-    'const require = __appling_createRequire(import.meta.url);',
-    'const __filename = __appling_fileURLToPath(import.meta.url);',
-    'const __dirname = __appling_dirname(__filename);'
+    // var: a bundled package may declare these itself (`open` has its own __dirname)
+    'var require = __appling_createRequire(import.meta.url);',
+    'var __filename = __appling_fileURLToPath(import.meta.url);',
+    'var __dirname = __appling_dirname(__filename);'
 ].join('\n');
-const ide = join(out, 'ide');
-for (const file of ['main.js', 'generation-worker.js']) {
-    await build({
-        entryPoints: [join(packages, 'ide/out/server', file)], outfile: join(ide, 'out/server', file), bundle: true, platform: 'node', format: 'esm', target: 'node20',
-        banner: { js: banner }, logLevel: 'warning', legalComments: 'none'
-    });
-}
-cpSync(join(packages, 'ide/dist/client'), join(ide, 'dist/client'), { recursive: true });
-for (const dir of ['skills', 'language']) cpSync(join(packages, 'ai', dir), join(ide, 'out', dir), { recursive: true });
-writeFileSync(join(ide, 'package.json'), `${JSON.stringify({ type: 'module' })}\n`);
+const inspect = join(out, 'inspect');
+await build({
+    entryPoints: [join(packages, 'inspect/out/server/main.js')], outfile: join(inspect, 'out/server/main.js'), bundle: true, platform: 'node', format: 'esm', target: 'node20',
+    banner: { js: banner }, logLevel: 'warning', legalComments: 'none'
+});
+cpSync(join(packages, 'inspect/dist/client'), join(inspect, 'dist/client'), { recursive: true });
+for (const dir of ['skills', 'language']) cpSync(join(packages, 'ai', dir), join(inspect, 'out', dir), { recursive: true });
+writeFileSync(join(inspect, 'package.json'), `${JSON.stringify({ type: 'module' })}\n`);
 // the `appling` command line that Initialize Appling runs (`appling init`)
 await build({
     entryPoints: [join(packages, 'cli/out/main.js')], outfile: join(out, 'cli/main.js'), bundle: true, platform: 'node', format: 'esm', target: 'node20',

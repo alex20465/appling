@@ -1,6 +1,6 @@
 ---
 title: Your first model
-description: Write a small shop model step by step, check it, format it, look at its graph and open it in Appling Desktop.
+description: Write a small shop model step by step, check it, format it, look at its graph and open it in the inspector.
 ---
 
 This tutorial builds a small shop: products, orders, a way to place an order and an API that lists placed orders. It touches four of the five layers and every CLI command you need day to day. You need [the CLI](installation.md#the-cli).
@@ -129,7 +129,7 @@ Write the canonical form back to the file. Running it twice changes nothing:
 npx appling fmt models
 ```
 
-Print the semantic graph as JSON, the same graph the IDE, the AI and the generators read:
+Print the semantic graph as JSON, the same graph the inspector, the AI and the generators read:
 
 ```sh
 npx appling graph models
@@ -137,15 +137,15 @@ npx appling graph models
 
 Each element is a node with its qualified name, such as `shop.Order.status`, and each reference an edge. See [the semantic graph](../reference/graph.md).
 
-## 6. Open it in Appling Desktop
+## 6. Open it in the inspector
 
-Open the project folder in [Appling Desktop](../tools/desktop.md), from its launcher or from a terminal:
+Open the project folder in the [inspector](../tools/inspect.md), in your browser:
 
 ```sh
-./Appling-0.1.0-linux-x86_64.AppImage .
+npx appling inspect
 ```
 
-The model canvas opens as the main area of the repo. Click a module to unfold its declarations, search for `PlaceOrder`, and rename a field in the inspector: every reference follows. **Source** opens the text next to the canvas, and the cursor in the text selects the element on the canvas. See [the repo view](../tools/ide.md). To try it without installing anything, open the [demo](https://appling.tools/ide/).
+The model canvas opens. Click a module to unfold its declarations and select `PlaceOrder`: the inspector shows what it does, who may trigger it and where it is used. In VS Code the [Appling extension](../tools/vscode.md) opens the same canvas in a tab, and the cursor in a `.appling` file selects the element there. To try it without installing anything, open the [demo](https://appling.tools/inspect/).
 
 ## Next steps
 

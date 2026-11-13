@@ -1,7 +1,7 @@
 {
   "name": "@appling/viz",
   "version": "0.1.1",
-  "description": "Appling visualization: the model views and SVG canvases of the Appling Desktop repo view, and the messages of the visual tools",
+  "description": "Appling visualization: the model views and SVG canvases of the Appling inspector, and the messages of the visual tools",
   "homepage": "https://www.appling.tools/docs/",
   "repository": {
     "type": "git",
@@ -35,7 +35,6 @@
     "build": "tsc && cp src/canvas/canvas.css out/canvas/"
   },
   "dependencies": {
-    "@appling/lang": "workspace:*",
     "@appling/model": "workspace:*"
   },
   "peerDependencies": {

@@ -26,7 +26,7 @@ module sales {
 }
 ```
 
-All files you pass to `appling check` (or that the IDE opens) load as one workspace, so modules in different files can reference each other through their exports. See [modules](modules.md).
+All files you pass to `appling check` (or that the inspector opens) load as one workspace, so modules in different files can reference each other through their exports. See [modules](modules.md).
 
 Inside a module, declarations appear in any order. A reference may point to a declaration that comes later in the file.
 
@@ -146,7 +146,7 @@ Every element is identified by its qualified name: the module path followed by t
 | Declared error | `sales.PlaceOrder.EmptyOrder` |
 | External operation | `sales.Payments.Charge` |
 
-There are no separate ids. Tools such as the [graph](../reference/graph.md), the [IDE](../tools/ide.md) and the [edit operations](../reference/edit-operations.md) address elements by these names, and renames are recorded as [migration steps](migrations.md) so tools can follow an element to its new name.
+There are no separate ids. Tools such as the [graph](../reference/graph.md), the [inspector](../tools/inspect.md) and the [edit operations](../reference/edit-operations.md) address elements by these names, and renames are recorded as [migration steps](migrations.md) so tools can follow an element to its new name.
 
 ### Content keys of unnamed elements
 

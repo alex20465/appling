@@ -1,6 +1,6 @@
 ---
 title: AI tools
-description: Give AI assistants validated access to your model through the MCP server, run them as agent sessions in Appling Desktop that show their work on the canvas, and finish generated projects with the registry skill.
+description: Give AI assistants validated access to your model through the MCP server, run them as agent sessions that show their work on the canvas, and finish generated projects with the registry skill.
 ---
 
 `@appling/ai` connects AI assistants to an Appling workspace. It has these parts:
@@ -8,10 +8,10 @@ description: Give AI assistants validated access to your model through the MCP s
 - an [MCP server](#mcp-server), `appling-mcp`, with tools to query the model, edit it through validated operations and work through a generated project's task registry,
 - the [appling skill and rules](#appling-skill-and-rules), which make a coding agent design and change the application through the model,
 - the [registry skill](#registry-skill), instructions for an agent that finishes a generated project one task at a time,
-- the [visual tools](#visual-tools), with which an agent in [Appling Desktop](desktop.md) shows you parts of the model on the repo's canvas and asks you to accept its changes,
-- [agent sessions](#agent-sessions), which let several agents work side by side in Desktop.
+- the [visual tools](#visual-tools), with which an agent in an agent session shows you parts of the model on the [inspector](inspect.md)'s canvas,
+- [agent sessions](#agent-sessions), which let several agents work side by side.
 
-Appling has no built in chat: AI work runs through coding agents such as Claude Code, in a terminal of Desktop or anywhere else, connected to the MCP server.
+Appling has no built in chat: AI work runs through coding agents such as Claude Code, in a terminal of VS Code or anywhere else, connected to the MCP server.
 
 An assistant never edits `.appling` text directly. It changes the model with [edit operations](../reference/edit-operations.md), and every operation is validated: an edit that does not parse or adds an error is rejected with the reasons, so the model stays valid.
 
@@ -35,7 +35,7 @@ Over stdio, the server serves one client on stdin and stdout. Over HTTP, it list
 
 The server sends Claude instructions that the model is the source of truth for business logic: questions about rules, states, actions, permissions and flows go to `graph_query`, `read_source` and `simulate` first, and the application code only for how something is implemented or what the model does not cover.
 
-The server reads the files on every tool call, so it always sees the current text, including changes from Desktop or your editor. Edits it makes are written to the files at once.
+The server reads the files on every tool call, so it always sees the current text, including changes from your editor. Edits it makes are written to the files at once.
 
 ### Claude Code
 
@@ -71,7 +71,7 @@ Use an absolute folder here, since the client decides the working directory.
 
 ## Tools
 
-The server registers twelve tools, and six more [visual tools](#visual-tools) for agent sessions over the IDE server's `/mcp` in Desktop. Each returns its result as JSON text.
+The server registers thirteen tools, and five more [visual tools](#visual-tools) for agent sessions over the inspector server's `/mcp`. Each returns its result as JSON text.
 
 ### Model tools
 
@@ -122,20 +122,9 @@ These three tools work on the [task registry](../codegen/registry.md) (`.appling
 | `registry_update` | `qn` (string), `status` (`done`, `partial` or `todo`), `note?` (string), `target?` | The updated entry. It counts one attempt; `done` clears the missing work; the note is appended; an entry still open after its third attempt gets the note `stopped after 3 attempts` |
 | `run_tests` | `target?` | `{ out, passed, output }`: runs the test command the extension recorded in the registry (for example `uv run python manage.py test`) in the project, with the last 4000 characters of its output |
 
-In an [agent session](#agent-sessions), `registry_next` passes over the entries whose element another session of the workspace claimed (or a parent or member of it), claims the element of the entry it returns for the session and adds `claimed: "<qn>"`; the IDE's [Code tab](implementation.md#registry-tasks-and-agent-sessions) shows the session on the task. With nothing left it returns `{ done: "No open tasks that other sessions have not claimed." }`. `registry_update` releases the claim when the entry is `done` or out of attempts.
+In an [agent session](#agent-sessions), `registry_next` passes over the entries whose element another session of the workspace claimed (or a parent or member of it), claims the element of the entry it returns for the session and adds `claimed: "<qn>"`; the inspector's [task board](inspect.md#the-task-board) shows the task in progress with the session. With nothing left it returns `{ done: "No open tasks that other sessions have not claimed." }`. `registry_update` releases the claim when the entry is `done` or out of attempts.
 
 The entry from `registry_next` carries everything an agent needs: the element's qualified name, kind and layer, the steps and files that produced it, and for each missing task its description with the element's properties and related elements.
-
-### Request tools
-
-These two tools work on the elements the person asked for on the [canvas](ide.md#the-right-click-menu) by kind, name and description, kept in `.appling/requests.json` in the workspace folder. The canvas draws each as a requested ghost until it is done.
-
-| Tool | Input | Returns |
-|---|---|---|
-| `request_next` | none | `{ id, name, description, kind?, parent?, at, taken, takenBy? }`: the oldest request no agent took yet, else the oldest one this session took, else the oldest one, marked taken now by the session; `parent` is the element or module it was asked for under, none for a top level module. A request built on another request waits until that one is done. Or `{ done: "No open requests." }` |
-| `request_done` | `id` (string), `qn?` (string): the element that now models it | `{ ok: true, open, dropped? }` with the count of requests left. With `qn` the model must have that element, else `{ error: "The model has no <qn> yet." }`, and the requests built on it go under that element; without `qn` the request is dropped with the requests built on it, named in `dropped` |
-
-The agent models the element of the kind asked for (or decides one when a request has none) under its parent, writes it with `edit` or `write_model_file`, then calls `request_done`.
 
 ### Reference tools
 
@@ -157,7 +146,7 @@ The package ships the instructions that make a coding agent work model first:
 
 | File | Loaded | Says |
 |---|---|---|
-| `rules/appling.md` | Always, from the agent's instructions | The model is the source of truth; every requirement goes through the model first; a design is a model, not code; the model changes only through the MCP tools; while only the model exists, changes apply without asking; once the code exists, model and code change together in both directions, through `appling generate --migrate` or `--sync` where generation covers the change and by hand otherwise; in an agent session of Desktop the work shows on the canvas |
+| `rules/appling.md` | Always, from the agent's instructions | The model is the source of truth; every requirement goes through the model first; a design is a model, not code; the model changes only through the MCP tools; while only the model exists, changes apply without asking; once the code exists, model and code change together in both directions, through `appling generate --migrate` or `--sync` where generation covers the change and by hand otherwise; in an agent session the work shows on the canvas |
 | `skills/appling/SKILL.md` | When a request is about what the application does | How to find out where the project stands, learn the language with `language_reference`, design a new application layer by layer, verify it with `simulate`, generate and release it, carry a change through model and code, and explain the application from the model |
 
 Skills load only when the agent decides a request needs them; the rules are always in context and tell the agent to load the skill. [`appling init`](../getting-started/new-project.md) wires both into Claude Code, Codex, OpenCode, Gemini CLI and Antigravity CLI by reference into `node_modules/@appling/ai`, so updating the package updates them. To wire them by hand in Claude Code, import the rules in `CLAUDE.md` and link the skill:
@@ -196,21 +185,21 @@ Then ask Claude Code to finish the generated project; the skill's description ma
 
 ## Visual tools
 
-An agent in an [agent session](#agent-sessions) of [Appling Desktop](desktop.md) shows you the model on the repo's canvas while you talk to it in the terminal. Ask for it in words, such as "show me the order lifecycle" or "draw what PlaceOrder does", or ask how a part of the application works, such as "how does observability work": the agent finds the elements with the model tools, calls `visualize` and explains them with `visual_bubble`. The stdio and HTTP servers of `appling-mcp` have no visual tools; they exist only over the IDE server's `/mcp`, where the canvas is.
+An agent in an [agent session](#agent-sessions) shows you the model on the [inspector](inspect.md)'s canvas while you talk to it in the terminal. Ask for it in words, such as "show me the order lifecycle" or "draw what PlaceOrder does", or ask how a part of the application works, such as "how does observability work": the agent finds the elements with the model tools, calls `visualize` and explains them with `visual_bubble`. The stdio and HTTP servers of `appling-mcp` have no visual tools; they exist only over the inspector server's `/mcp`, where the canvas is.
 
-The canvas never moves on its own: a session's view waits as a chip at the top right of the canvas, under the session's name and colour, until you open it. Then it follows each new view and bubble of that session; **Back to the model** returns to your own tree. See [Agent views and proposals](ide.md#agent-views-and-proposals).
+The canvas never moves on its own: a session's view waits as a chip at the top right of the canvas, under the session's name and colour, until you open it. Then it follows each new view and bubble of that session; **Back to the model** returns to your own tree. See [Agent views](inspect.md#agent-views).
 
 ### Views
 
 | View | Draws | `focus` takes |
 |---|---|---|
-| `node` | The [model tree](ide.md#the-model-canvas) with only the focused declarations or modules: the trail from the seed through the module to each one, unfolded to what uses it. Its tabs switch the lens | Any declaration or module |
+| `node` | The [model tree](inspect.md#the-model-canvas) with only the focused declarations or modules: the trail from the seed through the module to each one, unfolded to what uses it. Its tabs switch the lens | Any declaration or module |
 | `machine` | A flowchart: the states of the machine's field type as boxes, the initial one highlighted and the final ones double framed. The transitions stay hidden until you click a state; then its arrows show where it can go, one per transition, labelled with the action or event that drives it, its guard and the jobs that run it. Click the state again to hide them | Machines |
 | `action` | One card: the states it moves between, whether each actor may run it (`yes`, `no` or `depends` on the data, from the [simulator](simulator.md)), its inputs, preconditions, changes, errors and the declarations that use it | Actions |
 | `usecase` | A flowchart: the use case with its inputs, then its steps in order, with each error handler and timeout branching off its step to the call it makes | Use cases |
 | `event` | One card: the fields, the actions that emit it, the transitions it triggers and the use cases that await it | Events |
 
-Arrows run in straight segments with right angle corners. Click a node, an arrow label, a card title or a row to select the element behind it; the inspector shows it. The view follows the files: an edit from the agent, the inspector or your editor redraws it.
+Arrows run in straight segments with right angle corners. Click a node, an arrow label, a card title or a row to select the element behind it; the inspector shows it. The view follows the files: an edit from the agent or your editor redraws it.
 
 ### One node at a time
 
@@ -224,32 +213,30 @@ The canvas shows one bubble at a time, so none covers another. It grows as large
 
 ### Talk about what you see
 
-When you say "this" or "the selected one" in the terminal, the agent reads your selection with `visual_selection`: the element selected in the repo view and, while you look at it, the session's view. To ask a session something about what it shows, open its view and type the question in the field under the view's bar. The question reaches the session's inbox as a message from User; the agent sees that a message waits in the result of its next tool call, reads it with `session_inbox` and answers with `visual_reply`, which shows the answer with the session's view. An agent that waits at its prompt makes no tool call, so tell it in its terminal to read its inbox, or ask it there.
+When you say "this" or "the selected one" in the terminal, the agent reads your selection with `visual_selection`: the element selected in the inspector and, while you look at it, the session's view. To ask a session something about what it shows, open its view and type the question in the field under the view's bar. The question reaches the session's inbox as a message from User; the agent sees that a message waits in the result of its next tool call, reads it with `session_inbox` and answers with `visual_reply`, which shows the answer with the session's view. An agent that waits at its prompt makes no tool call, so tell it in its terminal to read its inbox, or ask it there.
 
-### Progress, changes and review
+### Progress and changes
 
 - **Progress.** The agent reports each step of a longer task with `visual_status`, such as "Modeling the tasks module" or "Implementing registry task 3 of 12", with its progress when the step has a count. The step shows with the session's view.
-- **Changes.** Every model change, by an agent or anything else that writes the files, is marked live on the canvas and listed in the Changes tab with the session that wrote it. See [Live changes](ide.md#live-changes).
-- **Review.** The agent changes the model with `edit` and the canvas marks the change as it happens. When you ask to review a change before it is written, it proposes it with `propose_edits`. The proposal shows at the top of the Changes tab with its summary, the changed lines per file and the elements added, removed and changed. **Accept** writes the operations to the files; **Reject** leaves them unchanged and returns your optional comment to the agent. When the session ends, its waiting proposals are rejected.
+- **Changes.** The agent changes the model with `edit`. Every model change, by an agent or anything else that writes the files, is marked live on the canvas against git `HEAD` (followed after each commit, checkout or reset; outside git or before the first commit, against the files on disk at server start) with the session that wrote it. See [Live changes](inspect.md#live-changes).
 
 ### Visual tool reference
 
 | Tool | Input | Returns |
 |---|---|---|
 | `visualize` | `view`: `node`, `machine`, `action`, `usecase` or `event`; `focus`: qualified names; `title?`, `note?` | `{ shown: true }`, or `{ error }` naming the elements the view cannot draw |
-| `visual_bubble` | `target`: an element or member; `text`; `code?`; `file?` (relative to the model folder) and `line?` | `{ placed: true }`, or `{ placed: false, reason }` for an unknown element, a missing file, a line without its file or no open repo view |
-| `visual_selection` | none | `{ open, qn?, view? }`: whether a repo view is open, the selected element and the session's view while the person looks at it |
-| `visual_reply` | `text` | `{ sent: true }`, or `{ sent: false, reason }` when no repo view is open |
+| `visual_bubble` | `target`: an element or member; `text`; `code?`; `file?` (relative to the model folder) and `line?` | `{ placed: true }`, or `{ placed: false, reason }` for an unknown element, a missing file, a line without its file or no open inspector |
+| `visual_selection` | none | `{ open, qn?, view? }`: whether an inspector is open, the selected element and the session's view while the person looks at it |
+| `visual_reply` | `text` | `{ sent: true }`, or `{ sent: false, reason }` when no inspector is open |
 | `visual_status` | `text`: the current step; `done?`, `total?`: the progress | `{ shown: true }` |
-| `propose_edits` | `operations`: [edit operations](../reference/edit-operations.md); `summary` | After your decision: `{ accepted: true, ok: true, changed }`, `{ accepted: false, comment? }`, or `{ ok: false, operation, errors }` when an operation is invalid before review |
 
 ## Agent sessions
 
-Several coding agents can work on one repo, or on the repos of one workspace, at the same time. Each one runs in an agent session: a terminal of [Appling Desktop](desktop.md) with an identity that its MCP connection carries. Through the session tools an agent labels its session with what it is about, keeps its status current, claims the elements and files it works on, sees the other sessions with their claims and messages them. An edit that touches another session's claim still goes through but comes back with a warning.
+Several coding agents can work on one repo, or on the repos of one workspace, at the same time. Each one runs in an agent session: a terminal with an identity that its MCP connection carries. Through the session tools an agent labels its session with what it is about, keeps its status current, claims the elements and files it works on, sees the other sessions with their claims and messages them. An edit that touches another session's claim still goes through but comes back with a warning.
 
 ### Connect an agent
 
-The IDE server that Desktop runs for every repo (see [Repo view](ide.md)) serves the repo's MCP server over Streamable HTTP at `http://127.0.0.1:<port>/mcp`. Every request needs the bearer token of a session; a request without a known token gets `401`. Desktop opens a session for every agent it starts and hands the agent the URL and the token. `POST /api/sessions` on that server opens one for an agent you start yourself:
+The inspector server of every repo (see [Inspect](inspect.md)) serves the repo's MCP server over Streamable HTTP at `http://127.0.0.1:<port>/mcp`. Every request needs the bearer token of a session; a request without a known token gets `401`. The [VS Code extension](vscode.md#agent-sessions) opens a session for every agent it starts and hands the agent the URL and the token. `POST /api/sessions` on that server opens one for an agent you start yourself:
 
 ```sh
 curl -s -X POST http://127.0.0.1:<port>/api/sessions -d '{"name": "Claude Code"}'
@@ -272,24 +259,24 @@ The server instructions tell the agent to set the label after reading the first 
 | `sessions_list` | none | `{ self, others }`: the sessions of the workspace with label, status, note, repo, claims and last tool call |
 | `session_message` | `to`: a session id or label; `text` | `{ sent: true, to }`, or `{ error }` for an unknown or ambiguous session |
 | `session_inbox` | none | `{ messages }`: the unread messages of other sessions and of the person (`fromLabel` User: questions typed in the session's view), each with `from`, `fromLabel`, `text` and `at`; reading marks them read |
-| `ide_context` | none | What the IDE shows: the session's `tab`, the `repo`, the `activeRepo` and `workspace`, the open `tabs`, the canvas `view`, the `selection` and the open `file` |
-| `ide_act` | `action`: `focus`, `open`, `highlight` or `reveal`; `elements?`; `file?`, `line?` | `{ ok: true }`, or `{ ok: false, reason }`. `focus` shows the session's tab (Desktop only), `open` and `reveal` select an element or open a file, `highlight` marks elements on the canvas in the session's colour (an empty list clears them) |
+| `ide_context` | none | What the inspector shows: the session's `tab`, the `repo`, the `activeRepo` and `workspace`, the open `tabs`, the canvas `view`, the `selection` and the agent view it shows (`watching`) |
+| `ide_act` | `action`: `focus`, `open`, `highlight` or `reveal`; `elements?`; `file?`, `line?` | `{ ok: true }`, or `{ ok: false, reason }`. `focus` shows the session's terminal (VS Code only), `open` and `reveal` select a node on the canvas (or open a file in the host's editor), `highlight` marks elements on the canvas in the session's colour (an empty list clears them) |
 
 A claim of an element covers its members, and a claim of a member touches its element: `sales.Order` and `sales.Order.status` overlap, `sales.Order` and `sales.OrderFlow` do not. Element claims count within one repo, file claims across the workspace.
 
-When another session claimed what a tool call touches, `edit`, `propose_edits` and `write_model_file` return `conflicts` (`session`, `label`, `claimed`, `touched`) and a `warning`. The edit target, the parent of an `add`, and every file the edit changed count. Every tool result also carries `messages` while messages wait unread.
+When another session claimed what a tool call touches, `edit` and `write_model_file` return `conflicts` (`session`, `label`, `claimed`, `touched`) and a `warning`. The edit target, the parent of an `add`, and every file the edit changed count. Every tool result also carries `messages` while messages wait unread.
 
 ### Visual tools on the canvas
 
-Over the IDE server's `/mcp`, every session also gets the [visual tools](#visual-tools), which draw on the repo's canvas. `propose_edits` waits until the person accepts or rejects the proposal in the app.
+Over the inspector server's `/mcp`, every session also gets the [visual tools](#visual-tools), which draw on the repo's canvas.
 
-Every file a session's tool call writes is attributed to the session in the IDE's [live changes](ide.md#live-changes), which mark every change to the model, by a session or by anything else that writes the files.
+Every file a session's tool call writes is attributed to the session in the inspector's [live changes](inspect.md#live-changes), which mark every change to the model, by a session or by anything else that writes the files.
 
 ### Where sessions live
 
-The sessions sit in a session store that the IDE servers of a workspace share. Appling Desktop holds one store in its main process and serves it to every repo's IDE server child over the child's IPC channel (`--shared-sessions`), so sessions of different repos see each other and keep their claims while a server restarts. The [VS Code extension](vscode.md#agent-sessions) does the same for the projects of a VS Code workspace and starts the agents in VS Code terminals, with the same presets and wiring (`@appling/ai/agents`). A session belongs to a workspace and works in one repo; it sees the sessions of its workspace, or of its repo when it has none. An IDE server started on its own keeps a store of its own.
+The sessions sit in a session store that the inspector servers of a workspace share. The [VS Code extension](vscode.md#agent-sessions) holds one store and serves it to every project's inspector server child over the child's IPC channel (`--shared-sessions`), so sessions of different projects see each other and keep their claims while a server restarts, and starts the agents in VS Code terminals with the presets and wiring of `@appling/ai/agents`. A session belongs to a workspace and works in one repo; it sees the sessions of its workspace, or of its repo when it has none. An inspector server started on its own keeps a store of its own.
 
-In Desktop, agents reach the MCP server through one local endpoint of the app (`http://127.0.0.1:<port>/mcp`, which forwards to the session's repo server) and report hook events to it (`/hooks/<event>`), both with the session's token. Its port stays the same between starts and the store takes the sessions back with their tokens (`MemorySessionStore.adopt`), so an agent that kept running while the app restarted goes on with the same session. How Desktop starts and wires each agent is in [Appling Desktop](desktop.md#agent-sessions).
+In VS Code, agents reach the MCP server through one local endpoint of the extension (`http://127.0.0.1:<port>/mcp`, which forwards to the session's project server) and report hook events to it (`/hooks/<event>`), both with the session's token. How the extension starts and wires each agent is in [VS Code](vscode.md#agent-sessions).
 
-The IDE server pushes every change of the sessions over its `/events` websocket as `{ type: "sessions", sessions }`, and every `ide_act` except `focus` as `{ type: "act", session, color, action, ... }`. The IDE client reports what it shows (`{ type: "context", selection, view, file, watching }`) on the same socket, which `ide_context` returns, and draws the claimed and highlighted elements of its repo's sessions with a ring in the session's colour.
+The inspector server pushes every change of the sessions over its `/events` websocket as `{ type: "sessions", sessions }`, and every `ide_act` except `focus` as `{ type: "act", session, color, action, ... }`. The inspector client reports what it shows (`{ type: "context", selection, view, watching }`) on the same socket, which `ide_context` returns, and draws the claimed and highlighted elements of its repo's sessions with a ring in the session's colour.
 

@@ -9,7 +9,7 @@ export interface Placed {
 }
 
 /** The width each node type takes in a row: a circle with its labels on the right. */
-const SLOT: Record<TreeNode['type'], number> = { seed: 220, module: 260, group: 210, element: 250, request: 250 };
+const SLOT: Record<TreeNode['type'], number> = { seed: 220, module: 260, group: 210, element: 250 };
 /** From a parent to the first row of its children. */
 const LEVEL = 140;
 /** Between the rows of a wrapped group. */

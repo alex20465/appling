@@ -1,12 +1,10 @@
 import { expect, test } from 'vitest';
 import { clientUrl, panelAction, panelHtml, THEME_TOKENS } from '../src/frame.js';
 
-test('requests of the IDE client stay inside the project', () => {
+test('requests of the inspector client stay inside the project', () => {
     expect(panelAction('/w/shop', { type: 'openSource', uri: 'file:///w/shop/m/sales.appling', start: 3, end: 9 })).toEqual({ type: 'source', path: '/w/shop/m/sales.appling', start: 3, end: 9 });
     expect(panelAction('/w/shop', { type: 'openSource', uri: 'file:///etc/passwd.appling', start: 0, end: 0 })).toBeUndefined();
     expect(panelAction('/w/shop', { type: 'openSource', uri: 'file:///w/shop/notes.txt', start: 0, end: 0 })).toBeUndefined();
-    expect(panelAction('/w/shop', { type: 'openCode', path: 'build/shop/models.py', start: 4, end: 8 })).toEqual({ type: 'open', path: '/w/shop/build/shop/models.py', start: 4, end: 8 });
-    expect(panelAction('/w/shop', { type: 'openCode', path: '../../etc/passwd', start: 1 })).toBeUndefined();
     expect(panelAction('/w/shop', { type: 'openTextDiff', path: 'sales.appling', rev: 'HEAD~1', line: 2 })).toEqual({ type: 'diff', path: '/w/shop/sales.appling', before: '/w/shop/sales.appling', rev: 'HEAD~1', line: 2 });
     expect(panelAction('/w/shop', { type: 'openTextDiff', path: 'sales.appling', rev: '--output=x' })).toBeUndefined();
     expect(panelAction('/w/shop', { type: 'focusSession', session: 's1' })).toEqual({ type: 'focusSession', session: 's1' });
@@ -22,22 +20,16 @@ test('the tab embeds the client of the server it reaches, and allows only that f
     expect(html).toContain('if (event.origin === origin) vscode.postMessage(event.data);');
 });
 
-test('the client hands its side panels to the extension: their state, which one to show, and errors', () => {
+test('the client hands its side panels to the extension: their state and which one to show, nothing that writes', () => {
     const state = { snapshot: { graph: { nodes: [], edges: [] } } };
     expect(panelAction('/repo', { type: 'panels', state })).toEqual({ type: 'panels', state });
     expect(panelAction('/repo', { type: 'panels', state: 'x' })).toBeUndefined();
     expect(panelAction('/repo', { type: 'showPanel', name: 'changes' })).toEqual({ type: 'showPanel', name: 'changes' });
     expect(panelAction('/repo', { type: 'showPanel', name: 'workbench.action.quit' })).toBeUndefined();
-    expect(panelAction('/repo', { type: 'error', message: 'No targets' })).toEqual({ type: 'error', message: 'No targets' });
-    expect(panelAction('/repo', { type: 'chooseStack', selection: { mode: 'elements', elements: ['sales.Order'] } })).toEqual({ type: 'chooseStack', selection: { mode: 'elements', elements: ['sales.Order'] } });
-    expect(panelAction('/repo', { type: 'chooseStack', selection: { mode: 'elements', elements: [1] } })).toBeUndefined();
-    // the canvas's right click menu edits through VS Code's documents
-    expect(panelAction('/repo', { type: 'edit', operation: { op: 'remove', target: 'sales.Order' } })).toEqual({ type: 'edit', operation: { op: 'remove', target: 'sales.Order' } });
-    expect(panelAction('/repo', { type: 'edit', operation: { op: 'rename', target: 'sales.Order' } })).toBeUndefined();
-    expect(panelAction('/repo', { type: 'edit', operation: { op: 'drop', target: 'sales.Order' } })).toBeUndefined();
+    for (const type of ['error', 'chooseStack', 'edit', 'openCode']) expect(panelAction('/repo', { type, message: 'x', operation: { op: 'remove', target: 'sales.Order' } })).toBeUndefined();
 });
 
-test("the tab sends VS Code's theme to the IDE: its colours and fonts for the IDE's theme tokens", () => {
+test("the tab sends VS Code's theme to the inspector: its colours and fonts for its theme tokens", () => {
     const html = panelHtml('http://127.0.0.1:4410/?host=frame', 'nonce');
     expect(html).toContain(JSON.stringify(THEME_TOKENS));
     expect(html).toContain('vscode-light');

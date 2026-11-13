@@ -3,7 +3,7 @@ title: Relevance
 description: How much a declaration matters to what the application does, declared as a level and refined by the graph.
 ---
 
-Not every declaration matters equally. In a quoting application the `Quote` entity and its `Accept` action are what the business runs on, while an audit log or an enum used by one field are details. Relevance records that difference, so tools can show the important parts first: the [IDE](../tools/ide.md#the-model-canvas) draws relevant declarations as larger circles in the middle of their row and keeps the peripheral ones small at the edges.
+Not every declaration matters equally. In a quoting application the `Quote` entity and its `Accept` action are what the business runs on, while an audit log or an enum used by one field are details. Relevance records that difference, so tools can show the important parts first: the [inspector](../tools/inspect.md#the-model-canvas) draws relevant declarations as larger circles in the middle of their row and keeps the peripheral ones small at the edges.
 
 Every module and every top level declaration has a relevance score from 0 to 1. The graph computes it; a declared level puts it into a range.
 

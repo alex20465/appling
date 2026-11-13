@@ -28,7 +28,7 @@ module shop {
 }
 ```
 
-You rarely write them by hand. Once a release exists (`appling release <version>`), the IDE and the AI tools record renames, type changes and removals of released domain elements as steps in a block named after the release, such as `since_v1_0_0`. See [migrations](../language/migrations.md) for the language side.
+You rarely write them by hand. Once a release exists (`appling release <version>`), the AI tools record renames, type changes and removals of released domain elements as steps in a block named after the release, such as `since_v1_0_0`. See [migrations](../language/migrations.md) for the language side.
 
 ## Which steps are pending
 

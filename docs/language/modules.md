@@ -3,7 +3,7 @@ title: Modules
 description: Modules group declarations into bounded contexts, and exports decide what other modules may reference.
 ---
 
-A module is a bounded context: a named group of declarations. Every declaration belongs to exactly one module, modules can nest, and the module hierarchy is what the IDE uses to zoom in and out of a model. A module keeps its declarations private unless it lists them in `export`.
+A module is a bounded context: a named group of declarations. Every declaration belongs to exactly one module, modules can nest, and the module hierarchy is what the inspector unfolds. A module keeps its declarations private unless it lists them in `export`.
 
 ## Declaring a module
 

@@ -3,15 +3,15 @@ import { cpSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import Module, { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { startIdeProcess } from '@appling/ide/process';
+import { startInspectProcess } from '@appling/inspect/process';
 import { expect, test } from 'vitest';
 
 // `pnpm --filter appling-vscode build` writes out/; the extension starts this bundle for each project
-test('the bundled IDE server serves a project, its client for the tab and the implementation marks', { timeout: 60000 }, async () => {
+test('the bundled inspect server serves a project, its client for the tab and the implementation marks', { timeout: 60000 }, async () => {
     const root = mkdtempSync(join(tmpdir(), 'appling-vscode-'));
     cpSync(join(import.meta.dirname, '../../../examples'), root, { recursive: true });
     let marks: unknown;
-    const ide = await startIdeProcess(root, { main: join(import.meta.dirname, '../out/ide/out/server/main.js'), onImplementation: state => marks = state });
+    const ide = await startInspectProcess(root, { main: join(import.meta.dirname, '../out/inspect/out/server/main.js'), onImplementation: state => marks = state });
     try {
         const snapshot = await (await fetch(`${ide.url}/api/snapshot`)).json() as { graph: { nodes: { kind: string, qn: string }[] } };
         expect(snapshot.graph.nodes.filter(n => n.kind === 'Module').map(n => n.qn).sort()).toEqual(['crm', 'sales']);

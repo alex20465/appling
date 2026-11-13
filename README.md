@@ -51,10 +51,10 @@ The language is documented in [docs/language](docs/language/overview.md); the fu
 
 | Package | Purpose |
 |---|---|
-| [`@appling/cli`](packages/cli) | The `appling` command: `check`, `fmt`, `graph`, `release`, `generate` |
+| [`@appling/cli`](packages/cli) | The `appling` command: `check`, `fmt`, `graph`, `release`, `generate`, `inspect` |
 | [`@appling/lang`](packages/lang) | The language: grammar, scoping, validation, expression typing, canonical printer and language server, built on [Langium](https://langium.org) |
 | [`@appling/model`](packages/model) | The semantic graph, edit operations and releases with automatic migration steps |
-| [`@appling/desktop`](packages/desktop) | Appling Desktop, the native app: repos grouped into workspaces, each with the model canvas, a search over every element, an inspector that edits, the code view, terminals and agent sessions (in development) |
+| [`@appling/inspect`](packages/inspect) | The read only inspector you run next to an AI coding tool: the model canvas, a floating inspector, the task board of the agent's registry tasks and live change marks, updated as the files change |
 | [`@appling/ai`](packages/ai) | MCP server, agent sessions and the skill that works through a generated project's task registry |
 | [`@appling/codegen`](packages/codegen) | Code generation core: plan, step runner, extension contract, task registry, migrations |
 | [`@appling/codegen-django`](packages/codegen-django) | Django extension |
@@ -83,8 +83,7 @@ pnpm fmt examples     # canonical formatting
 ```
 packages/lang     grammar (src/appling.langium), scoping, validator, expression typing, printer, language server
 packages/model    semantic graph, edit operations, releases
-packages/desktop  Appling Desktop, the Electron app
-packages/ide      the repo view Desktop runs per repo (server and React client), and the landing demo
+packages/inspect  the read only inspector (server and React client) VS Code and `appling inspect` run per repo, and the landing demo
 packages/viz      model views and SVG canvases
 packages/ai       MCP server, agent sessions, registry skill
 packages/codegen* code generation core and the Django and Ash extensions

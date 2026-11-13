@@ -17,8 +17,7 @@ flowchart BT
   ai["@appling/ai<br/>MCP server, agent sessions, registry skill"]
   cli["@appling/cli<br/>the appling command"]
   viz["@appling/viz<br/>views and canvases"]
-  ide["@appling/ide<br/>repo view of Desktop"]
-  desktop["@appling/desktop<br/>the Electron app"]
+  inspect["@appling/inspect<br/>the read only inspector"]
   landing["@appling/landing<br/>site and docs"]
   model --> lang
   codegen --> model
@@ -30,11 +29,10 @@ flowchart BT
   cli --> codegen
   ai --> viz
   viz --> model
-  ide --> model
-  ide --> ai
-  ide --> viz
-  desktop --> ide
-  desktop --> ai
+  inspect --> model
+  inspect --> ai
+  inspect --> viz
+  cli --> inspect
   landing --> model
 ```
 
@@ -45,10 +43,9 @@ flowchart BT
 | `@appling/codegen` | The extension contract, planning in layer order, the step runner, the task registry and migration planning |
 | `@appling/codegen-django`, `@appling/codegen-ash` | Extensions: a map from graph node kinds to commands, templates and tasks |
 | `@appling/ai` | The workspace `Project`, the tool definitions of the MCP server, agent sessions and the registry skill |
-| `@appling/cli` | `check`, `fmt`, `graph`, `release`, `generate` |
+| `@appling/cli` | `check`, `fmt`, `graph`, `release`, `generate`, `inspect` |
 | `@appling/viz` | The pure view logic (tree, search, flowcharts, cards) and the SVG canvases |
-| `@appling/ide` | The repo view of Desktop: a server per repo (snapshot, file, edit, live changes, sessions, `/mcp`, a language server per websocket) and a React client with Monaco and the canvases of `@appling/viz`; also built as the browser demo of the landing site |
-| `@appling/desktop` | Appling Desktop: workspaces of repos, one IDE server and kept alive view per repo, code view, terminals and agent sessions |
+| `@appling/inspect` | The read only inspector next to an AI coding tool: a server per repo (snapshot, live changes, review, sessions, `/mcp`) and a React client with the canvases of `@appling/viz`, the floating inspector and the task board; run by the VS Code extension and `appling inspect`, also built as the browser demo of the landing site |
 | `@appling/landing` | The Astro site, which also renders `docs/` |
 
 Extensions read only `GraphNode.data`, never the Langium AST. That keeps third party extensions independent of the grammar's internals.
@@ -60,13 +57,13 @@ sequenceDiagram
   participant Files as .appling files
   participant Lang as @appling/lang
   participant Model as @appling/model
-  participant Tool as CLI, IDE, AI, codegen
+  participant Tool as CLI, inspector, AI, codegen
   Files->>Lang: parse into AST
   Lang->>Lang: link references (scope provider)
   Lang->>Lang: validate (layer rules, types, migrations)
   Lang->>Model: resolved models
   Model->>Tool: semantic graph (nodes, edges, dependencies)
-  Tool->>Model: edit operation
+  Tool->>Model: edit operation (CLI, AI)
   Model->>Files: minimal text edit, rejected if it adds an error
 ```
 

@@ -21,7 +21,7 @@ pnpm check examples   # validates the sample models with the built CLI
 pnpm fmt examples     # canonical formatting
 ```
 
-`pnpm build` runs `langium generate` and `tsc` in `@appling/lang` (the generated parser goes to `packages/lang/src/generated/`, which is not committed), `tsc` in the other packages, Vite for the IDE client and Astro for the landing site.
+`pnpm build` runs `langium generate` and `tsc` in `@appling/lang` (the generated parser goes to `packages/lang/src/generated/`, which is not committed), `tsc` in the other packages, Vite for the inspector client and Astro for the landing site.
 
 `check` and `fmt` run the built CLI (`packages/cli/out/main.js`), so rebuild after a source change.
 
@@ -32,7 +32,6 @@ pnpm --filter @appling/lang build                                   # after a gr
 pnpm vitest run packages/lang/test/validation.test.ts -t "name"     # one file, one test
 pnpm vitest run -u                                                  # update snapshots
 node packages/cli/out/main.js graph examples                        # the semantic graph as JSON
-node packages/desktop/out/bin.js examples                           # Appling Desktop on the sample models
 ```
 
 The language tests import `src/` directly and only need `langium generate`. Every other package's tests import `@appling/*` through the packages' `out/` exports, so rebuild an upstream package before testing a downstream one.
@@ -70,9 +69,7 @@ source ~/Dev/appling/scripts/make-completion.bash
 | Coverage comment | Posts the report as one comment on the pull request and updates it on every push. Pull requests from forks get no write token, so they only get the job summary |
 | Coverage badge | On `main` only: pushes the badge JSON to the `badges` branch, which the README shows through shields.io |
 
-No test starts Electron, and pnpm does not run Electron's download script, so the runner never fetches the Electron binary. `packages/desktop/test/remote-integration.test.ts` runs against a real sshd and a docker container and skips each one without it. The Ubuntu runner has docker, and the job installs `openssh-server` when sshd is missing, so CI runs both remote transports.
-
-The `VS Code extension` workflow (`.github/workflows/vscode.yml`) runs `pnpm --filter appling-vscode... build` on pull requests and pushes to `main` that touch `packages/` (except `landing` and `desktop`) or the lockfile, and on demand. It uploads `packages/vscode/out/appling.vsix` as an artifact, which installs on every platform.
+The `VS Code extension` workflow (`.github/workflows/vscode.yml`) runs `pnpm --filter appling-vscode... build` on pull requests and pushes to `main` that touch `packages/` (except `landing`) or the lockfile, and on demand. It uploads `packages/vscode/out/appling.vsix` as an artifact, which installs on every platform.
 
 ### Codegen coverage report
 
@@ -118,14 +115,13 @@ On GitHub the `Codegen end to end` workflow (`.github/workflows/codegen-e2e.yml`
 
 ## UI sandbox
 
-`pnpm sandbox <target>` starts the IDE in a sandbox an AI agent can see and use: it copies `examples/` into `.sandbox/workspace` (a git repo with one commit) and opens it with Chrome DevTools listening on `127.0.0.1:9222`. The `sandbox` MCP server in `.mcp.json` (Playwright MCP) connects there, and the `ui-sandbox` skill tells the agent how to walk the UI, take screenshots and fix what is plainly broken.
+`pnpm sandbox <target>` starts the inspector in a sandbox an AI agent can see and use: it copies `examples/` into `.sandbox/workspace` (a git repo with one commit) and opens it with Chrome DevTools listening on `127.0.0.1:9222`. The `sandbox` MCP server in `.mcp.json` (Playwright MCP) connects there, and the `ui-sandbox` skill tells the agent how to walk the UI, take screenshots and fix what is plainly broken.
 
 | Target | Opens |
 |---|---|
-| `ide` | the IDE server at `127.0.0.1:4410` in a Chrome app window |
+| `inspect` | the inspector server at `127.0.0.1:4410` in a Chrome app window |
 | `openvscode` | openvscode-server at `127.0.0.1:4411` with the built `appling.vsix`, in a Chrome app window |
 | `vscode` | VS Code with its own profile and the extension from `packages/vscode` |
-| `desktop` | Appling Desktop with its own user data and pty host |
 
 Build the targets first (`pnpm build`). Every target keeps its profile under `.sandbox/<target>`, apart from your own editors and app data; the workspace starts fresh on every start. One target runs at a time, since they share the DevTools port.
 

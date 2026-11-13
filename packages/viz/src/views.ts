@@ -2,7 +2,6 @@ import type { Access, Graph, GraphNode, TypeData } from '@appling/model';
 import { relevance } from '@appling/model/relevance';
 import { Simulator } from '@appling/model/simulator';
 import { rollupState, type ImplementationState } from '@appling/model/implementation';
-import { LAYER_OF, mayReference } from '@appling/lang/layers';
 
 /** The layers the tree starts from: each tab grows the model from the declarations of its kinds, module by module. */
 export type Lens = 'domain' | 'behavior' | 'application' | 'interfaces' | 'access';
@@ -31,11 +30,9 @@ export const DEFAULT_VIEW: ViewSettings = { lens: 'domain', linkEntities: false 
 export interface TreeNode {
     /** The path from the seed, unique in the tree. */
     id: string;
-    type: 'seed' | 'module' | 'group' | 'element' | 'request';
+    type: 'seed' | 'module' | 'group' | 'element';
     /** The module or the element. */
     qn?: string;
-    /** For a request: its id. */
-    request?: string;
     /** The element kind, or the kind of a group's elements. */
     kind?: string;
     layer?: string;
@@ -52,47 +49,17 @@ export interface TreeNode {
     children?: TreeNode[];
 }
 
-/** An element asked for by name, description and kind, for an agent to model (`ElementRequest` of `@appling/ai`). */
-export interface TreeRequest {
-    id: string;
-    name: string;
-    description: string;
-    kind?: string;
-    /** The element or module it was asked for under; none for the model as a whole. */
-    parent?: string;
-    /** The request it builds on, still to be modeled. */
-    parentRequest?: string;
-    /** The agent session that took it. */
-    takenBy?: string;
-}
-
-/** Every kind a person can ask for, in the order of the lenses; a migration is no sketch. */
-export const REQUEST_KINDS = [...Object.values(LENSES).flatMap(l => l.kinds), 'Scenario', 'Module'];
-
-/**
- * The kinds a new element may take under a node of the tree: a module in the model, any declaration in a module or
- * a requested module, else one that may reference the node's kind (`mayReference`), since the tree grows what uses
- * each node. An enum references nothing, so it is asked for only in a module.
- */
-export function requestKinds(under: TreeNode): string[] {
-    if (under.type === 'seed') return ['Module'];
-    if (under.type === 'module' || !under.kind || under.kind === 'Module') return REQUEST_KINDS;
-    return REQUEST_KINDS.filter(kind => kind !== 'Module' && kind !== 'Enum' && mayReference(kind, under.kind!));
-}
-
 /**
  * Grows the tree of a lens: the seed and every node whose id is in `unfolded` show their children. A node on the
- * `trail` shows only the children in `unfolded` or on the trail. `requests` hang under the node they were asked for
- * under, after its own children, and under the request they build on.
+ * `trail` shows only the children in `unfolded` or on the trail.
  */
-export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Set<string>, name = 'model', trail = new Set<string>(), requests: TreeRequest[] = []): TreeNode {
+export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Set<string>, name = 'model', trail = new Set<string>()): TreeNode {
     const shown = (n: GraphNode) => settings.linkEntities || !n.props.link;
     const roots = index.graph.nodes.filter(n => LENSES[settings.lens].kinds.includes(n.kind) && index.declaration(n.qn) === n.qn && shown(n));
-    // an empty module or one with requests shows in every lens, so the person can sketch in it
+    // an empty module shows in every lens, such as right after an agent wrote it
     const filled = new Set(index.graph.nodes.filter(n => n.kind !== 'Module').map(n => n.module));
-    const asked = new Set(requests.map(r => r.parent));
-    const sketched = index.graph.nodes.filter(n => n.kind === 'Module' && (!filled.has(n.qn) || asked.has(n.qn))).map(n => n.qn);
-    const modules = [...new Set([...roots.map(n => n.module), ...sketched])];
+    const empty = index.graph.nodes.filter(n => n.kind === 'Module' && !filled.has(n.qn)).map(n => n.qn);
+    const modules = [...new Set([...roots.map(n => n.module), ...empty])];
     const dependents = new Map<string, GraphNode[]>();
     const dependentsOf = (qn: string) => {
         if (!dependents.has(qn)) {
@@ -100,14 +67,6 @@ export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Se
             dependents.set(qn, used);
         }
         return dependents.get(qn)!;
-    };
-    const requested = (qn: string | undefined, parent: string): TreeNode[] => requests.filter(r => !r.parentRequest && r.parent === qn).map(r => request(r, parent));
-    const request = (r: TreeRequest, parent: string): TreeNode => {
-        const id = `${parent}/?${r.id}`;
-        const built = requests.filter(b => b.parentRequest === r.id);
-        const tree: TreeNode = { id, type: 'request', request: r.id, kind: r.kind, layer: r.kind && LAYER_OF[r.kind], label: r.name, fact: r.description, count: built.length, relevance: 0.5 };
-        if (built.length) tree.children = childrenOf(id, () => built.map(b => request(b, id)));
-        return tree;
     };
     const childrenOf = (id: string, grow: () => TreeNode[]) => {
         if (unfolded.has(id)) return grow();
@@ -117,10 +76,9 @@ export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Se
         const id = `${parent}/${node.qn}`;
         const cycle = path.includes(node.qn);
         const used = cycle ? [] : dependentsOf(node.qn);
-        const wanted = cycle ? [] : requested(node.qn, id);
         const label = node.module === module ? localName(node.qn, index) : node.qn;
-        const tree: TreeNode = { id, type: 'element', qn: node.qn, kind: node.kind, layer: node.layer, label, fact: factOf(index, node), count: used.length + wanted.length, relevance: index.relevanceOf(node.qn), cycle };
-        if (tree.count) tree.children = childrenOf(id, () => [...used.length ? grouped(used, id, node.module, [...path, node.qn]) : [], ...wanted]);
+        const tree: TreeNode = { id, type: 'element', qn: node.qn, kind: node.kind, layer: node.layer, label, fact: factOf(index, node), count: used.length, relevance: index.relevanceOf(node.qn), cycle };
+        if (tree.count) tree.children = childrenOf(id, () => grouped(used, id, node.module, [...path, node.qn]));
         return tree;
     };
     /** Elements directly when they are of one kind, else one group per kind; the most relevant first. */
@@ -135,17 +93,15 @@ export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Se
             return group;
         });
     };
-    const loose = requested(undefined, '~');
-    const seed: TreeNode = { id: '~', type: 'seed', label: name, fact: `${modules.length} module${modules.length === 1 ? '' : 's'}`, count: modules.length + loose.length, relevance: 1 };
+    const seed: TreeNode = { id: '~', type: 'seed', label: name, fact: `${modules.length} module${modules.length === 1 ? '' : 's'}`, count: modules.length, relevance: 1 };
     seed.children = childrenOf(seed.id, () => modules.sort((a, b) => index.relevanceOf(b) - index.relevanceOf(a)).map(module => {
             const members = roots.filter(n => n.module === module);
             const id = `~/${module}`;
             const kinds = [...Map.groupBy(members, n => n.kind)].sort(([a], [b]) => rank(a) - rank(b)).map(([kind, list]) => `${list.length} ${list.length === 1 ? kindLabel(kind) : plural(kind).toLowerCase()}`);
-            const wanted = requested(module, id);
-            const tree: TreeNode = { id, type: 'module', qn: module, label: module, fact: kinds.join(' · ') || (filled.has(module) ? '' : 'empty'), count: members.length + wanted.length, relevance: index.relevanceOf(module) };
-            tree.children = childrenOf(id, () => [...grouped(members, id, module, []), ...wanted]);
+            const tree: TreeNode = { id, type: 'module', qn: module, label: module, fact: kinds.join(' · ') || (filled.has(module) ? '' : 'empty'), count: members.length, relevance: index.relevanceOf(module) };
+            tree.children = childrenOf(id, () => grouped(members, id, module, []));
             return tree;
-        }).concat(loose));
+        }));
     return seed;
 }
 
@@ -395,7 +351,7 @@ export function implementationMarks(index: GraphIndex, states: Record<string, { 
 
 /** An element an agent session claimed or highlighted, drawn in the session's colour. */
 export interface SessionMark {
-    /** The element's qualified name, or `?<id>` for a request the session took. */
+    /** The element's qualified name. */
     element: string;
     color: string;
     /** The session's label. */
@@ -618,14 +574,6 @@ function usedBy(index: GraphIndex, qn: string): CardRow[] {
 function shortName(qn: string, index: GraphIndex): string {
     const module = index.nodes.get(qn)?.module;
     return module && qn.startsWith(`${module}.`) ? qn.slice(module.length + 1) : qn;
-}
-
-/** Elements of the chosen layers whose qualified name or kind contains every word; without words, the top level declarations. */
-export function search(index: GraphIndex, query: string, layers: string[]): GraphNode[] {
-    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-    return index.graph.nodes.filter(n => layers.includes(n.layer) && (words.length
-        ? words.every(w => n.qn.toLowerCase().includes(w) || kindLabel(n.kind).includes(w))
-        : index.declaration(n.qn) === n.qn));
 }
 
 /**

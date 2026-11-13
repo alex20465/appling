@@ -10,12 +10,12 @@ import {
     recordWritten, runMigrations, runPlan, type Plan, type PlannedInput, type Written
 } from '@appling/codegen';
 import { buildGraph, checkScenarios, dependencies, findApplingFiles, resolveReferences, Simulator, writeRelease, type Graph, type ResolvedReference } from '@appling/model';
-import { ide } from './ide.js';
+import { inspect } from './inspect.js';
 import { init } from './init.js';
 
 const USAGE = [
     'Usage: appling init [folder] [--name <name>] [--agents <claude,codex,opencode,gemini,antigravity>] [--stack <django|ash|go|rust|none>]',
-    '       appling ide [folder]',
+    '       appling inspect [folder]',
     '       appling <check|fmt|graph> [files or folders...]',
     '       appling release <version> [files or folders...]',
     '       appling generate [--plan | --coverage [--json] | --migrate | --sync] [files or folders...]',
@@ -25,7 +25,7 @@ const USAGE = [
 
 async function main([command, ...args]: string[]): Promise<number> {
     if (command === 'init') return init(args);
-    if (command === 'ide') return ide(args);
+    if (command === 'inspect') return inspect(args);
     const question = command === 'simulate' ? args.slice(0, args[0] === 'reach' ? 3 : 2) : command === 'refs' ? args.slice(0, 1) : [];
     if (!['check', 'fmt', 'graph', 'release', 'generate', 'simulate', 'refs'].includes(command) || ((command === 'release' || command === 'refs') && !args[0])
         || (command === 'simulate' && (!['reach', 'actors', 'risks'].includes(question[0]) || question.some(a => !a)))) {

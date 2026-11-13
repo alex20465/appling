@@ -4,11 +4,11 @@ import type { EditOperation } from '@appling/model';
 import { define, REGISTRY_TOOLS, type Tools } from './tools.js';
 import { findConflicts, peers, SESSION_STATUSES, sessionTitle, type AgentSession, type Channel, type ClaimConflict, type Claims, type SessionStore } from './sessions.js';
 
-/** What the IDE shows, as far as the IDE server and the app around it know it. */
+/** What the inspector shows, as far as the inspect server and the app around it know it. */
 export interface IdeContext {
     /** The session's own tab. */
     tab?: { id: string, title: string, status: string, active: boolean };
-    /** The repo of this IDE server, and the one the app shows. */
+    /** The repo of this inspect server, and the one the app shows. */
     repo: string;
     activeRepo?: string;
     workspace?: string;
@@ -16,10 +16,8 @@ export interface IdeContext {
     tabs?: { id: string, title: string, kind: string, repo?: string, active?: boolean }[];
     /** The canvas: lens, seed and unfolded elements, as the client reports it. */
     view?: Record<string, unknown>;
-    /** The element selected on the canvas or in the editor. */
+    /** The element selected on the canvas. */
     selection?: string;
-    /** The model file open in the editor. */
-    file?: string;
 }
 
 export const IDE_ACTIONS = ['focus', 'open', 'highlight', 'reveal'] as const;
@@ -34,8 +32,8 @@ export interface IdeAction {
 }
 
 /**
- * The IDE around a session: the IDE server answers with what its client shows and passes actions to it; Appling
- * Desktop implements it to add its tabs and to focus them.
+ * The inspector around a session: the inspect server answers with what its client shows and passes actions to it; the app
+ * around it (`AppHost`) adds its tabs and focuses them.
  */
 export interface IdeHost {
     context(session: AgentSession): Promise<IdeContext>;
@@ -43,8 +41,8 @@ export interface IdeHost {
 }
 
 /**
- * The part of a session's IDE that the app around the IDE server knows: Appling Desktop answers with the session's
- * tab, the active repo, the workspace and its tabs, and focuses tabs. Both methods are optional.
+ * The part of a session's context that the app around the inspect server knows: the VS Code extension answers with the
+ * active repo, the workspace and its agent terminals, and focuses a session's terminal. Both methods are optional.
  */
 export interface AppHost {
     context?(session: AgentSession): Promise<Partial<IdeContext>>;
@@ -52,7 +50,7 @@ export interface AppHost {
     act?(session: AgentSession, action: IdeAction): Promise<boolean>;
 }
 
-/** Serves an app host to an IDE server child over its IPC channel. */
+/** Serves an app host to an inspect server child over its IPC channel. */
 export function serveAppHost(host: AppHost, channel: Channel): () => void {
     return channel.onMessage(async message => {
         const call = message as { type?: string, call: number, session: AgentSession, action?: IdeAction };
@@ -95,14 +93,14 @@ export interface SessionScope {
     host?: IdeHost;
 }
 
-export const SESSION_INSTRUCTIONS = `You work in an agent session of Appling Desktop, next to other agent sessions that may change the same model and files at the same time. The session tools keep you coordinated with them and show the person what each session does:
+export const SESSION_INSTRUCTIONS = `You work in an Appling agent session, next to other agent sessions that may change the same model and files at the same time. The session tools keep you coordinated with them and show the person what each session does:
 
 - After reading the first prompt, set a short static label with session_set_label that names the topic of the work, such as "Invoice entity and its payment flow". Keep it until the topic changes.
 - Keep the status current with session_set_status: working while you work, needs-input when you wait for the person, blocked when another session or something outside holds you up, done when the task is finished, failed when you gave up; add a note that says why.
 - Before you change elements or files, call sessions_list to see what the other sessions claimed, and claim what you work on with session_claim: elements by qualified name (a claim covers the element's members) and files. Do not change what another session claimed; ask it with session_message instead, or wait. Release claims with session_release when you are done with them; they also end with the session.
 - An edit that touches another session's claim still goes through but comes back with a warning: tell the session with session_message and settle it before you go on.
 - When a tool result mentions unread messages, read them with session_inbox and answer them.
-- ide_context tells what the IDE shows (your tab, the repo, the open tabs, the canvas view and the selection; read it when the person says "this" or "here"); ide_act focuses your tab, opens, highlights or reveals elements to show the person what you mean.`;
+- ide_context tells what the inspector shows (your tab, the repo, the open tabs, the canvas view and the selection; read it when the person says "this" or "here"); ide_act focuses your tab, opens, highlights or reveals elements to show the person what you mean.`;
 
 const claimsInput = {
     elements: z.array(z.string()).optional().describe('Qualified names of model elements, such as ["sales.Order", "sales.OrderFlow"]'),
@@ -177,7 +175,7 @@ export function sessionTools(scope: SessionScope): Tools {
             run: () => attempt(async () => ({ messages: await store.inbox(id) }))
         }),
         ide_context: define({
-            description: 'What the IDE shows: your own tab, the repo and workspace, the open tabs, the canvas view and the selected element. Read it when the person refers to "this" or "here".',
+            description: 'What the inspector shows: your own tab, the repo and workspace, the open tabs, the canvas view and the selected element. Read it when the person refers to "this" or "here".',
             input: {},
             run: () => attempt(async () => {
                 const session = await self();
@@ -208,14 +206,14 @@ export function sessionTools(scope: SessionScope): Tools {
             })
         }),
         ide_act: define({
-            description: 'Act on the IDE to show the person something: focus (show your session\'s tab), open (an element or a file, with line), highlight (mark elements on the canvas), reveal (select an element on the canvas and in the source).',
+            description: 'Act on the inspector to show the person something: focus (show your session\'s tab), open (an element or a file, with line), highlight (mark elements on the canvas), reveal (select an element on the canvas and in the source).',
             input: {
                 action: z.enum(['focus', 'open', 'highlight', 'reveal']),
                 elements: z.array(z.string()).optional().describe('Qualified names, for open, highlight and reveal'),
                 file: z.string().optional().describe('open: a file, relative to the repo'),
                 line: z.number().int().min(1).optional()
             },
-            run: (_, input) => attempt(async () => scope.host ? scope.host.act(await self(), input as IdeAction) : { ok: false, reason: 'No IDE is attached to this session.' })
+            run: (_, input) => attempt(async () => scope.host ? scope.host.act(await self(), input as IdeAction) : { ok: false, reason: 'No inspector is attached to this session.' })
         })
     };
 }
@@ -232,10 +230,6 @@ export function touchedBy(tool: string, input: Record<string, unknown>, result: 
     if (tool === 'edit') {
         const operation = input.operation as EditOperation;
         return { elements: [operation.op === 'add' ? operation.parent : operation.target], files };
-    }
-    if (tool === 'propose_edits') {
-        const operations = (input.operations ?? []) as EditOperation[];
-        return { elements: operations.map(o => (o.op === 'add' ? o.parent : o.target)), files };
     }
     if (tool === 'write_model_file') return { files: [String(input.path)] };
     return {};

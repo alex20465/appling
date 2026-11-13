@@ -3,7 +3,7 @@ import { layoutTree, type Placed } from '../layout.js';
 import { relevanceLevel } from '@appling/model/relevance';
 import type { Bubble } from '../protocol.js';
 import type { ImplementationState } from '@appling/model/implementation';
-import { anchorOf, changeMarks, modelPulse, growTree, IMPLEMENTATION_LABELS, IMPLEMENTATION_TAGS, implementationMarks, sessionMarks, kindLabel, LENSES, requestKinds, revealPath, trailOf, type GraphIndex, type Lens, type MarkedChanges, type SessionMark, type TreeNode, type TreeRequest, type ViewSettings } from '../views.js';
+import { anchorOf, changeMarks, modelPulse, growTree, IMPLEMENTATION_LABELS, IMPLEMENTATION_TAGS, implementationMarks, sessionMarks, kindLabel, LENSES, revealPath, trailOf, type GraphIndex, type Lens, type MarkedChanges, type SessionMark, type TreeNode, type ViewSettings } from '../views.js';
 import { BubbleView, LooseBubbles, memberOf, type BubbleStep } from './Bubble.js';
 import { leaves, loads, pathOf, sproutDelays, stem } from './plant.js';
 import { play, setSound, soundOn } from './sound.js';
@@ -21,45 +21,17 @@ interface CanvasProps {
     changes?: MarkedChanges;
     /** Elements agent sessions claimed or highlighted: their declarations get a ring in the session's colour. */
     sessions?: SessionMark[];
-    /** A click on a claim ring: jump to that session (its tab in Appling Desktop). Without it the ring is not clickable. */
+    /** A click on a claim ring: jump to that session (its terminal). Without it the ring is not clickable. */
     onSession?(session: string): void;
     /** How far each element is implemented (`@appling/model/implementation`): declarations and modules get a dot and a tag in the colour of their rolled up state. */
     implementation?: Record<string, { state: ImplementationState }>;
-    /** Elements asked for by name and description, drawn as ghosts under the node they were asked for under. */
-    requests?: TreeRequest[];
-    /** The right click menu of the nodes; without it there is none. */
-    menu?: NodeMenu;
     /** The place of the shown bubble among all, for its back and next buttons. */
     step?: BubbleStep;
     /** More buttons in the bottom bar, such as one that opens a panel over the canvas (`pressed` while it is open). */
     buttons?: { label: string, pressed?: boolean, run(): void }[];
-    /** A button in the top bar, beside the current node's line, such as generating the selected element (`hint` under it). */
-    action?: { label: string, hint?: string, run(): void };
     onSelect(qn: string): void;
     onSettings(settings: ViewSettings): void;
     onOpenFile?(file: string, line: number): void;
-}
-
-/** What the right click menu of a node does. */
-export interface NodeMenu {
-    /** Shows the element or module in the inspector, to edit it there. */
-    onEdit(qn: string): void;
-    /** Removes the element or module, once the person confirmed it in the menu. */
-    onRemove(qn: string): void;
-    /** Asks an agent for a new element of `kind` under `parent` (none: the model as a whole) or on top of the request `parentRequest`. */
-    onRequest(request: { name: string, description: string, kind: string, parent?: string, parentRequest?: string }): void;
-    onEditRequest(id: string, change: { name: string, description: string, kind: string }): void;
-    onRemoveRequest(id: string): void;
-}
-
-/** The open menu: on which node, where (in the canvas), and whether it shows its actions, a confirmation or a form. */
-interface OpenMenu {
-    node: TreeNode;
-    /** The node it hangs under. */
-    above?: TreeNode;
-    x: number;
-    y: number;
-    mode: 'actions' | 'remove' | 'request' | 'editRequest';
 }
 
 interface Camera {
@@ -69,7 +41,7 @@ interface Camera {
 }
 
 /** The smallest and the largest circle of each node type; relevance decides in between. */
-const RADIUS: Record<TreeNode['type'], [number, number]> = { seed: [34, 34], module: [10, 22], group: [11, 18], element: [13, 30], request: [14, 14] };
+const RADIUS: Record<TreeNode['type'], [number, number]> = { seed: [34, 34], module: [10, 22], group: [11, 18], element: [13, 30] };
 
 function radius(node: TreeNode): number {
     const [low, high] = RADIUS[node.type];
@@ -116,13 +88,13 @@ function folding(before: Placed[], now: Map<string, Placed>): Drawn[] {
 const CHANGE_LETTERS: Record<string, string> = { added: 'A', changed: 'M', removed: 'D' };
 
 /** How far the labels reach right of the circle, so a press anywhere on them counts. */
-const LABEL: Record<TreeNode['type'], number> = { seed: 0, module: 210, group: 140, element: 190, request: 190 };
+const LABEL: Record<TreeNode['type'], number> = { seed: 0, module: 210, group: 140, element: 190 };
 
 /**
  * The model as a tree that grows from a seed: modules first, then the declarations of the lens, then on every
  * unfold what uses the unfolded declaration. Only what you unfold is drawn.
  */
-export function ModelCanvas({ index, name, focus, selected, settings, bubbles = [], changes, sessions, onSession, implementation, requests, menu, action, buttons = [], onSelect, onSettings, onOpenFile, step }: CanvasProps) {
+export function ModelCanvas({ index, name, focus, selected, settings, bubbles = [], changes, sessions, onSession, implementation, buttons = [], onSelect, onSettings, onOpenFile, step }: CanvasProps) {
     const box = useRef<HTMLDivElement>(null);
     const drag = useRef<{ x: number, y: number, moved: boolean }>(undefined);
     const [camera, setCamera] = useState<Camera>({ x: 0, y: 0, k: 1 });
@@ -137,9 +109,8 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
     /** The node whose children just grew, to bring into view once they are placed. */
     const [follow, setFollow] = useState<{ id: string }>();
 
-    const [opened, setOpened] = useState<OpenMenu>();
     const [legend, setLegend] = useState(false);
-    const tree = useMemo(() => growTree(index, settings, unfolded, name, trail, requests), [index, settings, unfolded, name, trail, requests]);
+    const tree = useMemo(() => growTree(index, settings, unfolded, name, trail), [index, settings, unfolded, name, trail]);
     const placed = useMemo(() => layoutTree(tree), [tree]);
     const byId = useMemo(() => new Map(placed.map(p => [p.node.id, p])), [placed]);
     // folded nodes shrink back into the nearest node that stays, then go (same keys, so the transition runs)
@@ -178,7 +149,6 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
     const chosen = selected && index.declaration(selected);
     const marks = useMemo(() => changes ? changeMarks(index, changes, true) : new Map<string, string>(), [index, changes]);
     const claimed = useMemo(() => sessions?.length ? sessionMarks(index, sessions) : new Map<string, SessionMark>(), [index, sessions]);
-    const modeling = useMemo(() => new Map(sessions?.filter(m => m.element.startsWith('?')).map(m => [m.element.slice(1), m])), [sessions]);
     const implemented = useMemo(() => implementation ? implementationMarks(index, implementation) : new Map<string, ImplementationState>(), [index, implementation]);
 
     const replant = () => {
@@ -319,19 +289,7 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
         ? `${here.node.qn} · ${kindLabel(here.node.kind!)} · ${relevanceLevel(here.node.relevance)}${here.node.fact ? ` · ${here.node.fact}` : ''}${here.node.cycle ? ' · already on this branch' : here.node.count ? ` · used by ${here.node.count}` : ' · used by nothing'}`
         : here.node.type === 'module' ? `module ${here.node.qn} · ${relevanceLevel(here.node.relevance)} · ${here.node.fact}`
         : here.node.type === 'group' ? `${here.node.count} ${here.node.label.toLowerCase()} · ${here.parent?.node.qn ?? ''}`
-        : here.node.type === 'request' ? `requested: ${here.node.label}${here.node.kind ? ` · ${kindLabel(here.node.kind)}` : ''} · ${modeling.has(here.node.request!) ? `modeled by ${modeling.get(here.node.request!)!.label}` : 'waits for an agent to model it'}${here.node.fact ? ` · ${here.node.fact}` : ''}`
         : `${here.node.label} · ${here.node.fact}`;
-
-    /** Opens the right click menu at the pointer, kept inside the canvas. */
-    const openMenu = (node: TreeNode, event: React.MouseEvent) => {
-        if (!menu || !box.current) return;
-        event.preventDefault();
-        event.stopPropagation();
-        const rect = box.current.getBoundingClientRect();
-        const x = Math.max(8, Math.min(event.clientX - rect.left, rect.width - 290));
-        const y = Math.max(8, Math.min(event.clientY - rect.top, rect.height - 250));
-        setOpened({ node, above: byId.get(node.id)?.parent?.node, x, y, mode: 'actions' });
-    };
 
     const stems = drawing.filter(p => p.parent).map(p => ({ p, curve: stem(p, radius), state: p.leaving ? 'leaving' : lit.has(p.node.id) ? 'lit' : '' }));
 
@@ -340,11 +298,8 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
             className="tree-canvas"
             ref={box}
             onPointerDown={event => {
-                if ((event.target as Element).closest('.node-menu')) return;
-                setOpened(undefined);
                 if (event.button === 0) drag.current = { x: event.clientX, y: event.clientY, moved: false };
             }}
-            onContextMenu={event => openMenu(byId.get('~')!.node, event)}
             onPointerMove={event => {
                 const start = drag.current;
                 if (!start || !(event.buttons & 1)) return;
@@ -382,7 +337,7 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
                         );
                     })}
                     {drawing.map(p => p.leaving ? <TreeItem key={p.node.id} placed={p} current={false} chosen={false} unfolded={false} leaving onPress={() => {}} /> : (
-                        <TreeItem key={p.node.id} placed={p} delay={delays.get(p.node.id)} current={p.node.id === current} chosen={!!chosen && p.node.qn === chosen} unfolded={!!p.node.children} mark={p.node.qn && marks.get(p.node.qn) && [marks.get(p.node.qn)].join(' ')} session={p.node.qn ? claimed.get(p.node.qn) : p.node.request ? modeling.get(p.node.request) : undefined} onSession={onSession} implementation={p.node.qn && p.node.type !== 'group' ? implemented.get(p.node.qn) : undefined} onPress={press} onMenu={menu ? openMenu : undefined} />
+                        <TreeItem key={p.node.id} placed={p} delay={delays.get(p.node.id)} current={p.node.id === current} chosen={!!chosen && p.node.qn === chosen} unfolded={!!p.node.children} mark={p.node.qn && marks.get(p.node.qn) && [marks.get(p.node.qn)].join(' ')} session={p.node.qn ? claimed.get(p.node.qn) : undefined} onSession={onSession} implementation={p.node.qn && p.node.type !== 'group' ? implemented.get(p.node.qn) : undefined} onPress={press} />
                     ))}
                 </g>
             </svg>
@@ -396,7 +351,6 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
                 return <BubbleView key={`${i} ${bubble.target} ${bubble.text}`} bubble={bubble} member={memberOf(bubble, anchor!)} style={style} tail="up" step={step} onOpenFile={onOpenFile} />;
             })}
             <LooseBubbles bubbles={anchored.filter(a => !a.anchor).map(a => a.bubble)} step={step} onOpenFile={onOpenFile} />
-            {opened && menu && <MenuView key={`${opened.node.id} ${opened.mode}`} at={opened} menu={menu} requests={requests} onMode={mode => setOpened({ ...opened, mode })} onAsked={id => setUnfolded(now => new Set([...now, id]))} onClose={() => setOpened(undefined)} />}
             {legend && <Legend />}
             <div className="tree-top">
                 <nav className="lenses" aria-label="Lens">
@@ -408,7 +362,6 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
                     {crumbs.map(p => <li key={p.node.id}><button onClick={() => setCurrent(p.node.id)}>{p.node.label}</button></li>)}
                 </ol>
                 <p className="tree-info">{info}</p>
-                {action && <div className="tree-action"><button onClick={action.run}>{action.label}</button>{action.hint && <span>{action.hint}</span>}</div>}
             </div>
             <div className="tree-bottom">
                 <span className="hint">click a bud to unfold what uses it · click again to fold · drag to pan · scroll to zoom</span>
@@ -426,7 +379,7 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
     );
 }
 
-function TreeItem({ placed, delay = 0, current, chosen, unfolded, mark, session, onSession, implementation, leaving, onPress, onMenu }: { placed: Placed, delay?: number, current: boolean, chosen: boolean, unfolded: boolean, mark?: string, session?: SessionMark, onSession?(session: string): void, implementation?: ImplementationState, leaving?: boolean, onPress(node: TreeNode): void, onMenu?(node: TreeNode, event: React.MouseEvent): void }) {
+function TreeItem({ placed, delay = 0, current, chosen, unfolded, mark, session, onSession, implementation, leaving, onPress }: { placed: Placed, delay?: number, current: boolean, chosen: boolean, unfolded: boolean, mark?: string, session?: SessionMark, onSession?(session: string): void, implementation?: ImplementationState, leaving?: boolean, onPress(node: TreeNode): void }) {
     const { node, x, y, parent } = placed;
     const r = radius(node);
     // a new node comes out of the bud of the node it grows from
@@ -434,8 +387,8 @@ function TreeItem({ placed, delay = 0, current, chosen, unfolded, mark, session,
     const bud = node.count > 0 && !node.cycle && !unfolded;
     const classes = ['tree-item', node.type, node.type !== 'seed' && relevanceLevel(node.relevance), node.layer && `layer-${node.layer}`, current && 'current', chosen && 'chosen', node.cycle && 'cycle', unfolded && 'open', implementation === 'unimplemented' && 'not-generated', leaving && 'leaving', mark];
     const change = mark?.split(' ').find(c => c in CHANGE_LETTERS);
-    // The state in words under the labels: requested, or how far the code is.
-    const tag = node.type === 'request' ? (session ? { name: 'modeling', text: `modeling · ${session.label}` } : { name: 'requested', text: 'requested · for an agent' }) : implementation && { name: implementation, text: IMPLEMENTATION_TAGS[implementation] };
+    // How far the code is, in words under the labels.
+    const tag = implementation && { name: implementation, text: IMPLEMENTATION_TAGS[implementation] };
     const tagY = node.type === 'module' ? 28 : node.kind && node.fact ? 34 : 21;
     return (
         <g
@@ -446,13 +399,12 @@ function TreeItem({ placed, delay = 0, current, chosen, unfolded, mark, session,
             aria-label={`${node.label}${node.kind && node.type !== 'group' ? `, ${kindLabel(node.kind)}` : ''}${node.fact ? `, ${node.fact}` : ''}`}
             tabIndex={0}
             onClick={() => onPress(node)}
-            onContextMenu={onMenu ? event => onMenu(node, event) : undefined}
             onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onPress(node); } }}
         >
             <g className="grow" style={sprout}>
-                <title>{node.qn ?? node.label}{node.type === 'element' ? `\n${kindLabel(node.kind!)}, ${relevanceLevel(node.relevance)}` : node.type === 'request' && node.kind ? `\n${kindLabel(node.kind)}, requested` : ''}{node.fact ? `\n${node.fact}` : ''}{session ? `\n${node.type === 'request' ? 'Modeled' : 'Claimed'} by ${session.label}` : ''}{implementation ? `\nCode: ${IMPLEMENTATION_LABELS[implementation]}` : ''}</title>
+                <title>{node.qn ?? node.label}{node.type === 'element' ? `\n${kindLabel(node.kind!)}, ${relevanceLevel(node.relevance)}` : ''}{node.fact ? `\n${node.fact}` : ''}{session ? `\nClaimed by ${session.label}` : ''}{implementation ? `\nCode: ${IMPLEMENTATION_LABELS[implementation]}` : ''}</title>
                 {session && <circle className={`session-ring${onSession ? ' jump' : ''}`} r={r + 5} style={{ stroke: session.color }}
-                    onClick={onSession ? event => { event.stopPropagation(); onSession(session.session); } : undefined}><title>{`${node.type === 'request' ? 'Modeled' : 'Claimed'} by ${session.label}${onSession ? '. Click to go to the session' : ''}`}</title></circle>}
+                    onClick={onSession ? event => { event.stopPropagation(); onSession(session.session); } : undefined}><title>{`Claimed by ${session.label}${onSession ? '. Click to go to the session' : ''}`}</title></circle>}
                 {node.type !== 'seed' && <rect className="hit" x={-r - 4} y={-r - 4} width={r + LABEL[node.type]} height={2 * r + 8} rx={r} />}
                 {change && <circle className="change-halo" r={r + 9} />}
                 <circle className="ring" r={r} />
@@ -477,12 +429,6 @@ function TreeItem({ placed, delay = 0, current, chosen, unfolded, mark, session,
                                 <text className="name" x={r + 10} y={-1}>{clip(node.label, 24)}</text>
                                 <text className="fact" x={r + 10} y={14}>{clip(node.fact, 30)}</text>
                             </>
-                            : node.type === 'request'
-                            ? <>
-                                <text className="name" x={r + 10} y={-7}>{clip(node.label, 24)}</text>
-                                {node.kind && <text className="kind" x={r + 10} y={7}>{kindLabel(node.kind)}</text>}
-                                {node.fact && <text className="fact" x={r + 10} y={node.kind ? 20 : 7}>{clip(node.fact, 30)}</text>}
-                            </>
                             : <>
                                 <text className="name" x={r + 10} y={-7}>{clip(node.label, 24)}</text>
                                 <text className="kind" x={r + 10} y={7}>{kindLabel(node.kind!)}</text>
@@ -503,76 +449,6 @@ function TreeItem({ placed, delay = 0, current, chosen, unfolded, mark, session,
     );
 }
 
-/** The right click menu: the node's actions, the confirmation of a removal, or the form of a request. */
-function MenuView({ at, menu, requests, onMode, onAsked, onClose }: { at: OpenMenu, menu: NodeMenu, requests?: TreeRequest[], onMode(mode: OpenMenu['mode']): void, onAsked(id: string): void, onClose(): void }) {
-    const { node } = at;
-    const request = node.request ? requests?.find(r => r.id === node.request) : undefined;
-    const editing = at.mode === 'editRequest';
-    // a new element goes under the node, or under the group's parent; an edited request stays where it hangs
-    const under = editing || node.type === 'group' ? at.above : node;
-    const kinds = under ? requestKinds(under) : [];
-    const [name, setName] = useState(editing ? request?.name ?? '' : '');
-    const [description, setDescription] = useState(editing ? request?.description ?? '' : '');
-    const [kind, setKind] = useState(editing && request?.kind && kinds.includes(request.kind) ? request.kind : node.type === 'group' && kinds.includes(node.kind!) ? node.kind! : kinds[0]);
-    const built = request ? requests!.filter(r => r.parentRequest === request.id).length : 0;
-    const done = (run: () => void) => {
-        run();
-        onClose();
-    };
-    const props = { className: 'node-menu', style: { left: at.x, top: at.y }, onKeyDown: (event: React.KeyboardEvent) => { if (event.key === 'Escape') onClose(); } };
-    if (at.mode === 'remove') return (
-        <div {...props} role="dialog" aria-label={`Remove ${node.qn}`}>
-            <p>Remove <strong>{node.qn}</strong> from the model?</p>
-            <div className="node-menu-row">
-                <button className="danger" autoFocus onClick={() => done(() => menu.onRemove(node.qn!))}>Remove</button>
-                <button onClick={onClose}>Keep</button>
-            </div>
-        </div>
-    );
-    if ((at.mode === 'request' || editing) && under) return (
-        <form {...props} className="node-menu node-form" aria-label="Request an element" onSubmit={event => {
-            event.preventDefault();
-            const asked = { name: name.trim(), description: description.trim(), kind };
-            if (!asked.name) return;
-            if (editing) return done(() => menu.onEditRequest(node.request!, asked));
-            done(() => menu.onRequest({ ...asked, ...under.type === 'request' ? { parentRequest: under.request } : { parent: under.qn } }));
-            onAsked(under.id);
-        }}>
-            <p>{editing ? 'Edit the request' : `New element ${under.type === 'seed' ? 'in the model' : `on ${under.qn ?? under.label}`}`}</p>
-            <select value={kind} onChange={e => setKind(e.target.value)} aria-label="Kind" disabled={kinds.length === 1}>
-                {kinds.map(k => <option key={k} value={k}>{kindLabel(k)}</option>)}
-            </select>
-            <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Name, such as Invoice" aria-label="Name" />
-            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} placeholder="What it is and what it does, in your words" aria-label="Description" />
-            <p className="node-menu-hint">{under.type === 'request'
-                ? `It waits for ${under.label} and goes under it once an agent modeled that.`
-                : 'An agent session models it from this and the place in the tree. Until then it shows as requested.'}</p>
-            <div className="node-menu-row">
-                <button type="submit" disabled={!name.trim()}>{editing ? 'Save' : 'Request it'}</button>
-                <button type="button" onClick={onClose}>Cancel</button>
-            </div>
-        </form>
-    );
-    const editable = node.qn && node.type !== 'group';
-    return (
-        <div {...props} role="menu" aria-label={node.label}>
-            {node.type === 'request' ? (
-                <>
-                    <button role="menuitem" autoFocus onClick={() => onMode('editRequest')}>Edit request…</button>
-                    <button role="menuitem" onClick={() => onMode('request')}>New element on it…</button>
-                    <button role="menuitem" className="danger" onClick={() => done(() => menu.onRemoveRequest(node.request!))}>{built ? `Remove request and the ${built} on it` : 'Remove request'}</button>
-                </>
-            ) : (
-                <>
-                    {editable && <button role="menuitem" autoFocus onClick={() => done(() => menu.onEdit(node.qn!))}>Edit in the inspector</button>}
-                    <button role="menuitem" autoFocus={!editable} onClick={() => onMode('request')}>{node.type === 'seed' ? 'New module…' : 'New element…'}</button>
-                    {editable && <button role="menuitem" className="danger" onClick={() => onMode('remove')}>Remove…</button>}
-                </>
-            )}
-        </div>
-    );
-}
-
 /** What every mark on the canvas means. */
 function Legend() {
     const dot = (state: string, text: string) => <li key={state}><svg width="14" height="14" viewBox="-7 -7 14 14"><circle className={`impl impl-${state}`} r={4.5} /></svg>{text}</li>;
@@ -582,8 +458,6 @@ function Legend() {
             <h4>Code</h4>
             <ul>
                 {(Object.keys(IMPLEMENTATION_LABELS) as ImplementationState[]).map(state => dot(state, IMPLEMENTATION_LABELS[state]))}
-                {dot('requested', 'requested: an agent models it from your description')}
-                {dot('modeling', 'modeling: an agent session took the request')}
             </ul>
             <h4>Changes</h4>
             <ul>
@@ -598,7 +472,6 @@ function Legend() {
                 <li><svg width="18" height="18" viewBox="-9 -9 18 18"><circle className="legend-ring session" r={7} /></svg>ring in a session's colour: claimed by that agent session</li>
                 <li><span className="legend-glyph">◯</span>bigger and bolder: more relevant; faded: peripheral</li>
             </ul>
-            <p>Right click a node to edit, remove or request a new element.</p>
         </div>
     );
 }

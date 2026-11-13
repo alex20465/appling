@@ -1,5 +1,5 @@
 /**
- * The implementation state Appling Desktop sends over the bridge (#20), and what the extension shows of it, without
+ * The implementation state of a project's inspect server (#20), and what the extension shows of it, without
  * VS Code so it is tested on its own: gutter marks on the model lines, a CodeLens on code that implements an element
  * (back to the element) and one on model lines that have code (to the code). Paths are absolute.
  */
@@ -33,7 +33,7 @@ export const MARK_LABELS: Record<MarkState, string> = {
     shifted: 'code reference shifted', broken: 'code reference broken'
 };
 
-/** The colour of each state's gutter mark, as in the IDE. */
+/** The colour of each state's gutter mark, as in the inspector. */
 export const MARK_COLORS: Record<MarkState, string> = {
     implemented: '#5cbf63', partial: '#d98a1c', unimplemented: '#aaa092', shifted: '#4c9fe0', broken: '#e5534b'
 };

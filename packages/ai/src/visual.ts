@@ -1,15 +1,13 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
-import type { EditOperation } from '@appling/model';
-import type { Bubble, Decision, Review, Selection, Show, Status } from '@appling/viz/protocol';
+import type { Bubble, Selection, Show, Status } from '@appling/viz/protocol';
 import { VIEW_KINDS, type ViewKind } from '@appling/viz/views';
-import { proposal } from './proposal.js';
-import { define, operationSchema, ProposalContext, type Tools } from './tools.js';
+import { define, type Tools } from './tools.js';
 
 /**
- * Where the visual tools draw: the project's canvas in the repo view of Appling Desktop, for an agent session of the
- * IDE server's `/mcp`. Tests stand in for it.
+ * Where the visual tools draw: the project's canvas in Appling Inspect, for an agent session of the inspect
+ * server's `/mcp`. Tests stand in for it.
  */
 export interface VisualHost {
     show(show: Show): Promise<void>;
@@ -17,8 +15,6 @@ export interface VisualHost {
     bubble(bubble: Bubble): boolean | Promise<boolean>;
     selection(): Selection | Promise<Selection>;
     reply(text: string): boolean | Promise<boolean>;
-    /** Resolves with the person's decision on a proposal. */
-    review(review: Review): Promise<Decision>;
     status(status: Status): Promise<void>;
 }
 
@@ -28,7 +24,7 @@ export const VISUAL_INSTRUCTIONS = `The appling server shows the model on the pr
 
 The canvas never moves on its own: your view and its bubbles wait beside the canvas under your session's name until the person opens them, and then they follow each new view and bubble. Show one node at a time to walk through the model, and place one bubble per step in the order of the explanation; the person steps through them. Pass code, file and line to hint how an element is implemented, such as from code_references. Read what the person selected with visual_selection when they say "this" or "the selected one". The person can type a question to your session in your view; it reaches your inbox as a message from User: answer it with visual_reply.
 
-Every model change, yours and any other, is marked live on the canvas and listed with its text and model diff until the person accepts or reverts it, so change the model with edit and write_model_file as usual; use propose_edits only when the person asks to review a change before it is written: they decide in the app. During longer work call visual_status at the start of each step with what you do and, when you know it, done and total.`;
+Every model change, yours and any other, is marked live on the canvas against the last commit, so change the model with edit and write_model_file as usual. During longer work call visual_status at the start of each step with what you do and, when you know it, done and total.`;
 
 /** Tools that drive the project's canvas. Only the MCP server registers them. */
 export function visualTools(host: VisualHost): Tools {
@@ -89,27 +85,6 @@ export function visualTools(host: VisualHost): Tools {
             run: async (_, input) => {
                 await host.status(input);
                 return { shown: true };
-            }
-        }),
-        propose_edits: define({
-            description: `Propose model changes for the person to review in Appling: the operations are validated on a copy, shown as text and graph differences, and written only when the person accepts. Waits for the decision and returns it, with their comment when they reject.`,
-            input: { operations: z.array(operationSchema).min(1), summary: z.string().describe('What changes and why, in one or two sentences') },
-            run: async (context, input) => {
-                const working = new ProposalContext(context.project, context.sources());
-                for (const operation of input.operations as EditOperation[]) {
-                    const result = await working.edit(operation, false);
-                    if (!result.ok) return { ok: false, operation, errors: result.errors };
-                }
-                const { hunks, graph } = await proposal(context.project, working);
-                const decision = await host.review({ summary: input.summary, hunks, graph });
-                if (!decision.accepted) return { accepted: false, comment: decision.comment };
-                const changed = new Set<string>();
-                for (const operation of working.operations) {
-                    const result = await context.edit(operation, false);
-                    if (!result.ok) return { accepted: true, ok: false, operation, errors: result.errors };
-                    result.changed?.forEach(file => changed.add(file));
-                }
-                return { accepted: true, ok: true, changed: [...changed] };
             }
         })
     };

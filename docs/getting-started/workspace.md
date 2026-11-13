@@ -14,7 +14,7 @@ my-app/
     sales.appling            one or more modules per file
     crm.appling
   .appling/
-    view.json                canvas lens and option from the IDE
+    view.json                canvas lens and option from the inspector
     releases/
       1.0.0.json             graph snapshot written by appling release
   build/
@@ -26,14 +26,14 @@ my-app/
 
 | Path | Written by | Commit it |
 |---|---|---|
-| `*.appling` | you, the IDE, the AI | yes, it is the source of truth |
+| `*.appling` | you, your editor, the AI | yes, it is the source of truth |
 | `appling.config.json` | you | yes |
-| `.appling/view.json` | the IDE | yes, if your team should share the view |
+| `.appling/view.json` | the inspector | yes, if your team should share the view |
 | `.appling/releases/*.json` | `appling release` | yes, edits compare against the latest release |
 | `<out>/.appling/tasks.json` | `appling generate`, the registry tools | yes, with the generated project |
 | `<out>/.appling/migrations.json` | `appling generate --migrate` | yes, with the generated project |
 
-The tree assumes you run the tools from `my-app`: `appling release` writes into the current folder, and the IDE keeps `.appling/view.json` in the folder it serves. See [configuration and files](../reference/configuration.md) for the format of each.
+The tree assumes you run the tools from `my-app`: `appling release` writes into the current folder, and the inspector keeps `.appling/view.json` in the folder it serves. See [configuration and files](../reference/configuration.md) for the format of each.
 
 ## One workspace
 
@@ -54,4 +54,4 @@ Every element is identified by its qualified name: the module path, then the pat
 
 ## Version control
 
-Commit the text. The graph, the layout and generated code are derived from it, and the canonical formatting of `appling fmt` keeps diffs small: an edit from the IDE or the AI touches only the lines it changes.
+Commit the text. The graph, the layout and generated code are derived from it, and the canonical formatting of `appling fmt` keeps diffs small: an edit from the AI touches only the lines it changes.

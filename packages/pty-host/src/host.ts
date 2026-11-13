@@ -32,7 +32,7 @@ export interface HostOptions {
     notifier?: Notifier;
     /**
      * The program that opens the app at a terminal when its notification is clicked, `{terminal}` standing for its id
-     * (`['appling-desktop', '--session', '{terminal}']`). Without it a click does nothing.
+     * (`['my-app', '--session', '{terminal}']`). Without it a click does nothing.
      */
     open?: string[];
 }
