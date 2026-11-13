@@ -41,32 +41,45 @@ interface AgentCanvasProps {
     settings: ViewSettings;
     selected?: string;
     changes?: MarkedChanges;
+    /** The bubble on screen, and whether the view lists its bubbles itself (a host with panels lists a playbook's steps). */
+    at: number;
+    list: boolean;
+    onStep(at: number): void;
     onSelect(qn: string): void;
     onClose(): void;
     onOpenFile?(file: string, line: number): void;
 }
 
 /** One session's view on the canvas: its trail, flowchart or cards, its bubbles one at a time, its last step and reply. */
-export function AgentCanvas({ index, view, session, settings: base, selected, changes, onSelect, onClose, onOpenFile }: AgentCanvasProps) {
-    const show = view.show!;
-    const [settings, setSettings] = useState(base);
-    const [picked, setPicked] = useState<number>();
-    const current = Math.min(picked ?? 0, Math.max(0, view.bubbles.length - 1));
-    const step = { at: current, of: view.bubbles.length, onBack: () => setPicked(current - 1), onNext: () => setPicked(current + 1) };
+export function AgentCanvas({ index, view, session, settings: base, selected, changes, at, list, onStep, onSelect, onClose, onOpenFile }: AgentCanvasProps) {
+    // every push of the session sends the view anew
+    const show = useMemo(() => view.show!, [JSON.stringify(view.show)]);
+    const current = Math.min(at, Math.max(0, view.bubbles.length - 1));
+    const step = { at: current, of: view.bubbles.length, onBack: () => onStep(current - 1), onNext: () => onStep(current + 1) };
     const bubbles = view.bubbles.slice(current, current + 1);
+    const target = bubbles[0]?.target;
     const cards = useMemo(() => show.view === 'action' || show.view === 'event' ? cardView(index, show.view, show.focus) : undefined, [index, show]);
     const flow = useMemo(() => show.view === 'machine' || show.view === 'usecase' ? flowView(index, show.view, show.focus) : undefined, [index, show]);
+    /** A playbook's tree grows with each step played. */
+    const focus = useMemo(() => view.playbook ? show.focus.slice(0, current + 1) : show.focus, [show, view.playbook, current]);
 
-    // A new view starts at its first bubble.
-    useEffect(() => setPicked(undefined), [show]);
+    /** The shown bubble selects its element, so the inspector shows it. */
+    useEffect(() => { if (target) onSelect(target); }, [current, target]);
 
-    /** A node the lens cannot draw switches to the lens of its kind, for this view only. */
-    useEffect(() => {
-        const last = show.view === 'node' && show.focus.at(-1);
-        if (!last || trailOf(index, settings, show.focus).ids.at(-1)) return;
-        const lens = lensOf(index.nodes.get(index.declaration(last))?.kind ?? '');
-        if (lens) setSettings({ ...settings, lens });
-    }, [index, show]);
+    /**
+     * The tree shows the element of the shown bubble under the lens of its kind; without bubbles, a last node the lens
+     * cannot draw switches to the lens of its kind. The lens the person picks holds until the next bubble.
+     */
+    const lens = useMemo(() => {
+        const of = (qn: string) => lensOf(index.nodes.get(index.declaration(qn))?.kind ?? '');
+        const last = show.focus.at(-1);
+        if (show.view !== 'node') return base.lens;
+        if (target) return of(target) ?? base.lens;
+        return last && !trailOf(index, base, show.focus).ids.at(-1) ? of(last) ?? base.lens : base.lens;
+    }, [index, show, target, base]);
+    const [picked, setPicked] = useState<{ at: string, settings: ViewSettings }>();
+    const here = `${current} ${target}`;
+    const settings = useMemo(() => picked?.at === here ? picked.settings : { ...base, lens }, [picked, here, base, lens]);
 
     const latest = view.steps.at(-1);
     return (
@@ -80,9 +93,16 @@ export function AgentCanvas({ index, view, session, settings: base, selected, ch
             </div>
             <AskSession session={view.session} name={session ? session.label ?? session.name : 'the session'} asked={view.questions?.at(-1)} />
             {view.replies.length > 0 && <p className="agent-reply">{view.replies.at(-1)}</p>}
+            {list && view.bubbles.length > 1 && (
+                <ol className="agent-steps" aria-label="Steps">
+                    {view.bubbles.map((bubble, i) => (
+                        <li key={i}><button aria-current={i === current ? 'step' : undefined} title={bubble.text} onClick={() => onStep(i)}>{i + 1} {bubble.title ?? bubble.target.split('.').at(-1)}</button></li>
+                    ))}
+                </ol>
+            )}
             {cards ? <CardCanvas index={index} cards={cards} selected={selected} bubbles={bubbles} step={step} onSelect={onSelect} onOpenFile={onOpenFile} />
                 : flow ? <FlowCanvas index={index} flow={flow} selected={selected} bubbles={bubbles} step={step} edgesOnClick={show.view === 'machine'} onSelect={onSelect} onOpenFile={onOpenFile} />
-                : <ModelCanvas index={index} focus={show.focus} selected={selected} settings={settings} bubbles={bubbles} changes={changes} step={step} onSelect={onSelect} onSettings={setSettings} onOpenFile={onOpenFile} />}
+                : <ModelCanvas index={index} focus={focus} folded={view.playbook} selected={selected} settings={settings} bubbles={bubbles} changes={changes} step={step} onSelect={onSelect} onSettings={next => setPicked({ at: here, settings: next })} onOpenFile={onOpenFile} />}
         </div>
     );
 }

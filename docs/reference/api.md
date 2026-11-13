@@ -261,6 +261,7 @@ Agent sessions in an app's terminals, `@appling/ai/agents` (what the VS Code ext
 | Export | Purpose |
 |---|---|
 | `BUILTIN_PRESETS`, `agentPresets(settings)`, `PRESETS_KEY`, `AgentPreset`, `Wiring`, `WIRINGS`, `AnswerKeys` | The agents a session can run: the built in ones plus the custom ones of `agents.presets`, with the problems found in them |
+| `attach(preset, context)` | The agent's own commands that add the session's MCP server to the local configuration of an agent the app did not start, and remove it again; undefined for an agent without such a command (only Claude Code has one) |
 | `launch(preset, context)`, `LaunchContext`, `Launch`, `SERVER`, `CLAUDE_HOOKS`, `GEMINI_HOOKS`, `OPENCODE_EVENTS`, `OPENCODE_PLUGIN`, `geminiSystemSettingsFile()` | The command, arguments, environment and files that start a preset's agent wired to its session's MCP server and hooks |
 | `Gateway`, `GatewayOptions` | The one local endpoint the agents reach: `/mcp` forwarded to the session's inspector server, `/hooks/<event>`, both with the session's bearer token |
 | `reduce(state, signal)`, `hookSignal(wiring, event, body)`, `notificationSignal(wiring, notification)`, `answers(state, data)`, `waiting(status)`, `AgentStatus`, `StatusState`, `Signal`, `AgentPrompt`, `TerminalNotification`, `STATUS_COLORS`, `STATUS_LABELS` | A session's status from its hooks, its terminal notifications and its exit |

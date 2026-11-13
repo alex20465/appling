@@ -9,7 +9,7 @@ import type { Snapshot } from './snapshot.js';
  * client's side column: the client sends what they show (`PanelState`) after every change and does what they ask
  * (`PanelAction`). Hosts without the `panels` hook keep the side column.
  */
-export const PANELS = ['inspector', 'changes', 'review', 'code', 'tasks'] as const;
+export const PANELS = ['inspector', 'playbook', 'changes', 'review', 'code', 'tasks'] as const;
 export type PanelName = typeof PANELS[number];
 
 export interface PanelState {
@@ -21,6 +21,15 @@ export interface PanelState {
     sessions: AgentSession[];
     /** The review: whether it marks the canvas (`on` and `marked`), the revision compared with and its result. */
     review: { on: boolean, rev: string, marked: boolean, revisions: Revision[], result?: PanelReview };
+    playbooks: PanelPlaybook[];
+}
+
+/** A playbook of an agent session: its steps, and the one that plays (`at`) while the canvas shows it. */
+export interface PanelPlaybook {
+    session: string;
+    title: string;
+    steps: { title: string, text: string, target: string }[];
+    at?: number;
 }
 
 /** The session that claimed an element or one of its parents, as `overlaps` of `@appling/ai` decides. */
@@ -34,4 +43,6 @@ export type PanelAction =
     | { type: 'select', qn: string }
     /** The text diff of an element the review marks, from the revision. */
     | { type: 'textDiff', qn: string }
-    | { type: 'review', on?: boolean, rev?: string, marked?: boolean };
+    | { type: 'review', on?: boolean, rev?: string, marked?: boolean }
+    /** Plays a step of a session's playbook on the canvas. */
+    | { type: 'step', session: string, step: number };

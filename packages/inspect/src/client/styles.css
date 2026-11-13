@@ -140,8 +140,12 @@ button:focus-visible { outline: 2px solid var(--appling-leaf); outline-offset: 2
 
 .canvas-area { position: relative; display: grid; min-width: 0; min-height: 0; }
 .canvas-area > .tree-canvas, .agent-canvas { grid-area: 1 / 1; min-height: 0; }
-.agent-canvas { display: grid; grid-template-rows: auto auto 1fr; min-width: 0; }
-.agent-canvas > :last-child { min-height: 0; }
+.agent-canvas { display: grid; grid-template-rows: repeat(4, auto) 1fr; min-width: 0; }
+.agent-canvas > :last-child { grid-row: 5; min-height: 0; }
+.agent-steps { display: flex; gap: 4px; margin: 0; padding: 6px 10px; overflow-x: auto; list-style: none; border-bottom: 1px solid var(--appling-line); background: var(--appling-surface); }
+.agent-steps button { padding: 2px 8px; border: 1px solid var(--appling-line); border-radius: 4px; background: var(--appling-surface-raised); color: var(--appling-ink-soft); font-size: 12px; white-space: nowrap; cursor: pointer; }
+.agent-steps button:hover { border-color: var(--appling-line-strong); color: var(--appling-ink); }
+.agent-steps button[aria-current] { border-color: var(--appling-rust); color: var(--appling-ink); }
 .agent-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 2px solid var(--session, var(--appling-leaf)); background: var(--appling-surface-raised); font-size: 12.5px; }
 .agent-bar .button { margin-left: auto; }
 .agent-note { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

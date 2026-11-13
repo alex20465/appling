@@ -49,6 +49,9 @@ export function App() {
     /** What each agent session shows with the visual tools, and the session whose view the canvas shows. */
     const [agentViews, setAgentViews] = useState<Record<string, AgentView>>({});
     const [watching, setWatching] = useState<string>();
+    /** The bubble of the watched view on screen: the step of a playbook. */
+    const [step, setStep] = useState(0);
+    const watch = (session?: string, at = 0) => { setWatching(session); setStep(at); };
 
     useEffect(() => {
         loadSnapshot().then(setSnapshot);
@@ -72,6 +75,14 @@ export function App() {
 
     // The view of a session that ended closes.
     useEffect(() => { if (watching && !agentViews[watching]?.show) setWatching(undefined); }, [agentViews, watching]);
+
+    // A new view of the watched session starts at its first bubble.
+    const shown = watching && JSON.stringify(agentViews[watching]?.show);
+    const before = useRef({ watching, shown });
+    useEffect(() => {
+        if (before.current.watching === watching && before.current.shown !== shown) setStep(0);
+        before.current = { watching, shown };
+    }, [watching, shown]);
 
     useEffect(() => {
         if (!reviewing || !snapshot) return;
@@ -146,15 +157,20 @@ export function App() {
         const timer = setTimeout(() => host.panels!({
             snapshot: { ...snapshot, files: snapshot.files.map(({ uri, path }) => ({ uri, path })) },
             selected, live, sessions,
-            review: { on: reviewing, rev, marked, revisions, result: review && (review.ok ? { ok: true, commit: review.commit, diff: review.diff, files: review.files } : review) }
+            review: { on: reviewing, rev, marked, revisions, result: review && (review.ok ? { ok: true, commit: review.commit, diff: review.diff, files: review.files } : review) },
+            playbooks: Object.values(agentViews).filter(v => v.playbook && v.show).map(v => ({
+                session: v.session, title: v.show!.title ?? 'Playbook', steps: v.bubbles.map(b => ({ title: b.title ?? b.target, text: b.text, target: b.target })),
+                ...v.session === watching ? { at: Math.min(step, v.bubbles.length - 1) } : {}
+            }))
         }), 50);
         return () => clearTimeout(timer);
-    }, [snapshot, selected, live, sessions, reviewing, rev, marked, revisions, review]);
+    }, [snapshot, selected, live, sessions, reviewing, rev, marked, revisions, review, agentViews, watching, step]);
     const panelAction = useRef<(action: PanelAction) => void>(() => undefined);
     panelAction.current = action => {
         switch (action.type) {
             case 'select': return select(action.qn);
             case 'textDiff': return textDiff(action.qn);
+            case 'step': return watch(action.session, action.step);
             case 'review':
                 if (action.on !== undefined) setReviewing(action.on);
                 if (action.rev !== undefined && action.rev !== rev) { setReview(undefined); setRev(action.rev); }
@@ -184,10 +200,10 @@ export function App() {
             </header>
             <main className="canvas-area">
                 {watched?.show
-                    ? <AgentCanvas key={watched.session} index={canvasIndex} view={watched} session={sessions.find(s => s.id === watched.session)} settings={view} selected={element} changes={canvasChanges} onSelect={select} onClose={() => setWatching(undefined)} onOpenFile={openFile} />
+                    ? <AgentCanvas key={watched.session} index={canvasIndex} view={watched} session={sessions.find(s => s.id === watched.session)} settings={view} selected={element} changes={canvasChanges} at={step} list={!host?.panels} onStep={setStep} onSelect={select} onClose={() => watch()} onOpenFile={openFile} />
                     : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={element} settings={view} sessions={sessionMarks} onSession={host?.focusSession} implementation={snapshot.implementation} buttons={[{ label: openTasks ? `Tasks ${openTasks}` : 'Tasks', pressed: board, run: () => setBoard(!board) }]} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
                 {board && !watched?.show && <TaskBoard tasks={snapshot.tasks} sessions={sessions} selected={element} onSelect={select} onClose={() => setBoard(false)} />}
-                <AgentStrip views={Object.values(agentViews)} sessions={sessions} watching={watching} onWatch={setWatching} />
+                <AgentStrip views={Object.values(agentViews)} sessions={sessions} watching={watching} onWatch={watch} />
                 {element && !host?.panels && (
                     <Inspector index={index} qn={element} anchor={anchor} change={selectedChange} onSelect={select} onOpenSource={openSource} onClose={() => setSelected(undefined)} />
                 )}

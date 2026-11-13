@@ -141,6 +141,11 @@ describe('the inspect server', () => {
         const view = (await watch.next(m => m.type === 'agent-view' && (m.view as AgentView).steps.length > 0)).view as AgentView;
         expect(view).toMatchObject({ session: session.id, show: { view: 'node', focus: ['sales.Order'], title: 'Orders' }, bubbles: [{ target: 'sales.Order.status' }] });
 
+        // A playbook replaces the view and its bubbles.
+        expect(await a.call('visual_playbook', { title: 'Placing an order', steps: [{ title: 'The order', description: 'Holds the lines', target: 'sales.Order' }] })).toEqual({ shown: true, steps: 1 });
+        const played = (await watch.next(m => m.type === 'agent-view' && (m.view as AgentView).show?.title === 'Placing an order')).view as AgentView;
+        expect(played.bubbles).toEqual([{ target: 'sales.Order', title: 'The order', text: 'Holds the lines' }]);
+
         watch.socket.send(JSON.stringify({ type: 'context', selection: 'sales.Order', watching: session.id }));
         await new Promise(resolve => setTimeout(resolve, 50));
         expect(await a.call('visual_selection')).toMatchObject({ open: true, qn: 'sales.Order', view: { view: 'node' } });

@@ -70,7 +70,10 @@ export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Se
     };
     const childrenOf = (id: string, grow: () => TreeNode[]) => {
         if (unfolded.has(id)) return grow();
-        if (trail.has(id)) return grow().filter(child => unfolded.has(child.id) || trail.has(child.id));
+        if (!trail.has(id)) return undefined;
+        // the end of a trail that stays folded keeps nothing
+        const kept = grow().filter(child => unfolded.has(child.id) || trail.has(child.id));
+        return kept.length ? kept : undefined;
     };
     const element = (node: GraphNode, parent: string, module: string, path: string[]): TreeNode => {
         const id = `${parent}/${node.qn}`;
@@ -108,9 +111,9 @@ export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Se
 /**
  * The tree that draws these elements one after another and nothing else: each unfolds where the tree already shows
  * it, else its trail from the seed through its module is added. `ids` are the drawn nodes, undefined when the lens
- * has no place for the element.
+ * has no place for the element. With `folded` the elements stay folded: each stands in its module's group, without what uses it.
  */
-export function trailOf(index: GraphIndex, settings: ViewSettings, focus: string[]): { unfolded: Set<string>, trail: Set<string>, ids: (string | undefined)[] } {
+export function trailOf(index: GraphIndex, settings: ViewSettings, focus: string[], folded = false): { unfolded: Set<string>, trail: Set<string>, ids: (string | undefined)[] } {
     const unfolded = new Set<string>();
     const trail = new Set(['~']);
     const find = (qn: string, open: string[]) => flatten(growTree(index, settings, new Set([...unfolded, ...open]), undefined, trail))
@@ -122,7 +125,7 @@ export function trailOf(index: GraphIndex, settings: ViewSettings, focus: string
         if (!found) return undefined;
         const parts = found.id.split('/');
         parts.slice(1).forEach((_, i) => trail.add(parts.slice(0, i + 1).join('/')));
-        unfolded.add(found.id);
+        (folded ? trail : unfolded).add(found.id);
         return found.id;
     });
     return { unfolded, trail, ids };

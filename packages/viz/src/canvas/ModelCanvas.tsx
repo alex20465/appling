@@ -14,6 +14,8 @@ interface CanvasProps {
     name?: string;
     /** Elements or modules to draw one after another, each unfolded in place; when given, the tree draws only their trails. */
     focus?: string[];
+    /** The focused elements stay folded: only their trails, without what uses them. */
+    folded?: boolean;
     selected?: string;
     settings: ViewSettings;
     bubbles?: Bubble[];
@@ -94,7 +96,7 @@ const LABEL: Record<TreeNode['type'], number> = { seed: 0, module: 210, group: 1
  * The model as a tree that grows from a seed: modules first, then the declarations of the lens, then on every
  * unfold what uses the unfolded declaration. Only what you unfold is drawn.
  */
-export function ModelCanvas({ index, name, focus, selected, settings, bubbles = [], changes, sessions, onSession, implementation, buttons = [], onSelect, onSettings, onOpenFile, step }: CanvasProps) {
+export function ModelCanvas({ index, name, focus, folded, selected, settings, bubbles = [], changes, sessions, onSession, implementation, buttons = [], onSelect, onSettings, onOpenFile, step }: CanvasProps) {
     const box = useRef<HTMLDivElement>(null);
     const drag = useRef<{ x: number, y: number, moved: boolean }>(undefined);
     const [camera, setCamera] = useState<Camera>({ x: 0, y: 0, k: 1 });
@@ -102,12 +104,12 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
     seen.current = camera;
     const glide = useRef<number>(undefined);
     const [current, setCurrent] = useState('~');
-    const [start] = useState(() => initial(index, settings, focus));
+    const [start] = useState(() => initial(index, settings, focus, folded));
     const [unfolded, setUnfolded] = useState(start.unfolded);
     const [trail, setTrail] = useState(start.trail);
     const [fitting, setFitting] = useState(true);
     /** The node whose children just grew, to bring into view once they are placed. */
-    const [follow, setFollow] = useState<{ id: string }>();
+    const [follow, setFollow] = useState(start.last ? { id: start.last } : undefined);
 
     const [legend, setLegend] = useState(false);
     const tree = useMemo(() => growTree(index, settings, unfolded, name, trail), [index, settings, unfolded, name, trail]);
@@ -152,15 +154,21 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
     const implemented = useMemo(() => implementation ? implementationMarks(index, implementation) : new Map<string, ImplementationState>(), [index, implementation]);
 
     const replant = () => {
-        const next = initial(index, settings, focus);
+        const next = initial(index, settings, focus, folded);
         setUnfolded(next.unfolded);
         setTrail(next.trail);
         setCurrent(next.last ?? '~');
-        if (next.last) setFollow({ id: next.last });
-        else setFitting(true);
+        // the shown bubble places the camera itself
+        if (next.last && !bubbles.length) setFollow({ id: next.last });
+        else if (!next.last) setFitting(true);
     };
 
-    useEffect(replant, [settings.lens, focus]);
+    // while rendering, so no frame draws the new lens or focus with the old tree
+    const planted = useRef({ lens: settings.lens, focus });
+    if (planted.current.lens !== settings.lens || planted.current.focus !== focus) {
+        planted.current = { lens: settings.lens, focus };
+        replant();
+    }
 
     /** A selection from the text, the search or the inspector unfolds the tree to its declaration when the lens has it. */
     useEffect(() => {
@@ -272,17 +280,19 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
     const drawn = new Map(placed.filter(p => p.node.type !== 'seed' && p.node.type !== 'group').reverse().map(p => [p.node.qn!, p]));
     const anchored = bubbles.map(bubble => ({ bubble, anchor: index.nodes.has(bubble.target) ? anchorOf(index, bubble.target, new Set(drawn.keys())) : undefined }));
 
-    /** The shown bubble makes the node it points at the current one and glides it to the top left, leaving room for the bubble below. */
+    /** The shown bubble makes the node it points at the current one; the camera glides only when the node or the room for its bubble below is out of view. */
     useEffect(() => {
         const anchor = anchored[0]?.anchor;
         const element = box.current;
         if (!anchor || !element) return;
         const p = drawn.get(anchor)!;
         setCurrent(p.node.id);
-        const k = Math.max(seen.current.k, 1);
-        const x = Math.max(40, (element.clientWidth - bubbleWidth(element)) / 2 + 24);
-        move({ k, x: x - p.x * k, y: 120 - p.y * k });
-    }, [bubbles[0]]);
+        const { x, y, k } = seen.current;
+        const [left, top] = [x + p.x * k, y + p.y * k];
+        if (k >= 0.6 && left > 60 && left < element.clientWidth - 60 && top > 110 && top < element.clientHeight - 280) return;
+        const zoom = Math.max(k, 0.6);
+        move({ k: zoom, x: element.clientWidth / 2 - p.x * zoom, y: Math.max(140, element.clientHeight * 0.35) - p.y * zoom });
+    }, [bubbles[0], anchored[0]?.anchor]);
 
     const crumbs = lineage(here);
     const info = here.node.type === 'element'
@@ -477,9 +487,9 @@ function Legend() {
 }
 
 /** The trails of the focus with the last focused node; without a focus the seed, unfolded to the module when there is only one. */
-function initial(index: GraphIndex, settings: ViewSettings, focus?: string[]): { unfolded: Set<string>, trail: Set<string>, last?: string } {
+function initial(index: GraphIndex, settings: ViewSettings, focus?: string[], folded?: boolean): { unfolded: Set<string>, trail: Set<string>, last?: string } {
     if (focus) {
-        const { unfolded, trail, ids } = trailOf(index, settings, focus);
+        const { unfolded, trail, ids } = trailOf(index, settings, focus, folded);
         return { unfolded, trail, last: ids.findLast(id => id !== undefined) };
     }
     const open = new Set(['~']);

@@ -64,4 +64,4 @@ The direction also runs the other way: when you or the person change behavior in
 
 ## 6. Explain how something works
 
-Answer from the model, not from the code: find the elements with `graph_query`, read them with `read_source`, ask `simulate` about behavior. Show them with `visualize` and walk through them with one `visual_bubble` per step. Read the code only for how something is implemented, and say so when code and model disagree.
+Answer from the model, not from the code: find the elements with `graph_query`, read them with `read_source`, ask `simulate` about behavior. Show them with `visualize`, or walk through a workflow with a `visual_playbook` of its steps. Read the code only for how something is implemented, and say so when code and model disagree.

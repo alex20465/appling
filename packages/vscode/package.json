@@ -151,6 +151,11 @@
           "when": "appling.inspect"
         },
         {
+          "id": "appling.playbook",
+          "name": "Playbook",
+          "when": "appling.inspect"
+        },
+        {
           "id": "appling.changes",
           "name": "Changes",
           "when": "appling.inspect"
@@ -186,6 +191,10 @@
       {
         "view": "appling.agents",
         "contents": "Agent sessions you start from the command palette (Appling: New agent session) show here, with their status and questions. Agents you start yourself connect through the Appling MCP server that appling init sets up.\n[Initialize Appling](command:appling.init)"
+      },
+      {
+        "view": "appling.playbook",
+        "contents": "No playbook yet. Ask your agent session how a part of the application works, such as \"walk me through how an order is placed\": its steps are listed here and play on the canvas, one at a time."
       },
       {
         "view": "appling.changes",

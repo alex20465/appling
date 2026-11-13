@@ -11,6 +11,8 @@ export interface Show {
 /** A note Claude places on an element or one of its members; with `code`, an example of how it is implemented. */
 export interface Bubble {
     target: string;
+    /** The step's name in a playbook. */
+    title?: string;
     text: string;
     code?: string;
     /** Relative to the model folder. */

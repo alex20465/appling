@@ -49,7 +49,7 @@ export type Run =
 type Builder = (state: PanelState, index: GraphIndex) => PanelNode[];
 
 /** The panels the sidebar shows; search is VS Code's own (Go to Symbol in Workspace, from the language server). */
-export const VIEWS = ['inspector', 'changes', 'review', 'code', 'tasks'] as const;
+export const VIEWS = ['inspector', 'playbook', 'changes', 'review', 'code', 'tasks'] as const;
 export type ViewName = typeof VIEWS[number];
 
 /** The open tasks of every target's registry: what the generated code still misses, for an agent or you to finish. */
@@ -76,8 +76,25 @@ function registryTasks(state: PanelState, index: GraphIndex): PanelNode[] {
     return snapshot.targets.flatMap(t => group(`target/${t.out}`, `${t.extension} → ${t.out}`, byTarget(t.out), true, String(open.filter(task => task.target === t.out).length)));
 }
 
+/** The playbooks of the agent sessions: a click on a step plays it on the canvas. */
+function playbookTree(state: PanelState, index: GraphIndex): PanelNode[] {
+    return state.playbooks.map(book => {
+        const session = state.sessions.find(s => s.id === book.session);
+        return {
+            id: `playbook/${book.session}`, label: book.title, description: session && (session.label ?? session.name), expanded: true,
+            children: book.steps.map((step, i): PanelNode => ({
+                id: `playbook/${book.session}/${i}`, label: `${i + 1}  ${step.title}`, description: step.target.split('.').at(-1), tooltip: step.text,
+                icon: i === book.at ? 'play' : book.at !== undefined && i < book.at ? 'check' : iconOf(index.nodes.get(step.target)?.kind ?? ''),
+                color: i === book.at ? 'charts.green' : undefined,
+                run: { type: 'action', action: { type: 'step', session: book.session, step: i } }
+            }))
+        };
+    });
+}
+
 export const PANEL_TREES: Record<ViewName, Builder> = {
     inspector: inspectorTree,
+    playbook: playbookTree,
     changes: changesTree,
     review: reviewTree,
     code: codeTree,

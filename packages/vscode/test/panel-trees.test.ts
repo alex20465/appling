@@ -17,7 +17,7 @@ beforeAll(async () => {
     cpSync(join(import.meta.dirname, '../../../examples'), root, { recursive: true });
     ide = await startInspectProcess(root, { main: join(import.meta.dirname, '../../inspect/out/server/main.js') });
     const snapshot = await (await fetch(`${ide.url}/api/snapshot`)).json();
-    base = { snapshot, sessions: [], review: { on: false, rev: 'HEAD', marked: true, revisions: [] } };
+    base = { snapshot, sessions: [], review: { on: false, rev: 'HEAD', marked: true, revisions: [] }, playbooks: [] };
     index = new GraphIndex(snapshot.graph);
 }, 60000);
 afterAll(() => ide?.close());
@@ -90,4 +90,15 @@ test('the tasks view lists every open registry task with what it misses; without
 test('code shows the implementation and the targets', () => {
     const tree = PANEL_TREES.code(base, index);
     expect(labels(tree)).toEqual(expect.arrayContaining(['Implementation', 'No targets']));
+});
+
+test('the playbook lists the steps of each session, marks the one that plays and a click plays a step', () => {
+    const steps = [{ title: 'The order', text: 'Stored here', target: 'sales.Order' }, { title: 'Its lifecycle', text: 'Moves it', target: 'sales.OrderFlow' }];
+    const [book] = PANEL_TREES.playbook({ ...base, playbooks: [{ session: 's1', title: 'Placing an order', steps, at: 1 }] }, index);
+    expect(book.label).toBe('Placing an order');
+    expect(book.children).toMatchObject([
+        { label: '1  The order', description: 'Order', tooltip: 'Stored here', icon: 'check' },
+        { label: '2  Its lifecycle', icon: 'play', run: { type: 'action', action: { type: 'step', session: 's1', step: 1 } } }
+    ]);
+    expect(PANEL_TREES.playbook(base, index)).toEqual([]);
 });

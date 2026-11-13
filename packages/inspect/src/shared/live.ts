@@ -36,6 +36,8 @@ export interface AgentView {
     show?: Show;
     /** The bubbles of the view, in the order they were placed. */
     bubbles: Bubble[];
+    /** The bubbles are the steps of a playbook: the tree grows with each step played. */
+    playbook?: boolean;
     /** What the session works on, the last step last (visual_status). */
     steps: Status[];
     /** Its answers (visual_reply), the last last. */

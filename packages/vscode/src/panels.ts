@@ -26,7 +26,7 @@ const DECORATIONS: Record<ChangeStatus, [string, string]> = {
 };
 
 /**
- * The inspector's side panels as native views in the Appling sidebar (`appling.inspector`, `.changes`, `.review`,
+ * The inspector's side panels as native views in the Appling sidebar (`appling.inspector`, `.playbook`, `.changes`, `.review`,
  * `.code`, `.tasks`; search is VS Code's Go to Symbol in Workspace), showing the inspector tab last active, read only:
  * its client sends the state, the trees come from `panel-trees.ts`, and what the user does goes back to the client as
  * an action, or happens here (opening files and diffs).
@@ -145,6 +145,7 @@ export class Panels implements Disposable {
         for (const [key, value] of Object.entries(context)) void commands.executeCommand('setContext', key, value);
         const badge = (count: number, what: string) => count ? { value: count, tooltip: `${count} ${what}` } : undefined;
         this.trees.changes.view.badge = badge(state.live?.files.length ?? 0, 'changed model files');
+        this.trees.playbook.view.badge = badge(state.playbooks.length, 'playbooks');
         this.trees.tasks.view.badge = badge(state.snapshot.tasks.filter(t => t.status !== 'done').length, 'open registry tasks');
         this.trees.tasks.view.description = state.snapshot.targets.length ? undefined : 'no stack yet';
         this.trees.changes.view.description = state.live?.files.length ? diffSummary(state.live.diff) : undefined;

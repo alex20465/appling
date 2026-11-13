@@ -17,8 +17,10 @@ export class AgentViews {
     /** The visual host of one session for its MCP server. */
     host(session: string): VisualHost {
         return {
-            show: async show => this.change(session, view => {
+            show: async (show, bubbles) => this.change(session, view => {
+                if (bubbles) return void Object.assign(view, { show, bubbles, playbook: true });
                 const next = nextShow(view.show, show);
+                if (!next.keep) view.playbook = false;
                 view.show = next.show;
                 if (!next.keep) view.bubbles = [];
             }),

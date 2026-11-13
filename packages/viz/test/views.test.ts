@@ -105,6 +105,16 @@ test('a trail draws only the elements shown one after another, each unfolded whe
     expect([lensOf('Machine'), lensOf('Field')]).toEqual(['behavior', undefined]);
 });
 
+test('a folded trail draws each element in its module without what uses it', async () => {
+    const index = await indexOf(examples());
+    const { unfolded, trail, ids } = trailOf(index, DOMAIN, ['sales.Order', 'sales.OrderStatus', 'sales.PlaceOrder'], true);
+    expect(ids).toEqual(['~/sales/#Entity/sales.Order', '~/sales/#Enum/sales.OrderStatus', undefined]);
+    const drawn: string[] = [];
+    const walk = (node: { id: string, children?: unknown[] }) => { drawn.push(node.id); (node.children as typeof node[] | undefined)?.forEach(walk); };
+    walk(growTree(index, DOMAIN, unfolded, undefined, trail));
+    expect(drawn).toEqual(['~', '~/sales', '~/sales/#Entity', '~/sales/#Entity/sales.Order', '~/sales/#Enum', '~/sales/#Enum/sales.OrderStatus']);
+});
+
 test('a declaration that is already on its branch does not unfold again', async () => {
     const index = await indexOf({ 'a.appling': 'module a {\n  entity Node {\n    parent: Node?\n    owner: Owner\n  }\n  entity Owner {\n    nodes: Node[]\n  }\n}\n' });
     const open = new Set(['~', '~/a', '~/a/a.Owner', '~/a/a.Owner/a.Node']);

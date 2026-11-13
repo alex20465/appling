@@ -89,7 +89,7 @@ function fakeCanvas() {
     const bubbles: Bubble[] = [];
     const steps: Status[] = [];
     const host: VisualHost = {
-        show: async show => { shown.push(show); },
+        show: async (show, playbook) => { shown.push(show); if (playbook) bubbles.splice(0, bubbles.length, ...playbook); },
         bubble: bubble => { bubbles.push(bubble); return true; },
         selection: () => ({ open: true, qn: 'sales.OrderStatus.placed', view: shown.at(-1) }),
         reply: () => true,
@@ -122,6 +122,10 @@ test('with a visualizer the MCP server shows views and bubbles on the canvas', a
     expect(window.bubbles.map(b => b.target)).toEqual(['sales.Order.status', 'sales.Order']);
     expect(await text('visual_bubble', { target: 'sales.Nope', text: 'x' })).toEqual({ placed: false, reason: 'No element sales.Nope.' });
     expect(await text('visual_bubble', { target: 'sales.Order', text: 'x', file: 'missing.py', line: 1 })).toEqual({ placed: false, reason: 'No file missing.py relative to the model folder.' });
+    expect(await text('visual_playbook', { title: 'Orders', steps: [{ title: 'Nothing', description: 'x', target: 'sales.Nope' }] })).toEqual({ error: 'No element sales.Nope.' });
+    expect(await text('visual_playbook', { title: 'Orders', steps: [{ title: 'The order', description: 'Stored here', target: 'sales.Order' }, { title: 'Its lifecycle', description: 'Moves it', target: 'sales.OrderFlow' }] })).toEqual({ shown: true, steps: 2 });
+    expect(window.shown.at(-1)).toEqual({ view: 'node', focus: ['sales.Order', 'sales.OrderFlow'], title: 'Orders' });
+    expect(window.bubbles).toEqual([{ target: 'sales.Order', title: 'The order', text: 'Stored here' }, { target: 'sales.OrderFlow', title: 'Its lifecycle', text: 'Moves it' }]);
     expect(await text('visual_selection', {})).toMatchObject({ open: true, qn: 'sales.OrderStatus.placed' });
     expect(await text('visual_status', { text: 'Implementing registry tasks', done: 2, total: 5 })).toEqual({ shown: true });
     expect(window.steps).toEqual([{ text: 'Implementing registry tasks', done: 2, total: 5 }]);

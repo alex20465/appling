@@ -10,7 +10,8 @@ import { define, type Tools } from './tools.js';
  * server's `/mcp`. Tests stand in for it.
  */
 export interface VisualHost {
-    show(show: Show): Promise<void>;
+    /** With `bubbles`, a playbook: the view and its bubbles replace what the session showed. */
+    show(show: Show, bubbles?: Bubble[]): Promise<void>;
     /** False when nothing can show it. */
     bubble(bubble: Bubble): boolean | Promise<boolean>;
     selection(): Selection | Promise<Selection>;
@@ -22,7 +23,7 @@ const VIEWS = Object.keys(VIEW_KINDS) as [ViewKind, ...ViewKind[]];
 
 export const VISUAL_INSTRUCTIONS = `The appling server shows the model on the project's canvas in Appling, where the person works. Use it when the person asks to see, show, draw or visualize part of the model, and when they ask how a part of the application works: find the elements involved with the model tools, show them with visualize and explain them with visual_bubble, besides a short answer here. Pick the view that fits: node (one declaration or module in the model tree with what uses it), machine (a flowchart of the states and transitions), action (between which states it moves, who may run it, what it requires and changes), usecase (a flowchart of the steps), event (who emits and consumes it).
 
-The canvas never moves on its own: your view and its bubbles wait beside the canvas under your session's name until the person opens them, and then they follow each new view and bubble. Show one node at a time to walk through the model, and place one bubble per step in the order of the explanation; the person steps through them. Pass code, file and line to hint how an element is implemented, such as from code_references. Read what the person selected with visual_selection when they say "this" or "the selected one". The person can type a question to your session in your view; it reaches your inbox as a message from User: answer it with visual_reply.
+The canvas never moves on its own: your view and its bubbles wait beside the canvas under your session's name until the person opens them, and then they follow each new view and bubble. To explain how a workflow or a part of the application works, write a playbook with visual_playbook: the ordered steps, each with a title, a description and the element it is about. The person plays it step by step at their own pace; each step selects its element under the lens of its layer and shows the description in a bubble. Outside a playbook, show one node at a time to walk through the model, and place one bubble per step in the order of the explanation; the person steps through them. Pass code, file and line to hint how an element is implemented, such as from code_references. Read what the person selected with visual_selection when they say "this" or "the selected one". The person can type a question to your session in your view; it reaches your inbox as a message from User: answer it with visual_reply.
 
 Every model change, yours and any other, is marked live on the canvas against the last commit, so change the model with edit and write_model_file as usual. During longer work call visual_status at the start of each step with what you do and, when you know it, done and total.`;
 
@@ -63,6 +64,25 @@ export function visualTools(host: VisualHost): Tools {
                 if (input.line && !input.file) return { placed: false, reason: 'A line needs its file.' };
                 if (input.file && !existsSync(resolve(context.project.root, input.file))) return { placed: false, reason: `No file ${input.file} relative to the model folder.` };
                 return await host.bubble(input) ? { placed: true } : { placed: false, reason: closed };
+            }
+        }),
+        visual_playbook: define({
+            description: `Show a playbook ${where}: the ordered steps that explain how a workflow or a part of the application works. The person plays it step by step, with no timer, or picks a step from its list; each step selects its element in the model tree, under the lens of its layer, and shows its description in a bubble. It replaces the view and bubbles you showed before.`,
+            input: {
+                title: z.string().describe('What the playbook explains, such as "How an order is placed"'),
+                steps: z.array(z.object({
+                    title: z.string().describe('The step in a few words'),
+                    description: z.string().describe('What happens at this step, in one or two sentences'),
+                    target: z.string().describe('Qualified name of the element or member the step is about, such as "sales.PlaceOrder"')
+                })).min(1)
+            },
+            run: async (context, input) => {
+                const graph = await context.project.graph(context.sources());
+                const known = new Set(graph.nodes.map(n => n.qn));
+                const unknown = input.steps.map(s => s.target).filter(qn => !known.has(qn));
+                if (unknown.length) return { error: `No element ${unknown.join(', ')}.` };
+                await host.show({ view: 'node', focus: input.steps.map(s => s.target), title: input.title }, input.steps.map(s => ({ target: s.target, title: s.title, text: s.description })));
+                return { shown: true, steps: input.steps.length };
             }
         }),
         visual_selection: define({

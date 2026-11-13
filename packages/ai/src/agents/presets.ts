@@ -198,6 +198,19 @@ export function launch(preset: AgentPreset, context: LaunchContext): Launch {
     return { command: preset.command, args, env, files };
 }
 
+/**
+ * The agent's own commands (arguments of the preset's command, run in the agent's folder) that add the session's MCP
+ * server to its local configuration of that folder and remove it again, for an agent the app did not start. Undefined
+ * for an agent without such a command; only Claude Code has one that takes the token without a prompt.
+ */
+export function attach(preset: AgentPreset, context: Pick<LaunchContext, 'mcpUrl' | 'token'>): { add: string[], remove: string[] } | undefined {
+    if (preset.wiring !== 'claude') return undefined;
+    return {
+        add: ['mcp', 'add', '--scope', 'local', '--transport', 'http', SERVER, context.mcpUrl, '--header', `Authorization: Bearer ${context.token}`],
+        remove: ['mcp', 'remove', '--scope', 'local', SERVER]
+    };
+}
+
 /** The opencode plugin that reports permission requests and idle sessions to the gateway. */
 export const OPENCODE_PLUGIN = `// Written by Appling for one agent session: reports permission requests and idle sessions.
 const EVENTS = new Set(${JSON.stringify(OPENCODE_EVENTS)});

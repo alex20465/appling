@@ -3,7 +3,7 @@ title: VS Code
 description: Work with Appling models in VS Code, with the read only inspector in a tab per project, jumps between the model, its code and the canvas, and agent sessions in VS Code terminals.
 ---
 
-The Appling extension for VS Code brings the read only [inspector](inspect.md) into VS Code, next to your AI coding tool. It finds the Appling projects of your workspace, runs one inspector server per project and opens each project's model canvas in a tab of its own, with the Inspector, Changes, Review, Code and Tasks panels as read only views in the Appling sidebar. The text stays in VS Code's own editors, with the [language server](editors.md#vs-code). Agents run as [agent sessions](ai.md#agent-sessions) in VS Code's terminals.
+The Appling extension for VS Code brings the read only [inspector](inspect.md) into VS Code, next to your AI coding tool. It finds the Appling projects of your workspace, runs one inspector server per project and opens each project's model canvas in a tab of its own, with the Inspector, Playbook, Changes, Review, Code and Tasks panels as read only views in the Appling sidebar. The text stays in VS Code's own editors, with the [language server](editors.md#vs-code). Agents run as [agent sessions](ai.md#agent-sessions) in VS Code's terminals.
 
 ## Install
 
@@ -49,6 +49,7 @@ The sidebar shows the panels of the inspector tab you used last, as read only VS
 | Panel | Shows | Does |
 |---|---|---|
 | **Inspector** | The selected element: kind and layer, its change, implementation state and code, what an action does and who may trigger it, what an actor may do, an entity's actions, a machine's reachable states, its properties, members, what uses it and what it uses | The title buttons open the source and the code |
+| **Playbook** | The [playbooks](ai.md#playbooks) of the agent sessions: each with its steps, the one that plays marked; the badge counts the playbooks | A step opens the playbook on the canvas and plays that step: its element is selected and its description shows in a bubble |
 | **Changes** | Every model file changed since the last commit (outside git or before the first commit, since the server started) with the session that wrote it and its changed elements; the badge counts them | A file opens VS Code's diff against the last commit; nothing accepts or reverts a change |
 | **Review** | The model changes and the changed files since a revision | Compare with any commit, mark on the canvas or not; text diffs open in VS Code's diff editor |
 | **Code** | The implementation counts, each target with when it was generated, and the elements new or changed since the last generation | An element selects it on the canvas; there is no generation run or log |
@@ -107,6 +108,8 @@ Each session gets its own MCP session of the workspace with a token. The extensi
 | Inspector tab | The claims of every session on the canvas and on the task board, the files they wrote in the Changes panel, their views |
 
 The sessions of all projects share one session store, so they see each other's labels, status and claims across projects. The workspace is the `.code-workspace` file, or the first folder.
+
+When you start Claude Code yourself in a VS Code terminal, in a project's folder or a folder that holds the only project, the extension offers to add the Appling MCP server to it, so it gets a session of its own with the [visual tools](ai.md#visual-tools). **Add the MCP server** runs `claude mcp add` with the local scope for that folder, which is the one case where the extension changes an agent's configuration: the entry holds the session's token and replaces a project wide `appling` server while it is there. It connects when the agent reloads its MCP servers or restarts in the terminal. The session shows in the Agent Sessions view; it lasts through restarts of the agent in that terminal and covers every Claude Code started in the same folder, so the extension asks once per folder and window, whatever you answer. When the terminal closes, you end the session or the window closes, the extension removes the entry with `claude mcp remove`. This needs VS Code's shell integration, and the other agents have no such command, so start those as agent sessions.
 
 The agent runs as a command of your shell through VS Code's shell integration, which lets the extension see the agent's terminal notifications (OSC 9, OSC 777) and its exit. Without shell integration the command is typed into the shell; the status then comes from the agent's hooks and MCP alone. VS Code shows extensions no terminal input, so when you answer a prompt by typing into the terminal, the session stays marked as waiting until the agent reports again. Answering from the notification or the view clears it at once. Closing the terminal ends the session and releases its claims. Sessions end with the VS Code window.
 

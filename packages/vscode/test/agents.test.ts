@@ -14,16 +14,18 @@ function setup() {
     const store = new MemorySessionStore();
     const terminals: { spec: TerminalSpec, events: TerminalEvents, written: string[], shown: number, disposed: boolean }[] = [];
     const folder = mkdtempSync(join(tmpdir(), 'appling-agents-'));
+    const ran: string[] = [];
     agents = new Agents({
         store, folder, hookScript: '/ext/out/hook.cjs', workspace: '/w',
         ideMcp: repo => repo === '/w/shop' ? 'http://127.0.0.1:9/mcp' : undefined,
+        run: async (command, args, cwd) => { ran.push([command, ...args, cwd].join(' ')); },
         terminals: (spec, events) => {
             const terminal = { spec, events, written: [] as string[], shown: 0, disposed: false };
             terminals.push(terminal);
             return { write: data => terminal.written.push(data), show: () => terminal.shown++, visible: () => false, dispose: () => terminal.disposed = true };
         }
     });
-    return { store, terminals, folder, agents };
+    return { store, terminals, folder, agents, ran };
 }
 
 test('a Claude Code session is wired to the gateway, waits through its hooks, is answered and exits', async () => {
@@ -73,4 +75,21 @@ test('an agent wired by environment waits through its terminal notifications; cl
     await expect.poll(() => agents.get(record.id)).toBeUndefined();
     expect(await store.get(record.id)).toBeUndefined();
     expect(terminal.disposed).toBe(true);
+});
+
+test('an agent the user started gets the MCP server through its own command until its session ends', async () => {
+    const { store, agents, ran } = setup();
+    await agents.start();
+    expect(agents.attachable(preset('Claude Code'))).toBe(true);
+    expect(agents.attachable(preset('Codex'))).toBe(false);
+    let disposed = false;
+    const record = await agents.adopt('/w/shop', '/w/shop/api', preset('Claude Code'), { write: () => undefined, show: () => undefined, visible: () => true, dispose: () => { disposed = true; } });
+    const token = /Bearer (\S+)/.exec(ran[1])![1];
+    expect(ran).toEqual(['claude mcp remove --scope local appling /w/shop/api', `claude mcp add --scope local --transport http appling ${agents.gateway.mcpUrl} --header Authorization: Bearer ${token} /w/shop/api`]);
+    expect(await store.authenticate(token)).toBe(record.id);
+    expect(agents.focus(record.id)).toBe(true);
+    await agents.close(record.id);
+    expect(ran.at(-1)).toBe('claude mcp remove --scope local appling /w/shop/api');
+    expect(disposed).toBe(false);
+    expect(await store.get(record.id)).toBeUndefined();
 });

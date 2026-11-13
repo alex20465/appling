@@ -3,7 +3,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { sessionTitle, type AgentSession, type MemorySessionStore, type SessionStatus } from '@appling/ai';
 import {
-    answerKeys, Gateway, hookSignal, launch, notificationSignal, reduce, waiting,
+    answerKeys, attach, Gateway, hookSignal, launch, notificationSignal, reduce, waiting,
     type AgentPreset, type AgentStatus, type Answer, type Signal, type StatusState, type TerminalNotification
 } from '@appling/ai/agents';
 
@@ -51,6 +51,8 @@ export interface AgentRecord extends StatusState {
     repo: string;
     preset: AgentPreset;
     started: string;
+    /** For an agent the user started: the folder it runs in and the arguments that take the MCP server out of its configuration. */
+    attached?: { cwd: string, remove: string[] };
 }
 
 export interface AgentsOptions {
@@ -63,6 +65,8 @@ export interface AgentsOptions {
     hookScript: string;
     /** The workspace the sessions belong to. */
     workspace?: string;
+    /** Runs an agent's own command to completion, to add the MCP server to an agent the user started. */
+    run?(command: string, args: string[], cwd: string): Promise<unknown>;
     geminiSystemSettings?(): Record<string, unknown> | undefined;
 }
 
@@ -142,6 +146,35 @@ export class Agents extends EventEmitter<Events> {
         return record;
     }
 
+    /** Whether the preset's agent can take the MCP server while it runs in a terminal of the user's. */
+    attachable(preset: AgentPreset): boolean {
+        return !!this.options.run && !!attach(preset, { mcpUrl: '', token: '' });
+    }
+
+    /**
+     * Gives an agent the user started in `terminal`, in the folder `cwd` of the project, an MCP session of its own:
+     * the agent's own command adds the server to its local configuration of that folder, and the session's end
+     * removes it. The terminal stays the user's.
+     */
+    async adopt(repo: string, cwd: string, preset: AgentPreset, terminal: AgentTerminal): Promise<AgentRecord> {
+        if (!this.options.ideMcp(repo)) throw new Error('The project\'s inspect server is not running yet.');
+        const { session, token } = await this.options.store.open({ name: preset.name, repo, workspace: this.options.workspace });
+        const commands = attach(preset, { mcpUrl: this.gateway.mcpUrl, token })!;
+        const record: AgentRecord = { id: session.id, name: preset.name, color: session.color, repo, preset, status: 'working', started: session.started, attached: { cwd, remove: commands.remove } };
+        try {
+            // an entry a window left behind would make the add fail
+            await this.options.run!(preset.command, commands.remove, cwd).catch(() => undefined);
+            await this.options.run!(preset.command, commands.add, cwd);
+        } catch (error) {
+            await this.options.store.end(session.id);
+            throw error;
+        }
+        this.records.set(record.id, record);
+        this.terminals.set(record.id, terminal);
+        this.emit('changed');
+        return record;
+    }
+
     /** Shows the session's terminal; false when there is none. */
     focus(id: string): boolean {
         const terminal = this.terminals.get(id);
@@ -171,7 +204,8 @@ export class Agents extends EventEmitter<Events> {
         this.records.delete(id);
         const terminal = this.terminals.get(id);
         this.terminals.delete(id);
-        terminal?.dispose();
+        if (record.attached) await this.options.run!(record.preset.command, record.attached.remove, record.attached.cwd).catch(() => undefined);
+        else terminal?.dispose();
         await this.options.store.end(id).catch(() => undefined);
         rmSync(join(this.options.folder, id), { recursive: true, force: true });
         this.emit('changed');

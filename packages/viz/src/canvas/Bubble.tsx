@@ -30,6 +30,7 @@ export function BubbleView({ bubble, member, style, reveal, tail, step, onOpenFi
         <aside ref={element} className={['bubble', bubble.code && 'code', tail && `tail-${tail}`].filter(Boolean).join(' ')} style={style}>
             <div className="bubble-body">
                 {member && <span className="bubble-member">{member}</span>}
+                {bubble.title && <strong>{bubble.title}</strong>}
                 <p>{bubble.text}</p>
                 {bubble.file && <FileLink file={bubble.file} line={bubble.line ?? 1} onOpenFile={onOpenFile} />}
                 {bubble.code && <pre>{bubble.code}</pre>}
