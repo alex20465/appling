@@ -45,8 +45,8 @@ test('the tree starts folded at the seed and unfolds modules, then the lens decl
         '    Entities (1)',
         '      Order (13)',
         '        Actions (2)',
-        '          PlaceOrder (6)',
         '          Cancel (6)',
+        '          PlaceOrder (6)',
         '        Use cases (1)',
         '        Machines (1)',
         '        Projections (1)',
@@ -324,20 +324,40 @@ test('new nodes sprout generation by generation, siblings one after another', as
     expect(loads(next).get(module)).toBe(shoots.length);
 });
 
-test('unfolding a wide crown leaves the nodes below where they stand and overlaps nothing', async () => {
+test('unfolding leaves every node that stands where it is and overlaps nothing', async () => {
     const index = await indexOf(examples());
     const open = new Set(['~']);
-    let before = layoutTree(growTree(index, DOMAIN, open));
-    // unfold everything level by level, four levels up
+    let before = layoutTree(growTree(index, DOMAIN, open), open);
+    // unfold one node after another, four levels up
     for (let level = 0; level < 4; level++) {
-        for (const p of before) if (p.node.count && !p.node.cycle) open.add(p.node.id);
-        const after = layoutTree(growTree(index, DOMAIN, open));
-        const now = new Map(after.map(p => [p.node.id, p]));
-        const depth = (p: { node: TreeNode }) => p.node.id.split('/').length;
-        const deepest = Math.max(...before.map(depth));
-        for (const p of before.filter(p => depth(p) < deepest)) expect([p.node.id, now.get(p.node.id)!.x]).toEqual([p.node.id, p.x]);
+        for (const { node } of before.filter(p => p.node.count && !p.node.cycle && !open.has(p.node.id))) {
+            const stood = layoutTree(growTree(index, DOMAIN, open), open);
+            open.add(node.id);
+            const now = new Map(layoutTree(growTree(index, DOMAIN, open), open).map(p => [p.node.id, p]));
+            for (const p of stood) expect([p.node.id, now.get(p.node.id)!.x, now.get(p.node.id)!.y]).toEqual([p.node.id, p.x, p.y]);
+        }
+        const after = layoutTree(growTree(index, DOMAIN, open), open);
         for (const a of after) for (const b of after) if (a !== b && Math.abs(a.y - b.y) < 100 && a.x <= b.x) expect(b.x - a.x, `${a.node.id} and ${b.node.id}`).toBeGreaterThanOrEqual(200);
         before = after;
     }
     expect(before.length).toBeGreaterThan(40);
+});
+
+test('many children wrap into rows, and a node that unfolds keeps its place and those of its siblings, its children above them', () => {
+    const leaf = (id: string, children?: TreeNode[]): TreeNode => ({ id, type: 'element', label: id, fact: '', count: 0, relevance: 0, children });
+    const group = (open?: string) => leaf('~', Array.from({ length: 12 }, (_, i) => leaf(`~/${i}`, `~/${i}` === open ? [leaf(`~/${i}/a`), leaf(`~/${i}/b`)] : undefined)));
+    const at = (placed: ReturnType<typeof layoutTree>) => placed.filter(p => p.node.id.split('/').length === 2).map(p => [p.node.id, p.x, p.y]);
+    const folded = layoutTree(group());
+    expect(new Set(folded.slice(1).map(p => p.y)).size).toBe(3);
+    const unfolded = layoutTree(group('~/0'));
+    expect(at(unfolded)).toEqual(at(folded));
+    const top = Math.min(...folded.map(p => p.y));
+    for (const child of unfolded.filter(p => p.parent?.node.id === '~/0')) expect(child.y).toBeLessThan(top);
+});
+
+test('equally relevant nodes stand in the order of their names, whatever the order of the source', async () => {
+    const module = (members: string[]) => `module m {\n${members.map(name => `  entity ${name} {\n    label: String\n  }\n`).join('')}}\n`;
+    const labels = async (members: string[]) => growTree(await indexOf({ 'm.appling': module(members) }), DOMAIN, new Set(['~', '~/m'])).children![0].children!.map(c => c.label);
+    expect(await labels(['Cherry', 'Apple', 'Banana'])).toEqual(['Apple', 'Banana', 'Cherry']);
+    expect(await labels(['Banana', 'Cherry', 'Apple'])).toEqual(['Apple', 'Banana', 'Cherry']);
 });

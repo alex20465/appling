@@ -14,8 +14,8 @@ const SLOT: Record<TreeNode['type'], number> = { seed: 220, module: 260, group: 
 const LEVEL = 140;
 /** Between the rows of a wrapped group. */
 const ROW = 100;
-/** Folded children beyond this many wrap into rows. */
-const WRAP = 6;
+/** Children beyond this many wrap into rows. */
+const WRAP = 4;
 
 /** The children of one node as they stand together: a row, or the rows of a wrapped group. */
 interface Block {
@@ -23,59 +23,75 @@ interface Block {
     /** Each child, from the middle of the block and at its height. */
     items: { node: TreeNode, dx: number, y: number }[];
     /** What each row takes, from the middle of the block. */
-    rows: { left: number, right: number, y: number }[];
+    rows: Row[];
 }
 
+interface Row { left: number, right: number, y: number }
+
+/** What one row higher costs, in the width a block would otherwise lean to its side. */
+const LIFT = 2;
+/** Beside its parent's place, a block's stems run between the nodes of the rows above. */
+const BETWEEN = SLOT.element / 2;
+/** What a stem through another node costs: only where nothing else is free. */
+const CROSSING = 1000;
+
 /**
- * Places the tree growing upwards the way a plant does: what stands stays, and each node's children go above it, most
- * relevant in the middle, groups of folded elements wrapped into rows. Where the children of two nodes would meet,
- * both give way to their side, so a wide crown leans out on its stems and never pushes the nodes below it apart.
+ * Places the tree growing upwards the way a plant does: each node's children go above it, most relevant in the middle,
+ * many children wrapped into rows about as many as they are wide. What stands stays: the nodes unfold in the order
+ * they were `opened` (the others after them, the nearest to the seed first), and the children of each take the
+ * nearest room that is left. Where they would meet rows that stand, they give way a little to their side, or grow on a
+ * longer stem above them once that is nearer, so a tree of many crowns grows in height as well as in width.
  */
-export function layoutTree(root: TreeNode): Placed[] {
+export function layoutTree(root: TreeNode, opened: Iterable<string> = []): Placed[] {
     const placed: Placed[] = [{ node: root, x: 0, y: 0 }];
-    /** The rows of the wrapped blocks placed so far, which reach up beside the rows of deeper nodes. */
-    const tall: { left: number, right: number, y: number, of: Placed, depth: number }[] = [];
-    let row = placed;
-    for (let depth = 0; row.length; depth++) {
-        const blocks = row.filter(p => p.node.children?.length).map(blockOf);
-        const gap = (a: Block, b: Block) => Math.max(...a.rows.flatMap(ra => b.rows.filter(rb => meet(ra.y, rb.y)).map(rb => ra.right - rb.left)));
-        // every block as near to its parent as the ones before it allow, then as the ones after it allow: between the two, both sides give way alike
-        const pushed: number[] = [];
-        const pulled: number[] = [];
-        blocks.forEach((b, i) => pushed[i] = Math.max(b.parent.x, ...blocks.slice(0, i).map((a, j) => pushed[j] + gap(a, b))));
-        blocks.forEach((_, n) => {
-            const i = blocks.length - 1 - n;
-            pulled[i] = Math.min(blocks[i].parent.x, ...blocks.slice(i + 1).map((b, j) => pulled[i + 1 + j] - gap(blocks[i], b)));
-        });
-        const at = blocks.map((_, i) => (pushed[i] + pulled[i]) / 2);
-        // then out of the way of the wrapped rows beside it
-        const beside = blocks.map(b => {
-            let [low, high] = [-Infinity, Infinity];
-            for (const fixed of tall) {
-                let lineage = b.parent;
-                for (let d = depth; d > fixed.depth; d--) lineage = lineage.parent!;
-                for (const r of b.rows.filter(r => meet(r.y, fixed.y))) {
-                    if (fixed.of.x < lineage.x) low = Math.max(low, fixed.right - r.left);
-                    else high = Math.min(high, fixed.left - r.right);
-                }
-            }
-            return { low, high };
-        });
-        blocks.forEach((b, i) => at[i] = Math.max(at[i], beside[i].low, ...blocks.slice(0, i).map((a, j) => at[j] + gap(a, b))));
-        blocks.forEach((_, n) => {
-            const i = blocks.length - 1 - n;
-            at[i] = Math.min(at[i], beside[i].high, ...blocks.slice(i + 1).map((b, j) => at[i + 1 + j] - gap(blocks[i], b)));
-        });
-        row = blocks.flatMap((b, i) => b.items.map(item => ({ node: item.node, x: at[i] + item.dx, y: item.y, parent: b.parent })));
-        placed.push(...row);
-        blocks.forEach((b, i) => { if (b.rows.length > 1) tall.push(...b.rows.map(r => ({ left: at[i] + r.left, right: at[i] + r.right, y: r.y, of: b.parent, depth }))); });
+    const rows: Row[] = [];
+    const turn = new Map([...opened].map((id, i) => [id, i]));
+    const turnOf = (p: Placed) => turn.get(p.node.id) ?? Infinity;
+    const waiting = [...placed];
+    while (waiting.length) {
+        const parent = waiting.reduce((first, p) => turnOf(p) < turnOf(first) ? p : first);
+        waiting.splice(waiting.indexOf(parent), 1);
+        if (!parent.node.children?.length) continue;
+        const block = blockOf(parent);
+        const { x, lift } = roomFor(block, rows, placed);
+        const items = block.items.map(item => ({ node: item.node, x: x + item.dx, y: item.y - lift, parent }));
+        rows.push(...block.rows.map(r => ({ left: x + r.left, right: x + r.right, y: r.y - lift })));
+        placed.push(...items);
+        waiting.push(...items);
     }
     return placed;
 }
 
+/** Where a block is nearest to its place above its parent without meeting a row that stands, its stems past the nodes between. */
+function roomFor(block: Block, rows: Row[], placed: Placed[]): { x: number, lift: number } {
+    const home = block.parent.x;
+    let best = { x: home, lift: 0, cost: Infinity };
+    for (let lift = 0; lift * LIFT < best.cost; lift += ROW) {
+        const taken = block.rows.flatMap(r => rows.filter(o => meet(o.y, r.y - lift)).map(o => [o.left - r.right, o.right - r.left]));
+        const between = placed.filter(p => p.y < block.parent.y && p.y > block.rows.at(-1)!.y - lift);
+        const crossing = (x: number) => block.items.some(item => between.some(p => p.y > item.y - lift && crosses(block.parent, x + item.dx, item.y - lift, p)));
+        const free = [home, home - BETWEEN, home + BETWEEN, ...taken.flat()].filter(x => !taken.some(([from, to]) => x > from && x < to)).sort((a, b) => Math.abs(a - home) - Math.abs(b - home));
+        for (const x of free.slice(0, 6)) {
+            const cost = Math.abs(x - home) + lift * LIFT + (crossing(x) ? CROSSING : 0);
+            if (cost < best.cost) best = { x, lift, cost };
+        }
+    }
+    return best;
+}
+
+/** The stem from a node to a child at this place runs through another node: the curve of `stem` in `canvas/plant.ts`. */
+function crosses(from: Placed, x: number, y: number, node: Placed): boolean {
+    for (let t = 0.05; t < 1; t += 0.05) {
+        const u = 1 - t;
+        const sx = u ** 3 * from.x + 3 * u * u * t * (from.x + (x - from.x) * 0.35) + (3 * u * t * t + t ** 3) * x;
+        const sy = from.y + (y - from.y) * (3 * u * u * t * 0.45 + 3 * u * t * t * 0.5 + t ** 3);
+        if (Math.abs(sx - node.x) < 50 && Math.abs(sy - node.y) < 50) return true;
+    }
+    return false;
+}
+
 function blockOf(parent: Placed): Block {
-    const children = parent.node.children!;
-    const lines = wraps(parent.node) ? Array.from({ length: Math.ceil(children.length / WRAP) }, (_, i) => children.slice(i * WRAP, (i + 1) * WRAP)) : [children];
+    const lines = linesOf(parent.node.children!);
     const block: Block = { parent, items: [], rows: [] };
     lines.forEach((line, i) => {
         const y = parent.y - LEVEL - i * ROW;
@@ -102,8 +118,10 @@ function centered<T>(items: T[]): T[] {
     return result;
 }
 
-function wraps(node: TreeNode): boolean {
-    return (node.children?.length ?? 0) > WRAP && !node.children!.some(c => c.children);
+function linesOf(children: TreeNode[]): TreeNode[][] {
+    if (children.length <= WRAP) return [children];
+    const columns = Math.ceil(Math.sqrt(children.length));
+    return Array.from({ length: Math.ceil(children.length / columns) }, (_, i) => children.slice(i * columns, (i + 1) * columns));
 }
 
 export interface PlacedFlow {

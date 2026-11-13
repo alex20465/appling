@@ -24,11 +24,14 @@ export function Inspector({ index, qn, onSelect, onClose, onOpenSource, change, 
     const link = (target: string, text = target) => <button className="link" onClick={() => onSelect(target)}>{text}</button>;
 
     return (
-        <aside className="inspector" aria-label="Inspector">
-            <button className="inspector-close" aria-label="Close" onClick={onClose}>×</button>
-            <div className="eyebrow">{node.props.link ? 'link ' : ''}{kindLabel(node.kind)} · {LAYER_LABELS[node.layer]}</div>
-            <h2>{node.qn}</h2>
-            {onOpenSource && <p><button className="button" onClick={() => onOpenSource(node.qn)}>Open source</button></p>}
+        <aside className={`inspector layer-${node.layer}`} aria-label="Inspector">
+            <header className="inspector-head" key={node.qn}>
+                <div className="inspector-kind"><i />{node.props.link ? 'link ' : ''}{kindLabel(node.kind)}<span className="muted">{LAYER_LABELS[node.layer]}</span></div>
+                <button className="inspector-close" aria-label="Close" onClick={onClose}>×</button>
+                <h2>{node.qn}</h2>
+                {onOpenSource && <button className="button" onClick={() => onOpenSource(node.qn)}>Open source</button>}
+            </header>
+            <div className="inspector-body" key={`body ${node.qn}`}>
             {anchor && <p><span className="muted">line</span> <code>{anchor.slice(node.qn.length)}</code></p>}
             {change && (
                 <p className={`review-item ${change.status}`}>
@@ -44,6 +47,7 @@ export function Inspector({ index, qn, onSelect, onClose, onOpenSource, change, 
             <Section title="Members" items={index.children(node.qn).map(c => <li key={c.qn}>{link(c.qn, memberText(c, index))} <span className="muted">{kindLabel(c.kind)}</span></li>)} />
             <Relations title="Used by" index={index} qn={node.qn} direction="usedBy" link={link} />
             <Relations title="Uses" index={index} qn={node.qn} direction="uses" link={link} />
+            </div>
         </aside>
     );
 }
@@ -144,5 +148,5 @@ function Relations({ title, index, qn, direction, link }: { title: string, index
 }
 
 function Section({ title, items }: { title: string, items: React.ReactNode[] }) {
-    return items.length ? <section><h3>{title}</h3><ul>{items}</ul></section> : null;
+    return items.length ? <section><h3>{title} <span className="count">{items.length}</span></h3><ul>{items}</ul></section> : null;
 }

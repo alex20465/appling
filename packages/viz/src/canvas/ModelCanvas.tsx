@@ -111,7 +111,7 @@ export function ModelCanvas({ index, name, focus, selected, settings, bubbles = 
 
     const [legend, setLegend] = useState(false);
     const tree = useMemo(() => growTree(index, settings, unfolded, name, trail), [index, settings, unfolded, name, trail]);
-    const placed = useMemo(() => layoutTree(tree), [tree]);
+    const placed = useMemo(() => layoutTree(tree, unfolded), [tree, unfolded]);
     const byId = useMemo(() => new Map(placed.map(p => [p.node.id, p])), [placed]);
     // folded nodes shrink back into the nearest node that stays, then go (same keys, so the transition runs)
     const previous = useRef<Placed[]>([]);

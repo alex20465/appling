@@ -81,9 +81,9 @@ export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Se
         if (tree.count) tree.children = childrenOf(id, () => grouped(used, id, node.module, [...path, node.qn]));
         return tree;
     };
-    /** Elements directly when they are of one kind, else one group per kind; the most relevant first. */
+    /** Elements directly when they are of one kind, else one group per kind; the most relevant first, by name among equals. */
     const grouped = (nodes: GraphNode[], parent: string, module: string, path: string[]): TreeNode[] => {
-        const sorted = [...nodes].sort((a, b) => index.relevanceOf(b.qn) - index.relevanceOf(a.qn) || rank(a.kind) - rank(b.kind));
+        const sorted = [...nodes].sort((a, b) => index.relevanceOf(b.qn) - index.relevanceOf(a.qn) || rank(a.kind) - rank(b.kind) || a.qn.localeCompare(b.qn));
         const byKind = Map.groupBy(sorted, n => n.kind);
         if (byKind.size === 1) return sorted.map(n => element(n, parent, module, path));
         return [...byKind].map(([kind, members]) => {
@@ -94,7 +94,7 @@ export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Se
         });
     };
     const seed: TreeNode = { id: '~', type: 'seed', label: name, fact: `${modules.length} module${modules.length === 1 ? '' : 's'}`, count: modules.length, relevance: 1 };
-    seed.children = childrenOf(seed.id, () => modules.sort((a, b) => index.relevanceOf(b) - index.relevanceOf(a)).map(module => {
+    seed.children = childrenOf(seed.id, () => modules.sort((a, b) => index.relevanceOf(b) - index.relevanceOf(a) || a.localeCompare(b)).map(module => {
             const members = roots.filter(n => n.module === module);
             const id = `~/${module}`;
             const kinds = [...Map.groupBy(members, n => n.kind)].sort(([a], [b]) => rank(a) - rank(b)).map(([kind, list]) => `${list.length} ${list.length === 1 ? kindLabel(kind) : plural(kind).toLowerCase()}`);
