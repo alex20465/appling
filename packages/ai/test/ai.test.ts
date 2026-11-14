@@ -30,15 +30,18 @@ test('the MCP server exposes model and registry tools and the registry prompt', 
     expect(await text('edit', { operation: { op: 'rename', target: 'crm.Account.email', name: 'mail' } })).toEqual({ ok: true, changed: ['crm.appling'] });
     expect(readFileSync(join(root, 'crm.appling'), 'utf8')).toContain('mail: String');
     writeFileSync(join(root, 'models.py'), 'class Order(models.Model):\n    pass\n');
-    expect(await text('record_code_references', { qn: 'sales.Order', ranges: [{ file: 'models.py', start: 1, end: 2 }] })).toEqual([{ file: 'models.py', start: 1, end: 2, anchor: 'class Order(models.Model):' }]);
-    expect((await text('record_code_references', { qn: 'sales.Nope', ranges: [] })).error).toBe('No element or sub-anchor sales.Nope.');
-    expect((await text('code_references', { qn: 'sales.Order' })).references).toEqual([{ qn: 'sales.Order', file: 'models.py', start: 1, end: 2, anchor: 'class Order(models.Model):', status: 'current' }]);
+    const marked = { file: 'models.py', start: 2, end: 3, line: 1, fingerprint: expect.stringMatching(/^[0-9a-f]{8}$/) };
+    expect(await text('record_code_references', { qn: 'sales.Order', places: [{ file: 'models.py', line: 1 }] })).toEqual([marked]);
+    expect(readFileSync(join(root, 'models.py'), 'utf8')).toMatch(/^# @appling sales\.Order [0-9a-f]{8}\nclass Order/);
+    expect((await text('record_code_references', { qn: 'sales.Nope', places: [] })).error).toBe('No element or sub-anchor sales.Nope.');
+    expect((await text('code_references', { qn: 'sales.Order' })).references).toEqual([{ qn: 'sales.Order', ...marked, status: 'current' }]);
     expect(await text('code_references', {})).toEqual({ references: [] });
     // a use case step is no element, but its line carries code references by its sub-anchor address (#20)
-    expect(await text('record_code_references', { qn: 'sales.Checkout#step[2]', ranges: [{ file: 'models.py', start: 2, end: 2 }] })).toEqual([{ file: 'models.py', start: 2, end: 2, anchor: 'pass' }]);
+    expect(await text('record_code_references', { qn: 'sales.Checkout#step[2]', places: [{ file: 'models.py', line: 3 }] })).toMatchObject([{ file: 'models.py', start: 4, end: 4, line: 3 }]);
     expect((await text('code_references', { qn: 'sales.Checkout' })).references).toMatchObject([{ qn: 'sales.Checkout#step[2]', status: 'current' }]);
-    expect((await text('record_code_references', { qn: 'sales.Checkout#step[9]', ranges: [] })).error).toBe('No element or sub-anchor sales.Checkout#step[9].');
-    await text('record_code_references', { qn: 'sales.Checkout#step[2]', ranges: [] });
+    expect((await text('record_code_references', { qn: 'sales.Checkout#step[9]', places: [] })).error).toBe('No element or sub-anchor sales.Checkout#step[9].');
+    await text('record_code_references', { qn: 'sales.Checkout#step[2]', places: [] });
+    expect(readFileSync(join(root, 'models.py'), 'utf8')).not.toContain('step[2]');
     const prompt = await client.getPrompt({ name: 'implement_next_task' });
     expect((prompt.messages[0].content as { text: string }).text).toContain('registry_next');
 });

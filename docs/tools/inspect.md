@@ -80,15 +80,9 @@ For an action the inspector also shows **Who may trigger it**, each actor that m
 
 The inspector has no fields to edit, no menu and no buttons that change the model.
 
-## Reviewing changes
+## Comparing with a revision
 
-The **Review** panel of the [VS Code extension](vscode.md#the-panels) shows what changed in a workspace that lives in a git repository. By default it compares the working tree with `HEAD`, so you see the uncommitted changes; the picker on top compares it with any of the latest 50 commits that touch the workspace folder instead.
-
-- **Model** lists the elements that were added, changed or removed, by qualified name. A changed element names the properties that differ and how many of its references changed. A rename recorded as a migration step (see [Migrations](../language/migrations.md)) shows as one change with its old name, not as a removal and an addition. Click an element to select it on the canvas; **text diff** shows the element's text at the commit and now.
-- **Files** lists every file of the workspace folder that differs from the commit, `.appling` or not: added (A), modified (M), deleted (D), renamed (R) and untracked (U). Click one for its text diff.
-- **mark on the canvas** (on by default) marks the changes on the canvas: added declarations glow green, changed ones and the modules that hold changes glow yellow, and removed declarations are drawn ghosted with a dashed circle where they were.
-
-The panel follows every change on disk. The server reads git with the git CLI: `git ls-tree` and `git show` for the `.appling` files at the commit, which it builds into a graph the same way as the working tree, and `git diff --name-status` plus `git status --porcelain` for the changed files. A folder outside git shows a message instead. Its text diffs open in VS Code's diff editor.
+For a host that shows what changed since a commit, the server compares a workspace in a git repository with any revision. It reads git with the git CLI: `git ls-tree` and `git show` for the `.appling` files at the commit, which it builds into a graph the same way as the working tree, and `git diff --name-status` plus `git status --porcelain` for the changed files. A rename recorded as a migration step (see [Migrations](../language/migrations.md)) shows as one change with its old name, not as a removal and an addition.
 
 | Endpoint | Returns |
 |---|---|
@@ -107,7 +101,7 @@ Generating a project leaves a [registry task](../codegen/registry.md) for every 
 
 Each task shows the element's qualified name and kind, `partly written` when the generator wrote part of it, the first thing it still misses and its attempts (and its target, with more than one). Click a task to select its element: the canvas unfolds to it and the inspector opens. The board follows the registries on disk, so a task moves from pending to in progress to done as the agent claims and finishes it. See [Registry tasks and agent sessions](implementation.md#registry-tasks-and-agent-sessions).
 
-The inspector does not generate. Run [`appling generate`](cli.md#generate) or let your agent do it; the marks and the board follow. The **Code** panel of the [VS Code extension](vscode.md#the-panels) also lists the count of elements per [implementation state](implementation.md#implementation-states), the targets of `appling.config.json` and the elements changed since the last generation.
+The inspector does not generate. Run [`appling generate`](cli.md#generate) or let your agent do it; the marks and the board follow.
 
 ## Live changes
 
@@ -121,7 +115,7 @@ The **Changes** panel of the [VS Code extension](vscode.md#the-panels), with the
 - the model changes in the file: the elements added, changed (with the properties that differ) or removed; click one to select it,
 - **text diff**: the file at `HEAD` (or the baseline outside git) and now.
 
-While the Review panel marks its own diff on the canvas, the review's marks replace the live ones.
+While a host marks a revision's diff on the canvas, its marks replace the live ones.
 
 ### Agent views
 
@@ -137,7 +131,7 @@ Renaming, retyping or removing a released domain element through the [edit opera
 
 ## Live updates
 
-The server watches the workspace folder for changes to `.appling` files (ignoring hidden folders and `node_modules`), to `appling.config.json`, `.appling/references.json`, `.appling/generation.json` and the registries of the generate targets inside the folder, and pushes a new snapshot to the view about 100 ms after the last change. Edits from your editor, `appling fmt` or an AI agent through the [MCP server](ai.md#mcp-server) appear without a reload.
+The server watches the workspace folder for changes to `.appling` files (ignoring hidden folders and `node_modules`), to `appling.config.json`, `.appling/generation.json`, the registries of the generate targets inside the folder and the [`@appling` markers](references.md#the-marker) in code files (a code file counts only when its markers change), and pushes a new snapshot to the view about 100 ms after the last change. Edits from your editor, `appling fmt` or an AI agent through the [MCP server](ai.md#mcp-server) appear without a reload.
 
 The canvas also marks what [agent sessions](ai.md#agent-sessions) of the repo claimed or highlighted: a dashed ring in the session's colour around the declaration, with the session's label in its tooltip. In [VS Code](vscode.md#agent-sessions) a click on the ring goes to the session's terminal.
 

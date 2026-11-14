@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import {
-    anchorStates, fingerprint, implementationStates, outstandingElements, replaceReferencesIn, resolveReferences,
-    type ElementImplementation, type GenerationRecord, type Graph
+    anchorStates, fingerprint, implementationStates, markerFolders, outstandingElements, resolveReferences,
+    type ElementImplementation, type GenerationRecord, type Graph, type ResolvedReference
 } from '@appling/model';
 import { loadExtension, readConfig, type Target } from './config.js';
 import type { CodegenExtension } from './contract.js';
@@ -11,7 +11,6 @@ import { pendingChanges, planMigrations, readApplied, runMigrations } from './mi
 import { describe, plan, type RegistryEntry } from './plan.js';
 import { checkPrerequisites, readRegistry, runPlan } from './run.js';
 import { BASELINE, mergeGeneration, type SyncReport } from './sync.js';
-import { locateWritten, type Written } from './written.js';
 
 /** What each target's last generation wrote, by the target's `out` as configured: `.appling/generation.json` of the workspace. */
 export const GENERATIONS = join('.appling', 'generation.json');
@@ -37,16 +36,9 @@ export function recordGeneration(root: string, out: string, graph: Graph, elemen
     return record;
 }
 
-/**
- * After a generation into a target (`out` as configured, relative to the workspace): records the code references of
- * what it wrote for these elements, replacing their earlier references into the target, and their fingerprints.
- * Returns the number of references.
- */
-export function recordWritten(root: string, out: string, graph: Graph, written: Written[], elements: Set<string>): number {
-    const located = locateWritten(resolve(root, out), written, elements);
-    replaceReferencesIn(root, resolve(root, out), located);
-    recordGeneration(root, out, graph, elements);
-    return Object.values(located).reduce((sum, r) => sum + r.length, 0);
+/** The code references of a workspace: the markers in its git work tree (or itself) and in every configured target. */
+export function workspaceReferences(root: string, graph?: Graph): Promise<ResolvedReference[]> {
+    return resolveReferences(root, graph, markerFolders(root, (readConfig(root).generate ?? []).map(t => t.out)));
 }
 
 /** A registry entry with its target, for lists such as the IDE's registry panel. */
@@ -79,13 +71,16 @@ export interface WorkspaceImplementation {
     tasks: TargetTask[];
 }
 
-/** The implementation state of every element of a workspace: its code references, registries and last generations. */
-export function workspaceImplementation(root: string, graph: Graph): WorkspaceImplementation {
+/**
+ * The implementation state of every element of a workspace: its code references, registries and last generations.
+ * Pass the references when they are already resolved (`workspaceReferences`).
+ */
+export async function workspaceImplementation(root: string, graph: Graph, resolved?: ResolvedReference[]): Promise<WorkspaceImplementation> {
     const configured = readConfig(root).generate ?? [];
     const records = readGenerations(root);
     const registries = configured.map(t => ({ target: t, registry: readRegistry(resolve(root, t.out)) }));
     const entries = registries.flatMap(r => Object.values(r.registry?.entries ?? {}));
-    const references = resolveReferences(root, graph);
+    const references = resolved ?? await workspaceReferences(root, graph);
     const states = implementationStates(graph, {
         references,
         tasks: entries,
@@ -136,7 +131,7 @@ export interface GenerationOptions {
  * empty). An existing one is brought up to the model like `appling generate --sync`, its pending migration steps
  * first, but only for the selection: the files of the selected elements are merged three ways, and every element
  * whose files were all merged counts as generated with them (files are shared, such as a `models.py`). Generation
- * records the code references of what it wrote in `.appling/references.json` and the fingerprints of the generated
+ * marks the code it writes for each element with an `@appling` marker and records the fingerprints of the generated
  * elements in `.appling/generation.json`; what it cannot complete stays in the registry as tasks.
  */
 export async function generateElements(options: GenerationOptions): Promise<{ generated: Record<string, string[]>, tasks: number, failed: boolean }> {
@@ -194,11 +189,10 @@ async function generateTarget(root: string, graph: Graph, target: Target, select
         }
         return undefined;
     };
-    const written: Written[] = [];
     let elements: Set<string>;
     if (!exists) {
         emit({ type: 'planned', target: target.out, mode: 'create', elements: [...selected], steps: planned.steps.map(s => `${s.node}: ${describe(s.step)}`) });
-        runPlan(planned, out, log, written);
+        await runPlan(planned, out, log);
         elements = selected;
     } else {
         const files = selection.mode === 'all' ? undefined : [...new Set([...selected].flatMap(qn => owner(qn)?.files ?? []))];
@@ -215,14 +209,15 @@ async function generateTarget(root: string, graph: Graph, target: Target, select
         const temp = mkdtempSync(join(tmpdir(), 'appling-generate-'));
         try {
             const next = join(temp, basename(out));
-            runPlan(planned, next, line => log(`  ${line}`), written);
+            await runPlan(planned, next, line => log(`  ${line}`));
             const report = mergeGeneration(out, next, extension.syncExclude ?? [], files && { files, entries: [...elements] });
             emit({ type: 'merged', target: target.out, report });
         } finally {
             rmSync(temp, { recursive: true, force: true });
         }
     }
-    const references = recordWritten(root, target.out, graph, written, elements);
+    recordGeneration(root, target.out, graph, elements);
+    const references = (await resolveReferences(root, graph, [out])).filter(r => elements.has(r.qn)).length;
     const registry = readRegistry(out)!;
     emit({
         type: 'generated', target: target.out, references,

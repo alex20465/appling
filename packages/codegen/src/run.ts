@@ -2,6 +2,7 @@ import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type { Graph } from '@appling/model';
+import { markWritten } from './markers.js';
 import type { Prerequisite } from './contract.js';
 import { describe, type Plan, type PlannedStep, type RegistryEntry } from './plan.js';
 import { saveBaseline } from './sync.js';
@@ -27,12 +28,14 @@ export function checkPrerequisites(prerequisites: Prerequisite[], graph?: Graph)
 }
 
 /**
- * Runs the planned steps in order into the output folder and writes the registry. Stops at the first failing command.
- * With `written`, collects what each step wrote, for the code references (`locateWritten`).
+ * Runs the planned steps in order into the output folder, marks the code each element got (`markWritten`) and writes
+ * the registry and the baseline. Stops at the first failing command.
  */
-export function runPlan(plan: Plan, out: string, log: (line: string) => void = () => { }, written?: Written[]): Registry {
+export async function runPlan(plan: Plan, out: string, log: (line: string) => void = () => { }): Promise<Registry> {
     const root = resolve(out);
+    const written: Written[] = [];
     runSteps(plan.steps, out, log, written);
+    if (plan.fingerprints) await markWritten(root, written, plan.fingerprints);
     const registry: Registry = { extension: plan.extension, test: plan.test, entries: Object.fromEntries(plan.entries.map(e => [e.qn, e])) };
     writeRegistry(root, registry);
     saveBaseline(root, plan.syncExclude ?? []);

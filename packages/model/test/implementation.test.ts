@@ -3,7 +3,7 @@ import { fingerprint, implementationStates, lineMarks, outstandingElements, roll
 
 const node = (qn: string, kind: string, props: Record<string, unknown> = {}) => ({ qn, kind, layer: 'domain', level: 1, module: 'm', props, data: {} }) as unknown as GraphNode;
 const graph: Graph = { nodes: [node('m.A', 'Entity'), node('m.A.a', 'Field', { type: 'Int' }), node('m.B', 'Entity'), node('m.Close', 'Action'), node('m.C', 'Entity')], edges: [] };
-const reference = (qn: string, status: ResolvedReference['status']): ResolvedReference => ({ qn, file: 'x.py', start: 1, end: 2, anchor: 'x', status });
+const reference = (qn: string, status: ResolvedReference['status']): ResolvedReference => ({ qn, file: 'x.py', start: 2, end: 3, line: 1, status });
 
 test('fingerprints follow kind and properties; elements a target has not generated as they are now are outstanding', () => {
     expect(fingerprint(node('m.A.a', 'Field', { type: 'Int' }))).toBe(fingerprint(graph.nodes[1]));
@@ -17,7 +17,7 @@ test('fingerprints follow kind and properties; elements a target has not generat
 
 test('every element gets a state from its references, its registry tasks and the last generation', () => {
     const states = implementationStates(graph, {
-        references: [reference('m.A', 'current'), reference('m.B', 'shifted'), reference('m.Close', 'current'), reference('m.C', 'broken'), reference('m.C', 'current'), reference('m.Gone', 'orphaned')],
+        references: [reference('m.A', 'current'), reference('m.B', 'stale'), reference('m.Close', 'current'), reference('m.C', 'stale'), reference('m.C', 'current'), reference('m.Gone', 'orphaned')],
         tasks: [
             { qn: 'm.A.a', status: 'generated', missing: [] },
             { qn: 'm.Close', status: 'todo', missing: ['implement'] }
@@ -25,7 +25,7 @@ test('every element gets a state from its references, its registry tasks and the
         outstanding: new Set()
     });
     expect(Object.fromEntries(Object.entries(states).map(([qn, s]) => [qn, s.state]))).toEqual({
-        'm.A': 'implemented', 'm.A.a': 'implemented', 'm.B': 'shifted', 'm.Close': 'partial', 'm.C': 'broken'
+        'm.A': 'implemented', 'm.A.a': 'implemented', 'm.B': 'partial', 'm.Close': 'partial', 'm.C': 'partial'
     });
     expect(states['m.Close']).toMatchObject({ references: 1, tasks: 1 });
     // changed since the generation: its generated code no longer counts
@@ -37,7 +37,7 @@ test('states roll up and mark the line each element starts on, the innermost one
     expect(rollupState([])).toBeUndefined();
     expect(rollupState(['implemented', 'implemented'])).toBe('implemented');
     expect(rollupState(['unimplemented', 'implemented'])).toBe('partial');
-    expect(rollupState(['shifted', 'broken', 'implemented'])).toBe('broken');
+    expect(rollupState(['unimplemented', 'partial'])).toBe('partial');
     const text = 'module m {\n  entity A { a: Int }\n  entity B {\n  }\n}\n';
     const at = (part: string) => text.indexOf(part);
     const marks = lineMarks(
@@ -47,13 +47,13 @@ test('states roll up and mark the line each element starts on, the innermost one
             m: { state: 'partial', references: 0, tasks: 0, outstanding: false },
             'm.A': { state: 'implemented', references: 1, tasks: 0, outstanding: false },
             'm.A.a': { state: 'unimplemented', references: 0, tasks: 0, outstanding: true },
-            'm.B': { state: 'broken', references: 0, tasks: 0, outstanding: false },
+            'm.B': { state: 'partial', references: 0, tasks: 0, outstanding: false },
             'm.X': { state: 'implemented', references: 0, tasks: 0, outstanding: false }
         }
     );
     expect(marks).toEqual({ f: [
         { line: 1, qn: 'm', state: 'partial', outstanding: false },
         { line: 2, qn: 'm.A.a', state: 'unimplemented', outstanding: true },
-        { line: 3, qn: 'm.B', state: 'broken', outstanding: false }
+        { line: 3, qn: 'm.B', state: 'partial', outstanding: false }
     ] });
 });

@@ -1,18 +1,19 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { URI } from 'langium';
-import { workspaceImplementation } from '@appling/codegen';
-import { findApplingFiles, lineMarks, resolveReferences, type LineMark } from '@appling/model';
+import { workspaceImplementation, workspaceReferences } from '@appling/codegen';
+import { findApplingFiles, lineMarks, type LineMark } from '@appling/model';
 import { buildSnapshot } from '../shared/model.js';
 import type { CodeLocation, Snapshot, ViewSettings } from '../shared/snapshot.js';
 
 export async function snapshot(root: string): Promise<Snapshot> {
     const files = findApplingFiles(root).map(path => ({ uri: URI.file(path).toString(), path: relative(root, path), text: readFileSync(path, 'utf8') }));
     const snapshot = await buildSnapshot(URI.file(root).toString(), files);
-    const code = Object.groupBy(resolveReferences(root, snapshot.graph).map(r => ({
-        ...r, text: r.status === 'broken' || !existsSync(resolve(root, r.file)) ? '' : readFileSync(resolve(root, r.file), 'utf8').split('\n').slice(r.start - 1, r.end).join('\n')
+    const references = await workspaceReferences(root, snapshot.graph);
+    const code = Object.groupBy(references.map(r => ({
+        ...r, text: existsSync(resolve(root, r.file)) ? readFileSync(resolve(root, r.file), 'utf8').split('\n').slice(r.start - 1, r.end).join('\n') : ''
     })), r => r.qn) as Record<string, CodeLocation[]>;
-    const { states, anchors, targets, tasks } = workspaceImplementation(root, snapshot.graph);
+    const { states, anchors, targets, tasks } = await workspaceImplementation(root, snapshot.graph, references);
     return { ...snapshot, code, implementation: states, anchors, targets, tasks };
 }
 
@@ -26,7 +27,7 @@ export function fileMarks(snapshot: Snapshot): Record<string, LineMark[]> {
 export function codeLinks(root: string, snapshot: Snapshot): Record<string, { qn: string, start: number, end: number }[]> {
     const links: Record<string, { qn: string, start: number, end: number }[]> = {};
     for (const [qn, locations] of Object.entries(snapshot.code)) {
-        for (const l of locations) if (l.status !== 'broken' && l.status !== 'orphaned') (links[resolve(root, l.file)] ??= []).push({ qn, start: l.start, end: l.end });
+        for (const l of locations) if (l.status !== 'orphaned') (links[resolve(root, l.file)] ??= []).push({ qn, start: l.start, end: l.end });
     }
     return links;
 }

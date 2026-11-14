@@ -78,15 +78,15 @@ test('declaring lines that are not elements get sub-anchor addresses, listed in 
 
 test('a sub-anchor carries code references and its own state; without one it shows its element\'s', async () => {
     const { graph } = await model();
-    const reference = (qn: string, status: ResolvedReference['status']): ResolvedReference => ({ qn, file: 'x.py', start: 1, end: 2, anchor: 'x', status });
-    const references = [reference('m.Checkout#step[1]', 'current'), reference('m.Checkout#step[2]', 'broken'), reference('m.Checkout#step[9]', 'orphaned')];
+    const reference = (qn: string, status: ResolvedReference['status']): ResolvedReference => ({ qn, file: 'x.py', start: 2, end: 3, line: 1, status });
+    const references = [reference('m.Checkout#step[1]', 'current'), reference('m.Checkout#step[2]', 'stale'), reference('m.Checkout#step[9]', 'orphaned')];
     const states = implementationStates(graph, { references, tasks: [], outstanding: new Set() });
     expect(states['m.Checkout'].state).toBe('unimplemented');
     // the elements' states stay the elements'
     expect(Object.keys(states).some(isAnchorAddress)).toBe(false);
     const anchors = anchorStates(graph, references, states);
     expect(anchors['m.Checkout#step[1]']).toEqual({ state: 'implemented', references: 1, tasks: 0, outstanding: false });
-    expect(anchors['m.Checkout#step[2]'].state).toBe('broken');
+    expect(anchors['m.Checkout#step[2]'].state).toBe('partial');
     expect(anchors['m.Place#requires[1]'].state).toBe(states['m.Place'].state);
     expect(anchors['m.Checkout#step[9]']).toBeUndefined();
     // changed with its element: generation would write it again

@@ -1,12 +1,20 @@
 import { basename } from 'node:path';
-import { commands, Range, Selection, TextEditorRevealType, Uri, ViewColumn, window, workspace } from 'vscode';
+import { commands, Range, Selection, TabInputText, TextEditorRevealType, Uri, ViewColumn, window, workspace } from 'vscode';
 
 /** Opening files natively in VS Code for the inspector tab. */
+
+/** The editor group that already has the file open, so it is focused there instead of opened again; else `column`. */
+function columnOf(uri: Uri, column?: ViewColumn): ViewColumn | undefined {
+    const open = (tab: { input: unknown }) => tab.input instanceof TabInputText && tab.input.uri.toString() === uri.toString();
+    const groups = window.tabGroups.all;
+    const group = groups.find(g => g.activeTab && open(g.activeTab)) ?? groups.find(g => g.tabs.some(open));
+    return group?.viewColumn ?? column;
+}
 
 /** Opens a file and puts the cursor at the offset `start`, showing `start` to `end`. */
 export async function revealOffsets(uri: Uri, start: number, end: number, column?: ViewColumn): Promise<void> {
     const document = await workspace.openTextDocument(uri);
-    const editor = await window.showTextDocument(document, { preview: true, viewColumn: column });
+    const editor = await window.showTextDocument(document, { preview: true, viewColumn: columnOf(document.uri, column) });
     const from = document.positionAt(start);
     editor.selection = new Selection(from, from);
     editor.revealRange(new Range(from, document.positionAt(end)), TextEditorRevealType.InCenterIfOutsideViewport);
@@ -15,7 +23,7 @@ export async function revealOffsets(uri: Uri, start: number, end: number, column
 /** Opens a file at a line range (lines from 1). */
 export async function openLines(path: string, start: number, end: number, column?: ViewColumn): Promise<void> {
     const document = await workspace.openTextDocument(Uri.file(path));
-    const editor = await window.showTextDocument(document, { preview: true, viewColumn: column });
+    const editor = await window.showTextDocument(document, { preview: true, viewColumn: columnOf(document.uri, column) });
     const range = new Range(start - 1, 0, Math.max(start, end) - 1, 0);
     editor.selection = new Selection(range.start, range.start);
     editor.revealRange(range, TextEditorRevealType.InCenterIfOutsideViewport);

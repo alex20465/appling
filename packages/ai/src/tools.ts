@@ -129,24 +129,23 @@ export const REGISTRY_TOOLS = {
 /** Tools for the code references: where each element is implemented. */
 export const REFERENCE_TOOLS = {
     code_references: define({
-        description: 'Where an element and its members are implemented in the application code: file, line range and status (current, shifted, broken or orphaned). Shifted references come with the lines where their anchor is now. Without qn: every reference that is not current, the ones to record again.',
+        description: 'Where an element and its members are implemented in the application code: each `@appling <qn> <fingerprint>` marker in the code with the declaration it marks (file, start, end, the marker line) and its status: current, stale (the element changed since the code was written, or a migration step renamed it: `marked` is the name in the marker) or orphaned (no such element). Without qn: every reference that is not current, the code to check and record again.',
         input: { qn: z.string().optional() },
         run: async (context, input) => ({ references: await context.project.references(input.qn) })
     }),
     record_code_references: define({
-        description: 'Record where an element is implemented, replacing its earlier references: one line range per place in the code. qn may also be the sub-anchor of a declaring line that is no element: `<usecase>#step[<n>]`, `<usecase>#step[<n>].on[<Error>]`, `<action>#requires[<n>]`, `<page>#component[<n>]`, `<navigation>#item[<label>/<label>]`, `<messages>#message[<key>]` (n from 1). The first line of each range becomes its anchor, so start at the line that declares the code, such as the class or function. An empty list removes the references.',
+        description: 'Record where an element is implemented: writes the comment `@appling <qn> <fingerprint>` above the declaration (class, function, block) that starts on each given line, renews the fingerprint of a marker it has there and removes its markers elsewhere. The declaration the marker belongs to is its range, so lines may shift freely afterwards. qn may also be the sub-anchor of a declaring line that is no element: `<usecase>#step[<n>]`, `<usecase>#step[<n>].on[<Error>]`, `<action>#requires[<n>]`, `<page>#component[<n>]`, `<navigation>#item[<label>/<label>]`, `<messages>#message[<key>]` (n from 1). An empty list removes every marker of the element. Files must lie in the git work tree of the workspace or a generated target.',
         input: {
             qn: z.string(),
-            ranges: z.array(z.object({
+            places: z.array(z.object({
                 file: z.string().describe('Absolute, or relative to the workspace folder'),
-                start: z.number().int().describe('First line, 1 based'),
-                end: z.number().int().describe('Last line, inclusive')
+                line: z.number().int().describe('The line the declaration starts on, 1 based')
             }))
         },
-        run: async (context, input) => context.project.recordReferences(input.qn, input.ranges)
+        run: async (context, input) => context.project.recordReferences(input.qn, input.places)
     }),
     implementation_status: define({
-        description: 'How far the model is implemented: per element implemented (a current code reference, or generated code it has not changed since), partial (an open registry task), unimplemented (no code), shifted or broken (a code reference to fix). Returns the counts and every element that is not implemented or changed since the last generation, optionally within one module or element.',
+        description: 'How far the model is implemented: per element implemented (a current code reference, or generated code it has not changed since), partial (an open registry task, or a stale code marker: the element changed since its code was written), unimplemented (no code). Returns the counts and every element that is not implemented or changed since the last generation, optionally within one module or element.',
         input: { module: z.string().optional().describe('Qualified name of a module or element to narrow to') },
         run: async (context, input) => context.project.implementation(input.module)
     })

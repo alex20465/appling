@@ -113,12 +113,12 @@ paid is reachable from draft:
 
 ### refs
 
-Prints the code references of the workspace in the current folder (`.appling/references.json`): where an element and its members are implemented, by file and line range. With `--check`, it lists every reference whose anchor line moved (`shifted`), whose file or anchor is gone (`broken`) or whose element the model no longer has (`orphaned`), and exits with 1 when there is one.
+Prints the code references of the workspace in the current folder: the `@appling <qualified name> <fingerprint>` markers in the code of its git work tree and its generated targets, with the lines of the declaration each marks. With `--check`, it lists every reference whose element changed since the code was written or was renamed by a migration step (`stale`) or that the model no longer has (`orphaned`), and exits with 1 when there is one.
 
 ```
 $ appling refs --check
-../shop/sales/models.py:16-33 sales.Order: shifted from 14-31
-1 reference(s), 1 shifted, 0 broken, 0 orphaned
+../shop/sales/models.py:9-9 sales.Order.status: stale, the element changed since the code was written
+2 reference(s), 1 stale, 0 orphaned
 ```
 
 ## Exit codes

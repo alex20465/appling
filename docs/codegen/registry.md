@@ -158,7 +158,7 @@ The AI tools automate that loop. The Appling MCP server (`appling-mcp`) offers t
 | `registry_update` | Records the outcome for a qualified name: `done`, `partial` or `todo`, with an optional note. Every call counts as one attempt. |
 | `run_tests` | Runs the registry's `test` command in the project and returns whether it passed, with the end of the output. |
 
-The agent repeats: take the next entry, read the generated files and the element's Appling source, implement what is missing, run the tests until they pass, record where the element is implemented as [code references](../tools/references.md), then record `done`. When it cannot finish, it records `partial` with a note on what is left.
+The agent repeats: take the next entry, read the generated files and the element's Appling source, implement what is missing, run the tests until they pass, mark the declarations that implement the element as [code references](../tools/references.md), then record `done`. When it cannot finish, it records `partial` with a note on what is left.
 
 In an [agent session](../tools/ai.md#agent-sessions), `registry_next` claims the entry's element for the session and passes over entries other sessions claimed, so several sessions work through one registry without doing the same work twice; the inspector's task board lists the tasks with the session that claimed each (see [Seed to code](../tools/implementation.md#registry-tasks-and-agent-sessions)).
 

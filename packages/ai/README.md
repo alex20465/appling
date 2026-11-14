@@ -25,8 +25,8 @@ The server instructions tell the assistant that the model is the source of truth
 | `registry_next` | The next open task of a generated project, with its model context; in an agent session it skips tasks other sessions claimed and claims it |
 | `registry_update` | Marks a task `done`, or `partial` with a note |
 | `run_tests` | Runs the generated project's tests |
-| `code_references` | Where an element and its members are implemented, by file and line range, with their status; without a name, every reference that is not current |
-| `record_code_references` | Records the line ranges that implement an element in `.appling/references.json`, each with its first line as the anchor |
+| `code_references` | Where an element and its members are implemented: the declarations its `@appling` markers mark, with their status (current, stale, orphaned); without a name, every reference that is not current |
+| `record_code_references` | Marks the declarations that implement an element with an `@appling <qn> <fingerprint>` comment, removing its markers elsewhere |
 | `implementation_status` | How far the model is implemented: counts per state and the elements that are not implemented or changed since the last generation |
 
 The prompt `implement_next_task` carries the registry workflow.

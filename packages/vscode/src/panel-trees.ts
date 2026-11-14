@@ -1,17 +1,16 @@
-import { IMPLEMENTATION_STATES } from '@appling/model/implementation';
 import { anchorOwner, isAnchorAddress } from '@appling/model/anchors';
 import type { ElementChange, GraphDiff } from '@appling/model/diff';
 import { Simulator, type Access, type Verdict } from '@appling/model/simulator';
 import { claimOf, type PanelAction, type PanelState } from '@appling/inspect/panels';
 import {
-    abilities, actionSummary, entityActions, IMPLEMENTATION_LABELS, kindLabel, LAYER_LABELS, memberText, policyText, relations,
+    abilities, actionSummary, entityActions, IMPLEMENTATION_LABELS, kindLabel, LAYER_LABELS, memberText, plural, policyText, relations,
     type GraphIndex
 } from '@appling/viz/views';
 
 /**
  * The side panels of the inspector as trees for the Appling sidebar in VS Code, VS Code free and read only: each
  * panel's nodes from the state the inspector client sends (`@appling/inspect/panels`). A node's `run` is what a click
- * does, its `actions` what its inline buttons do.
+ * does, its `inspect` the element its inline button inspects.
  */
 
 export interface PanelNode {
@@ -28,13 +27,11 @@ export interface PanelNode {
     /** A file relative to the project: its file icon. */
     file?: string;
     run?: Run;
-    actions?: Partial<Record<Verb, Run>>;
+    /** The element the row's inline button selects on the canvas, so the inspector shows it. */
+    inspect?: string;
     children?: PanelNode[];
     expanded?: boolean;
 }
-
-export const VERBS = ['diff'] as const;
-export type Verb = typeof VERBS[number];
 
 export type Run =
     | { type: 'action', action: PanelAction }
@@ -43,13 +40,12 @@ export type Run =
     | { type: 'source', qn: string }
     /** The text diff of a changed element: from the revision while the review marks, else the live file's. */
     | { type: 'textDiff', qn: string }
-    | { type: 'liveDiff', path: string }
-    | { type: 'reviewDiff', path: string, from?: string };
+    | { type: 'liveDiff', path: string };
 
 type Builder = (state: PanelState, index: GraphIndex) => PanelNode[];
 
 /** The panels the sidebar shows; search is VS Code's own (Go to Symbol in Workspace, from the language server). */
-export const VIEWS = ['inspector', 'playbook', 'changes', 'review', 'code', 'tasks'] as const;
+export const VIEWS = ['inspector', 'playbook', 'changes', 'tasks'] as const;
 export type ViewName = typeof VIEWS[number];
 
 /** The open tasks of every target's registry: what the generated code still misses, for an agent or you to finish. */
@@ -73,7 +69,7 @@ function registryTasks(state: PanelState, index: GraphIndex): PanelNode[] {
         };
     });
     if (snapshot.targets.length === 1) return byTarget(snapshot.targets[0].out);
-    return snapshot.targets.flatMap(t => group(`target/${t.out}`, `${t.extension} → ${t.out}`, byTarget(t.out), true, String(open.filter(task => task.target === t.out).length)));
+    return snapshot.targets.flatMap(t => group(`target/${t.out}`, `${t.extension} → ${t.out}`, 'package', byTarget(t.out)));
 }
 
 /** The playbooks of the agent sessions: a click on a step plays it on the canvas. */
@@ -96,8 +92,6 @@ export const PANEL_TREES: Record<ViewName, Builder> = {
     inspector: inspectorTree,
     playbook: playbookTree,
     changes: changesTree,
-    review: reviewTree,
-    code: codeTree,
     tasks: tasksTree
 };
 
@@ -109,15 +103,26 @@ function element(id: string, index: GraphIndex, qn: string, description?: string
     return { id, label, description: description ?? (node && kindLabel(node.kind)), tooltip: qn, icon: node ? iconOf(node.kind) : 'symbol-misc', run: select(qn) };
 }
 
-function group(id: string, label: string, children: PanelNode[], expanded = true, description?: string): PanelNode[] {
-    return children.length ? [{ id, label, description, children, expanded }] : [];
+/** A group row with its icon and, unless `counted` is false, how many rows it holds (subgroups count their rows). */
+function group(id: string, label: string, icon: string, children: PanelNode[], { expanded = true, counted = true } = {}): PanelNode[] {
+    return children.length ? [{ id, label, icon, description: counted ? String(count(children)) : undefined, children, expanded }] : [];
+}
+
+function count(nodes: PanelNode[]): number {
+    return nodes.reduce((sum, node) => sum + (node.run || !node.children ? 1 : count(node.children)), 0);
 }
 
 const ICONS: Record<string, string> = {
-    Module: 'symbol-namespace', Entity: 'symbol-class', Value: 'symbol-structure', Field: 'symbol-field', Param: 'symbol-parameter',
-    Enum: 'symbol-enum', Literal: 'symbol-enum-member', Action: 'symbol-method', Event: 'symbol-event', Error: 'error',
-    Machine: 'symbol-constructor', Query: 'search', Invariant: 'law', Policy: 'shield', Actor: 'person', Role: 'organization',
-    UseCase: 'list-ordered', Endpoint: 'globe', Page: 'window', Job: 'clock', External: 'plug', Migration: 'history'
+    Module: 'symbol-namespace', Role: 'organization', Actor: 'person', Tenant: 'home', Entity: 'symbol-class', Field: 'symbol-field',
+    Policy: 'shield', Invariant: 'law', Enum: 'symbol-enum', EnumLiteral: 'symbol-enum-member', ValueType: 'symbol-structure',
+    Event: 'symbol-event', Action: 'symbol-method', SetEffect: 'edit', EmitEffect: 'broadcast', ErrorDecl: 'error', Param: 'symbol-parameter',
+    Machine: 'symbol-constructor', Transition: 'arrow-right', Job: 'clock', Query: 'search', Projection: 'eye', ProjectionField: 'symbol-field',
+    External: 'plug', ExternalOperation: 'symbol-function', UseCase: 'list-ordered', Interface: 'symbol-interface', Endpoint: 'globe',
+    Page: 'window', Navigation: 'compass', Flow: 'type-hierarchy-sub', Messages: 'comment', Scenario: 'beaker', Migration: 'history'
+};
+
+const LAYER_ICONS: Record<string, string> = {
+    domain: 'database', behavior: 'zap', application: 'gear', interface: 'radio-tower', experience: 'window', cross: 'layers'
 };
 
 export function iconOf(kind: string): string {
@@ -125,7 +130,7 @@ export function iconOf(kind: string): string {
 }
 
 const STATE_COLORS: Record<string, string> = {
-    implemented: 'charts.green', partial: 'charts.yellow', unimplemented: 'disabledForeground', shifted: 'charts.orange', broken: 'charts.red'
+    implemented: 'charts.green', partial: 'charts.yellow', unimplemented: 'disabledForeground'
 };
 export type ChangeStatus = 'added' | 'changed' | 'removed' | 'modified' | 'deleted' | 'renamed' | 'untracked';
 
@@ -196,20 +201,22 @@ function inspectorTree(state: PanelState, index: GraphIndex): PanelNode[] {
             expanded: true
         });
     }
-    const link = (id: string, target: string, description?: string, label?: string) => element(id, index, target, description, label);
+    // a click opens the source and keeps the inspected element; the inline button inspects the target
+    const link = (id: string, target: string, description?: string, label?: string): PanelNode =>
+        ({ ...element(id, index, target, description, label), run: { type: 'source', qn: target }, inspect: target });
     if (node.kind === 'Action') {
         const summary = actionSummary(index, qn);
         const rows: [string, string | undefined][] = [
             ['Input', summary.inputs.join('; ')], ['Requires', summary.requires.join('; ')], ['Changes', summary.changes.join('; ') || 'nothing in the model'],
             ['Errors', summary.errors.join(', ')], ['Consistency', summary.consistency]
         ];
-        nodes.push(...group('does', 'What it does', [
+        nodes.push(...group('does', 'What it does', 'info', [
             ...summary.on ? [link('does/on', summary.on, 'on')] : [],
             ...rows.filter(([, value]) => value).map(([label, value]) => ({ id: `does/${label}`, label, description: value, tooltip: value }))
-        ]));
+        ], { counted: false }));
         const simulator = new Simulator(index.graph);
-        nodes.push(...group('who', 'Who may trigger it', simulator.actors(qn).filter(a => a.verdict !== 'no').map(a => link(`who/${a.actor}`, a.actor, VERDICTS[a.verdict]))));
-        nodes.push(...group('risks', 'Invariants at risk', simulator.risks(qn).map(r => link(`risk/${r.invariant}`, r.invariant, `reads ${r.fields.join(', ')}`))));
+        nodes.push(...group('who', 'Who may trigger it', 'person', simulator.actors(qn).filter(a => a.verdict !== 'no').map(a => link(`who/${a.actor}`, a.actor, VERDICTS[a.verdict]))));
+        nodes.push(...group('risks', 'Invariants at risk', 'warning', simulator.risks(qn).map(r => link(`risk/${r.invariant}`, r.invariant, `reads ${r.fields.join(', ')}`))));
     }
     if (node.kind === 'Actor') {
         const groups = abilities(index, new Simulator(index.graph).access(qn));
@@ -220,31 +227,34 @@ function inspectorTree(state: PanelState, index: GraphIndex): PanelNode[] {
                 ...(entry.offers ?? []).filter(o => o.verdict !== 'no').map(o => link(`${prefix}/${entry.target}/offers/${o.target}`, o.target, `offers · ${VERDICTS[o.verdict]}`))
             ]
         });
-        nodes.push(...group('can', 'What they can do', [...groups].flatMap(([label, entries]) => group(`can/${label}`, label,
+        nodes.push(...group('can', 'What they can do', 'key', [...groups].flatMap(([label, entries]) => group(`can/${label}`, label, 'folder',
             entries.filter(e => e.verdict !== 'no').sort((a, b) => Number(a.verdict === 'depends') - Number(b.verdict === 'depends')).map(e => ability(`can/${label}`, e))))));
     }
     if (node.kind === 'Entity') {
-        nodes.push(...group('actions', 'Actions', entityActions(index, qn).map(a => link(`action/${a.qn}`, a.qn, [a.creates ? 'creates' : '', ...a.transitions].filter(Boolean).join(', ')))));
+        nodes.push(...group('actions', 'Actions', iconOf('Action'), entityActions(index, qn).map(a => link(`action/${a.qn}`, a.qn, [a.creates ? 'creates' : '', ...a.transitions].filter(Boolean).join(', ')))));
     }
     if (node.kind === 'Machine') {
         const simulator = new Simulator(index.graph);
         const field = index.nodes.get(String(node.data.field));
         const states = field ? index.children(String((field.data.type as { decl?: string }).decl)).map(l => l.qn.slice(l.qn.lastIndexOf('.') + 1)) : [];
-        nodes.push(...group('states', 'Reachable states', states.map(s => {
+        nodes.push(...group('states', 'Reachable states', iconOf('EnumLiteral'), states.map(s => {
             const reach = simulator.reach(qn, s);
             return { id: `state/${s}`, label: s, description: reach ? (reach.path.length ? `via ${reach.path.map(p => p.trigger).join(', ')}` : 'initial') : 'unreachable' };
         })));
     }
-    nodes.push(...group('props', 'Properties', properties(index, qn).map(([key, value]) => {
+    nodes.push(...group('props', 'Properties', 'symbol-property', properties(index, qn).map(([key, value]) => {
         const lines = Array.isArray(value) ? value.map(String) : [String(value)];
         if (!Array.isArray(value) || key === 'modifiers') return { id: `prop/${key}`, label: key, description: lines.join(' '), tooltip: lines.join(' ') };
         return { id: `prop/${key}`, label: key, description: String(lines.length), expanded: true, children: lines.map((text, i) => ({ id: `prop/${key}/${i}`, label: text, tooltip: text })) };
-    }), false));
-    nodes.push(...group('members', 'Members', index.children(qn).map(c => link(`member/${c.qn}`, c.qn, kindLabel(c.kind), memberText(c, index)))));
-    for (const [direction, title] of [['usedBy', 'Used by'], ['uses', 'Uses']] as const) {
+    }), { expanded: false, counted: false }));
+    for (const [kind, members] of Map.groupBy(index.children(qn), c => c.kind)) {
+        const rows = members.map(c => ({ ...link(`member/${c.qn}`, c.qn, undefined, memberText(c, index)), description: undefined }));
+        nodes.push(...group(`members/${kind}`, plural(kind), iconOf(kind), rows, { expanded: kind !== 'Policy' && kind !== 'Invariant' }));
+    }
+    for (const [direction, title, icon] of [['usedBy', 'Used by', 'call-incoming'], ['uses', 'Uses', 'call-outgoing']] as const) {
         const byLayer = relations(index, qn, direction);
-        nodes.push(...group(direction, title, [...byLayer].flatMap(([layer, items]) => group(`${direction}/${layer}`, LAYER_LABELS[layer],
-            items.map(r => link(`${direction}/${layer}/${r.qn}`, r.qn, `${kindLabel(r.kind)}${r.via.length ? ` via ${r.via.join(', ')}` : ''}`))))));
+        nodes.push(...group(direction, title, icon, [...byLayer].flatMap(([layer, items]) => group(`${direction}/${layer}`, LAYER_LABELS[layer], LAYER_ICONS[layer],
+            items.map(r => link(`${direction}/${layer}/${r.qn}`, r.qn, `${kindLabel(r.kind)}${r.via.length ? ` via ${r.via.join(', ')}` : ''}`)))), { expanded: direction === 'usedBy' }));
     }
     return nodes;
 }
@@ -255,11 +265,10 @@ function sessionName(state: PanelState, id: string): string {
 }
 
 /** The changed elements of a diff, each selecting its element. */
-function changeNodes(prefix: string, index: GraphIndex, changes: (ElementChange | undefined)[], details: (c: ElementChange) => string | undefined, diff?: (c: ElementChange) => Run): PanelNode[] {
+function changeNodes(prefix: string, index: GraphIndex, changes: (ElementChange | undefined)[], details: (c: ElementChange) => string | undefined): PanelNode[] {
     return changes.filter((c): c is ElementChange => !!c).map(c => ({
         ...element(`${prefix}/${c.status}/${c.qn}`, index, c.qn, details(c)),
-        status: c.status,
-        actions: diff && { diff: diff(c) }
+        status: c.status
     }));
 }
 
@@ -283,42 +292,4 @@ function changesTree(state: PanelState, index: GraphIndex): PanelNode[] {
 /** "2 added · 1 changed · 0 removed" */
 export function diffSummary(diff: GraphDiff): string {
     return `${diff.added.length} added · ${diff.changed.length} changed · ${diff.removed.length} removed`;
-}
-
-function reviewTree(state: PanelState, index: GraphIndex): PanelNode[] {
-    const result = state.review.result;
-    if (!result) return [{ id: 'reading', label: 'Reading git…', icon: 'loading~spin' }];
-    if (!result.ok) return [{ id: 'error', label: result.error, icon: 'warning', tooltip: result.error }];
-    const details = (c: ElementChange) => [
-        `${c.status}${c.was ? ` from ${c.was}` : ''} ${kindLabel(c.kind)}`,
-        c.status === 'changed' && c.props.join(', '),
-        c.status === 'changed' && c.edges.added.length + c.edges.removed.length > 0 && `${c.edges.added.length + c.edges.removed.length} reference(s)`
-    ].filter(Boolean).join(' · ');
-    const model = changeNodes('model', index, result.diff.changes.slice(0, 300), details, c => ({ type: 'action', action: { type: 'textDiff', qn: c.qn } }));
-    return [
-        ...model.length ? group('model', 'Model', model, true, diffSummary(result.diff)) : [{ id: 'model', label: 'The model has not changed.' }],
-        ...group('files', 'Files', result.files.map(f => ({
-            id: `file/${f.path}`, label: f.path, file: f.path, status: f.status,
-            tooltip: f.from ? `${f.from} → ${f.path}` : f.path, run: { type: 'reviewDiff', path: f.path, from: f.from } as Run
-        })))
-    ];
-}
-
-function codeTree(state: PanelState, index: GraphIndex): PanelNode[] {
-    const snapshot = state.snapshot;
-    const states = Object.entries(snapshot.implementation);
-    const outstanding = states.filter(([, i]) => i.outstanding).map(([qn]) => qn);
-    const tops = outstanding.filter(qn => !outstanding.some(other => qn.startsWith(`${other}.`)));
-    const nodes: PanelNode[] = [{
-        id: 'implementation', label: 'Implementation',
-        children: IMPLEMENTATION_STATES.map(s => ({ id: `state/${s}`, label: IMPLEMENTATION_LABELS[s], description: String(states.filter(([, i]) => i.state === s).length), icon: 'circle-filled', color: STATE_COLORS[s] })),
-        expanded: false
-    }];
-    nodes.push(snapshot.targets.length
-        ? { id: 'targets', label: 'Targets', expanded: true, children: snapshot.targets.map(t => ({ id: `target/${t.out}`, label: `${t.extension} → ${t.out}`, icon: 'package', description: t.generated ? (t.at ? `generated ${new Date(t.at).toLocaleString()}` : 'generated') : 'not generated yet' })) }
-        : { id: 'targets', label: 'No targets', icon: 'info', tooltip: 'Add "generate": [{ "extension": "@appling/codegen-django", "out": "app" }] to appling.config.json.' });
-    nodes.push(...group('outstanding', 'New or changed since the last generation', tops.slice(0, 300).map(qn => ({
-        ...element(`outstanding/${qn}`, index, qn, IMPLEMENTATION_LABELS[snapshot.implementation[qn].state])
-    })), false, String(tops.length)));
-    return nodes;
 }

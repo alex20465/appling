@@ -22,7 +22,8 @@ const deps = dependencies(graph);
 | `writeRelease(root, version, graph)`, `readReleases(root)`, `latestRelease(releases)` | Release snapshots in `<root>/.appling/releases/` |
 | `migrationBlockName(version)` | The migration block for steps after a release, such as `since_v1_0_0` |
 | `subAnchors(qns)`, `isAnchorAddress(name)`, `anchorOwner(name)`, `anchorStates(graph, references, states)` | Sub-anchors (`@appling/model/anchors`): addresses such as `sales.Checkout#step[2]` for declaring lines that are no elements (use case steps and handlers, `requires`, page components, navigation items, messages), listed in `graph.anchors`, so they carry code references and a state of their own |
-| `recordReferences(root, qn, ranges)`, `readReferences(root)`, `resolveReferences(root, graph?)` | Code references in `<root>/.appling/references.json`: where elements are implemented, by file, line range and anchor line, resolved as `current`, `shifted`, `broken` or `orphaned` |
+| `resolveReferences(root, graph?, folders?)`, `recordReferences(root, graph, qn, places, folders?)`, `markerFolders(root, extra?)` | Code references: `@appling <qn> <fingerprint>` markers in the code, each with the declaration it marks (parsed with tree-sitter), resolved as `current`, `stale` or `orphaned`; recording writes the markers |
+| `findMarkers(text, extension)`, `scanMarkers(folders)`, `writeMarker(path, line, qn, fingerprint?)`, `MARKER_LANGUAGES` | The markers of a text or of folders, writing one, and the comment syntax per code file extension |
 | `Graph`, `GraphNode`, `GraphEdge`, `Dependency` | The serializable graph types |
 
 In a browser bundle, import the graph from `@appling/model/graph` and the edit operations from `@appling/model/edit`; the package root also loads the file system functions.

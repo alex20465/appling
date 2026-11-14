@@ -3,7 +3,7 @@ title: VS Code
 description: Work with Appling models in VS Code, with the read only inspector in a tab per project, jumps between the model, its code and the canvas, and agent sessions in VS Code terminals.
 ---
 
-The Appling extension for VS Code brings the read only [inspector](inspect.md) into VS Code, next to your AI coding tool. It finds the Appling projects of your workspace, runs one inspector server per project and opens each project's model canvas in a tab of its own, with the Inspector, Playbook, Changes, Review, Code and Tasks panels as read only views in the Appling sidebar. The text stays in VS Code's own editors, with the [language server](editors.md#vs-code). Agents run as [agent sessions](ai.md#agent-sessions) in VS Code's terminals.
+The Appling extension for VS Code brings the read only [inspector](inspect.md) into VS Code, next to your AI coding tool. It finds the Appling projects of your workspace, runs one inspector server per project and opens each project's model canvas in a tab of its own, with the Inspector, Playbook, Changes and Tasks panels as read only views in the Appling sidebar. The text stays in VS Code's own editors, with the [language server](editors.md#vs-code). Agents run as [agent sessions](ai.md#agent-sessions) in VS Code's terminals.
 
 ## Install
 
@@ -40,7 +40,7 @@ A project without `appling.config.json` is not set up yet: the Projects view mar
 
 ## The inspector tab
 
-Each project's tab shows the [inspector](inspect.md)'s canvas and task board; its floating inspector is the **Inspector** view in the sidebar. The tab keeps its state while it is in the background. Everything that opens a file opens it in VS Code, in the editor group beside the tab. Selecting an element on the canvas changes nothing in your editors: you open its source or its code when you ask for it. Nothing in the tab or the panels changes the model; you edit the text in VS Code's editors or through your agent.
+Each project's tab shows the [inspector](inspect.md)'s canvas and task board; its floating inspector is the **Inspector** view in the sidebar. The tab keeps its state while it is in the background. Everything that opens a file opens it in VS Code: where it is already open, its tab comes to the front at the element; otherwise it opens in the editor group beside the tab. Selecting an element on the canvas changes nothing in your editors: you open its source or its code when you ask for it. Nothing in the tab or the panels changes the model; you edit the text in VS Code's editors or through your agent.
 
 ### The panels
 
@@ -51,15 +51,13 @@ The sidebar shows the panels of the inspector tab you used last, as read only VS
 | **Inspector** | The selected element: kind and layer, its change, implementation state and code, what an action does and who may trigger it, what an actor may do, an entity's actions, a machine's reachable states, its properties, members, what uses it and what it uses | The title buttons open the source and the code |
 | **Playbook** | The [playbooks](ai.md#playbooks) of the agent sessions: each with its steps, the one that plays marked; the badge counts the playbooks | A step opens the playbook on the canvas and plays that step: its element is selected and its description shows in a bubble |
 | **Changes** | Every model file changed since the last commit (outside git or before the first commit, since the server started) with the session that wrote it and its changed elements; the badge counts them | A file opens VS Code's diff against the last commit; nothing accepts or reverts a change |
-| **Review** | The model changes and the changed files since a revision | Compare with any commit, mark on the canvas or not; text diffs open in VS Code's diff editor |
-| **Code** | The implementation counts, each target with when it was generated, and the elements new or changed since the last generation | An element selects it on the canvas; there is no generation run or log |
 | **Tasks** | Only the open tasks of every target's [registry](../codegen/registry.md): each element with its status, attempts and claiming session, what it still misses and its notes; the badge counts them | A task selects its element; the Inspector lists the selected element's tasks too |
 
 | In the tab or a panel | Opens in VS Code |
 |---|---|
 | **Open source** | The element's declaration in its `.appling` file |
 | **Open code**, or a code reference | The element's code, at its lines (see [Code references](references.md)) |
-| A text diff in Review or the Inspector | VS Code's diff editor between the revision and the working tree |
+| A text diff in Changes or the Inspector | VS Code's diff editor between the last commit and the working tree |
 | A changed file in Changes | VS Code's diff editor between the last commit and the file now |
 | A claim ring on the canvas | The session's terminal |
 | An agent's `ide_act` with `open` and a file | The `.appling` file at the line |
@@ -70,7 +68,7 @@ Changed elements and files carry Source Control's letters and colours (A added, 
 
 ### Generating
 
-The inspector does not generate. Run [`appling generate`](cli.md#generate) in a terminal, or let your agent do it; the canvas marks and the **Code** and **Tasks** panels follow.
+The inspector does not generate. Run [`appling generate`](cli.md#generate) in a terminal, or let your agent do it; the canvas marks and the **Tasks** panel follow.
 
 ### Theme
 
@@ -82,11 +80,13 @@ A `.appling` file shows the Appling icon in the editor's title bar, **Appling: S
 
 The editor also shows the [implementation state](implementation.md) of every project:
 
-- a gutter mark on each model line that declares an element: implemented, partial, unimplemented, shifted or broken, with the element in its hover,
-- a CodeLens **Appling: sales.Order** above each code range that implements an element; it selects the element in its project's tab,
+- a gutter mark on each model line that declares an element: implemented, partial or unimplemented, with the element in its hover,
+- **Go to Implementation** (Ctrl+F12) on an element in a `.appling` file, or on a name that stands for one, opens the code its [`@appling` markers](references.md#the-marker) mark (the code of its members when it has none of its own),
+- **Go to Definition** (F12) on the name in an `@appling` marker in code opens the element in its `.appling` file,
+- a CodeLens **Appling: sales.Order** above each marked declaration; it selects the element in its project's tab,
 - a CodeLens **Open code** on model lines whose element has code, and the command **Appling: Open the code of this element** for the element at the cursor.
 
-Each inspector server sends the marks after every model or reference change.
+Each inspector server sends the marks after every change of the model or of a marker in the code.
 
 ## Agent sessions
 

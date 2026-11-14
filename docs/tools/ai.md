@@ -128,12 +128,12 @@ The entry from `registry_next` carries everything an agent needs: the element's 
 
 ### Reference tools
 
-These tools read and write the [code references](references.md) of the workspace (`.appling/references.json`), where each element is implemented by file and line range, and tell how far the model is implemented.
+These tools read and write the [code references](references.md) of the workspace, the `@appling <qn> <fingerprint>` markers on the declarations that implement each element, and tell how far the model is implemented.
 
 | Tool | Input | Returns |
 |---|---|---|
-| `code_references` | `qn?` (string) | `{ references }`. With `qn`: the references of that element and its members. Without: every reference that is not `current`. Each has `qn`, `file`, `start`, `end`, `anchor` and `status` (`current`, `shifted`, `broken` or `orphaned`); a shifted one has the lines where its anchor is now and the `recorded` range |
-| `record_code_references` | `qn` (string: an element, or the [sub-anchor](../reference/graph.md#sub-anchors) of a line that is no element, such as `sales.Checkout#step[2]`), `ranges`: a list of `{ file, start, end }`, with `file` absolute or relative to the workspace folder and lines counted from 1 | The recorded references, each with the first line of its range as `anchor`; `{ error }` for an unknown element, a missing file, a range outside the file or one that starts on an empty line. It replaces the element's references; an empty list removes them |
+| `code_references` | `qn?` (string) | `{ references }`. With `qn`: the references of that element and its members. Without: every reference that is not `current`. Each has `qn`, `file`, `start` and `end` (the declaration), `line` (the marker), `fingerprint` and `status` (`current`, `stale` or `orphaned`); a stale one renamed by a migration step has `marked`, the name in its marker |
+| `record_code_references` | `qn` (string: an element, or the [sub-anchor](../reference/graph.md#sub-anchors) of a line that is no element, such as `sales.Checkout#step[2]`), `places`: a list of `{ file, line }`, with `file` absolute or relative to the workspace folder and `line` the line a declaration starts on, from 1 | The element's references afterwards. It writes the marker with the element's fingerprint above each declaration, renews a marker the element has there and removes its markers elsewhere; an empty list removes them all. `{ error }` for an unknown element, a missing file, a file outside the git work tree of the workspace and the generated targets, an empty line or a line that starts no declaration |
 | `implementation_status` | `module?`: a module or element to narrow to | `{ counts, outstanding, elements }`: the number of elements per [implementation state](implementation.md#implementation-states), how many are new or changed since the last generation, and every element (up to 200) that is not implemented or is outstanding, with `state`, `tasks` and `outstanding` |
 
 ### The implement_next_task prompt
@@ -169,7 +169,7 @@ The registry skill lives in the package at `skills/appling-registry/SKILL.md`. I
 2. Read the generated files listed in it, `read_source` for the element and `graph_query` for related elements. The model is the specification; the agent does not change it to make the code easier.
 3. Implement what is missing in the style of the code around it. For a test body, write the test and remove the skip that points at the entry.
 4. Call `run_tests` and fix failures until the related tests pass.
-5. Call `record_code_references` with every line range that implements the element, and now and then record again what `code_references` reports as shifted or broken.
+5. Call `record_code_references` with the first line of every declaration that implements the element, so each gets its marker, and now and then check and mark again what `code_references` reports as stale.
 6. Call `registry_update` with `done`, or `partial` with a note on what is left and why.
 
 Entries that need a decision only a person can make (credentials, an external system's real behavior, product choices) end as `partial` with the question in the note. Effort follows the [relevance](../language/relevance.md) of the element: `core` declarations are implemented completely with tests for their rules, `peripheral` ones get the simplest correct implementation.

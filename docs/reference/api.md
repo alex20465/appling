@@ -110,10 +110,12 @@ console.log(result.ok ? result.edits : result.errors);
 | `releasesDir(root)` | `<root>/.appling/releases` |
 | `migrationBlockName(version)` | The migration block for steps after a release: `1.0.0` gives `since_v1_0_0` |
 | `Release` | `{ version, created, graph }` |
-| `recordReferences(root, qn, ranges)` | Replaces the [code references](../tools/references.md) of one element in `<root>/.appling/references.json` and returns them; throws for a missing file, a range outside it or one that starts on an empty line |
-| `readReferences(root)`, `resolveReferences(root, graph?)` | The stored references by qualified name, and every reference with its status and where it is now; with a graph, references to elements it lacks are `orphaned` |
-| `REFERENCES`, `CodeReference`, `References`, `ResolvedReference`, `ReferenceStatus` | `.appling/references.json` and the reference types |
-| `replaceReferencesIn(root, folder, updates)` | Replaces the references of these elements that point into `folder` (such as a generated project) with the given ranges, relative to the folder, and keeps their references elsewhere |
+| `resolveReferences(root, graph?, folders?)` | Every [code reference](../tools/references.md): each `@appling` marker in the code of the folders (default `markerFolders(root)`) with the declaration it marks; with a graph, its status `current`, `stale` or `orphaned`, a name renamed by a migration step mapped to its name now (async) |
+| `recordReferences(root, graph, qn, places, folders?)` | Writes the marker of an element or sub-anchor with its fingerprint above the declaration on each `{ file, line }`, renews one it has there, removes its markers elsewhere and returns its references (async); throws for an unknown element, a missing file, a file outside the folders, an empty line or one that starts no declaration |
+| `markerFolders(root, extra?)`, `markerFingerprint(graph, qn)` | The folders searched for markers: the git work tree around the workspace (or the workspace) and the extra ones; the fingerprint a marker of an element (a sub-anchor: its element's) carries |
+| `findMarkers(text, extension)`, `markersOf(path)`, `scanMarkers(folders)` | The markers of a text with their ranges by tree-sitter (or indentation), of a file (cached by size and time), of every code file in some folders (async) |
+| `writeMarker(path, line, qn, fingerprint?)`, `removeMarkerLines(path, lines)`, `markerLine(path, qn, fingerprint, indent)`, `largestDeclaration(text, extension, start, end)`, `MARKER_LANGUAGES` | Writing and removing markers, the comment syntax of each code file extension, and the declaration generation marks among the lines it wrote |
+| `CodeReference`, `ResolvedReference`, `ReferenceStatus`, `Marker` | The reference types |
 | `implementationStates(graph, { references, tasks, outstanding })` | The [implementation state](../tools/implementation.md#implementation-states) of every element (`ElementImplementation`: `state`, current `references`, open `tasks`, `outstanding`) |
 | `fingerprint(node)`, `fingerprints(graph)`, `outstandingElements(graph, records)` | The hash generation records per element, and the elements new or changed since the given `GenerationRecord`s (every element for a missing record) |
 | `anchorStates(graph, references, states)` | The state of every [sub-anchor](graph.md#sub-anchors) (`graph.anchors`): its own from its code references, else its element's (a handler's, its step's) |
@@ -206,10 +208,11 @@ Generation with code references and the implementation state, as `appling genera
 
 | Export | Purpose |
 |---|---|
-| `generateElements({ root, graph, selection, targets?, load?, onEvent? })` | Generates the selection (`{ mode: 'outstanding' }`, `{ mode: 'all' }` or `{ mode: 'elements', elements }`) into every target: creates a target without a registry, merges the selected elements' files into an existing one, records references and fingerprints, and calls back with every `GenerationEvent` |
-| `recordWritten(root, out, graph, written, elements)` | Records the references of collected code and the fingerprints of the elements for one target |
+| `generateElements({ root, graph, selection, targets?, load?, onEvent? })` | Generates the selection (`{ mode: 'outstanding' }`, `{ mode: 'all' }` or `{ mode: 'elements', elements }`) into every target: creates a target without a registry, merges the selected elements' files into an existing one, marks the code and records fingerprints, and calls back with every `GenerationEvent` |
+| `runPlan(plan, out, log)` | Runs the steps into `out`, marks the code each element got with its `@appling` marker, writes the registry and the baseline (async) |
+| `workspaceReferences(root, graph?)` | The code references of a workspace: the markers in its git work tree and every configured target |
 | `readGenerations(root)`, `recordGeneration(root, out, graph, elements)`, `GENERATIONS` | `<root>/.appling/generation.json`: the fingerprints of each target's last generation |
-| `workspaceImplementation(root, graph)` | The implementation state of every element of a workspace, its targets (`TargetState`) and the tasks of their registries, open and done (`TargetTask`) |
+| `workspaceImplementation(root, graph, references?)` | The implementation state (async) of every element of a workspace, its targets (`TargetState`) and the tasks of their registries, open and done (`TargetTask`) |
 | `GenerationSelection`, `GenerationEvent`, `GenerationOptions`, `MergeScope` | The generation types; `mergeGeneration(out, next, exclude, scope?)` merges only a scope's files and registry entries |
 
 How to write an extension is described in [Writing extensions](../codegen/extensions.md).

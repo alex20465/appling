@@ -20,7 +20,7 @@ const lines: CodegenExtension = {
 
 async function generate(model: string, out: string) {
     const { documents, services } = await buildWorkspace({ 'm.appling': model });
-    runPlan(plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), lines, 'm'), out);
+    await runPlan(plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), lines, 'm'), out);
 }
 
 test('sync replaces untouched files, keeps and merges your changes, removes what the model dropped and keeps done work', async () => {

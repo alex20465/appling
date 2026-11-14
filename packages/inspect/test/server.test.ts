@@ -1,9 +1,8 @@
-import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { WebSocket } from 'ws';
-import { recordReferences } from '@appling/model';
 import { startInspect, type Inspect } from '../src/server/server.js';
 import { fileMarks } from '../src/server/workspace.js';
 import type { Snapshot } from '../src/shared/snapshot.js';
@@ -29,21 +28,19 @@ test('the snapshot has files, graph and locations', async () => {
 });
 
 test('the snapshot has the code references with their lines', async () => {
-    writeFileSync(join(root, 'models.py'), 'import x\n\nclass Order(models.Model):\n    pass\n');
-    recordReferences(root, 'sales.Order', [{ file: 'models.py', start: 3, end: 4 }]);
+    writeFileSync(join(root, 'models.py'), 'import x\n\n# @appling sales.Order\nclass Order(models.Model):\n    pass\n');
     const snapshot = await (await fetch(`${inspect.url}/api/snapshot`)).json();
-    expect(snapshot.code['sales.Order']).toMatchObject([{ file: 'models.py', start: 3, end: 4, status: 'current', text: 'class Order(models.Model):\n    pass' }]);
+    expect(snapshot.code['sales.Order']).toMatchObject([{ file: 'models.py', start: 4, end: 5, line: 3, status: 'current', text: 'class Order(models.Model):\n    pass' }]);
 });
 
 test('a declaring line that is no element carries its code reference, state and mark by its sub-anchor (#20)', async () => {
-    writeFileSync(join(root, 'checkout.py'), 'def checkout(order):\n    charge(order.total)\n');
-    recordReferences(root, 'sales.Checkout#step[2]', [{ file: 'checkout.py', start: 2, end: 2 }]);
+    writeFileSync(join(root, 'checkout.py'), 'def checkout(order):\n    # @appling sales.Checkout#step[2]\n    charge(order.total)\n');
     const snapshot = await (await fetch(`${inspect.url}/api/snapshot`)).json() as Snapshot;
     const address = 'sales.Checkout#step[2]';
     const file = snapshot.files.find(f => f.path === 'sales.appling')!;
     const location = snapshot.locations[address];
     expect(file.text.slice(location.start, location.end)).toBe('step Payments.Charge(order.total) on Declined do Cancel(order)');
-    expect(snapshot.code[address]).toMatchObject([{ file: 'checkout.py', start: 2, status: 'current', text: '    charge(order.total)' }]);
+    expect(snapshot.code[address]).toMatchObject([{ file: 'checkout.py', start: 3, status: 'current', text: '    charge(order.total)' }]);
     expect(snapshot.anchors[address]).toMatchObject({ state: 'implemented', references: 1 });
     // the other steps show their use case's state; the elements' states hold no sub-anchors
     expect(snapshot.anchors['sales.Checkout#step[1]'].state).toBe(snapshot.implementation['sales.Checkout'].state);
@@ -56,7 +53,7 @@ test('a declaring line that is no element carries its code reference, state and 
     // the cursor on the handler selects the handler's own address
     const handler = snapshot.locations[`${address}.on[Declined]`];
     expect(elementAt(snapshot.locations, file.uri, handler.start + 3)).toBe(`${address}.on[Declined]`);
-    recordReferences(root, address, []);
+    rmSync(join(root, 'checkout.py'));
 });
 
 test('requests from other origins are refused', async () => {

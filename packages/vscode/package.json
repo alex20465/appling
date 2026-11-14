@@ -103,19 +103,9 @@
         "icon": "$(code)"
       },
       {
-        "command": "appling.review.compare",
-        "title": "Appling: Compare with\u2026",
-        "icon": "$(git-compare)"
-      },
-      {
-        "command": "appling.review.mark",
-        "title": "Appling: Mark on the canvas",
-        "icon": "$(eye-closed)"
-      },
-      {
-        "command": "appling.review.unmark",
-        "title": "Appling: Stop marking on the canvas",
-        "icon": "$(eye)"
+        "command": "appling.panel.inspect",
+        "title": "Appling: Inspect",
+        "icon": "$(arrow-right)"
       }
     ],
     "grammars": [
@@ -158,16 +148,6 @@
         {
           "id": "appling.changes",
           "name": "Changes",
-          "when": "appling.inspect"
-        },
-        {
-          "id": "appling.review",
-          "name": "Review",
-          "when": "appling.inspect"
-        },
-        {
-          "id": "appling.code",
-          "name": "Code",
           "when": "appling.inspect"
         },
         {
@@ -232,21 +212,6 @@
           "command": "appling.inspector.openCode",
           "when": "view == appling.inspector && appling.inspector.code",
           "group": "navigation@2"
-        },
-        {
-          "command": "appling.review.compare",
-          "when": "view == appling.review",
-          "group": "navigation@1"
-        },
-        {
-          "command": "appling.review.mark",
-          "when": "view == appling.review && !appling.review.marked",
-          "group": "navigation@2"
-        },
-        {
-          "command": "appling.review.unmark",
-          "when": "view == appling.review && appling.review.marked",
-          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -261,8 +226,8 @@
           "group": "inline"
         },
         {
-          "command": "appling.panel.diff",
-          "when": "view =~ /^appling\\.(inspector|changes|review|code|tasks)$/ && viewItem =~ /\\bdiff\\b/",
+          "command": "appling.panel.inspect",
+          "when": "view == appling.inspector && viewItem == inspect",
           "group": "inline"
         },
         {
@@ -289,7 +254,7 @@
           "when": "false"
         },
         {
-          "command": "appling.panel.diff",
+          "command": "appling.panel.inspect",
           "when": "false"
         },
         {
@@ -298,18 +263,6 @@
         },
         {
           "command": "appling.inspector.openCode",
-          "when": "false"
-        },
-        {
-          "command": "appling.review.compare",
-          "when": "false"
-        },
-        {
-          "command": "appling.review.mark",
-          "when": "false"
-        },
-        {
-          "command": "appling.review.unmark",
           "when": "false"
         }
       ]

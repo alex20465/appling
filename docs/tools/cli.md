@@ -187,7 +187,7 @@ For each target, `generate`:
 2. Checks the tools the extension needs (for example `uv` for Django) and stops with a hint for each one that is missing.
 3. Refuses to run when the `out` folder exists and is not empty. Generation creates a new draft project once.
 4. Runs the planned steps into `out`, printing one line per step, and writes the task registry `.appling/tasks.json` into it.
-5. Records the [code references](references.md) of the code it wrote in `.appling/references.json` and the fingerprints of the generated elements in `.appling/generation.json`, both in the current folder, so the inspector knows what is [implemented and what changed since](implementation.md#generation-records).
+5. Marks the code it wrote for each element with an [`@appling` marker](references.md#the-marker) and records the fingerprints of the generated elements in `.appling/generation.json` of the current folder, so the inspector knows what is [implemented and what changed since](implementation.md#generation-records).
 6. Prints a summary such as `12 element(s): 11 generated, 1 partial, 0 todo`.
 
 Without targets in the configuration, `generate` prints how to add one and exits with 1. The extensions are described in [Code generation](../codegen/overview.md), the configuration in [Configuration](../reference/configuration.md).
@@ -296,7 +296,7 @@ conflicts: internal/sales/types.go
 build/shop: synced, 1 file(s) with conflict markers (registry tasks)
 ```
 
-The target must have been generated with a version of appling that stores the generation baseline in `.appling/baseline/`. Like a first generation, sync records the code references and the fingerprints of what it generated.
+The target must have been generated with a version of appling that stores the generation baseline in `.appling/baseline/`. Like a first generation, sync marks the code it generated and records the fingerprints.
 
 `--plan`, `--coverage` (with `--json` right after it), `--migrate` and `--sync` must come directly after `generate`, before any path.
 
@@ -331,22 +331,24 @@ appling refs <qualified name> [paths...]
 appling refs --check [paths...]
 ```
 
-Prints the [code references](references.md) of the workspace in the current folder (`.appling/references.json`): where elements are implemented, by file and line range. The model must be valid. With a qualified name, it prints the references of that element, its members and its [sub-anchors](../reference/graph.md#sub-anchors) (such as `sales.Checkout#step[2]`), each with its status when it is not `current`:
+Prints the [code references](references.md) of the workspace in the current folder: the `@appling` markers in the code of its git work tree and of its generated targets, each with the lines of the declaration it marks. The model must be valid. With a qualified name, it prints the references of that element, its members and its [sub-anchors](../reference/graph.md#sub-anchors) (such as `sales.Checkout#step[2]`), each with its status when it is not `current`:
 
 ```
 $ appling refs sales.Order
-../shop/sales/models.py:14-31 sales.Order
-../shop/sales/permissions.py:12-24 sales.Order.policy[update] (shifted)
+../shop/sales/models.py:5-9 sales.Order
+../shop/sales/models.py:9-9 sales.Order.status (stale)
 ```
 
-With `--check`, it prints every reference that is `shifted`, `broken` or `orphaned`, then the counts, and exits with 1 when there is one:
+With `--check`, it prints every reference that is `stale` or `orphaned`, then the counts, and exits with 1 when there is one:
 
 ```
 $ appling refs --check
-../shop/sales/models.py:16-33 sales.Order: shifted from 14-31
-../shop/sales/views.py:40-52 sales.Archive: orphaned, no such element in the model
-3 reference(s), 1 shifted, 0 broken, 1 orphaned
+../shop/sales/models.py:9-9 sales.Order.status: stale, the element changed since the code was written
+../shop/sales/models.py:13-14 sales.Archive: orphaned, no such element in the model
+3 reference(s), 1 stale, 1 orphaned
 ```
+
+A marker whose name a migration step renamed since reports `stale, the marker names <old name>`.
 
 ## Exit codes
 

@@ -197,12 +197,12 @@ test('implementation marks roll members up into their declaration and declaratio
     const index = await indexOf(examples());
     const states = Object.fromEntries(index.graph.nodes.map(n => [n.qn, { state: 'implemented' as const }]));
     states['sales.Order.status'] = { state: 'unimplemented' as const };
-    states['crm.Account'] = { state: 'broken' as const };
+    states['crm.Account'] = { state: 'unimplemented' as const };
     const marks = implementationMarks(index, states);
     expect(marks.get('sales.Order')).toBe('partial');
     expect(marks.get('sales.OrderStatus')).toBe('implemented');
     expect(marks.get('sales')).toBe('partial');
-    expect(marks.get('crm')).toBe('broken');
+    expect(marks.get('crm')).toBe('partial');
     expect(marks.has('sales.Order.status')).toBe(false);
 });
 

@@ -1,12 +1,12 @@
 import { join } from 'node:path';
 import type { PanelAction, PanelName, PanelState } from '@appling/inspect/panels';
-import { diffMessage, openMessage } from '@appling/inspect/host-requests';
+import { openMessage } from '@appling/inspect/host-requests';
 import { GraphIndex, kindLabel } from '@appling/viz/views';
 import {
     commands, EventEmitter, FileDecoration, ThemeColor, ThemeIcon, TreeItem, TreeItemCollapsibleState, Uri, ViewColumn, window, workspace, type Disposable, type TextDocumentContentProvider, type TreeDataProvider, type TreeView
 } from 'vscode';
-import { openDiff, openLines, revealOffsets } from './editor.js';
-import { diffSummary, inspected, PANEL_TREES, VERBS, VIEWS, type ChangeStatus, type PanelNode, type Run, type ViewName } from './panel-trees.js';
+import { openLines, revealOffsets } from './editor.js';
+import { diffSummary, inspected, PANEL_TREES, VIEWS, type ChangeStatus, type PanelNode, type Run, type ViewName } from './panel-trees.js';
 
 /** What the panels need from the inspector tabs. */
 export interface PanelsHost {
@@ -26,8 +26,8 @@ const DECORATIONS: Record<ChangeStatus, [string, string]> = {
 };
 
 /**
- * The inspector's side panels as native views in the Appling sidebar (`appling.inspector`, `.playbook`, `.changes`, `.review`,
- * `.code`, `.tasks`; search is VS Code's Go to Symbol in Workspace), showing the inspector tab last active, read only:
+ * The inspector's side panels as native views in the Appling sidebar (`appling.inspector`, `.playbook`, `.changes`,
+ * `.tasks`; search is VS Code's Go to Symbol in Workspace), showing the inspector tab last active, read only:
  * its client sends the state, the trees come from `panel-trees.ts`, and what the user does goes back to the client as
  * an action, or happens here (opening files and diffs).
  */
@@ -49,7 +49,6 @@ export class Panels implements Disposable {
             this.trees[name] = { view, changed };
             this.disposables.push(view, changed);
         }
-        this.trees.review.view.onDidChangeVisibility(event => { if (event.visible) this.act({ type: 'review', on: true }); });
         const baseline: TextDocumentContentProvider = { provideTextDocumentContent: uri => this.baseline(uri) };
         const command = (id: string, run: (...args: never[]) => unknown) => commands.registerCommand(id, run);
         this.disposables.push(
@@ -61,12 +60,9 @@ export class Panels implements Disposable {
                 }
             }),
             command('appling.panel.run', (run: Run) => this.run(run)),
-            ...VERBS.map(verb => command(`appling.panel.${verb}`, (node: PanelNode) => node.actions?.[verb] && this.run(node.actions[verb]!))),
+            command('appling.panel.inspect', (node: PanelNode) => node.inspect && this.act({ type: 'select', qn: node.inspect })),
             command('appling.inspector.openSource', () => this.selected() && this.run({ type: 'source', qn: this.selected()! })),
-            command('appling.inspector.openCode', () => this.openCode()),
-            command('appling.review.compare', () => this.compare()),
-            command('appling.review.mark', () => this.act({ type: 'review', marked: true })),
-            command('appling.review.unmark', () => this.act({ type: 'review', marked: false }))
+            command('appling.inspector.openCode', () => this.openCode())
         );
     }
 
@@ -124,7 +120,7 @@ export class Panels implements Disposable {
         item.tooltip = node.tooltip;
         if (node.file || node.status) item.resourceUri = Uri.from({ scheme: ITEM, path: `/${node.file ?? node.id}`, query: node.status ?? '' });
         if (node.icon) item.iconPath = new ThemeIcon(node.icon, node.color ? new ThemeColor(node.color) : undefined);
-        item.contextValue = Object.keys(node.actions ?? {}).join(' ');
+        item.contextValue = node.inspect ? 'inspect' : undefined;
         if (node.run) item.command = { command: 'appling.panel.run', title: node.label, arguments: [node.run] };
         return item;
     }
@@ -139,8 +135,7 @@ export class Panels implements Disposable {
         const node = qn ? index.nodes.get(qn) : undefined;
         const context: Record<string, boolean> = {
             'appling.inspector.element': !!node,
-            'appling.inspector.code': !!qn && (state.snapshot.code[qn]?.length ?? 0) > 0,
-            'appling.review.marked': state.review.marked
+            'appling.inspector.code': !!qn && (state.snapshot.code[qn]?.length ?? 0) > 0
         };
         for (const [key, value] of Object.entries(context)) void commands.executeCommand('setContext', key, value);
         const badge = (count: number, what: string) => count ? { value: count, tooltip: `${count} ${what}` } : undefined;
@@ -149,8 +144,6 @@ export class Panels implements Disposable {
         this.trees.tasks.view.badge = badge(state.snapshot.tasks.filter(t => t.status !== 'done').length, 'open registry tasks');
         this.trees.tasks.view.description = state.snapshot.targets.length ? undefined : 'no stack yet';
         this.trees.changes.view.description = state.live?.files.length ? diffSummary(state.live.diff) : undefined;
-        const review = state.review.result;
-        this.trees.review.view.description = review?.ok ? `since ${review.commit.slice(0, 7)}${state.review.rev === 'HEAD' ? ' (uncommitted)' : ''}` : undefined;
         this.trees.inspector.view.description = node && kindLabel(node.kind);
     }
 
@@ -189,12 +182,6 @@ export class Panels implements Disposable {
                     await commands.executeCommand('vscode.diff', before, after, `${file.path} (changed)`, { viewColumn: ViewColumn.Beside });
                     return;
                 }
-                case 'reviewDiff': {
-                    const result = state.review.result;
-                    const diff = result?.ok && diffMessage(root, { path: run.path, rev: result.commit, ...run.from ? { before: run.from } : {} });
-                    if (diff) await openDiff(diff.path, diff.before, diff.rev, diff.line, ViewColumn.Beside);
-                    return;
-                }
             }
         } catch (error) {
             window.showErrorMessage(`Appling: ${(error as Error).message}`);
@@ -205,18 +192,8 @@ export class Panels implements Disposable {
         const current = this.current();
         const qn = this.selected();
         const references = qn ? current?.state.snapshot.code[qn] ?? [] : [];
-        const reference = references.find(c => c.status !== 'broken') ?? references[0];
+        const reference = references.find(c => c.status !== 'orphaned') ?? references[0];
         if (reference) void this.run({ type: 'code', path: reference.file, start: reference.start, end: reference.end });
-    }
-
-    private async compare(): Promise<void> {
-        const review = this.current()?.state.review;
-        if (!review) return;
-        const picked = await window.showQuickPick([
-            { label: 'HEAD', description: 'uncommitted changes', rev: 'HEAD' },
-            ...review.revisions.map(r => ({ label: r.short, description: `${r.subject} · ${r.date}`, rev: r.hash }))
-        ], { placeHolder: 'Compare the working tree with' });
-        if (picked) this.act({ type: 'review', on: true, rev: picked.rev });
     }
 
     /** A live changed file's text at the baseline (`?before`), or an empty text for a deleted one (`?after`). */

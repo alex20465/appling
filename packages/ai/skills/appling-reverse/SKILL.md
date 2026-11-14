@@ -68,7 +68,7 @@ Declare a level on the module when all of it shares it, on the declaration other
 1. Write one module per file with `write_model_file`, starting with the domain layer: enums, value types, entities. It refuses a file that introduces errors and tells you why. Add a `does` text only where the code holds knowledge the structure cannot carry, such as the vendor endpoint an operation calls or the format of an id; never restate what names, types and effects already say.
 2. Call `check` after each file. Fix errors before moving on; never leave the model invalid.
 3. Add behavior, then application, interfaces and pages, module by module. Use `edit` for small changes to files that exist.
-4. For each element you write, call `record_code_references` with the line ranges of the code it describes, each starting at the line that declares it (the model class, the function, the permission class). Paths are absolute or relative to the model folder.
+4. For each element you write, call `record_code_references` with the line of each declaration it describes (the model class, the function, the permission class); it writes an `@appling` marker comment above each. Paths are absolute or relative to the model folder.
 5. Use `graph_query` to confirm references, and `simulate` to compare the model's behavior with the code: can each state be reached the way the code reaches it, and do the right actors pass the policies? Ask `simulate` with `question: "actors"` for each action, and check every `yes` for an anonymous or low privileged actor: each one must have a place in the code that allows it.
 
 ## 4. Report what is uncertain

@@ -4,7 +4,7 @@ import { extname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { createMcpServer, handleMcpRequest, MemorySessionStore, touchedBy, type AppHost, type SessionStore } from '@appling/ai';
-import { latestRelease, readReleases, REFERENCES, type LineMark } from '@appling/model';
+import { latestRelease, MARKER_LANGUAGES, markersOf, readReleases, type LineMark } from '@appling/model';
 import { CONFIG, GENERATIONS, readConfig, REGISTRY } from '@appling/codegen';
 import type { Snapshot } from '../shared/snapshot.js';
 import { git, review, revisions } from './git.js';
@@ -99,8 +99,8 @@ export async function startInspect(root: string, port = 0, options: InspectOptio
     });
 
     let timer: NodeJS.Timeout | undefined;
-    /** Besides the model files: the config, the code references, the generation records and the targets' registries. */
-    const state = () => [CONFIG, REFERENCES, GENERATIONS, ...(readConfig(root).generate ?? []).map(t => relative(root, resolve(root, t.out, REGISTRY)))];
+    /** Besides the model files and the code markers: the config, the generation records and the targets' registries. */
+    const state = () => [CONFIG, GENERATIONS, ...(readConfig(root).generate ?? []).map(t => relative(root, resolve(root, t.out, REGISTRY)))];
     const report = (current: Snapshot) => options.onImplementation?.({ marks: fileMarks(current), links: codeLinks(root, current) });
     const refresh = () => {
         clearTimeout(timer);
@@ -113,10 +113,18 @@ export async function startInspect(root: string, port = 0, options: InspectOptio
             await live.update(current).catch(error => console.error(error));
         }, 100);
     };
+    // the markers of each code file as last seen, so only a change of markers refreshes
+    const marked = new Map<string, string>();
     const watcher = watch(root, { recursive: true }, (_, file) => {
         if (!file) return;
-        const model = file.endsWith('.appling') && !file.split(sep).some(part => part.startsWith('.') || part === 'node_modules');
-        if (model || state().includes(file)) refresh();
+        const hidden = file.split(sep).some(part => part.startsWith('.') || part === 'node_modules');
+        if (state().includes(file) || (!hidden && file.endsWith('.appling'))) return refresh();
+        if (hidden || !MARKER_LANGUAGES[extname(file)]) return;
+        markersOf(resolve(root, file)).then(markers => {
+            const now = JSON.stringify(markers);
+            if (now !== (marked.get(file) ?? '[]')) refresh();
+            marked.set(file, now);
+        }, () => undefined);
     });
     if (options.onImplementation) snapshot(root).then(report, error => console.error(error));
     // the marks start against HEAD and follow it: a commit, checkout or reset rewrites files in the git folder

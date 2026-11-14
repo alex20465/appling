@@ -17,7 +17,7 @@ Before you answer or change anything, find out where the project stands:
 | `graph_query` with `kind: "Module"` | The modules that exist; an empty starter module means a new application |
 | `appling.config.json` | The stack: each `generate` target names an extension (`@appling/codegen-django`, `-ash`, `-go`, `-rust`) and an `out` folder |
 | `<out>/.appling/tasks.json` | The application was generated: model and code now change together |
-| `.appling/references.json`, `code_references` | Code that implements model elements, by file and line |
+| `@appling <qn> <fingerprint>` comments, `code_references` | Code that implements model elements: the declaration each marker belongs to |
 | Application code without a model | Derive the model first with the `appling-reverse` skill |
 
 ## 2. Learn the language
@@ -57,7 +57,7 @@ Every feature, change request or behavior bug starts in the model:
 3. Check the change with `check` and `simulate`. The canvas marks the changed declarations and lists the change with its text differences; show related views with `visualize`.
 4. Carry the change into the code:
    - When code generation covers it, run `npx appling generate --migrate` for renames, type changes and removals, or `npx appling generate --sync` for everything else, then work through the new registry tasks with the `appling-registry` skill.
-   - When it does not (code that was not generated, or a target without that element), change the code by hand and record the lines with `record_code_references`.
+   - When it does not (code that was not generated, or a target without that element), change the code by hand and mark its declarations with `record_code_references`.
 5. Run the tests.
 
 The direction also runs the other way: when you or the person change behavior in the code, change the model to match, so the model never says something the code does not do.

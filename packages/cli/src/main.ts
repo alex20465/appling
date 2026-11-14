@@ -7,9 +7,9 @@ import { NodeFileSystem } from 'langium/node';
 import { createApplingServices, print, type ApplingServices, type Model } from '@appling/lang';
 import {
     BASELINE, checkPrerequisites, coverage, coverageMarkdown, coverageReport, coverageTable, describe, loadExtension, mergeGeneration, pendingChanges, plan, planMigrations, readApplied, readConfig, readRegistry,
-    recordWritten, runMigrations, runPlan, type Plan, type PlannedInput, type Written
+    recordGeneration, runMigrations, runPlan, workspaceReferences, type Plan, type PlannedInput
 } from '@appling/codegen';
-import { buildGraph, checkScenarios, dependencies, findApplingFiles, resolveReferences, Simulator, writeRelease, type Graph, type ResolvedReference } from '@appling/model';
+import { buildGraph, checkScenarios, dependencies, findApplingFiles, Simulator, writeRelease, type Graph, type ResolvedReference } from '@appling/model';
 import { inspect } from './inspect.js';
 import { init } from './init.js';
 
@@ -80,9 +80,9 @@ function simulate(documents: LangiumDocument[], services: ApplingServices, [ques
 }
 
 /** Prints where an element and its members are implemented, or with --check every reference that is not current. */
-function refs(documents: LangiumDocument[], services: ApplingServices, target: string): number {
+async function refs(documents: LangiumDocument[], services: ApplingServices, target: string): Promise<number> {
     if (report(documents, console.error)) return 1;
-    const all = resolveReferences('.', buildGraph(documents.map(doc => doc.parseResult.value as Model), services));
+    const all = await workspaceReferences('.', buildGraph(documents.map(doc => doc.parseResult.value as Model), services));
     const line = (r: ResolvedReference) => `${r.file}:${r.start}-${r.end} ${r.qn}`;
     if (target !== '--check') {
         const found = all.filter(r => r.qn === target || r.qn.startsWith(`${target}.`) || r.qn.startsWith(`${target}#`));
@@ -92,11 +92,11 @@ function refs(documents: LangiumDocument[], services: ApplingServices, target: s
     }
     const stale = all.filter(r => r.status !== 'current');
     for (const r of stale) {
-        console.log(`${line(r)}: ${r.status === 'shifted' ? `shifted from ${r.recorded!.start}-${r.recorded!.end}`
-            : r.status === 'broken' ? `broken, "${r.anchor}" not found` : 'orphaned, no such element in the model'}`);
+        console.log(`${line(r)}: ${r.status === 'orphaned' ? 'orphaned, no such element in the model'
+            : r.marked ? `stale, the marker names ${r.marked}` : 'stale, the element changed since the code was written'}`);
     }
     const count = (status: string) => stale.filter(r => r.status === status).length;
-    console.log(`${all.length} reference(s), ${count('shifted')} shifted, ${count('broken')} broken, ${count('orphaned')} orphaned`);
+    console.log(`${all.length} reference(s), ${count('stale')} stale, ${count('orphaned')} orphaned`);
     return stale.length ? 1 : 0;
 }
 
@@ -149,10 +149,9 @@ async function syncTarget(graph: Graph, name: string, out: string, options: Reco
     const temp = mkdtempSync(join(tmpdir(), 'appling-sync-'));
     try {
         const next = join(temp, basename(resolve(out)));
-        const written: Written[] = [];
-        runPlan(plan(graph, extension, String(options.name ?? basename(resolve(out))), options), next, line => console.log(`  ${line}`), written);
+        await runPlan(plan(graph, extension, String(options.name ?? basename(resolve(out))), options), next, line => console.log(`  ${line}`));
         const report = mergeGeneration(out, next, extension.syncExclude ?? []);
-        recordWritten('.', out, graph, written, new Set(graph.nodes.map(n => n.qn)));
+        recordGeneration('.', out, graph, graph.nodes.map(n => n.qn));
         for (const [label, files] of Object.entries(report)) if (files.length) console.log(`${label}: ${files.join(', ')}`);
         console.log(`${out}: synced${report.conflicts.length ? `, ${report.conflicts.length} file(s) with conflict markers (registry tasks)` : ''}`);
         return false;
@@ -211,9 +210,8 @@ async function generateTarget(graph: Graph, name: string, out: string, options: 
         return true;
     }
     try {
-        const written: Written[] = [];
-        runPlan(result, out, line => console.log(line), written);
-        recordWritten('.', out, graph, written, new Set(graph.nodes.map(n => n.qn)));
+        await runPlan(result, out, line => console.log(line));
+        recordGeneration('.', out, graph, graph.nodes.map(n => n.qn));
     } catch (error) {
         console.error((error as Error).message);
         return true;

@@ -5,7 +5,8 @@
 // upstream packages.
 import { build } from 'esbuild';
 import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { createRequire } from 'node:module';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -55,3 +56,12 @@ await build({
     banner: { js: banner }, logLevel: 'warning', legalComments: 'none'
 });
 writeFileSync(join(out, 'cli/package.json'), `${JSON.stringify({ type: 'module' })}\n`);
+
+// The code markers of `@appling/model` parse code with tree-sitter: its wasm and the grammars' sit in `grammars/` next to each bundle that reads them.
+const model = createRequire(join(packages, 'model/package.json'));
+const wasm = ['web-tree-sitter/web-tree-sitter.wasm', 'tree-sitter-python/tree-sitter-python.wasm', 'tree-sitter-elixir/tree-sitter-elixir.wasm', 'tree-sitter-go/tree-sitter-go.wasm',
+    'tree-sitter-rust/tree-sitter-rust.wasm', 'tree-sitter-typescript/tree-sitter-typescript.wasm', 'tree-sitter-typescript/tree-sitter-tsx.wasm', 'tree-sitter-javascript/tree-sitter-javascript.wasm'];
+for (const dir of [join(inspect, 'out/server/grammars'), join(out, 'cli/grammars')]) {
+    mkdirSync(dir, { recursive: true });
+    for (const file of wasm) cpSync(model.resolve(file), join(dir, basename(file)));
+}

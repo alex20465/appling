@@ -4,9 +4,9 @@
  * (back to the element) and one on model lines that have code (to the code). Paths are absolute.
  */
 
-export type MarkState = 'implemented' | 'partial' | 'unimplemented' | 'shifted' | 'broken';
+export type MarkState = 'implemented' | 'partial' | 'unimplemented';
 
-export const MARK_STATES: MarkState[] = ['implemented', 'partial', 'unimplemented', 'shifted', 'broken'];
+export const MARK_STATES: MarkState[] = ['implemented', 'partial', 'unimplemented'];
 
 export interface LineMark {
     /** From 1. */
@@ -29,13 +29,12 @@ export interface ImplementationState {
 }
 
 export const MARK_LABELS: Record<MarkState, string> = {
-    implemented: 'implemented', partial: 'partly implemented: open registry tasks', unimplemented: 'not implemented',
-    shifted: 'code reference shifted', broken: 'code reference broken'
+    implemented: 'implemented', partial: 'partly implemented: open registry tasks or code written against an older version', unimplemented: 'not implemented'
 };
 
 /** The colour of each state's gutter mark, as in the inspector. */
 export const MARK_COLORS: Record<MarkState, string> = {
-    implemented: '#5cbf63', partial: '#d98a1c', unimplemented: '#aaa092', shifted: '#4c9fe0', broken: '#e5534b'
+    implemented: '#5cbf63', partial: '#d98a1c', unimplemented: '#aaa092'
 };
 
 /** The gutter icon of a state, as an SVG data URI: a filled dot, a dashed ring for unimplemented. */
@@ -66,6 +65,29 @@ export function codeLenses(state: ImplementationState | undefined, path: string)
 /** The code of an element: every link to it, over all files. */
 export function codeOf(state: ImplementationState | undefined, qn: string): { path: string, start: number, end: number }[] {
     return Object.entries(state?.links ?? {}).flatMap(([path, links]) => links.filter(l => l.qn === qn).map(l => ({ path, start: l.start, end: l.end })));
+}
+
+/** The element declared on a model line or, below it, the nearest one before it. */
+export function elementAt(state: ImplementationState | undefined, path: string, line: number): string | undefined {
+    return state?.marks[path]?.filter(m => m.line <= line).at(-1)?.qn;
+}
+
+/** Where an element is declared in the model, by the line of its mark. */
+export function modelOf(state: ImplementationState | undefined, qn: string): { path: string, line: number } | undefined {
+    for (const [path, marks] of Object.entries(state?.marks ?? {})) {
+        const mark = marks.find(m => m.qn === qn);
+        if (mark) return { path, line: mark.line };
+    }
+    return undefined;
+}
+
+/** The qualified name of an `@appling <qn>` marker on a line of code when the character (from 0) is on it. */
+export function markerAt(text: string, character: number): { qn: string, start: number, end: number } | undefined {
+    const match = /@appling\s+(\S+)/.exec(text);
+    if (!match) return undefined;
+    const start = match.index + match[0].length - match[1].length;
+    const end = start + match[1].length;
+    return character >= match.index && character <= end ? { qn: match[1], start, end } : undefined;
 }
 
 /** One CodeLens on each model line whose element has code, to open it. */

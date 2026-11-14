@@ -7,13 +7,12 @@ import type { ResolvedReference } from './references.js';
  * IDE client draws it (gutter marks, canvas marks).
  *
  * - `implemented`: a current code reference, or generated code of the last generation the element has not changed since.
- * - `partial`: an open registry task, next to code that exists.
+ * - `partial`: an open registry task next to code that exists, or code whose marker is stale (the element changed since).
  * - `unimplemented`: no code reference and no generated code, or the element is new or changed since the last generation.
- * - `shifted`: a reference whose anchor moved; `broken`: a reference whose file or anchor is gone.
  */
-export type ImplementationState = 'implemented' | 'partial' | 'unimplemented' | 'shifted' | 'broken';
+export type ImplementationState = 'implemented' | 'partial' | 'unimplemented';
 
-export const IMPLEMENTATION_STATES: ImplementationState[] = ['implemented', 'partial', 'unimplemented', 'shifted', 'broken'];
+export const IMPLEMENTATION_STATES: ImplementationState[] = ['implemented', 'partial', 'unimplemented'];
 
 /** What the state computation needs of a registry entry (`RegistryEntry` of `@appling/codegen`). */
 export interface TaskEntry {
@@ -79,10 +78,10 @@ export function implementationStates(graph: Graph, input: ImplementationInput): 
         const entries = tasks.get(node.qn) ?? [];
         const open = entries.filter(e => e.status !== 'done' && e.missing.length > 0);
         const current = own.filter(r => r.status === 'current').length;
+        const stale = own.length > current;
         const outstanding = input.outstanding.has(node.qn);
         const generated = !outstanding && entries.some(e => e.status === 'generated' || e.status === 'done' || e.status === 'partial');
-        const state: ImplementationState = own.some(r => r.status === 'broken') ? 'broken'
-            : own.some(r => r.status === 'shifted') ? 'shifted'
+        const state: ImplementationState = stale ? 'partial'
             : open.length ? (current || entries.some(e => e.status === 'partial') && !outstanding ? 'partial' : 'unimplemented')
             : current || generated ? 'implemented'
             : 'unimplemented';
@@ -107,9 +106,9 @@ export function anchorStates(graph: Graph, references: ResolvedReference[], stat
         if (!owner) continue;
         const own = byAddress.get(anchor.address) ?? [];
         const current = own.filter(r => r.status === 'current').length;
+        const stale = own.length > current;
         const state: ImplementationState = !own.length ? owner.state
-            : own.some(r => r.status === 'broken') ? 'broken'
-            : own.some(r => r.status === 'shifted') ? 'shifted'
+            : stale ? 'partial'
             : owner.outstanding ? 'unimplemented'
             : 'implemented';
         result[anchor.address] = { state, references: current, tasks: 0, outstanding: owner.outstanding };
@@ -117,10 +116,9 @@ export function anchorStates(graph: Graph, references: ResolvedReference[], stat
     return result;
 }
 
-/** One state for several: broken or shifted when any is, implemented or unimplemented when all are, else partial. */
+/** One state for several: implemented or unimplemented when all are, else partial. */
 export function rollupState(states: ImplementationState[]): ImplementationState | undefined {
     if (!states.length) return undefined;
-    for (const worst of ['broken', 'shifted'] as const) if (states.includes(worst)) return worst;
     if (states.every(s => s === 'implemented')) return 'implemented';
     if (states.every(s => s === 'unimplemented')) return 'unimplemented';
     return 'partial';

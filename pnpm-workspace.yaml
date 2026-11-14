@@ -4,6 +4,14 @@ allowBuilds:
   '@vscode/vsce-sign': true
   esbuild: true
   node-pty: true
+  # grammar packages: only their prebuilt .wasm is used, never the native binding
+  tree-sitter: false
+  tree-sitter-elixir: false
+  tree-sitter-go: false
+  tree-sitter-javascript: false
+  tree-sitter-python: false
+  tree-sitter-rust: false
+  tree-sitter-typescript: false
 versioning:
   changelog:
     storage: repository

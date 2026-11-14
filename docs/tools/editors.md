@@ -58,11 +58,13 @@ When the workspace folder is reached through a symlink and the editor opens a fi
 
 In VS Code (see [VS Code](vscode.md)) the extension also shows the [implementation state](implementation.md):
 
-- a gutter mark on each model line that declares an element: implemented, partial, unimplemented, shifted or broken, with the element in its hover,
-- a CodeLens **Appling: sales.Order** above each code range that implements an element; it selects the element on the canvas of the project's inspector tab,
+- a gutter mark on each model line that declares an element: implemented, partial or unimplemented, with the element in its hover,
+- **Go to Implementation** (Ctrl+F12) on an element in a `.appling` file, or on a name that stands for one, opens the code its [`@appling` markers](references.md#the-marker) mark (the code of its members when it has none of its own),
+- **Go to Definition** (F12) on the name in an `@appling` marker in code opens the element in its `.appling` file,
+- a CodeLens **Appling: sales.Order** above each marked declaration; it selects the element on the canvas of the project's inspector tab,
 - a CodeLens **Open code** on model lines whose element has code, and the command **Appling: Open the code of this element** for the element at the cursor.
 
-The inspector server of each project sends the marks after every model or reference change.
+The inspector server of each project sends the marks after every change of the model or of a marker in the code.
 
 ## Connect an editor
 

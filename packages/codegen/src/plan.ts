@@ -1,4 +1,4 @@
-import type { Graph, GraphNode } from '@appling/model';
+import { fingerprints, type Graph, type GraphNode } from '@appling/model';
 import type { CodegenExtension, MapContext, Step } from './contract.js';
 
 export type Status = 'generated' | 'partial' | 'todo' | 'done';
@@ -37,6 +37,8 @@ export interface Plan {
     syncExclude?: string[];
     steps: PlannedStep[];
     entries: RegistryEntry[];
+    /** The fingerprint of every element: the markers generation writes above its code carry it. */
+    fingerprints?: Record<string, string>;
 }
 
 /** The node name of setup steps. */
@@ -57,7 +59,7 @@ export function plan(graph: Graph, extension: CodegenExtension, name: string, op
         return entry(node, nodeSteps, extension.name, context);
     });
     const phase = (s: PlannedStep) => s.step.kind === 'task' ? 0 : s.step.phase ?? 0;
-    return { extension: extension.name, test: extension.test, syncExclude: extension.syncExclude, steps: steps.map((s, i) => ({ s, i })).sort((a, b) => phase(a.s) - phase(b.s) || a.i - b.i).map(({ s }) => s), entries };
+    return { extension: extension.name, test: extension.test, syncExclude: extension.syncExclude, steps: steps.map((s, i) => ({ s, i })).sort((a, b) => phase(a.s) - phase(b.s) || a.i - b.i).map(({ s }) => s), entries, fingerprints: fingerprints(graph) };
 }
 
 /**

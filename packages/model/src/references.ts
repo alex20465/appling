@@ -1,108 +1,110 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { migrationRenames } from './diff.js';
 import type { Graph } from './graph.js';
+import { fingerprint } from './implementation.js';
+import { removeMarkerLines, scanMarkers, writeMarker } from './markers.js';
 
-/** Where an element is implemented: a line range of a code file, and its first line as the anchor that finds it again. */
+/** Where an element is implemented: the declaration an `@appling` marker in the code belongs to. */
 export interface CodeReference {
     /** Relative to the workspace folder. */
     file: string;
+    /** The declaration, from 1. */
     start: number;
     end: number;
-    anchor: string;
+    /** The marker's own line. */
+    line: number;
+    /** The element's fingerprint the code was written against. */
+    fingerprint?: string;
 }
 
-/** The code references of a workspace, by qualified name or sub-anchor address (`sales.PlaceOrder#step[2]`). */
-export type References = Record<string, CodeReference[]>;
-
 /**
- * `current`: the anchor is at the recorded start. `shifted`: the anchor moved, `start` and `end` are where it is now.
- * `broken`: the file or the anchor is gone. `orphaned`: the model has no element of that name anymore.
+ * `current`: the marker's fingerprint is the element's (or it has none). `stale`: the element changed since, or a
+ * migration step renamed it. `orphaned`: the model has no element of that name.
  */
-export type ReferenceStatus = 'current' | 'shifted' | 'broken' | 'orphaned';
+export type ReferenceStatus = 'current' | 'stale' | 'orphaned';
 
 export interface ResolvedReference extends CodeReference {
     qn: string;
     status: ReferenceStatus;
-    /** The recorded range, when it differs from `start` and `end`. */
-    recorded?: { start: number, end: number };
+    /** The name in the marker, when a migration step renamed the element since. */
+    marked?: string;
 }
 
-export const REFERENCES = join('.appling', 'references.json');
+/** The folders searched for markers: the git work tree around the workspace (or the workspace) and the given ones. */
+export function markerFolders(root: string, extra: string[] = []): string[] {
+    let top: string | undefined;
+    for (let folder = resolve(root); ; folder = dirname(folder)) {
+        if (existsSync(join(folder, '.git'))) top = folder;
+        if (top || dirname(folder) === folder) break;
+    }
+    return [top ?? resolve(root), ...extra.map(f => resolve(root, f))];
+}
 
-export function readReferences(root: string): References {
-    const file = join(root, REFERENCES);
-    return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as References : {};
+/** The fingerprints markers carry: an element's own, a sub-anchor its element's. */
+function markerFingerprints(graph: Graph): Map<string, string> {
+    const prints = new Map(graph.nodes.map(n => [n.qn, fingerprint(n)]));
+    for (const anchor of graph.anchors ?? []) {
+        const owner = prints.get(anchor.owner);
+        if (owner) prints.set(anchor.address, owner);
+    }
+    return prints;
+}
+
+/** The fingerprint a marker of an element or sub-anchor carries. */
+export function markerFingerprint(graph: Graph, qn: string): string | undefined {
+    return markerFingerprints(graph).get(qn);
 }
 
 /**
- * Replaces the references of one element with the given line ranges and returns them. Paths may be absolute
- * or relative to the workspace folder. Throws for a missing file or a range outside it.
+ * Every marker in the code of the workspace's folders (`markerFolders`) as a reference. With a graph, each gets its
+ * status; a name the model lacks is mapped through the migration steps first.
  */
-export function recordReferences(root: string, qn: string, ranges: { file: string, start: number, end: number }[]): CodeReference[] {
-    const references = ranges.map(({ file, start, end }) => {
+export async function resolveReferences(root: string, graph?: Graph, folders = markerFolders(root)): Promise<ResolvedReference[]> {
+    const markers = await scanMarkers(folders);
+    const prints = graph && markerFingerprints(graph);
+    const renamed = graph && migrationRenames({ nodes: [], edges: [] }, graph);
+    return markers.map(({ path, marker }) => {
+        const reference = { file: relative(resolve(root), path), start: marker.start, end: marker.end, line: marker.line, ...(marker.fingerprint && { fingerprint: marker.fingerprint }) };
+        if (!prints || !renamed) return { qn: marker.qn, ...reference, status: 'current' as const };
+        const print = prints.get(marker.qn);
+        if (print) return { qn: marker.qn, ...reference, status: !marker.fingerprint || marker.fingerprint === print ? 'current' as const : 'stale' as const };
+        // a sub-anchor's element may be renamed too
+        const [element, anchor] = marker.qn.split(/(?=#)/);
+        const now = renamed(element);
+        const qn = now && `${now}${anchor ?? ''}`;
+        if (qn && prints.has(qn)) return { qn, ...reference, status: 'stale' as const, marked: marker.qn };
+        return { qn: marker.qn, ...reference, status: 'orphaned' as const };
+    });
+}
+
+/**
+ * Marks where an element (or a sub-anchor) is implemented: a marker with its fingerprint above the declaration that
+ * starts on each given line, renewing a marker it has there and removing its markers elsewhere. Paths may be absolute
+ * or relative to the workspace folder and must lie in the folders searched for markers. An empty list removes every
+ * marker of the element. Returns its references afterwards.
+ */
+export async function recordReferences(root: string, graph: Graph, qn: string, places: { file: string, line: number }[], folders = markerFolders(root)): Promise<CodeReference[]> {
+    const print = markerFingerprint(graph, qn);
+    if (!print) throw new Error(`No element or sub-anchor ${qn}.`);
+    const operations = new Map<string, { line: number, run: () => Promise<unknown> | void }[]>();
+    const add = (path: string, line: number, run: () => Promise<unknown> | void) => operations.set(path, [...operations.get(path) ?? [], { line, run }]);
+    const targets = places.map(({ file, line }) => {
         const path = resolve(root, file);
         if (!existsSync(path)) throw new Error(`No file ${file}.`);
-        const lines = readFileSync(path, 'utf8').split('\n');
-        if (!(start >= 1 && start <= end && end <= lines.length)) throw new Error(`Lines ${start}-${end} are outside ${file}, which has ${lines.length} lines.`);
-        const anchor = lines[start - 1].trim();
-        if (!anchor) throw new Error(`Line ${start} of ${file} is empty; start the range at the first line of the code.`);
-        return { file: relative(resolve(root), path), start, end, anchor };
+        if (!folders.some(folder => { const rel = relative(folder, path); return !rel.startsWith('..') && !isAbsolute(rel); })) {
+            throw new Error(`${file} is outside the folders searched for markers: the git work tree of the workspace and the generated targets.`);
+        }
+        return { path, line };
     });
-    const all = readReferences(root);
-    if (references.length) all[qn] = references;
-    else delete all[qn];
-    mkdirSync(dirname(join(root, REFERENCES)), { recursive: true });
-    writeFileSync(join(root, REFERENCES), JSON.stringify(all, null, 2) + '\n');
-    return references;
-}
-
-/** Every reference with where it is now, nearest occurrence of its anchor first. With a graph, references to elements it lacks are orphaned. */
-export function resolveReferences(root: string, graph?: Graph): ResolvedReference[] {
-    // elements and the sub-anchors of lines that are not elements (`anchors.ts`) carry references
-    const names = graph && new Set([...graph.nodes.map(n => n.qn), ...(graph.anchors ?? []).map(a => a.address)]);
-    return Object.entries(readReferences(root)).flatMap(([qn, references]) => references.map(reference => {
-        if (names && !names.has(qn)) return { qn, ...reference, status: 'orphaned' as const };
+    const existing = (await resolveReferences(root, graph, folders)).filter(r => r.qn === qn);
+    for (const reference of existing) {
         const path = resolve(root, reference.file);
-        const lines = existsSync(path) ? readFileSync(path, 'utf8').split('\n') : [];
-        if (lines[reference.start - 1]?.trim() === reference.anchor) return { qn, ...reference, status: 'current' as const };
-        const found = lines.flatMap((line, i) => (line.trim() === reference.anchor ? [i + 1] : []))
-            .sort((a, b) => Math.abs(a - reference.start) - Math.abs(b - reference.start))[0];
-        if (!found) return { qn, ...reference, status: 'broken' as const };
-        const recorded = { start: reference.start, end: reference.end };
-        return { qn, ...reference, start: found, end: found + reference.end - reference.start, status: 'shifted' as const, recorded };
-    }));
-}
-
-/**
- * Replaces the references of these elements that point into one folder (absolute, such as a generated project) with
- * the given line ranges, keeping their references elsewhere, such as ones an agent recorded in other code. Ranges
- * are relative to the folder; ranges that start on an empty line or fall outside their file are skipped.
- */
-export function replaceReferencesIn(root: string, folder: string, updates: Record<string, { file: string, start: number, end: number }[]>): References {
-    const all = readReferences(root);
-    const base = resolve(folder);
-    const inside = (file: string) => {
-        const rel = relative(base, resolve(root, file));
-        return !rel.startsWith('..') && !isAbsolute(rel);
-    };
-    const texts = new Map<string, string[]>();
-    const linesOf = (path: string) => {
-        if (!texts.has(path)) texts.set(path, existsSync(path) ? readFileSync(path, 'utf8').split('\n') : []);
-        return texts.get(path)!;
-    };
-    for (const [qn, ranges] of Object.entries(updates)) {
-        const kept = (all[qn] ?? []).filter(r => !inside(r.file));
-        const added = ranges.flatMap(({ file, start, end }) => {
-            const path = resolve(base, file);
-            const lines = linesOf(path);
-            const anchor = lines[start - 1]?.trim();
-            if (!anchor || end < start || end > lines.length) return [];
-            return [{ file: relative(resolve(root), path), start, end, anchor }];
-        });
-        if (kept.length + added.length) all[qn] = [...kept, ...added];
-        else delete all[qn];
+        const kept = !reference.marked && targets.some(t => t.path === path && t.line === reference.start);
+        if (!kept) add(path, reference.line, () => removeMarkerLines(path, [reference.line]));
     }
-    mkdirSync(dirname(join(root, REFERENCES)), { recursive: true });
-    writeFileSync(join(root, REFERENCES), JSON.stringify(all, null, 2) + '\n');
-    return all;
+    for (const { path, line } of targets) add(path, line, () => writeMarker(path, line, qn, print));
+    // from the bottom of each file up, so every line still means what it meant
+    for (const list of operations.values()) for (const { run } of list.sort((a, b) => b.line - a.line)) await run();
+    return (await resolveReferences(root, graph, folders)).filter(r => r.qn === qn).map(({ file, start, end, line, fingerprint }) => ({ file, start, end, line, ...(fingerprint && { fingerprint }) }));
 }

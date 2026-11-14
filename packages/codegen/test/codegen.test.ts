@@ -5,7 +5,7 @@ import { expect, test } from 'vitest';
 import type { Model } from '@appling/lang';
 import { buildGraph } from '@appling/model';
 import { buildWorkspace } from '../../lang/test/workspace.js';
-import { checkPrerequisites, coverage, coverageTable, plan, runPlan, type CodegenExtension } from '../src/index.js';
+import { checkPrerequisites, coverage, coverageTable, plan, runPlan, type CodegenExtension, type Plan } from '../src/index.js';
 
 const MODEL = `module shop {
   enum Status { open done }
@@ -85,7 +85,7 @@ test('unmapped kinds become todo entries', async () => {
 
 test('run executes commands and templates and writes the registry', async () => {
     const out = join(mkdtempSync(join(tmpdir(), 'appling-')), 'shop');
-    runPlan(plan(await graph(), fake, 'shop'), out);
+    await runPlan(plan(await graph(), fake, 'shop'), out);
     expect(readFileSync(join(out, 'shop.txt'), 'utf8')).toBe('project');
     expect(readFileSync(join(out, 'models.txt'), 'utf8')).toBe('Enum shop.Status\nEntity shop.Item\n');
     const registry = JSON.parse(readFileSync(join(out, '.appling/tasks.json'), 'utf8'));
@@ -98,11 +98,23 @@ test('a failing command stops the run', async () => {
     const failing: CodegenExtension = { name: 'failing', steps: n => n.kind === 'Module' ? [{ kind: 'command', run: ['node', '-e', script] }] : [] };
     const steps = plan(await graph(), failing, 'shop');
     // the reason and both streams, since tools such as mix print their errors on stdout
-    expect(() => runPlan(steps, out)).toThrow(`node -e ${script} failed (exit 3):\ncompiling\nerror: no such app\nwarning`);
+    await expect(runPlan(steps, out)).rejects.toThrow(`node -e ${script} failed (exit 3):\ncompiling\nerror: no such app\nwarning`);
     expect(existsSync(join(out, '.appling/tasks.json'))).toBe(false);
 });
 
 test('prerequisites report what is missing', () => {
     expect(checkPrerequisites(fake.prerequisites!)).toEqual([]);
     expect(checkPrerequisites([{ name: 'nothing', command: ['appling-no-such-tool'], hint: 'install it' }])).toEqual(['nothing: install it']);
+});
+
+test('generation marks the code each element got, and leaves out a marker that would land in a string', async () => {
+    const out = join(mkdtempSync(join(tmpdir(), 'appling-')), 'shop');
+    const steps: Plan['steps'] = [
+        { node: 'm.A', step: { kind: 'template', file: 'a.py', write: () => 'import os\n\nclass A:\n    pass\n\nTEXT = """\n"""\n' } },
+        { node: 'm.B', step: { kind: 'template', file: 'a.py', write: text => text!.replace('TEXT = """\n', 'TEXT = """\nfirst line\nsecond line\n') } },
+        { node: 'm.C', step: { kind: 'template', file: 'notes.txt', write: () => 'c\n' } }
+    ];
+    await runPlan({ extension: 'x', steps, entries: [], fingerprints: { 'm.A': '0000000a', 'm.B': '0000000b', 'm.C': '0000000c' } }, out);
+    expect(readFileSync(join(out, 'a.py'), 'utf8')).toBe('import os\n\n# @appling m.A 0000000a\nclass A:\n    pass\n\nTEXT = """\nfirst line\nsecond line\n"""\n');
+    expect(readFileSync(join(out, 'notes.txt'), 'utf8')).toBe('c\n');
 });

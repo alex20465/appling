@@ -20,7 +20,7 @@ The [VS Code extension](../vscode) shows the client in a tab: a webview iframe o
 - The task board (`TaskBoard.tsx`, **Tasks** under the canvas): every registry task of the generated projects, in progress (claimed by an agent session), pending and done, in plan order. A click selects the task's element.
 - Live changes: every model change, by an agent session or any process that writes the files, is marked on the canvas (added, changed, removed ghosted) without moving the camera, compared with git `HEAD`, following it after every commit, checkout or reset; outside git or before the first commit, with the files on disk when the server started.
 - The repo's MCP server at `/mcp` for agent sessions (bearer token per session, `POST /api/sessions` opens one): agents label their work, set their status, claim elements and files and message each other; the canvas rings the claimed elements in the session's colour. `ide_context` reads what the person looks at, `ide_act` selects, reveals and highlights nodes, and the visual tools draw views and bubbles that wait as chips until the person opens them. A question typed in a session's view reaches its inbox (`POST /api/sessions/<id>/ask`).
-- For hosts with a Review panel: the model diff between any commit and the working tree (`/api/diff`, `/api/revisions`), marked on the canvas with removed elements ghosted where they were.
+- For a host that compares with a revision: the model diff between any commit and the working tree (`/api/diff`, `/api/revisions`), marked on the canvas with removed elements ghosted where they were.
 - Once a release exists (`appling release`), the header shows how many migration steps were recorded since.
 
 Everything updates when the files change on disk.

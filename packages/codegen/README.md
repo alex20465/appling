@@ -71,14 +71,14 @@ Every graph node has an entry, so the registry is also the coverage report and t
 
 ## Code references and the implementation state
 
-Generation collects what each step writes (`runPlan(plan, out, log, written)`) and records it as code references in the workspace's `.appling/references.json` (`recordWritten`), with a fingerprint per generated element in `.appling/generation.json`. `workspaceImplementation(root, graph)` turns references, registries and fingerprints into a state per element (implemented, partial, unimplemented, shifted, broken) and the elements new or changed since the last generation. `generateElements` generates a selection (what changed, some elements, everything) into every target.
+`runPlan(plan, out, log)` collects what each step writes and, once every step ran, puts an `@appling <qn> <fingerprint>` marker comment above the largest declaration each element got, before it saves the baseline; the generate commands record a fingerprint per generated element in `.appling/generation.json` (`recordGeneration`). `workspaceReferences(root, graph)` reads the markers of the workspace's git work tree and its targets, and `workspaceImplementation(root, graph)` turns them, the registries and the fingerprints into a state per element (implemented, partial, unimplemented) and the elements new or changed since the last generation. `generateElements` generates a selection (what changed, some elements, everything) into every target.
 
 ## API
 
 | Export | Purpose |
 |---|---|
 | `plan(graph, extension, name, options)` | The ordered steps and registry entries |
-| `runPlan(plan, out, log)` | Runs the steps and writes the registry |
+| `runPlan(plan, out, log)` | Runs the steps, marks the written code, writes the registry and the baseline (async) |
 | `checkPrerequisites(prerequisites)` | Messages for missing tools |
 | `readConfig(root)`, `loadExtension(name, root)` | Configuration and extension loading |
 | `STACKS`, `STACK_LABELS`, `STACK_LOCAL`, `addTarget(root, stack, name)`, `ignore(root, lines)` | The stacks and their packages (also `@appling/codegen/stacks`, browser safe), and adding a stack's target to `appling.config.json` |
@@ -88,8 +88,9 @@ Generation collects what each step writes (`runPlan(plan, out, log, written)`) a
 | `saveBaseline(out, exclude)`, `mergeGeneration(out, next, exclude)` | The generation baseline, and the three way merge of a fresh generation into a project |
 | `pendingChanges(graph, applied, stamp)`, `planMigrations(...)`, `runMigrations(...)`, `readApplied(out)` | Migration steps not yet applied to a generated project, and carrying them into it |
 | `generateElements(options)`, `GenerationEvent`, `GenerationSelection` | Generation of a selection into every target, with its events |
-| `locateWritten(out, written)`, `recordWritten(root, out, graph, written, elements)` | Where the written code is now, and recording it as references with the fingerprints |
-| `workspaceImplementation(root, graph)`, `readGenerations(root)`, `recordGeneration(...)` | The implementation state of a workspace and the generation records |
+| `locateWritten(out, written)` | Where the written code is now |
+| `workspaceReferences(root, graph?)` | The code references (markers) of a workspace, in its git work tree and every target |
+| `workspaceImplementation(root, graph, references?)`, `readGenerations(root)`, `recordGeneration(...)` | The implementation state of a workspace (async) and the generation records |
 
 ## License
 

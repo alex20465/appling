@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import type { Model } from '@appling/lang';
-import { buildGraph, readReferences } from '@appling/model';
+import { buildGraph, fingerprint, type Graph } from '@appling/model';
 import { buildWorkspace } from '../../lang/test/workspace.js';
-import { addedRuns, generateElements, locateWritten, mainRun, readGenerations, readRegistry, workspaceImplementation, type CodegenExtension, type GenerationEvent } from '../src/index.js';
+import { addedRuns, generateElements, locateWritten, mainRun, readGenerations, readRegistry, workspaceImplementation, workspaceReferences, type CodegenExtension, type GenerationEvent } from '../src/index.js';
 
 /** A header line that every step rewrites, so the code each step adds moves down; one class per entity, fields inside. */
 const classes: CodegenExtension = {
@@ -15,7 +15,7 @@ const classes: CodegenExtension = {
         if (node.kind === 'Entity') {
             const fields = context.children(node.qn).map(f => `    ${f.qn.split('.').pop()}: ${f.props.type}`);
             return [{
-                kind: 'template', file: 'models.txt',
+                kind: 'template', file: 'models.py',
                 write: existing => {
                     const body = (existing ?? '').split('\n').slice(1).join('\n');
                     const count = (body.match(/^class /gm)?.length ?? 0) + 1;
@@ -27,6 +27,8 @@ const classes: CodegenExtension = {
         return [];
     }
 };
+
+const print = (graph: Graph, qn: string) => fingerprint(graph.nodes.find(n => n.qn === qn)!);
 
 async function graphOf(model: string) {
     const { documents, services } = await buildWorkspace({ 'm.appling': model });
@@ -48,7 +50,7 @@ test('the lines a step added are found again after later steps moved them', () =
     expect(addedRuns('same', 'same')).toEqual([]);
 });
 
-test('a first generation creates the project, records the code references of what it wrote and the fingerprints', async () => {
+test('a first generation creates the project, marks the code it wrote for each element and records the fingerprints', async () => {
     const root = workspace();
     const graph = await graphOf(MODEL);
     const events: GenerationEvent[] = [];
@@ -57,14 +59,15 @@ test('a first generation creates the project, records the code references of wha
     expect(result.failed).toBe(false);
     expect(events.map(e => e.type)).toEqual(['start', 'planned', ...events.filter(e => e.type === 'log').map(() => 'log'), 'generated', 'tasks', 'done']);
     expect(events.find(e => e.type === 'tasks')).toMatchObject({ tasks: [{ qn: 'm.Close', missing: ['implement m.Close'] }] });
-    expect(readFileSync(join(root, 'out/models.txt'), 'utf8')).toBe('# 2 classes\nclass A:\n    a: Int\nclass B:\n    b: Int\n');
-    const references = readReferences(root);
-    expect(references['m.A']).toEqual([{ file: 'out/models.txt', start: 2, end: 3, anchor: 'class A:' }]);
-    expect(references['m.B']).toEqual([{ file: 'out/models.txt', start: 4, end: 5, anchor: 'class B:' }]);
-    expect(references['(project)']).toBeUndefined();
+    expect(readFileSync(join(root, 'out/models.py'), 'utf8')).toBe(`# 2 classes\n# @appling m.A ${print(graph, 'm.A')}\nclass A:\n    a: Int\n# @appling m.B ${print(graph, 'm.B')}\nclass B:\n    b: Int\n`);
+    expect(events.find(e => e.type === 'generated')).toMatchObject({ references: 2 });
+    expect((await workspaceReferences(root, graph)).map(r => [r.qn, r.file, r.start, r.end, r.status])).toEqual([
+        ['m.A', 'out/models.py', 3, 4, 'current'],
+        ['m.B', 'out/models.py', 6, 7, 'current']
+    ]);
     expect(Object.keys(readGenerations(root).out.fingerprints)).toContain('m.A.a');
 
-    const { states, tasks, targets } = workspaceImplementation(root, graph);
+    const { states, tasks, targets } = await workspaceImplementation(root, graph);
     expect(states['m.A'].state).toBe('implemented');
     // covered by its entity's code and unchanged since the generation
     expect(states['m.A.a'].state).toBe('implemented');
@@ -76,7 +79,7 @@ test('a first generation creates the project, records the code references of wha
     const registry = readRegistry(join(root, 'out'))!;
     registry.entries['m.Close'] = { ...registry.entries['m.Close'], status: 'done', missing: [] };
     writeFileSync(join(root, 'out/.appling/tasks.json'), JSON.stringify(registry));
-    expect(workspaceImplementation(root, graph).tasks).toMatchObject([{ qn: 'm.Close', status: 'done' }]);
+    expect((await workspaceImplementation(root, graph)).tasks).toMatchObject([{ qn: 'm.Close', status: 'done' }]);
 });
 
 test('a changed element is unimplemented at once; generating it merges only its files and keeps the rest', async () => {
@@ -85,7 +88,7 @@ test('a changed element is unimplemented at once; generating it merges only its 
     writeFileSync(join(root, 'out/README'), 'generated, then edited\n');
 
     const changed = await graphOf(MODEL.replace('b: Int', 'b: Int\n    c: Text'));
-    const before = workspaceImplementation(root, changed).states;
+    const before = (await workspaceImplementation(root, changed)).states;
     expect(before['m.B.c']).toMatchObject({ state: 'unimplemented', outstanding: true });
     // its entity has a current reference, so it stays implemented while its new field waits
     expect(before['m.B']).toMatchObject({ state: 'implemented', outstanding: false });
@@ -94,10 +97,10 @@ test('a changed element is unimplemented at once; generating it merges only its 
     await generateElements({ root, graph: changed, selection: { mode: 'outstanding' }, load: async () => classes, onEvent: e => events.push(e) });
     expect(events.find(e => e.type === 'planned')).toMatchObject({ mode: 'sync' });
     expect((events.find(e => e.type === 'planned') as { elements: string[] }).elements).toEqual(expect.arrayContaining(['m.B.c', 'm.A', 'm.B']));
-    expect(events.find(e => e.type === 'merged')).toMatchObject({ report: { updated: ['models.txt'] } });
-    expect(readFileSync(join(root, 'out/models.txt'), 'utf8')).toContain('    c: Text');
+    expect(events.find(e => e.type === 'merged')).toMatchObject({ report: { updated: ['models.py'] } });
+    expect(readFileSync(join(root, 'out/models.py'), 'utf8')).toContain('    c: Text');
     expect(readFileSync(join(root, 'out/README'), 'utf8')).toBe('generated, then edited\n');
-    const after = workspaceImplementation(root, changed).states;
+    const after = (await workspaceImplementation(root, changed)).states;
     expect(after['m.B.c']).toMatchObject({ state: 'implemented', outstanding: false });
 
     const again: GenerationEvent[] = [];
@@ -105,28 +108,26 @@ test('a changed element is unimplemented at once; generating it merges only its 
     expect(again.find(e => e.type === 'skipped')).toMatchObject({ reason: 'Nothing changed since the last generation.' });
 });
 
-test('a registry task makes an element partial, a broken reference shows, and references outside the project survive generation', async () => {
+test('a registry task makes an element partial, so does a stale marker, and markers outside the project survive generation', async () => {
     const root = workspace();
     const graph = await graphOf(MODEL);
     await generateElements({ root, graph, selection: { mode: 'all' }, load: async () => classes });
     const registry = readRegistry(join(root, 'out'))!;
     registry.entries['m.A'] = { ...registry.entries['m.A'], status: 'partial', missing: [{ what: 'validate a', context: { props: {}, related: [] } }] };
     writeFileSync(join(root, 'out/.appling/tasks.json'), JSON.stringify(registry));
-    writeFileSync(join(root, 'other.py'), 'def close():\n    pass\n');
-    const references = JSON.parse(readFileSync(join(root, '.appling/references.json'), 'utf8'));
-    references['m.Close'] = [{ file: 'other.py', start: 1, end: 2, anchor: 'def close():' }];
-    references['m.B'].push({ file: 'other.py', start: 1, end: 1, anchor: 'def gone():' });
-    writeFileSync(join(root, '.appling/references.json'), JSON.stringify(references));
+    writeFileSync(join(root, 'other.py'), '# @appling m.Close\ndef close():\n    pass\n\n# @appling m.B 00000000\ndef old():\n    pass\n');
 
-    const states = workspaceImplementation(root, graph).states;
+    const states = (await workspaceImplementation(root, graph)).states;
     expect(states['m.A'].state).toBe('partial');
-    expect(states['m.B'].state).toBe('broken');
+    // written against another version of m.B
+    expect(states['m.B'].state).toBe('partial');
     // linked by hand (brownfield): implemented, but its task is still open
     expect(states['m.Close'].state).toBe('partial');
 
     await generateElements({ root, graph, selection: { mode: 'elements', elements: ['m.B'] }, load: async () => classes });
-    expect(readReferences(root)['m.Close']).toHaveLength(1);
-    expect(readReferences(root)['m.B'].map(r => r.file)).toEqual(['other.py', 'out/models.txt']);
+    const references = await workspaceReferences(root, graph);
+    expect(references.filter(r => r.qn === 'm.Close')).toHaveLength(1);
+    expect(references.filter(r => r.qn === 'm.B').map(r => r.file)).toEqual(['other.py', 'out/models.py']);
 });
 
 test('a project that is not empty and has no registry is refused', async () => {

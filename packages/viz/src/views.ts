@@ -159,9 +159,10 @@ function rank(kind: string): number {
     return at < 0 ? KIND_ORDER.length : at;
 }
 
-const PLURALS: Record<string, string> = { Query: 'Queries', Entity: 'Entities', UseCase: 'Use cases', ValueType: 'Value types', Messages: 'Messages' };
+const PLURALS: Record<string, string> = { Query: 'Queries', Policy: 'Policies', Entity: 'Entities', UseCase: 'Use cases', ValueType: 'Value types', Messages: 'Messages' };
 
-function plural(kind: string): string {
+/** A kind as a group label: `Entities`, `Use cases`. */
+export function plural(kind: string): string {
     if (PLURALS[kind]) return PLURALS[kind];
     const label = kindLabel(kind);
     return `${label[0].toUpperCase()}${label.slice(1)}s`;
@@ -321,12 +322,12 @@ export function changeMarks(index: GraphIndex, changes: MarkedChanges, modules =
 
 /** Words for the implementation states, for marks and their tooltips. */
 export const IMPLEMENTATION_LABELS: Record<ImplementationState, string> = {
-    implemented: 'implemented', partial: 'partly implemented: open registry tasks', unimplemented: 'not implemented', shifted: 'code reference shifted', broken: 'code reference broken'
+    implemented: 'implemented', partial: 'partly implemented: open registry tasks or code written against an older version', unimplemented: 'not implemented'
 };
 
 /** The short words of the implementation states, for the tag line under a node's name. */
 export const IMPLEMENTATION_TAGS: Record<ImplementationState, string> = {
-    implemented: 'implemented', partial: 'partly implemented', unimplemented: 'not implemented', shifted: 'code moved', broken: 'code missing'
+    implemented: 'implemented', partial: 'partly implemented', unimplemented: 'not implemented'
 };
 
 /**

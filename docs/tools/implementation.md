@@ -10,10 +10,8 @@ The model is the seed, code generation the water, the code the plant. Every elem
 | State | When | Mark |
 |---|---|---|
 | implemented | The element has a current code reference, or the last generation wrote its code and the element has not changed since | green dot, tag `implemented` |
-| partial | An open registry task, next to code that exists (a reference, or generated code that is not complete) | amber dot, tag `partly implemented` |
+| partial | An open registry task, next to code that exists (a reference, or generated code that is not complete), or a [stale](references.md#status) code reference: the element changed since its code was written | amber dot, tag `partly implemented` |
 | unimplemented | No code: no reference and nothing generated, or the element is new or changed since the last generation and has no reference | hollow dot and circle, tag `not implemented` |
-| shifted | A code reference whose anchor moved; it still leads to the code, record it again | blue dot, tag `code moved` |
-| broken | A code reference whose file or anchor is gone | red dot, tag `code missing` |
 
 A reference beats generated code: an element an agent linked to existing code counts as implemented even when no generator covers it. A member without code of its own, such as a field that its entity's class declares, is implemented as long as the generation that wrote its parent covered it and it has not changed since.
 
@@ -22,13 +20,13 @@ An element is **outstanding** when it is new or changed since the last generatio
 ## Marks
 
 - **Model lines.** The [Appling extension](editors.md#implementation-marks), in VS Code, marks the line each element starts on in the gutter; where several start on one line, the innermost wins. Hover a mark for the element and its state.
-- **Canvas.** Each declaration on the [model canvas](inspect.md#the-model-canvas) gets a dot and a tag in words in the colour of its state rolled up with its members' (broken or shifted when any is, implemented or unimplemented when all are, partial otherwise); a module gets the roll up of its declarations. **Legend** at the bottom of the canvas explains the marks.
+- **Canvas.** Each declaration on the [model canvas](inspect.md#the-model-canvas) gets a dot and a tag in words in the colour of its state rolled up with its members' (implemented or unimplemented when all are, partial otherwise); a module gets the roll up of its declarations. **Legend** at the bottom of the canvas explains the marks.
 - **Inspector panel.** In VS Code the Inspector panel shows the state of the selected element with its open tasks and code.
 
 ## From the model to the code and back
 
-- **To the code.** In VS Code, model lines with code get an **Open code** CodeLens, and the command **Appling: Open the code of this element** opens the code of the element at the cursor.
-- **Back to the model.** Each referenced range has a CodeLens **Appling: sales.Order** above its first line; it selects the element on the inspector's canvas.
+- **To the code.** In VS Code, **Go to Implementation** (Ctrl+F12) on an element in a `.appling` file, or on a name that stands for one, opens its code; model lines with code get an **Open code** CodeLens, and the command **Appling: Open the code of this element** opens the code of the element at the cursor.
+- **Back to the model.** **Go to Definition** (F12) on the name in an `@appling` marker opens the element in its `.appling` file. Each marked declaration has a CodeLens **Appling: sales.Order** above its first line; it selects the element on the inspector's canvas.
 
 ## Generate
 
@@ -38,7 +36,7 @@ The inspector does not generate. [`appling generate`](cli.md#generate) creates a
 
 Generation, with `appling generate` and `appling generate --sync`, records:
 
-- **Code references** of the code it wrote, in `.appling/references.json`. For a template step, the lines it added to the file, located again in the final file (later steps may move them, such as imports added above); for a command step, the files it declares it creates. The references an element has elsewhere, such as code an agent linked, are kept.
+- **Markers** in the code it wrote: an `@appling <qn> <fingerprint>` comment (see [Code references](references.md)) above the largest declaration among the lines each template step added, located again once every step ran (later steps may move them, such as imports added above); for a command step, above the first code of the files it declares it creates. A marker that would not mark that code, such as one inside a string, and code in files without comments (JSON) get none. Markers the element has elsewhere, such as code an agent marked, stay.
 - **Fingerprints** of the generated elements per target, in `.appling/generation.json` of the model folder: a hash of each element's kind and properties. An element whose fingerprint differs from the recorded one is outstanding.
 
 ```json
@@ -50,7 +48,7 @@ Generation, with `appling generate` and `appling generate --sync`, records:
 }
 ```
 
-Code a framework command writes without declaring it (such as the files `startapp` fills) gets no reference of its own; its element counts as implemented through the generation record.
+Code a framework command writes without declaring it (such as the files `startapp` fills) gets no marker of its own; its element counts as implemented through the generation record.
 
 ## Registry tasks and agent sessions
 
@@ -58,4 +56,4 @@ The [task board](inspect.md#the-task-board) of the inspector is where you follow
 
 ## Existing code
 
-For an application that existed before its model, an agent links the code to the elements with `record_code_references` (the [reverse engineering skill](ai.md#reverse-engineering-skill) does it while it writes the model). Linked elements count as implemented; `implementation_status` lists what is still unimplemented, partial, shifted or broken.
+For an application that existed before its model, an agent marks the code of the elements with `record_code_references` (the [reverse engineering skill](ai.md#reverse-engineering-skill) does it while it writes the model). Marked elements count as implemented; `implementation_status` lists what is still unimplemented or partial.

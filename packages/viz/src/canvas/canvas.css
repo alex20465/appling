@@ -72,16 +72,12 @@
 .impl-implemented { fill: var(--appling-leaf); }
 .impl-partial { fill: var(--appling-amber); }
 .impl-unimplemented { fill: transparent; stroke: var(--appling-ink-muted) !important; stroke-dasharray: 2 1.5; }
-.impl-shifted { fill: var(--appling-info); }
-.impl-broken { fill: var(--appling-danger); }
 /* no code yet: a hollow circle; its tag says so in words */
 .tree-item.not-generated .ring { fill: var(--appling-surface); }
 /* The state in words under a node's labels, in the colour of its dot. */
 .tree-item .tag text { font: 600 10px var(--appling-font-mono); letter-spacing: 0.04em; fill: var(--tag, var(--appling-ink-muted)); }
 .tag-implemented { --tag: var(--appling-leaf); }
 .tag-partial { --tag: var(--appling-amber); }
-.tag-shifted { --tag: var(--appling-info); }
-.tag-broken { --tag: var(--appling-danger); }
 
 /* The right click menu of a node, and the form of a request. */
 
