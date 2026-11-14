@@ -8,6 +8,20 @@ const tools = [
     href: "/docs/tools/cli/",
   },
   {
+    title: "Inspector",
+    pkg: "@appling/inspect",
+    text: "The read only model canvas in your browser: the tree of modules and declarations with their icons, live change marks against the last commit and the task board.",
+    command: "npx appling inspect",
+    href: "/docs/tools/inspect/",
+  },
+  {
+    title: "VS Code",
+    pkg: "appling-vscode",
+    text: "The inspector in a tab per project, its panels as sidebar views, implementation marks in the editor and agent sessions in VS Code terminals.",
+    command: "code --install-extension appling.vsix",
+    href: "/docs/tools/vscode/",
+  },
+  {
     title: "AI",
     pkg: "@appling/ai",
     text: "An MCP server for any client, and agent sessions that show their work on the canvas. AI changes pass validation and are marked live on the canvas.",
@@ -44,7 +58,7 @@ const tools = [
     <div class="flex max-w-[640px] flex-col gap-3">
       <span class="eyebrow">Toolchain</span>
       <h2 class="text-h1">Every tool reads the same graph</h2>
-      <p class="text-ink-soft">The command line, the inspector, the AI and the generators all work on one validated model and change it through the same edit operations.</p>
+      <p class="text-ink-soft">The command line, the inspector, the AI and the generators all read one validated model. Changes go through the same edit operations; the inspector only shows them.</p>
     </div>
     <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-px border border-line bg-line">
       {tools.map((tool) => (

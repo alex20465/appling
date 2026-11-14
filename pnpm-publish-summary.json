@@ -1,3 +1,1157 @@
 {
-  "publishedPackages": []
+  "publishedPackages": [
+    {
+      "id": "@appling/lang@0.3.0",
+      "name": "@appling/lang",
+      "version": "0.3.0",
+      "size": 61017,
+      "unpackedSize": 495351,
+      "shasum": "2d3c02aa347117c32bc0dcf5f3a771cd5cc2146a",
+      "integrity": "sha512-ZgVZM8Hphiu2nihHa409I/V4wqtTwEjO+QjQ+XKsmEbKLVGyrQ3tLlvcClykFPePj0zLaxH4sxek4s8iET4GCg==",
+      "filename": "appling-lang-0.3.0.tgz",
+      "files": [
+        {
+          "path": "LICENSE"
+        },
+        {
+          "path": "out/appling-does.d.ts"
+        },
+        {
+          "path": "out/appling-does.js"
+        },
+        {
+          "path": "out/appling-module.d.ts"
+        },
+        {
+          "path": "out/appling-module.js"
+        },
+        {
+          "path": "out/appling-printer.d.ts"
+        },
+        {
+          "path": "out/appling-printer.js"
+        },
+        {
+          "path": "out/appling-scenario.d.ts"
+        },
+        {
+          "path": "out/appling-scenario.js"
+        },
+        {
+          "path": "out/appling-scope.d.ts"
+        },
+        {
+          "path": "out/appling-scope.js"
+        },
+        {
+          "path": "out/appling-tokens.d.ts"
+        },
+        {
+          "path": "out/appling-tokens.js"
+        },
+        {
+          "path": "out/appling-types.d.ts"
+        },
+        {
+          "path": "out/appling-types.js"
+        },
+        {
+          "path": "out/appling-validator.d.ts"
+        },
+        {
+          "path": "out/appling-validator.js"
+        },
+        {
+          "path": "out/appling-workspace.d.ts"
+        },
+        {
+          "path": "out/appling-workspace.js"
+        },
+        {
+          "path": "out/generated/ast.d.ts"
+        },
+        {
+          "path": "out/generated/ast.js"
+        },
+        {
+          "path": "out/generated/grammar.d.ts"
+        },
+        {
+          "path": "out/generated/grammar.js"
+        },
+        {
+          "path": "out/generated/module.d.ts"
+        },
+        {
+          "path": "out/generated/module.js"
+        },
+        {
+          "path": "out/index.d.ts"
+        },
+        {
+          "path": "out/index.js"
+        },
+        {
+          "path": "out/language-server.d.ts"
+        },
+        {
+          "path": "out/language-server.js"
+        },
+        {
+          "path": "out/layers.d.ts"
+        },
+        {
+          "path": "out/layers.js"
+        },
+        {
+          "path": "out/lsp.d.ts"
+        },
+        {
+          "path": "out/lsp.js"
+        },
+        {
+          "path": "out/syntaxes/monarch.d.ts"
+        },
+        {
+          "path": "out/syntaxes/monarch.js"
+        },
+        {
+          "path": "package.json"
+        },
+        {
+          "path": "README.md"
+        },
+        {
+          "path": "src/appling.langium"
+        },
+        {
+          "path": "src/syntaxes/appling.tmLanguage.json"
+        }
+      ],
+      "entryCount": 39,
+      "bundled": []
+    },
+    {
+      "id": "@appling/model@0.1.3",
+      "name": "@appling/model",
+      "version": "0.1.3",
+      "size": 42597,
+      "unpackedSize": 146793,
+      "shasum": "53d904f29cdad086118d6104ffe54f9c9dd55966",
+      "integrity": "sha512-PD1l06g/5G5LftbpDb0GylmROOZ3d6lweFiZiOIyjhk8KW6Jy8igUc2fcVhNkiyy2gR21aIgAt98RQZWTvOhTw==",
+      "filename": "appling-model-0.1.3.tgz",
+      "files": [
+        {
+          "path": "LICENSE"
+        },
+        {
+          "path": "out/anchors.d.ts"
+        },
+        {
+          "path": "out/anchors.js"
+        },
+        {
+          "path": "out/diff.d.ts"
+        },
+        {
+          "path": "out/diff.js"
+        },
+        {
+          "path": "out/edit.d.ts"
+        },
+        {
+          "path": "out/edit.js"
+        },
+        {
+          "path": "out/effects.d.ts"
+        },
+        {
+          "path": "out/effects.js"
+        },
+        {
+          "path": "out/files.d.ts"
+        },
+        {
+          "path": "out/files.js"
+        },
+        {
+          "path": "out/graph.d.ts"
+        },
+        {
+          "path": "out/graph.js"
+        },
+        {
+          "path": "out/implementation.d.ts"
+        },
+        {
+          "path": "out/implementation.js"
+        },
+        {
+          "path": "out/index.d.ts"
+        },
+        {
+          "path": "out/index.js"
+        },
+        {
+          "path": "out/markers.d.ts"
+        },
+        {
+          "path": "out/markers.js"
+        },
+        {
+          "path": "out/references.d.ts"
+        },
+        {
+          "path": "out/references.js"
+        },
+        {
+          "path": "out/release.d.ts"
+        },
+        {
+          "path": "out/release.js"
+        },
+        {
+          "path": "out/relevance.d.ts"
+        },
+        {
+          "path": "out/relevance.js"
+        },
+        {
+          "path": "out/scenarios.d.ts"
+        },
+        {
+          "path": "out/scenarios.js"
+        },
+        {
+          "path": "out/simulator.d.ts"
+        },
+        {
+          "path": "out/simulator.js"
+        },
+        {
+          "path": "package.json"
+        },
+        {
+          "path": "README.md"
+        }
+      ],
+      "entryCount": 31,
+      "bundled": []
+    },
+    {
+      "id": "@appling/codegen@0.1.3",
+      "name": "@appling/codegen",
+      "version": "0.1.3",
+      "size": 25229,
+      "unpackedSize": 82524,
+      "shasum": "c32daa60a3932b2ec08043aba14b98d227ad6d7b",
+      "integrity": "sha512-lqBy7yy9KLRnCY8aue+0SMH9hyvuoJwBW5s3GpQtAdzO/5aIaEfZUFQsBtdu8FgdjDfIxwbfAaR5NNPYmwubRQ==",
+      "filename": "appling-codegen-0.1.3.tgz",
+      "files": [
+        {
+          "path": "LICENSE"
+        },
+        {
+          "path": "out/config.d.ts"
+        },
+        {
+          "path": "out/config.js"
+        },
+        {
+          "path": "out/contract.d.ts"
+        },
+        {
+          "path": "out/contract.js"
+        },
+        {
+          "path": "out/generate.d.ts"
+        },
+        {
+          "path": "out/generate.js"
+        },
+        {
+          "path": "out/index.d.ts"
+        },
+        {
+          "path": "out/index.js"
+        },
+        {
+          "path": "out/markers.d.ts"
+        },
+        {
+          "path": "out/markers.js"
+        },
+        {
+          "path": "out/migrate.d.ts"
+        },
+        {
+          "path": "out/migrate.js"
+        },
+        {
+          "path": "out/plan.d.ts"
+        },
+        {
+          "path": "out/plan.js"
+        },
+        {
+          "path": "out/report.d.ts"
+        },
+        {
+          "path": "out/report.js"
+        },
+        {
+          "path": "out/run.d.ts"
+        },
+        {
+          "path": "out/run.js"
+        },
+        {
+          "path": "out/stacks.d.ts"
+        },
+        {
+          "path": "out/stacks.js"
+        },
+        {
+          "path": "out/sync.d.ts"
+        },
+        {
+          "path": "out/sync.js"
+        },
+        {
+          "path": "out/written.d.ts"
+        },
+        {
+          "path": "out/written.js"
+        },
+        {
+          "path": "package.json"
+        },
+        {
+          "path": "README.md"
+        }
+      ],
+      "entryCount": 27,
+      "bundled": []
+    },
+    {
+      "id": "@appling/viz@0.2.0",
+      "name": "@appling/viz",
+      "version": "0.2.0",
+      "size": 43442,
+      "unpackedSize": 146804,
+      "shasum": "05f3c172100249a4cfc2951e7431fc8ee9ef2dd2",
+      "integrity": "sha512-BredCl0RQMvoulDhrDfHMTGPxhHqozX7gtw6cw7+pFXpilUSu0aXLxg0RZGH33teahpZYT3PJOVrp05/OOQqWQ==",
+      "filename": "appling-viz-0.2.0.tgz",
+      "files": [
+        {
+          "path": "out/canvas/Bubble.d.ts"
+        },
+        {
+          "path": "out/canvas/Bubble.js"
+        },
+        {
+          "path": "out/canvas/canvas.css"
+        },
+        {
+          "path": "out/canvas/CardCanvas.d.ts"
+        },
+        {
+          "path": "out/canvas/CardCanvas.js"
+        },
+        {
+          "path": "out/canvas/EntityCanvas.d.ts"
+        },
+        {
+          "path": "out/canvas/EntityCanvas.js"
+        },
+        {
+          "path": "out/canvas/FlowCanvas.d.ts"
+        },
+        {
+          "path": "out/canvas/FlowCanvas.js"
+        },
+        {
+          "path": "out/canvas/index.d.ts"
+        },
+        {
+          "path": "out/canvas/index.js"
+        },
+        {
+          "path": "out/canvas/ModelCanvas.d.ts"
+        },
+        {
+          "path": "out/canvas/ModelCanvas.js"
+        },
+        {
+          "path": "out/canvas/plant.d.ts"
+        },
+        {
+          "path": "out/canvas/plant.js"
+        },
+        {
+          "path": "out/canvas/sound.d.ts"
+        },
+        {
+          "path": "out/canvas/sound.js"
+        },
+        {
+          "path": "out/host.d.ts"
+        },
+        {
+          "path": "out/host.js"
+        },
+        {
+          "path": "out/icons.d.ts"
+        },
+        {
+          "path": "out/icons.js"
+        },
+        {
+          "path": "out/index.d.ts"
+        },
+        {
+          "path": "out/index.js"
+        },
+        {
+          "path": "out/layout.d.ts"
+        },
+        {
+          "path": "out/layout.js"
+        },
+        {
+          "path": "out/main/electron.d.ts"
+        },
+        {
+          "path": "out/main/electron.js"
+        },
+        {
+          "path": "out/protocol.d.ts"
+        },
+        {
+          "path": "out/protocol.js"
+        },
+        {
+          "path": "out/views.d.ts"
+        },
+        {
+          "path": "out/views.js"
+        },
+        {
+          "path": "package.json"
+        },
+        {
+          "path": "README.md"
+        }
+      ],
+      "entryCount": 33,
+      "bundled": []
+    },
+    {
+      "id": "@appling/codegen-ash@0.1.3",
+      "name": "@appling/codegen-ash",
+      "version": "0.1.3",
+      "size": 47980,
+      "unpackedSize": 174453,
+      "shasum": "4f8ed64c8257937dcebb8b2bb33ef8c92a3a5359",
+      "integrity": "sha512-OySy9Hg3ET5iz7pfutgpf/2fzR+4AKBdUVIH182wiuDbzMK6rKpTSu2B5bz0G8JTnfNa/Up4mj21A4Vj0l6iVQ==",
+      "filename": "appling-codegen-ash-0.1.3.tgz",
+      "files": [
+        {
+          "path": "LICENSE"
+        },
+        {
+          "path": "out/actors.d.ts"
+        },
+        {
+          "path": "out/actors.js"
+        },
+        {
+          "path": "out/api.d.ts"
+        },
+        {
+          "path": "out/api.js"
+        },
+        {
+          "path": "out/application.d.ts"
+        },
+        {
+          "path": "out/application.js"
+        },
+        {
+          "path": "out/behavior.d.ts"
+        },
+        {
+          "path": "out/behavior.js"
+        },
+        {
+          "path": "out/elixir.d.ts"
+        },
+        {
+          "path": "out/elixir.js"
+        },
+        {
+          "path": "out/index.d.ts"
+        },
+        {
+          "path": "out/index.js"
+        },
+        {
+          "path": "out/migrations.d.ts"
+        },
+        {
+          "path": "out/migrations.js"
+        },
+        {
+          "path": "out/model-tests.d.ts"
+        },
+        {
+          "path": "out/model-tests.js"
+        },
+        {
+          "path": "out/naming.d.ts"
+        },
+        {
+          "path": "out/naming.js"
+        },
+        {
+          "path": "out/pages.d.ts"
+        },
+        {
+          "path": "out/pages.js"
+        },
+        {
+          "path": "out/policy-tests.d.ts"
+        },
+        {
+          "path": "out/policy-tests.js"
+        },
+        {
+          "path": "out/resource.d.ts"
+        },
+        {
+          "path": "out/resource.js"
+        },
+        {
+          "path": "out/roles.d.ts"
+        },
+        {
+          "path": "out/roles.js"
+        },
+        {
+          "path": "out/scenario-tests.d.ts"
+        },
+        {
+          "path": "out/scenario-tests.js"
+        },
+        {
+          "path": "out/tenants.d.ts"
+        },
+        {
+          "path": "out/tenants.js"
+        },
+        {
+          "path": "out/tests.d.ts"
+        },
+        {
+          "path": "out/tests.js"
+        },
+        {
+          "path": "out/vendors.d.ts"
+        },
+        {
+          "path": "out/vendors.js"
+        },
+        {
+          "path": "package.json"
+        },
+        {
+          "path": "README.md"
+        }
+      ],
+      "entryCount": 37,
+      "bundled": []
+    },
+    {
+      "id": "@appling/codegen-django@0.1.3",
+      "name": "@appling/codegen-django",
+      "version": "0.1.3",
+      "size": 57121,
+      "unpackedSize": 215381,
+      "shasum": "407d906fe2144f254e25136432a227c9f9822009",
+      "integrity": "sha512-YLU0Zggi4JNXPyjLPetcz0wiHZHw+YLCDFyQHPVlt7GjAS0HVz0ztX+8Rh/gZTFZwSwIPx5xfBeo481Nfs5+pg==",
+      "filename": "appling-codegen-django-0.1.3.tgz",
+      "files": [
+        {
+          "path": "LICENSE"
+        },
+        {
+          "path": "out/access.d.ts"
+        },
+        {
+          "path": "out/access.js"
+        },
+        {
+          "path": "out/api.d.ts"
+        },
+        {
+          "path": "out/api.js"
+        },
+        {
+          "path": "out/application.d.ts"
+        },
+        {
+          "path": "out/application.js"
+        },
+        {
+          "path": "out/behavior-tests.d.ts"
+        },
+        {
+          "path": "out/behavior-tests.js"
+        },
+        {
+          "path": "out/behavior.d.ts"
+        },
+        {
+          "path": "out/behavior.js"
+        },
+        {
+          "path": "out/files.d.ts"
+        },
+        {
+          "path": "out/files.js"
+        },
+        {
+          "path": "out/fixtures.d.ts"
+        },
+        {
+          "path": "out/fixtures.js"
+        },
+        {
+          "path": "out/index.d.ts"
+        },
+        {
+          "path": "out/index.js"
+        },
+        {
+          "path": "out/migrations.d.ts"
+        },
+        {
+          "path": "out/migrations.js"
+        },
+        {
+          "path": "out/model-tests.d.ts"
+        },
+        {
+          "path": "out/model-tests.js"
+        },
+        {
+          "path": "out/models.d.ts"
+        },
+        {
+          "path": "out/models.js"
+        },
+        {
+          "path": "out/pages.d.ts"
+        },
+        {
+          "path": "out/pages.js"
+        },
+        {
+          "path": "out/policy-tests.d.ts"
+        },
+        {
+          "path": "out/policy-tests.js"
+        },
+        {
+          "path": "out/python.d.ts"
+        },
+        {
+          "path": "out/python.js"
+        },
+        {
+          "path": "out/roles.d.ts"
+        },
+        {
+          "path": "out/roles.js"
+        },
+        {
+          "path": "out/scenario-tests.d.ts"
+        },
+        {
+          "path": "out/scenario-tests.js"
+        },
+        {
+          "path": "out/tests.d.ts"
+        },
+        {
+          "path": "out/tests.js"
+        },
+        {
+          "path": "out/vendors.d.ts"
+        },
+        {
+          "path": "out/vendors.js"
+        },
+        {
+          "path": "package.json"
+        },
+        {
+          "path": "README.md"
+        }
+      ],
+      "entryCount": 39,
+      "bundled": []
+    },
+    {
+      "id": "@appling/codegen-go@0.1.3",
+      "name": "@appling/codegen-go",
+      "version": "0.1.3",
+      "size": 29738,
+      "unpackedSize": 110730,
+      "shasum": "3fb619a06115710e5cc27652ad5b086c44cce7c9",
+      "integrity": "sha512-ek0Qlejx7NwFtDwmX4c+A0q7PDfsI91FvWjLd29TZ7vGAQDQ7fA63NOZCTl5b3f1vOUPAvBxcC99bfianSjBJg==",
+      "filename": "appling-codegen-go-0.1.3.tgz",
+      "files": [
+        {
+          "path": "LICENSE"
+        },
+        {
+          "path": "out/access.d.ts"
+        },
+        {
+          "path": "out/access.js"
+        },
+        {
+          "path": "out/golang.d.ts"
+        },
+        {
+          "path": "out/golang.js"
+        },
+        {
+          "path": "out/index.d.ts"
+        },
+        {
+          "path": "out/index.js"
+        },
+        {
+          "path": "package.json"
+        },
+        {
+          "path": "README.md"
+        }
+      ],
+      "entryCount": 9,
+      "bundled": []
+    },
+    {
+      "id": "@appling/codegen-rust@0.1.3",
+      "name": "@appling/codegen-rust",
+      "version": "0.1.3",
+      "size": 32607,
+      "unpackedSize": 121306,
+      "shasum": "6e4aa66bb616e92c136017c29a9c0f9ddf182648",
+      "integrity": "sha512-eku2ZIqfO+JjfstgmABfRf6xOEtB1Y0ZdXmWfeJa2I2iIKzkmLr4S7vBfCdBYqyzRW8NJFv6xN9lFeYIRq2XUA==",
+      "filename": "appling-codegen-rust-0.1.3.tgz",
+      "files": [
+        {
+          "path": "LICENSE"
+        },
+        {
+          "path": "out/access.d.ts"
+        },
+        {
+          "path": "out/access.js"
+        },
+        {
+          "path": "out/index.d.ts"
+        },
+        {
+          "path": "out/index.js"
+        },
+        {
+          "path": "out/rust.d.ts"
+        },
+        {
+          "path": "out/rust.js"
+        },
+        {
+          "path": "package.json"
+        },
+        {
+          "path": "README.md"
+        }
+      ],
+      "entryCount": 9,
+      "bundled": []
+    },
+    {
+      "id": "@appling/ai@0.2.0",
+      "name": "@appling/ai",
+      "version": "0.2.0",
+      "size": 90001,
+      "unpackedSize": 297520,
+      "shasum": "b185c3a9b0a5a81155f02a8933cdba75aa06caac",
+      "integrity": "sha512-NlOYvEr+FmI71nvTC9K073vCAY3CXCzpYe5VPBVzPjhs/Ao2w0Y7UKhjeDHcKm59tNCPofoAKqkHDy8xf6r1tQ==",
+      "filename": "appling-ai-0.2.0.tgz",
+      "files": [
+        {
+          "path": "language/access.md"
+        },
+        {
+          "path": "language/application.md"
+        },
+        {
+          "path": "language/behavior.md"
+        },
+        {
+          "path": "language/descriptions.md"
+        },
+        {
+          "path": "language/domain.md"
+        },
+        {
+          "path": "language/experience.md"
+        },
+        {
+          "path": "language/expressions.md"
+        },
+        {
+          "path": "language/interfaces.md"
+        },
+        {
+          "path": "language/migrations.md"
+        },
+        {
+          "path": "language/modules.md"
+        },
+        {
+          "path": "language/overview.md"
+        },
+        {
+          "path": "language/relevance.md"
+        },
+        {
+          "path": "language/scenarios.md"
+        },
+        {
+          "path": "language/validation.md"
+        },
+        {
+          "path": "LICENSE"
+        },
+        {
+          "path": "out/agents/gateway.d.ts"
+        },
+        {
+          "path": "out/agents/gateway.js"
+        },
+        {
+          "path": "out/agents/hook.cjs"
+        },
+        {
+          "path": "out/agents/hook.d.cts"
+        },
+        {
+          "path": "out/agents/index.d.ts"
+        },
+        {
+          "path": "out/agents/index.js"
+        },
+        {
+          "path": "out/agents/presets.d.ts"
+        },
+        {
+          "path": "out/agents/presets.js"
+        },
+        {
+          "path": "out/agents/status.d.ts"
+        },
+        {
+          "path": "out/agents/status.js"
+        },
+        {
+          "path": "out/chat.d.ts"
+        },
+        {
+          "path": "out/chat.js"
+        },
+        {
+          "path": "out/index.d.ts"
+        },
+        {
+          "path": "out/index.js"
+        },
+        {
+          "path": "out/main.d.ts"
+        },
+        {
+          "path": "out/main.js"
+        },
+        {
+          "path": "out/mcp.d.ts"
+        },
+        {
+          "path": "out/mcp.js"
+        },
+        {
+          "path": "out/playbook-tools.d.ts"
+        },
+        {
+          "path": "out/playbook-tools.js"
+        },
+        {
+          "path": "out/playbook.d.ts"
+        },
+        {
+          "path": "out/playbook.js"
+        },
+        {
+          "path": "out/project.d.ts"
+        },
+        {
+          "path": "out/project.js"
+        },
+        {
+          "path": "out/prompts.d.ts"
+        },
+        {
+          "path": "out/prompts.js"
+        },
+        {
+          "path": "out/proposal.d.ts"
+        },
+        {
+          "path": "out/proposal.js"
+        },
+        {
+          "path": "out/requests.d.ts"
+        },
+        {
+          "path": "out/requests.js"
+        },
+        {
+          "path": "out/session-tools.d.ts"
+        },
+        {
+          "path": "out/session-tools.js"
+        },
+        {
+          "path": "out/sessions.d.ts"
+        },
+        {
+          "path": "out/sessions.js"
+        },
+        {
+          "path": "out/tools.d.ts"
+        },
+        {
+          "path": "out/tools.js"
+        },
+        {
+          "path": "out/visual.d.ts"
+        },
+        {
+          "path": "out/visual.js"
+        },
+        {
+          "path": "package.json"
+        },
+        {
+          "path": "README.md"
+        },
+        {
+          "path": "rules/appling.md"
+        },
+        {
+          "path": "skills/appling-registry/SKILL.md"
+        },
+        {
+          "path": "skills/appling-reverse/SKILL.md"
+        },
+        {
+          "path": "skills/appling/SKILL.md"
+        }
+      ],
+      "entryCount": 59,
+      "bundled": []
+    },
+    {
+      "id": "@appling/inspect@0.1.3",
+      "name": "@appling/inspect",
+      "version": "0.1.3",
+      "size": 326016,
+      "unpackedSize": 952810,
+      "shasum": "8036882edf2ec466127651b3bb63bd63a594f757",
+      "integrity": "sha512-0p/D0n0540MRryOswmmQV9jLf/C/p94uYFxbdpXyNtMu657pei9TRa5ma1v3uL4U93KpKKahPF/186sPWAXT1g==",
+      "filename": "appling-inspect-0.1.3.tgz",
+      "files": [
+        {
+          "path": "dist/client/appling-icon.svg"
+        },
+        {
+          "path": "dist/client/assets/index-DTt8S9Fy.css"
+        },
+        {
+          "path": "dist/client/assets/index-s2O_YtIp.js"
+        },
+        {
+          "path": "dist/client/fonts/JetBrainsMono-Variable.woff2"
+        },
+        {
+          "path": "dist/client/fonts/Switzer-Medium.woff2"
+        },
+        {
+          "path": "dist/client/fonts/Switzer-Regular.woff2"
+        },
+        {
+          "path": "dist/client/fonts/Switzer-Semibold.woff2"
+        },
+        {
+          "path": "dist/client/index.html"
+        },
+        {
+          "path": "LICENSE"
+        },
+        {
+          "path": "out/server/git.d.ts"
+        },
+        {
+          "path": "out/server/git.js"
+        },
+        {
+          "path": "out/server/host-requests.d.ts"
+        },
+        {
+          "path": "out/server/host-requests.js"
+        },
+        {
+          "path": "out/server/live.d.ts"
+        },
+        {
+          "path": "out/server/live.js"
+        },
+        {
+          "path": "out/server/main.d.ts"
+        },
+        {
+          "path": "out/server/main.js"
+        },
+        {
+          "path": "out/server/process.d.ts"
+        },
+        {
+          "path": "out/server/process.js"
+        },
+        {
+          "path": "out/server/server.d.ts"
+        },
+        {
+          "path": "out/server/server.js"
+        },
+        {
+          "path": "out/server/sessions.d.ts"
+        },
+        {
+          "path": "out/server/sessions.js"
+        },
+        {
+          "path": "out/server/visuals.d.ts"
+        },
+        {
+          "path": "out/server/visuals.js"
+        },
+        {
+          "path": "out/server/workspace.d.ts"
+        },
+        {
+          "path": "out/server/workspace.js"
+        },
+        {
+          "path": "out/shared/live.d.ts"
+        },
+        {
+          "path": "out/shared/live.js"
+        },
+        {
+          "path": "out/shared/model.d.ts"
+        },
+        {
+          "path": "out/shared/model.js"
+        },
+        {
+          "path": "out/shared/panels.d.ts"
+        },
+        {
+          "path": "out/shared/panels.js"
+        },
+        {
+          "path": "out/shared/review.d.ts"
+        },
+        {
+          "path": "out/shared/review.js"
+        },
+        {
+          "path": "out/shared/snapshot.d.ts"
+        },
+        {
+          "path": "out/shared/snapshot.js"
+        },
+        {
+          "path": "package.json"
+        },
+        {
+          "path": "README.md"
+        }
+      ],
+      "entryCount": 39,
+      "bundled": []
+    },
+    {
+      "id": "@appling/cli@0.3.0",
+      "name": "@appling/cli",
+      "version": "0.3.0",
+      "size": 11462,
+      "unpackedSize": 35662,
+      "shasum": "93bb2e983a932d3772f2b9f1f6f20dd1e96a966d",
+      "integrity": "sha512-OxCpP2DeQAuuD9HCjRQvcBxepSen9nqmAgO+uE4ykAcpqVCo2+Dj8jHopOxbFI4/NIKF01Tpspc7M/UgQGiFAg==",
+      "filename": "appling-cli-0.3.0.tgz",
+      "files": [
+        {
+          "path": "LICENSE"
+        },
+        {
+          "path": "out/ide.d.ts"
+        },
+        {
+          "path": "out/ide.js"
+        },
+        {
+          "path": "out/init.d.ts"
+        },
+        {
+          "path": "out/init.js"
+        },
+        {
+          "path": "out/inspect.d.ts"
+        },
+        {
+          "path": "out/inspect.js"
+        },
+        {
+          "path": "out/main.d.ts"
+        },
+        {
+          "path": "out/main.js"
+        },
+        {
+          "path": "package.json"
+        },
+        {
+          "path": "README.md"
+        }
+      ],
+      "entryCount": 11,
+      "bundled": []
+    }
+  ]
 }

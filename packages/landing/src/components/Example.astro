@@ -40,11 +40,6 @@ const edges = [
   { from: [196, 48], d: "M196 48 L141 48", delay: 1, label: { x: 168, y: 48, text: "via", anchor: "middle" } },
   { from: [168, 176], d: "M168 176 L168 219", delay: 1.2, label: { x: 176, y: 198, text: "status", anchor: "start" } },
 ];
-
-const quotes = [
-  "[CUSTOMER QUOTE: what Appling changed for their team]",
-  "[CUSTOMER QUOTE: a concrete before and after]",
-];
 ---
 
 <section id="example" class="border-t border-line px-4 py-16 sm:px-8">
@@ -94,24 +89,6 @@ const quotes = [
       </div>
     </div>
 
-    <div class="flex flex-col gap-6 pt-8">
-      <div class="flex flex-col gap-3">
-        <span class="eyebrow">What people say</span>
-        <h3 class="text-[21.6px] leading-[26px] font-semibold tracking-[-0.015em]">Proof from real projects</h3>
-      </div>
-      <div class="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-px border border-line bg-line">
-        {quotes.map((quote) => (
-          <figure class="flex flex-col gap-4 bg-surface-raised p-6">
-            <blockquote class="text-ink-soft">{quote}</blockquote>
-            <figcaption class="font-mono text-xs leading-5 text-leaf">[NAME], [ROLE], [COMPANY]</figcaption>
-          </figure>
-        ))}
-        <a href={`${GITHUB_URL}/tree/main/examples`} class="flex flex-col justify-between gap-4 bg-leaf-soft p-6 text-ink no-underline hover:text-ink">
-          <span class="eyebrow">Example repository</span>
-          <span class="text-[21.6px] leading-[26px] font-semibold tracking-[-0.015em]">Browse full models on GitHub</span>
-          <span class="font-mono text-xs leading-5 text-ink-muted">alex20465/appling/examples →</span>
-        </a>
-      </div>
-    </div>
+    <a href={`${GITHUB_URL}/tree/main/examples`} class="font-mono text-[13px] leading-5 font-semibold">Browse full models on GitHub →</a>
   </div>
 </section>
