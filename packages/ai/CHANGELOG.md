@@ -1,5 +1,19 @@
 # @appling/ai
 
+## 0.2.0
+
+### Minor Changes
+
+- Replace the IDE oriented tools with the read only inspector: proposals, requests and the playbook are removed (breaking); add agent sessions, visual tools and set_icons.
+
+### Patch Changes
+
+- Updated dependencies:
+  - @appling/codegen@0.1.3
+  - @appling/lang@0.3.0
+  - @appling/model@0.1.3
+  - @appling/viz@0.2.0
+
 ## 0.1.3
 
 ### Patch Changes

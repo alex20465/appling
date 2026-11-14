@@ -1,5 +1,23 @@
 # @appling/lang
 
+## 0.3.0
+
+### Minor Changes
+
+- Remove the playbook construct from the language (breaking).
+
+### Patch Changes
+
+- Export the layer map and fix typing of actor fields declared with different types and machine ownership validation speed.
+
+- Declare the settings and secrets of an external, name vendors from interfaces and describe any element with a does clause.
+
+- Add scenarios (given, when, then) that the simulator checks and generators turn into tests.
+
+- Add query inputs with an input block, calls and REST GET parameters from path and query string.
+
+- Add richer action effects: for, update, delete and create as.
+
 ## 0.2.2
 
 ### Patch Changes

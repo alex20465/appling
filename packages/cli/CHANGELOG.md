@@ -1,5 +1,18 @@
 # @appling/cli
 
+## 0.3.0
+
+### Minor Changes
+
+- Replace the ide command with appling inspect (breaking), add appling init and report scenario failures in check.
+
+### Patch Changes
+
+- Updated dependencies:
+  - @appling/codegen@0.1.3
+  - @appling/lang@0.3.0
+  - @appling/model@0.1.3
+
 ## 0.2.2
 
 ### Patch Changes

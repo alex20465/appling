@@ -1,5 +1,22 @@
 # @appling/model
 
+## 0.1.3
+
+### Patch Changes
+
+- Track implementation markers and code references of every model line, and diff two graphs.
+
+- Declare the settings and secrets of an external, name vendors from interfaces and describe any element with a does clause.
+
+- Add scenarios (given, when, then) that the simulator checks and generators turn into tests.
+
+- Add query inputs with an input block, calls and REST GET parameters from path and query string.
+
+- Add richer action effects: for, update, delete and create as.
+
+- Updated dependencies:
+  - @appling/lang@0.3.0
+
 ## 0.1.2
 
 ### Patch Changes

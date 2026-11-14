@@ -8,6 +8,10 @@
     - fluffy-elephants-wait
     - new-donkeys-cheer
     - pretty-seals-happen
+"@appling/ai@0.2.0":
+  dir: packages/ai
+  intents:
+    - chilly-peaches-repeat
 "@appling/cli@0.2.0":
   dir: packages/cli
   intents:
@@ -21,14 +25,53 @@
   intents:
     - loud-frogs-tie
     - purple-pears-mix
+"@appling/cli@0.3.0":
+  dir: packages/cli
+  intents:
+    - tough-wombats-reply
 "@appling/codegen-ash@0.1.2":
   dir: packages/codegen-ash
   intents:
     - bright-kings-argue
+"@appling/codegen-ash@0.1.3":
+  dir: packages/codegen-ash
+  intents:
+    - hungry-poets-learn
+    - lazy-taxis-count
+    - smart-waves-taste
+    - tame-rivers-study
+    - tiny-tables-add
 "@appling/codegen-django@0.1.2":
   dir: packages/codegen-django
   intents:
     - warm-houses-rest
+"@appling/codegen-django@0.1.3":
+  dir: packages/codegen-django
+  intents:
+    - hungry-poets-learn
+    - lazy-taxis-count
+    - smart-waves-taste
+    - tame-rivers-study
+    - tiny-tables-add
+"@appling/codegen-go@0.1.3":
+  dir: packages/codegen-go
+  intents:
+    - lazy-taxis-count
+    - smart-waves-taste
+    - tame-rivers-study
+    - tiny-tables-add
+"@appling/codegen-rust@0.1.3":
+  dir: packages/codegen-rust
+  intents:
+    - lazy-taxis-count
+    - smart-waves-taste
+    - tame-rivers-study
+    - tiny-tables-add
+"@appling/codegen@0.1.3":
+  dir: packages/codegen
+  intents:
+    - fast-ants-fix
+    - smart-waves-taste
 "@appling/ide@0.1.2":
   dir: packages/ide
   intents:
@@ -59,6 +102,15 @@
     - calm-bottles-own
     - large-bottles-march
     - smart-rice-lie
+"@appling/lang@0.3.0":
+  dir: packages/lang
+  intents:
+    - curly-beds-pretend
+    - khaki-lemons-wash
+    - short-emus-promise
+    - smart-waves-taste
+    - tame-rivers-study
+    - tiny-tables-add
 "@appling/model@0.1.1":
   dir: packages/model
   intents:
@@ -71,8 +123,20 @@
   intents:
     - fresh-cups-pull
     - giant-donkeys-tap
+"@appling/model@0.1.3":
+  dir: packages/model
+  intents:
+    - fast-ants-fix
+    - khaki-lemons-wash
+    - smart-waves-taste
+    - tame-rivers-study
+    - tiny-tables-add
 "@appling/viz@0.1.1":
   dir: packages/viz
   intents:
     - mighty-geese-yawn
     - new-snakes-throw
+"@appling/viz@0.2.0":
+  dir: packages/viz
+  intents:
+    - curvy-mails-unite

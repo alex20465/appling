@@ -1,5 +1,16 @@
 # @appling/viz
 
+## 0.2.0
+
+### Minor Changes
+
+- Replace the playbook and floating window with an upward growing tree layout, node icons, flow and card canvases (breaking).
+
+### Patch Changes
+
+- Updated dependencies:
+  - @appling/model@0.1.3
+
 ## 0.1.1
 
 ### Patch Changes

@@ -4,6 +4,17 @@
 
 ### Patch Changes
 
+- Updated dependencies:
+  - @appling/ai@0.2.0
+  - @appling/codegen@0.1.3
+  - @appling/lang@0.3.0
+  - @appling/model@0.1.3
+  - @appling/viz@0.2.0
+
+## 0.1.3
+
+### Patch Changes
+
 - No false diagnostics when the workspace is reached through a symlink.
 
 - Updated dependencies:
