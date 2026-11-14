@@ -112,6 +112,14 @@ Edits are release aware: once the workspace has a release, renaming, retyping or
 
 `language_reference` serves the pages of this documentation's language section, shipped inside the package, so an assistant that has never seen Appling can learn the syntax before it writes any. `write_model_file` creates new modules, which the edit operations cannot, for example when [deriving a model](#reverse-engineering-skill) from an existing application.
 
+### View tools
+
+| Tool | Input | Returns |
+|---|---|---|
+| `set_icons` | `icons`: per target the name of a [Lucide](https://lucide.dev/icons) icon, such as `{ "Entity": "database", "sales.Order": "shopping-cart", "~": "cpu" }`. A target is the qualified name of a module or a declaration, a kind (its group and every declaration of that kind without an icon of its own) or `~` for the seed; an empty name removes the icon | `{ icons }`: all icons now set, or `{ error }` naming the unknown targets or icon names |
+
+`set_icons` gives the nodes of the inspector's [model canvas](inspect.md#the-model-canvas) icons. It never changes the model: the icons are kept under `icons` in `.appling/view.json`, and an open inspector shows them the moment the file changes. Every server has the tool, the stdio one too, so it works without a running inspector.
+
 ### Registry tools
 
 These three tools work on the [task registry](../codegen/registry.md) (`.appling/tasks.json`) of projects made by `appling generate`. The targets come from the `generate` section of `appling.config.json`, with each `out` folder taken relative to the workspace folder; targets without a registry are ignored.

@@ -26,7 +26,9 @@ The root export (also `@appling/viz/protocol`) has the types the visual tools of
 | `changeMarks(index, changes, modules?)` | The marks of a model change (such as a `GraphDiff` from `@appling/model/diff`, or an AI session's changes) per declaration: `added`, `changed` or `removed`, members lifted to their declaration, optionally their modules too |
 | `GraphIndex`, `relations`, `entityActions`, `actionSummary` | The index and queries the inspector uses |
 
-`@appling/viz/canvas` exports `ModelCanvas`, the tree that grows from a seed, sizes its circles by relevance and marks optional `changes` (removed elements drawn ghosted when its index comes from `withRemoved`), sends a wave from the drawn elements a new `index` added or changed and plays soft sounds a button switches off, `FlowCanvas` and `CardCanvas`, each drawing optional bubbles; import `@appling/viz/canvas.css` with them. `react` is a peer dependency.
+`@appling/viz/icons` exports `iconOf(name)`, the shapes of a [Lucide](https://lucide.dev/icons) icon by its name, and `ViewSettings.icons` maps nodes to icon names.
+
+`@appling/viz/canvas` exports `ModelCanvas`, the tree that grows from a seed as a circuit board (every node a chip, pins for the level of its layer, traces that never cross) and marks optional `changes` (removed elements drawn ghosted when its index comes from `withRemoved`), sends a wave from the drawn elements a new `index` added or changed and plays soft sounds a button switches off, `FlowCanvas` and `CardCanvas`, each drawing optional bubbles; import `@appling/viz/canvas.css` with them. `react` is a peer dependency.
 
 ## License
 

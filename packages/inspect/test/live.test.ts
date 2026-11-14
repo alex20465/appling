@@ -137,6 +137,10 @@ describe('the inspect server', () => {
 
         expect(await a.call('visualize', { view: 'node', focus: ['sales.Order'], title: 'Orders' })).toEqual({ shown: true });
         expect(await a.call('visual_bubble', { target: 'sales.Order.status', text: 'Moves through the order flow' })).toEqual({ placed: true });
+        expect(await a.call('set_icons', { icons: { Entity: 'database', 'sales.Order': 'shopping-cart' } })).toEqual({ icons: { Entity: 'database', 'sales.Order': 'shopping-cart' } });
+        expect((await watch.next(m => m.type === 'view')).view).toMatchObject({ icons: { Entity: 'database', 'sales.Order': 'shopping-cart' } });
+        expect(await a.call('set_icons', { icons: { Entity: '' } })).toEqual({ icons: { 'sales.Order': 'shopping-cart' } });
+        expect(JSON.parse(readFileSync(join(root, '.appling', 'view.json'), 'utf8')).icons).toEqual({ 'sales.Order': 'shopping-cart' });
         expect(await a.call('visual_status', { text: 'Explaining orders', done: 1, total: 3 })).toEqual({ shown: true });
         const view = (await watch.next(m => m.type === 'agent-view' && (m.view as AgentView).steps.length > 0)).view as AgentView;
         expect(view).toMatchObject({ session: session.id, show: { view: 'node', focus: ['sales.Order'], title: 'Orders' }, bubbles: [{ target: 'sales.Order.status' }] });

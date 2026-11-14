@@ -21,6 +21,7 @@ The server instructions tell the assistant that the model is the source of truth
 | `simulate` | Behavior questions: reachable states, which actors may trigger an action, invariants at risk, or a run of an action on a sample record |
 | `language_reference` | The complete language documentation: the list of pages, or one page as Markdown |
 | `write_model_file` | Creates or replaces one `.appling` file, only when the workspace still validates with it |
+| `set_icons` | Sets Lucide icons on the nodes of the inspector's canvas by kind, module, declaration or `~` for the seed; kept in `.appling/view.json`, never in the model |
 | `edit` | One edit operation (`add`, `rename`, `retype`, `remove`, `set`), validated, written to the files; `dryRun` only checks it |
 | `registry_next` | The next open task of a generated project, with its model context; in an agent session it skips tasks other sessions claimed and claims it |
 | `registry_update` | Marks a task `done`, or `partial` with a note |

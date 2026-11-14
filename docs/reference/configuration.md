@@ -67,7 +67,7 @@ Next to your models, in the workspace folder:
 
 ### View
 
-`.appling/view.json` holds the lens and the option of the inspector's [model canvas](../tools/inspect.md#the-model-canvas). The inspector writes it whenever you change one; it is the only file the inspector writes. It never affects the model. Missing keys take their default.
+`.appling/view.json` holds the lens and the option of the inspector's [model canvas](../tools/inspect.md#the-model-canvas), and under `icons` the [Lucide](https://lucide.dev/icons) icon of its nodes: a name per qualified name of a module or a declaration, per kind or for `~`, the seed. The inspector writes it whenever you change the lens or the option, and the [`set_icons`](../tools/ai.md#view-tools) tool of the MCP server writes the icons; it is the only file the inspector writes. It never affects the model. Missing keys take their default.
 
 ```json
 {

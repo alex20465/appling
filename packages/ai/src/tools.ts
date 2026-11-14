@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { iconOf } from '@appling/viz/icons';
 import { Simulator, UNKNOWN, type EditOperation } from '@appling/model';
 import { Project, queryGraph, type Sources } from './project.js';
 import { languageReference } from './prompts.js';
@@ -148,6 +149,25 @@ export const REFERENCE_TOOLS = {
         description: 'How far the model is implemented: per element implemented (a current code reference, or generated code it has not changed since), partial (an open registry task, or a stale code marker: the element changed since its code was written), unimplemented (no code). Returns the counts and every element that is not implemented or changed since the last generation, optionally within one module or element.',
         input: { module: z.string().optional().describe('Qualified name of a module or element to narrow to') },
         run: async (context, input) => context.project.implementation(input.module)
+    })
+};
+
+/** Tools for how the inspector's canvas draws the model. They never change the model. */
+export const VIEW_TOOLS = {
+    set_icons: define({
+        description: 'Set the icons of the nodes on the canvas of the Appling inspector, from the Lucide catalog (lucide.dev, names such as "database", "shopping-cart", "user-round"). They are kept in the project\'s .appling/view.json, not in the model, and an open canvas shows them at once. A target is the qualified name of a module or a declaration, a kind such as "Entity" (its group and every declaration of that kind without an icon of its own) or "~" for the seed. An empty name removes the icon.',
+        input: {
+            icons: z.record(z.string(), z.string()).describe('Target to Lucide icon name, such as { "Entity": "database", "sales.Order": "shopping-cart", "~": "cpu" }')
+        },
+        run: async (context, input) => {
+            const graph = await context.project.graph(context.sources());
+            const targets = new Set(['~', ...graph.nodes.flatMap(n => [n.qn, n.kind])]);
+            const unknown = Object.keys(input.icons).filter(target => !targets.has(target));
+            if (unknown.length) return { error: `No module, declaration or kind ${unknown.join(', ')}. The kinds: ${[...new Set(graph.nodes.map(n => n.kind))].sort().join(', ')}.` };
+            const missing = Object.values(input.icons).filter(name => name && !iconOf(name));
+            if (missing.length) return { error: `No Lucide icon ${missing.join(', ')}. Names are those of lucide.dev, in lower case with hyphens.` };
+            return { icons: context.project.setIcons(input.icons) };
+        }
     })
 };
 

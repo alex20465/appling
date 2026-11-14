@@ -1,42 +1,46 @@
-import type { Placed } from '../layout.js';
+import { ROW, type Placed } from '../layout.js';
 import type { TreeNode } from '../views.js';
 
-/** A cubic curve: start, two control points, end. */
-export type Curve = [number, number, number, number, number, number, number, number];
+export type Point = [number, number];
 
 /** Between two generations that sprout together, and between two siblings. */
 const GENERATION = 240;
 const SIBLING = 45;
+/** How long the 45 degree corners of a trace are. */
+const CORNER = 12;
 
-/** From 0 to 1, always the same for the same text: a shoot keeps its bend and its leaves between drawings. */
-export function grain(text: string, salt = 0): number {
-    let hash = 2166136261 ^ salt;
-    for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619);
-    return ((hash >>> 0) % 1000) / 1000;
+/**
+ * The traces of a circuit board, one per node from the top of its parent to its own bottom: straight up the trunk
+ * above the parent into the channel below the node's row, along it and up into the node. The children of one node are
+ * one net that shares the trunk. The layout gives every net room of its own and keeps the trunk free (`layoutTree`),
+ * so no trace meets a node or the trace of another net.
+ */
+export function traces(placed: Placed[], radius: (node: TreeNode) => number): Map<string, Point[]> {
+    return new Map(placed.filter(p => p.parent).map(({ node, x, y, parent }) => {
+        const start: Point = [parent!.x, parent!.y - radius(parent!.node)];
+        // a folded node shrinks into the node it hangs from
+        return [node.id, cornered(y >= parent!.y ? [start] : [start, [parent!.x, y + ROW / 2], [x, y + ROW / 2], [x, y + radius(node)]])];
+    }));
 }
 
-/** The stem from the top of the parent's circle to the bottom of the child's: it sets out towards the child, leaning a little to its own side, and bends upright before it arrives. */
-export function stem({ node, x, y, parent }: Placed, radius: (node: TreeNode) => number): Curve {
-    const [from, to] = [parent!.y - radius(parent!.node), y + radius(node)];
-    const lean = (grain(node.id) - 0.5) * 36;
-    return [parent!.x, from, parent!.x + (x - parent!.x) * 0.35 + lean, from + (to - from) * 0.45, x, from + (to - from) * 0.5, x, to];
-}
-
-export function pathOf([x0, y0, x1, y1, x2, y2, x3, y3]: Curve): string {
-    return `M ${x0} ${y0} C ${x1} ${y1}, ${x2} ${y2}, ${x3} ${y3}`;
-}
-
-/** One or two leaves on a stem: where, and turned how far (degrees), on alternating sides. */
-export function leaves(id: string, [x0, y0, x1, y1, x2, y2, x3, y3]: Curve): { x: number, y: number, angle: number }[] {
-    const side = grain(id, 1) < 0.5 ? 1 : -1;
-    return (grain(id, 2) < 0.45 ? [0.5] : [0.4, 0.68]).map((at, i) => {
-        const t = at + grain(id, 3 + i) * 0.1;
-        const u = 1 - t;
-        const along = (a: number, b: number, c: number, d: number) => u ** 3 * a + 3 * u * u * t * b + 3 * u * t * t * c + t ** 3 * d;
-        const slope = (a: number, b: number, c: number, d: number) => 3 * u * u * (b - a) + 6 * u * t * (c - b) + 3 * t * t * (d - c);
-        const upwards = Math.atan2(slope(y0, y1, y2, y3), slope(x0, x1, x2, x3)) * 180 / Math.PI;
-        return { x: along(x0, x1, x2, x3), y: along(y0, y1, y2, y3), angle: upwards + (i % 2 ? -side : side) * 52 };
+/** Every corner cut at 45 degrees, at most half of the shorter side. Always ten points: the last one repeats for the corners a trace does not take. */
+function cornered(route: Point[]): Point[] {
+    const points = route.filter(([x, y], i) => !i || x !== route[i - 1][0] || y !== route[i - 1][1]);
+    const towards = ([x, y]: Point, [tx, ty]: Point, cut: number): Point => {
+        const length = Math.hypot(tx - x, ty - y);
+        return [x + (tx - x) / length * cut, y + (ty - y) / length * cut];
+    };
+    const cut = points.flatMap((point, i) => {
+        if (!i || i === points.length - 1) return [point];
+        const [before, after] = [points[i - 1], points[i + 1]];
+        const size = Math.min(CORNER, Math.hypot(point[0] - before[0], point[1] - before[1]) / 2, Math.hypot(after[0] - point[0], after[1] - point[1]) / 2);
+        return [towards(point, before, size), towards(point, after, size)];
     });
+    return Array.from({ length: 10 }, (_, i) => cut[Math.min(i, cut.length - 1)]);
+}
+
+export function pathOf(points: Point[]): string {
+    return `M ${points.map(([x, y]) => `${x} ${y}`).join(' L ')}`;
 }
 
 /**

@@ -43,6 +43,8 @@ export interface Snapshot {
     errors: string[];
 }
 
+import type { ViewSettings } from '@appling/viz/views';
+
 export { DEFAULT_VIEW, type ViewSettings } from '@appling/viz/views';
 
 /** An `ide_act` of an agent session, pushed to the client over `/events`. */
@@ -58,6 +60,8 @@ export interface IdeEvents {
     live?(live: LiveChanges): void;
     /** What an agent session shows with the visual tools; `ended` when the session ended. */
     agentView?(view: AgentView, ended: boolean): void;
+    /** The view settings after `.appling/view.json` changed on disk, such as by the `set_icons` tool. */
+    view?(view: Partial<ViewSettings>): void;
 }
 
 /** What the client reports it shows, for the sessions' ide_context. */

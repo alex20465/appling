@@ -3,7 +3,7 @@ import type { Model } from '@appling/lang';
 import { buildGraph, diffGraphs, Simulator, withRemoved } from '@appling/model';
 import { buildWorkspace, examples } from '../../lang/test/workspace.js';
 import { layoutFlow, layoutTree } from '../src/layout.js';
-import { loads, sproutDelays } from '../src/canvas/plant.js';
+import { loads, sproutDelays, traces } from '../src/canvas/plant.js';
 import {
     abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, implementationMarks, sessionMarks, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, modelPulse, policyText, relations, revealPath, trailOf, viewFor,
     type Card, type Flow, type TreeNode
@@ -47,15 +47,15 @@ test('the tree starts folded at the seed and unfolds modules, then the lens decl
         '        Actions (2)',
         '          Cancel (6)',
         '          PlaceOrder (6)',
-        '        Use cases (1)',
-        '        Machines (1)',
-        '        Projections (1)',
-        '        Queries (2)',
         '        Events (2)',
+        '        Machines (1)',
         '        Jobs (1)',
+        '        Use cases (1)',
+        '        Queries (2)',
+        '        Projections (1)',
         '        Scenarios (3)',
-        '    Enums (1)',
         '    Value types (1)',
+        '    Enums (1)',
         '  crm (1)'
     ]);
     expect(growTree(index, DOMAIN, open).children!.find(m => m.label === 'sales')!.fact).toBe('1 entity · 1 value · 1 enum');
@@ -80,25 +80,25 @@ test('a trail draws only the elements shown one after another, each unfolded whe
         '      Order (13)',
         '        Actions (2)',
         '          Cancel (6)',
-        '            Use cases (1)',
         '            Machines (1)',
-        '            Pages (2)',
         '            Jobs (1)',
+        '            Use cases (1)',
+        '            Pages (2)',
         '            Scenarios (1)',
-        '        Use cases (1)',
-        '        Machines (1)',
-        '        Projections (1)',
-        '        Queries (2)',
         '        Events (2)',
+        '        Machines (1)',
         '        Jobs (1)',
+        '        Use cases (1)',
+        '        Queries (2)',
+        '        Projections (1)',
         '        Scenarios (3)',
         '  crm (1)',
         '    Account (8)',
-        '      Entities (1)',
         '      Actors (1)',
-        '      Projections (1)',
-        '      Queries (1)',
         '      Tenants (1)',
+        '      Entities (1)',
+        '      Queries (1)',
+        '      Projections (1)',
         '      Scenarios (3)'
     ]);
     expect(trailOf(index, { ...DOMAIN, lens: 'behavior' }, ['sales.OrderFlow']).ids).toEqual(['~/sales/#Machine/sales.OrderFlow']);
@@ -334,35 +334,44 @@ test('new nodes sprout generation by generation, siblings one after another', as
     expect(loads(next).get(module)).toBe(shoots.length);
 });
 
-test('unfolding leaves every node that stands where it is and overlaps nothing', async () => {
+/** Two stretches of traces share a point. */
+function meet([ax, ay]: number[], [bx, by]: number[], [cx, cy]: number[], [dx, dy]: number[]): boolean {
+    const side = (px: number, py: number, qx: number, qy: number, rx: number, ry: number) => Math.sign((qx - px) * (ry - py) - (qy - py) * (rx - px));
+    return side(ax, ay, bx, by, cx, cy) !== side(ax, ay, bx, by, dx, dy) && side(cx, cy, dx, dy, ax, ay) !== side(cx, cy, dx, dy, bx, by);
+}
+
+test('however far the tree unfolds, no nodes overlap, no trace runs through a node and no traces of two nodes cross', async () => {
     const index = await indexOf(examples());
-    const open = new Set(['~']);
-    let before = layoutTree(growTree(index, DOMAIN, open), open);
-    // unfold one node after another, four levels up
-    for (let level = 0; level < 4; level++) {
-        for (const { node } of before.filter(p => p.node.count && !p.node.cycle && !open.has(p.node.id))) {
-            const stood = layoutTree(growTree(index, DOMAIN, open), open);
-            open.add(node.id);
-            const now = new Map(layoutTree(growTree(index, DOMAIN, open), open).map(p => [p.node.id, p]));
-            for (const p of stood) expect([p.node.id, now.get(p.node.id)!.x, now.get(p.node.id)!.y]).toEqual([p.node.id, p.x, p.y]);
+    for (const lens of ['domain', 'behavior', 'application', 'interfaces', 'access'] as const) {
+        const settings = { lens, linkEntities: true };
+        const open = new Set(['~']);
+        let after = layoutTree(growTree(index, settings, open));
+        for (let level = 0; level < 4; level++) {
+            for (const { node } of after.filter(p => p.node.count && !p.node.cycle)) open.add(node.id);
+            after = layoutTree(growTree(index, settings, open));
         }
-        const after = layoutTree(growTree(index, DOMAIN, open), open);
         for (const a of after) for (const b of after) if (a !== b && Math.abs(a.y - b.y) < 100 && a.x <= b.x) expect(b.x - a.x, `${a.node.id} and ${b.node.id}`).toBeGreaterThanOrEqual(200);
-        before = after;
+        const routed = [...traces(after, () => 26)].map(([id, points]) => ({ id, net: id.slice(0, id.lastIndexOf('/')), parts: points.slice(1).map((to, i) => [points[i], to]).filter(([from, to]) => from[0] !== to[0] || from[1] !== to[1]) }));
+        for (const { id, parts } of routed) {
+            const samples = parts.flatMap(([[x1, y1], [x2, y2]]) => [0.25, 0.5, 0.75].map(t => [x1 + (x2 - x1) * t, y1 + (y2 - y1) * t]));
+            for (const p of after) if (p.node.id !== id && p.node.id !== routed.find(r => r.id === id)!.net) for (const [x, y] of samples) expect(Math.abs(x - p.x) < 100 && Math.abs(y - p.y) < 28, `${id} through ${p.node.id}`).toBe(false);
+        }
+        for (const a of routed) for (const b of routed) if (a.net < b.net) for (const [p, q] of a.parts) for (const [r, s] of b.parts) expect(meet(p, q, r, s), `${a.id} crosses ${b.id}`).toBe(false);
+        if (lens === 'domain') expect(after.length).toBeGreaterThan(60);
     }
-    expect(before.length).toBeGreaterThan(40);
 });
 
-test('many children wrap into rows, and a node that unfolds keeps its place and those of its siblings, its children above them', () => {
+test('many children wrap into rows, and what grows from a row stands between it and the row above', () => {
     const leaf = (id: string, children?: TreeNode[]): TreeNode => ({ id, type: 'element', label: id, fact: '', count: 0, relevance: 0, children });
     const group = (open?: string) => leaf('~', Array.from({ length: 12 }, (_, i) => leaf(`~/${i}`, `~/${i}` === open ? [leaf(`~/${i}/a`), leaf(`~/${i}/b`)] : undefined)));
-    const at = (placed: ReturnType<typeof layoutTree>) => placed.filter(p => p.node.id.split('/').length === 2).map(p => [p.node.id, p.x, p.y]);
+    const rows = (placed: ReturnType<typeof layoutTree>) => [...new Set(placed.filter(p => p.node.id.split('/').length === 2).map(p => p.y))];
     const folded = layoutTree(group());
-    expect(new Set(folded.slice(1).map(p => p.y)).size).toBe(3);
+    expect(rows(folded)).toEqual([-120, -240, -360]);
+    // the trunk runs straight up between the two halves of every row
+    for (const p of folded.slice(1)) expect(Math.abs(p.x)).toBeGreaterThanOrEqual(128);
     const unfolded = layoutTree(group('~/0'));
-    expect(at(unfolded)).toEqual(at(folded));
-    const top = Math.min(...folded.map(p => p.y));
-    for (const child of unfolded.filter(p => p.parent?.node.id === '~/0')) expect(child.y).toBeLessThan(top);
+    expect(rows(unfolded)).toEqual([-120, -360, -480]);
+    for (const child of unfolded.filter(p => p.parent?.node.id === '~/0')) expect(child.y).toBe(-240);
 });
 
 test('equally relevant nodes stand in the order of their names, whatever the order of the source', async () => {

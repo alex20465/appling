@@ -19,6 +19,11 @@ export interface ViewSettings {
     lens: Lens;
     /** Link entities, such as join records. */
     linkEntities: boolean;
+    /**
+     * The Lucide icon of nodes, by what they are: the qualified name of a module or a declaration, a kind (its group
+     * and every declaration of it without an icon of its own) or `~` for the seed. Set by the `set_icons` tool.
+     */
+    icons?: Record<string, string>;
 }
 
 export const DEFAULT_VIEW: ViewSettings = { lens: 'domain', linkEntities: false };
@@ -84,12 +89,12 @@ export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Se
         if (tree.count) tree.children = childrenOf(id, () => grouped(used, id, node.module, [...path, node.qn]));
         return tree;
     };
-    /** Elements directly when they are of one kind, else one group per kind; the most relevant first, by name among equals. */
+    /** Elements directly when they are of one kind, the most relevant first, by name among equals; else one group per kind, always in the order of the kinds. */
     const grouped = (nodes: GraphNode[], parent: string, module: string, path: string[]): TreeNode[] => {
         const sorted = [...nodes].sort((a, b) => index.relevanceOf(b.qn) - index.relevanceOf(a.qn) || rank(a.kind) - rank(b.kind) || a.qn.localeCompare(b.qn));
         const byKind = Map.groupBy(sorted, n => n.kind);
         if (byKind.size === 1) return sorted.map(n => element(n, parent, module, path));
-        return [...byKind].map(([kind, members]) => {
+        return [...byKind].sort(([a], [b]) => rank(a) - rank(b)).map(([kind, members]) => {
             const id = `${parent}/#${kind}`;
             const group: TreeNode = { id, type: 'group', kind, layer: members[0].layer, label: plural(kind), fact: '', count: members.length, relevance: index.relevanceOf(members[0].qn) };
             group.children = childrenOf(id, () => members.map(n => element(n, id, module, path)));
@@ -323,11 +328,6 @@ export function changeMarks(index: GraphIndex, changes: MarkedChanges, modules =
 /** Words for the implementation states, for marks and their tooltips. */
 export const IMPLEMENTATION_LABELS: Record<ImplementationState, string> = {
     implemented: 'implemented', partial: 'partly implemented: open registry tasks or code written against an older version', unimplemented: 'not implemented'
-};
-
-/** The short words of the implementation states, for the tag line under a node's name. */
-export const IMPLEMENTATION_TAGS: Record<ImplementationState, string> = {
-    implemented: 'implemented', partial: 'partly implemented', unimplemented: 'not implemented'
 };
 
 /**

@@ -44,11 +44,11 @@ Each project's tab shows the [inspector](inspect.md)'s canvas and task board; it
 
 ### The panels
 
-The sidebar shows the panels of the inspector tab you used last, as read only VS Code trees. A click on an element selects it on the canvas; the canvas's selection shows in **Inspector**.
+The sidebar shows the panels of the inspector tab you used last, as read only VS Code trees. A click on an element selects it on the canvas; the canvas's selection shows in **Inspector**. In **Inspector** a click on a related element opens its source and keeps what you inspect; its **Inspect** button (an arrow, on hover) inspects that element instead.
 
 | Panel | Shows | Does |
 |---|---|---|
-| **Inspector** | The selected element: kind and layer, its change, implementation state and code, what an action does and who may trigger it, what an actor may do, an entity's actions, a machine's reachable states, its properties, members, what uses it and what it uses | The title buttons open the source and the code |
+| **Inspector** | The selected element: kind and layer, its change, implementation state and code, what an action does and who may trigger it, what an actor may do, an entity's actions, a machine's reachable states, its properties, its members grouped by kind (fields, invariants, policies and so on), what uses it and what it uses by layer; every group with its icon and count | The title buttons open the source and the code; a related element opens its source, its **Inspect** button inspects it |
 | **Playbook** | The [playbooks](ai.md#playbooks) of the agent sessions: each with its steps, the one that plays marked; the badge counts the playbooks | A step opens the playbook on the canvas and plays that step: its element is selected and its description shows in a bubble |
 | **Changes** | Every model file changed since the last commit (outside git or before the first commit, since the server started) with the session that wrote it and its changed elements; the badge counts them | A file opens VS Code's diff against the last commit; nothing accepts or reverts a change |
 | **Tasks** | Only the open tasks of every target's [registry](../codegen/registry.md): each element with its status, attempts and claiming session, what it still misses and its notes; the badge counts them | A task selects its element; the Inspector lists the selected element's tasks too |

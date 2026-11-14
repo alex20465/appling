@@ -1,6 +1,6 @@
 import { watch, existsSync, readFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { extname, relative, resolve, sep } from 'node:path';
+import { extname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { createMcpServer, handleMcpRequest, MemorySessionStore, touchedBy, type AppHost, type SessionStore } from '@appling/ai';
@@ -117,6 +117,15 @@ export async function startInspect(root: string, port = 0, options: InspectOptio
     const marked = new Map<string, string>();
     const watcher = watch(root, { recursive: true }, (_, file) => {
         if (!file) return;
+        // the icons an agent set with set_icons, or anyone wrote into the view settings
+        if (file === join('.appling', 'view.json')) {
+            try {
+                broadcast({ type: 'view', view: readView(root) });
+            } catch {
+                // half written: the next change of the file follows
+            }
+            return;
+        }
         const hidden = file.split(sep).some(part => part.startsWith('.') || part === 'node_modules');
         if (state().includes(file) || (!hidden && file.endsWith('.appling'))) return refresh();
         if (hidden || !MARKER_LANGUAGES[extname(file)]) return;
@@ -232,7 +241,8 @@ async function handle(request: IncomingMessage, response: ServerResponse, root: 
     if (url.pathname === '/api/revisions' && request.method === 'GET') return json(response, await revisions(root));
     if (url.pathname === '/api/view' && request.method === 'GET') return json(response, readView(root));
     if (url.pathname === '/api/view' && request.method === 'PUT') {
-        writeView(root, JSON.parse(await body(request)));
+        // the icons come from the set_icons tool only: a client with an older view must not undo them
+        writeView(root, { ...JSON.parse(await body(request)), icons: readView(root).icons });
         return send(response, 204, '');
     }
     if (url.pathname === '/api/release' && request.method === 'GET') {

@@ -12,20 +12,12 @@
 /* The plant. A stem and the node on its tip grow out of the parent's bud together and settle with the same spring,
    so the node never leaves its stem; --settle moves what is already there when the plant makes room. */
 .tree { --spring: cubic-bezier(0.3, 1.4, 0.5, 1); --settle: 450ms cubic-bezier(0.3, 1.15, 0.5, 1); }
-.tree .roots { fill: none; stroke: var(--appling-root); stroke-width: 1.5; stroke-linecap: round; stroke-dasharray: 1; animation: root-grow 1400ms ease-out both; }
-@keyframes root-grow { from { stroke-dashoffset: 1; } }
-.tree .branch { fill: none; stroke: var(--appling-branch); stroke-linecap: round; transition: d var(--settle), stroke-width 300ms ease, stroke 300ms ease; animation: stem-grow 620ms var(--spring) both; }
+.tree .branch { fill: none; stroke: var(--appling-branch); stroke-linecap: square; stroke-linejoin: miter; transition: d var(--settle), stroke-width 300ms ease, stroke 300ms ease; animation: stem-grow 620ms var(--spring) both; }
 .tree .branch.lit { stroke: var(--appling-leaf); }
 @keyframes stem-grow { from { d: var(--seedling); stroke-width: 0.5px; } }
 /* sap runs up the stems to the current node */
-.tree .sap { fill: none; stroke: var(--appling-sprout); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 0.14 0.86; opacity: 0.8; pointer-events: none; transition: d var(--settle); animation: sap 2.6s linear infinite; }
+.tree .sap { fill: none; stroke: var(--appling-sprout); stroke-width: 2; stroke-linecap: butt; stroke-dasharray: 0.14 0.86; opacity: 0.8; pointer-events: none; transition: d var(--settle); animation: sap 2.6s linear infinite; }
 @keyframes sap { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
-.tree .leaf { pointer-events: none; transition: transform var(--settle), opacity 300ms ease; }
-.tree .leaf path { fill: color-mix(in srgb, var(--appling-branch) 70%, var(--appling-sprout)); animation: leaf-open 520ms var(--spring) both; }
-.tree .leaf.lit path { fill: var(--appling-sprout); animation: leaf-open 520ms var(--spring) both, leaf-sway 4.2s ease-in-out infinite; }
-.tree .leaf.leaving { opacity: 0; }
-@keyframes leaf-open { from { scale: 0; } }
-@keyframes leaf-sway { 0%, 100% { rotate: -7deg; } 50% { rotate: 8deg; } }
 /* a wave around a node that opened, folded, was added or changed */
 .tree .ripple { --wave: var(--layer, var(--appling-leaf)); pointer-events: none; }
 .tree .ripple.fold, .tree .ripple.touch { --wave: var(--appling-branch); }
@@ -37,24 +29,24 @@
 .tree .ripple.added circle, .tree .ripple.changed circle { stroke-width: 3; animation-duration: 1400ms; }
 @keyframes ripple { from { opacity: 0.75; transform: scale(1); } to { opacity: 0; transform: scale(3.2); } }
 @media (prefers-reduced-motion: reduce) {
-    .tree .roots, .tree .branch, .tree .sap, .tree .leaf path, .tree .leaf.lit path, .tree-item .grow { animation: none; }
+    .tree .branch, .tree .sap, .tree-item .grow { animation: none; }
     .tree .ripple { display: none; }
 }
 
 .tree-item { cursor: pointer; outline: none; transition: transform var(--settle); }
 .tree-item .grow { animation: sprout 620ms var(--spring) both; transform-origin: 0 0; }
 @keyframes sprout { from { opacity: 0; transform: translate(var(--from-x), var(--from-y)) scale(0.1); } 45% { opacity: 1; } }
-.tree-item .hit { fill: transparent; }
-.tree-item:hover .hit { fill: color-mix(in srgb, var(--layer, var(--appling-leaf)) 6%, transparent); }
 .tree-item .ring { fill: var(--appling-surface-raised); stroke: var(--layer, var(--appling-branch)); stroke-width: 1.5; transition: stroke-width 120ms, filter 120ms; }
+.tree-item .icon { fill: none; stroke: var(--appling-ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.tree-item .cell { fill: color-mix(in srgb, var(--layer, var(--appling-branch)) 38%, transparent); pointer-events: none; }
+.tree-item.core .cell { fill: color-mix(in srgb, var(--layer, var(--appling-branch)) 62%, transparent); }
+.tree-item.group .ring { fill: color-mix(in srgb, var(--layer, var(--appling-branch)) 8%, var(--appling-surface-raised)); }
 .tree-item.core .ring { stroke-width: 2.5; }
 .tree-item.peripheral { opacity: 0.6; }
 .tree-item.peripheral:hover, .tree-item.peripheral:focus-visible, .tree-item.peripheral.current, .tree-item.peripheral.chosen, .tree-item.peripheral.added, .tree-item.peripheral.changed { opacity: 1; }
 .tree-item:hover .ring, .tree-item:focus-visible .ring { stroke-width: 3; }
 .tree-item.element .ring { fill: color-mix(in srgb, var(--layer) 14%, var(--appling-surface-elevated)); }
-.tree-item.module .ring, .tree-item.group .ring { stroke-dasharray: 3 2; }
-.tree-item.open .ring { stroke-dasharray: none; }
-.tree-item.seed .ring { fill: var(--appling-seed); stroke: var(--appling-leaf); stroke-width: 2; }
+.tree-item.seed .ring { fill: var(--appling-seed); stroke: var(--appling-leaf); stroke-width: 2; stroke-linecap: square; }
 .tree-item.current .ring { stroke-width: 3; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--layer, var(--appling-leaf)) 70%, transparent)); }
 .tree-item.chosen .ring { stroke: var(--appling-ink); stroke-width: 3; }
 /* Changes stand out from the layer colours: a pulsing halo, a letter badge and the name in the change's colour. */
@@ -68,16 +60,11 @@
 .tree-item .change-badge text { fill: var(--appling-surface); font: 700 10px var(--appling-font-mono); text-anchor: middle; }
 @keyframes change-halo { 0%, 100% { opacity: 0.45; transform: scale(0.94); } 50% { opacity: 1; transform: scale(1.06); } }
 @media (prefers-reduced-motion: reduce) { .tree-item .change-halo { animation: none; } }
-.tree-item .impl { stroke: var(--appling-surface); stroke-width: 1.5; pointer-events: none; }
-.impl-implemented { fill: var(--appling-leaf); }
-.impl-partial { fill: var(--appling-amber); }
-.impl-unimplemented { fill: transparent; stroke: var(--appling-ink-muted) !important; stroke-dasharray: 2 1.5; }
-/* no code yet: a hollow circle; its tag says so in words */
-.tree-item.not-generated .ring { fill: var(--appling-surface); }
+/* how far the code is, in the outline of the chip: solid when implemented, dashed when partly, faint dots when there is none; the words are in the chip's hint */
+.tree-item.code-partial .ring, .tree-legend .code-partial { stroke-dasharray: 9 4; }
+.tree-item.code-unimplemented .ring, .tree-legend .code-unimplemented { stroke-dasharray: 1.5 4; stroke-linecap: round; stroke-opacity: 0.75; }
+.tree-item.code-unimplemented .ring { fill: var(--appling-surface); }
 /* The state in words under a node's labels, in the colour of its dot. */
-.tree-item .tag text { font: 600 10px var(--appling-font-mono); letter-spacing: 0.04em; fill: var(--tag, var(--appling-ink-muted)); }
-.tag-implemented { --tag: var(--appling-leaf); }
-.tag-partial { --tag: var(--appling-amber); }
 
 /* The right click menu of a node, and the form of a request. */
 
@@ -88,13 +75,13 @@
 .tree-legend ul { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
 .tree-legend li { display: flex; align-items: center; gap: 8px; }
 .tree-legend svg, .legend-glyph { flex: none; width: 18px; text-align: center; }
-.tree-legend .impl { stroke: var(--appling-surface); stroke-width: 1.5; }
 .tree-legend .added { --change: var(--appling-change-added); }
 .tree-legend .changed { --change: var(--appling-change-changed); }
 .tree-legend .removed { --change: var(--appling-change-removed); }
 .tree-legend .change-badge circle { fill: var(--change); }
 .tree-legend .change-badge text { fill: var(--appling-surface); font: 700 10px var(--appling-font-mono); text-anchor: middle; }
 .tree-legend .legend-ring { fill: none; stroke: var(--appling-branch); stroke-width: 1.5; }
+.tree-legend .legend-ring.layer { stroke: var(--layer, var(--appling-branch)); }
 .tree-legend .legend-ring.session { stroke: var(--appling-info); stroke-width: 2; stroke-dasharray: 3 2; }
 .tree-legend .bud { fill: var(--appling-sprout); }
 .tree-legend p { margin: 8px 0 0; font-size: 11px; color: var(--appling-ink-muted); }
@@ -108,7 +95,7 @@
 .tree-item.removed { opacity: 0.7; }
 .tree-item.removed .ring { stroke: var(--change); stroke-width: 2; stroke-dasharray: 4 3; fill: transparent; }
 .tree-item.removed .name { text-decoration: line-through; }
-.tree-item.cycle .ring { stroke-dasharray: 2 3; fill: var(--appling-surface); }
+.tree-item.cycle .ring { fill: var(--appling-surface); }
 .tree-item.cycle text { fill: var(--appling-ink-muted); }
 .tree-item .bud { fill: var(--appling-sprout); stroke: var(--appling-surface); stroke-width: 1.5; transform-box: fill-box; transform-origin: 50% 100%; transition: scale 260ms var(--spring); }
 .tree-item:hover .bud, .tree-item:focus-visible .bud { scale: 1.45; }

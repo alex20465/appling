@@ -22,6 +22,10 @@
       "types": "./out/protocol.d.ts",
       "default": "./out/protocol.js"
     },
+    "./icons": {
+      "types": "./out/icons.d.ts",
+      "default": "./out/icons.js"
+    },
     "./canvas": {
       "types": "./out/canvas/index.d.ts",
       "default": "./out/canvas/index.js"
@@ -35,7 +39,8 @@
     "build": "tsc && cp src/canvas/canvas.css out/canvas/"
   },
   "dependencies": {
-    "@appling/model": "workspace:*"
+    "@appling/model": "workspace:*",
+    "lucide": "^1.72.0"
   },
   "peerDependencies": {
     "react": "19.3.1"

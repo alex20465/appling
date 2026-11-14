@@ -40,7 +40,7 @@ export function readView(root: string): Partial<ViewSettings> {
     return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
 }
 
-export function writeView(root: string, view: ViewSettings): void {
+export function writeView(root: string, view: Partial<ViewSettings>): void {
     const file = join(root, VIEW);
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, JSON.stringify(view, null, 2) + '\n');

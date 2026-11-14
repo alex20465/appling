@@ -31,6 +31,7 @@ export function onEvents(handlers: IdeEvents): { close(): void, report(report: C
         if (message.type === 'act') handlers.act?.(message);
         if (message.type === 'live') handlers.live?.(message.live);
         if (message.type === 'agent-view') handlers.agentView?.(message.view, !!message.ended);
+        if (message.type === 'view') handlers.view?.(message.view);
     };
     return {
         close: () => socket.close(),

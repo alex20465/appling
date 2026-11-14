@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, relative, resolve, sep } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { AstUtils, URI } from 'langium';
 import { buildSources, type Model, type Workspace } from '@appling/lang';
 import { readConfig, readRegistry, workspaceImplementation, workspaceReferences, writeRegistry, type Registry, type RegistryEntry, type Status } from '@appling/codegen';
@@ -21,6 +21,19 @@ export class Project {
 
     constructor(root: string) {
         this.root = resolve(root);
+    }
+
+    /**
+     * Sets the icons of the canvas's nodes in the view settings (`.appling/view.json`, outside the model), removing
+     * those with an empty name: the icons the view then has.
+     */
+    setIcons(icons: Record<string, string>): Record<string, string> {
+        const file = join(this.root, '.appling', 'view.json');
+        const view = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
+        view.icons = Object.fromEntries(Object.entries({ ...view.icons, ...icons }).filter(([, name]) => name));
+        mkdirSync(dirname(file), { recursive: true });
+        writeFileSync(file, JSON.stringify(view, null, 2) + '\n');
+        return view.icons;
     }
 
     sources(): Sources {

@@ -59,6 +59,7 @@ export function App() {
         loadView().then(setView);
         const events = onEvents({
             snapshot: setSnapshot, sessions: setSessions, act: a => act.current(a), live: setLive,
+            view: next => setView(current => ({ ...current, icons: next.icons })),
             agentView: (next, ended) => setAgentViews(current => {
                 const { [next.session]: _, ...rest } = current;
                 return ended ? rest : { ...rest, [next.session]: next };

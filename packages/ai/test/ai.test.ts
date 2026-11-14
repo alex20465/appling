@@ -19,7 +19,7 @@ test('the MCP server exposes model and registry tools and the registry prompt', 
     const client = new Client({ name: 'test', version: '1' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await Promise.all([createMcpServer(root).connect(serverTransport), client.connect(clientTransport)]);
-    expect((await client.listTools()).tools.map(t => t.name).sort()).toEqual(['check', 'code_references', 'edit', 'graph_query', 'implementation_status', 'language_reference', 'read_source', 'record_code_references', 'registry_next', 'registry_update', 'run_tests', 'simulate', 'write_model_file']);
+    expect((await client.listTools()).tools.map(t => t.name).sort()).toEqual(['check', 'code_references', 'edit', 'graph_query', 'implementation_status', 'language_reference', 'read_source', 'record_code_references', 'registry_next', 'registry_update', 'run_tests', 'set_icons', 'simulate', 'write_model_file']);
     const text = async (name: string, args: Record<string, unknown>) => JSON.parse(((await client.callTool({ name, arguments: args })).content as { text: string }[])[0].text);
     expect((await text('language_reference', {})).pages).toContainEqual({ page: 'overview', title: 'Language overview', description: expect.any(String) });
     expect((await text('language_reference', { page: 'domain' })).markdown).toContain('entity');
@@ -100,6 +100,19 @@ function fakeCanvas() {
     };
     return { host, shown, bubbles, steps };
 }
+
+test('set_icons keeps the icons of the canvas in the view settings, on every server, and checks targets and names', async () => {
+    const root = workspace();
+    const client = new Client({ name: 'test', version: '1' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([createMcpServer(root).connect(serverTransport), client.connect(clientTransport)]);
+    const set = async (icons: Record<string, string>) => JSON.parse(((await client.callTool({ name: 'set_icons', arguments: { icons } })).content as { text: string }[])[0].text);
+    expect(await set({ Entity: 'database', 'sales.Order': 'shopping-cart', '~': 'cpu' })).toEqual({ icons: { Entity: 'database', 'sales.Order': 'shopping-cart', '~': 'cpu' } });
+    expect(await set({ '~': '' })).toEqual({ icons: { Entity: 'database', 'sales.Order': 'shopping-cart' } });
+    expect(JSON.parse(readFileSync(join(root, '.appling/view.json'), 'utf8'))).toEqual({ icons: { Entity: 'database', 'sales.Order': 'shopping-cart' } });
+    expect((await set({ 'sales.Nope': 'database' })).error).toContain('No module, declaration or kind sales.Nope.');
+    expect((await set({ Entity: 'no-such-icon' })).error).toContain('No Lucide icon no-such-icon.');
+});
 
 async function visualClient(root: string, host: VisualHost) {
     const client = new Client({ name: 'test', version: '1' });

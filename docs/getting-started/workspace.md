@@ -14,7 +14,7 @@ my-app/
     sales.appling            one or more modules per file
     crm.appling
   .appling/
-    view.json                canvas lens and option from the inspector
+    view.json                canvas lens, option and icons from the inspector
     releases/
       1.0.0.json             graph snapshot written by appling release
   build/
