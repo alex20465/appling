@@ -27,11 +27,11 @@ module shop core {
     to: String?
   }
 
-  entity Product does """
+  entity Product describe """
     What the shop sells, ordered through @Line.
       Prices are gross.
   """ {
-    sku: String unique does "Stock keeping unit, printed on the label"
+    sku: String unique describe "Stock keeping unit, printed on the label"
     title: String
     price: Money
     weight: Decimal
@@ -184,9 +184,9 @@ module shop core {
 
   external Payments peripheral {
     op Charge (amount: Money, reference: String) returns String errors Declined, Timeout
-    op Ping () does "Checks that @Payments answers"
+    op Ping () describe "Checks that @Payments answers"
     op Refund (amount: Money)
-    setting region: String does "The region of the merchant account"
+    setting region: String describe "The region of the merchant account"
     secret api_key: String
   }
 
@@ -253,7 +253,7 @@ module shop core {
   }
 
   // Scenarios
-  scenario PlaceFullOrder core does "A full draft order is placed and announced" {
+  scenario PlaceFullOrder core describe "A full draft order is placed and announced" {
     given {
       acme = create party.Company { name = "Acme" }
       ada = create party.Person { name = "Ada", company = acme }

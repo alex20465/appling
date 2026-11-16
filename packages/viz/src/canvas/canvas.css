@@ -8,12 +8,19 @@
 .tree-canvas { position: relative; min-width: 0; overflow: hidden; background: radial-gradient(ellipse at 50% 100%, var(--appling-canvas-glow) 0%, var(--appling-surface) 60%); cursor: grab; touch-action: none; user-select: none; }
 .tree-canvas:active { cursor: grabbing; }
 .tree { position: absolute; inset: 0; width: 100%; height: 100%; }
-.tree .ground { stroke: var(--appling-line); stroke-width: 1; }
+.tree .band { fill: none; stroke: var(--appling-line); stroke-width: 1; stroke-dasharray: 2 6; pointer-events: none; }
+.tree .band.entry { fill: color-mix(in srgb, var(--appling-leaf) 5%, transparent); }
 /* The plant. A stem and the node on its tip grow out of the parent's bud together and settle with the same spring,
    so the node never leaves its stem; --settle moves what is already there when the plant makes room. */
 .tree { --spring: cubic-bezier(0.3, 1.4, 0.5, 1); --settle: 450ms cubic-bezier(0.3, 1.15, 0.5, 1); }
-.tree .branch { fill: none; stroke: var(--appling-branch); stroke-linecap: square; stroke-linejoin: miter; transition: d var(--settle), stroke-width 300ms ease, stroke 300ms ease; animation: stem-grow 620ms var(--spring) both; }
-.tree .branch.lit { stroke: var(--appling-leaf); }
+.tree .branch { fill: none; stroke: color-mix(in srgb, var(--layer, var(--appling-leaf)) 62%, var(--appling-surface)); stroke-linecap: square; stroke-linejoin: miter; transition: d var(--settle), stroke-width 300ms ease, stroke 300ms ease, opacity 220ms ease; animation: stem-grow 620ms var(--spring) both; }
+.tree .branch.lit { stroke: var(--layer, var(--appling-leaf)); }
+.tree .branch.join { animation: none; }
+.tree .branch.dim { opacity: 0.18; }
+.tree .junction { fill: color-mix(in srgb, var(--layer, var(--appling-leaf)) 62%, var(--appling-surface)); transition: opacity 220ms ease; }
+.tree .junction.lit { fill: var(--layer, var(--appling-leaf)); }
+.tree .junction.dim { opacity: 0.18; }
+.tree-item.dim { opacity: 0.3; }
 @keyframes stem-grow { from { d: var(--seedling); stroke-width: 0.5px; } }
 /* sap runs up the stems to the current node */
 .tree .sap { fill: none; stroke: var(--appling-sprout); stroke-width: 2; stroke-linecap: butt; stroke-dasharray: 0.14 0.86; opacity: 0.8; pointer-events: none; transition: d var(--settle); animation: sap 2.6s linear infinite; }
@@ -23,24 +30,23 @@
 .tree .ripple.fold, .tree .ripple.touch { --wave: var(--appling-branch); }
 .tree .ripple.added { --wave: var(--appling-change-added); }
 .tree .ripple.changed { --wave: var(--appling-change-changed); }
-.tree .ripple circle { fill: none; stroke: var(--wave); stroke-width: 2; vector-effect: non-scaling-stroke; transform-box: fill-box; transform-origin: center; animation: ripple 900ms ease-out both; }
-.tree .ripple circle + circle { animation-delay: 170ms; }
-.tree .ripple.touch circle { animation-duration: 500ms; }
-.tree .ripple.added circle, .tree .ripple.changed circle { stroke-width: 3; animation-duration: 1400ms; }
-@keyframes ripple { from { opacity: 0.75; transform: scale(1); } to { opacity: 0; transform: scale(3.2); } }
+.tree .ripple rect { fill: none; stroke: var(--wave); stroke-width: 2; vector-effect: non-scaling-stroke; transform-box: fill-box; transform-origin: center; animation: ripple 900ms ease-out both; }
+.tree .ripple rect + rect { animation-delay: 170ms; }
+.tree .ripple.touch rect { animation-duration: 500ms; }
+.tree .ripple.added rect, .tree .ripple.changed rect { stroke-width: 3; animation-duration: 1400ms; }
+@keyframes ripple { from { opacity: 0.6; transform: scale(1); } to { opacity: 0; transform: scale(1.12, 1.5); } }
 @media (prefers-reduced-motion: reduce) {
     .tree .branch, .tree .sap, .tree-item .grow { animation: none; }
     .tree .ripple { display: none; }
 }
 
-.tree-item { cursor: pointer; outline: none; transition: transform var(--settle); }
+.tree-item { cursor: pointer; outline: none; transition: transform var(--settle), opacity 220ms ease; }
 .tree-item .grow { animation: sprout 620ms var(--spring) both; transform-origin: 0 0; }
 @keyframes sprout { from { opacity: 0; transform: translate(var(--from-x), var(--from-y)) scale(0.1); } 45% { opacity: 1; } }
 .tree-item .ring { fill: var(--appling-surface-raised); stroke: var(--layer, var(--appling-branch)); stroke-width: 1.5; transition: stroke-width 120ms, filter 120ms; }
 .tree-item .icon { fill: none; stroke: var(--appling-ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 .tree-item .cell { fill: color-mix(in srgb, var(--layer, var(--appling-branch)) 38%, transparent); pointer-events: none; }
 .tree-item.core .cell { fill: color-mix(in srgb, var(--layer, var(--appling-branch)) 62%, transparent); }
-.tree-item.group .ring { fill: color-mix(in srgb, var(--layer, var(--appling-branch)) 8%, var(--appling-surface-raised)); }
 .tree-item.core .ring { stroke-width: 2.5; }
 .tree-item.peripheral { opacity: 0.6; }
 .tree-item.peripheral:hover, .tree-item.peripheral:focus-visible, .tree-item.peripheral.current, .tree-item.peripheral.chosen, .tree-item.peripheral.added, .tree-item.peripheral.changed { opacity: 1; }
@@ -69,7 +75,7 @@
 /* The right click menu of a node, and the form of a request. */
 
 /* What the marks mean, above the bottom bar. */
-.tree-legend { position: absolute; z-index: 2; right: 12px; bottom: 44px; max-width: min(340px, calc(100% - 24px)); max-height: calc(100% - 140px); overflow: auto; padding: 8px 12px; border: 1px solid var(--appling-line-strong); border-radius: 6px; background: var(--appling-surface-raised); box-shadow: 0 6px 18px var(--appling-shadow); font: 12px var(--appling-font-sans); color: var(--appling-ink-soft); cursor: default; }
+.tree-legend { position: absolute; z-index: 2; right: 12px; bottom: 58px; max-width: min(340px, calc(100% - 24px)); max-height: calc(100% - 140px); overflow: auto; padding: 8px 12px; border: 1px solid var(--appling-line-strong); border-radius: 6px; background: var(--appling-surface-raised); box-shadow: 0 6px 18px var(--appling-shadow); font: 12px var(--appling-font-sans); color: var(--appling-ink-soft); cursor: default; }
 .tree-legend h4 { margin: 6px 0 2px; font: 600 10px var(--appling-font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--appling-ink-muted); }
 .tree-legend h4:first-child { margin-top: 0; }
 .tree-legend ul { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
@@ -83,7 +89,6 @@
 .tree-legend .legend-ring { fill: none; stroke: var(--appling-branch); stroke-width: 1.5; }
 .tree-legend .legend-ring.layer { stroke: var(--layer, var(--appling-branch)); }
 .tree-legend .legend-ring.session { stroke: var(--appling-info); stroke-width: 2; stroke-dasharray: 3 2; }
-.tree-legend .bud { fill: var(--appling-sprout); }
 .tree-legend p { margin: 8px 0 0; font-size: 11px; color: var(--appling-ink-muted); }
 /* a folded node shrinks into the node it hangs from */
 .tree-item.leaving { opacity: 0; pointer-events: none; transition: transform 380ms ease-in, opacity 380ms ease-in; }
@@ -95,10 +100,16 @@
 .tree-item.removed { opacity: 0.7; }
 .tree-item.removed .ring { stroke: var(--change); stroke-width: 2; stroke-dasharray: 4 3; fill: transparent; }
 .tree-item.removed .name { text-decoration: line-through; }
-.tree-item.cycle .ring { fill: var(--appling-surface); }
-.tree-item.cycle text { fill: var(--appling-ink-muted); }
-.tree-item .bud { fill: var(--appling-sprout); stroke: var(--appling-surface); stroke-width: 1.5; transform-box: fill-box; transform-origin: 50% 100%; transition: scale 260ms var(--spring); }
-.tree-item:hover .bud, .tree-item:focus-visible .bud { scale: 1.45; }
+.tree-item .bud-button { cursor: pointer; outline: none; }
+.bud-button .bud-disc { fill: var(--appling-surface-raised); stroke: color-mix(in srgb, var(--layer, var(--appling-branch)) 55%, transparent); stroke-width: 1; stroke-linecap: round; transition: fill 180ms ease, stroke 180ms ease; }
+.bud-button .bud-arrow { fill: none; stroke: var(--appling-ink-muted); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; transition: stroke 180ms ease, rotate 260ms var(--spring); transform-box: fill-box; transform-origin: center; pointer-events: none; }
+.tree-item .bud-button:hover .bud-disc, .tree-item .bud-button:focus-visible .bud-disc { fill: color-mix(in srgb, var(--layer, var(--appling-sprout)) 22%, var(--appling-surface-raised)); stroke: var(--layer, var(--appling-sprout)); }
+.tree-item .bud-button:hover .bud-arrow, .tree-item .bud-button:focus-visible .bud-arrow { stroke: var(--appling-ink); }
+.tree-item .bud-button.open .bud-disc { fill: color-mix(in srgb, var(--layer, var(--appling-sprout)) 16%, var(--appling-surface-raised)); }
+.tree-item .bud-button.open .bud-arrow { stroke: var(--layer, var(--appling-sprout)); rotate: 180deg; }
+.tree-item.related .ring { stroke-dasharray: 5 3; stroke: var(--appling-sprout); }
+.tree-item .frame { fill: color-mix(in srgb, var(--appling-rust) 4%, transparent); stroke: var(--appling-rust); stroke-width: 1; stroke-dasharray: 6 4; pointer-events: none; }
+.tree-item .frame-name { fill: var(--appling-rust); font: 600 12px var(--appling-font-mono); cursor: pointer; }
 .tree-item text { fill: var(--appling-ink); font: 12px var(--appling-font-sans); }
 .tree-item .count { text-anchor: middle; font: 600 12px var(--appling-font-mono); fill: var(--appling-ink-soft); }
 .tree-item .name { font-weight: 600; font-size: 13px; }
@@ -108,28 +119,35 @@
 .tree-item .fact { fill: var(--appling-ink-muted); font: 11px var(--appling-font-mono); }
 .tree-item .kind { fill: var(--layer, var(--appling-ink-muted)); font: 600 9px var(--appling-font-mono); text-transform: uppercase; letter-spacing: 0.1em; }
 .tree-item.module .name { fill: var(--appling-rust); font: 600 13px var(--appling-font-mono); }
-.tree-item .group-label { fill: var(--layer, var(--appling-ink-muted)); font: 600 11px var(--appling-font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
 .tree-item .seed-name { text-anchor: middle; font-weight: 600; font-size: 12px; }
 .tree-item .seed-kind { text-anchor: middle; fill: var(--appling-sprout); font: 9px var(--appling-font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
 
-.tree-top { position: absolute; top: 12px; left: 12px; right: 12px; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; pointer-events: none; }
-.tree-top > * { pointer-events: auto; }
-.lenses { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--appling-line); border-radius: 999px; background: var(--appling-surface-raised); }
-.lenses button { padding: 4px 12px; border: 0; border-radius: 999px; background: none; color: var(--appling-ink-muted); font: 12px var(--appling-font-sans); cursor: pointer; }
-.lenses button:hover { color: var(--appling-ink); }
-.lenses button.active { background: var(--appling-surface-hover); color: var(--appling-ink); }
-.tree-info { grid-row: 1; grid-column: 2; margin: 0; justify-self: end; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px var(--appling-font-mono); color: var(--appling-ink-muted); }
-.crumbs { grid-row: 2; grid-column: 1; display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0 4px; list-style: none; font: 12px var(--appling-font-mono); }
-.crumbs li + li::before { content: "/"; margin-right: 4px; color: var(--appling-line-strong); }
-.crumbs button { padding: 0; border: 0; background: none; color: var(--appling-ink-soft); font: inherit; cursor: pointer; }
-.crumbs li:last-child button { color: var(--appling-ink); font-weight: 600; }
-.tree-bottom { position: absolute; left: 0; right: 0; bottom: 0; padding: 6px 12px 8px; background: color-mix(in srgb, var(--appling-surface) 88%, transparent); border-top: 1px solid var(--appling-line); display: flex; gap: 6px; align-items: center; font: 11px var(--appling-font-mono); color: var(--appling-ink-muted); pointer-events: none; }
-.tree-bottom > * { pointer-events: auto; }
-.tree-bottom .hint { margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tree-bottom button { padding: 3px 9px; white-space: nowrap; border: 1px solid var(--appling-line); border-radius: 999px; background: var(--appling-surface-raised); color: var(--appling-ink-soft); font: inherit; text-transform: uppercase; letter-spacing: 0.06em; cursor: pointer; }
-.tree-bottom button:hover { color: var(--appling-ink); border-color: var(--appling-line-strong); }
-.tree-option { display: flex; gap: 6px; align-items: center; margin-right: 8px; cursor: pointer; }
-.tree-option input { accent-color: var(--appling-leaf); }
+.levels button { position: absolute; z-index: 1; left: 0; padding: 0; border: 0; border-radius: 0; background: none; color: color-mix(in srgb, var(--appling-rust) 55%, transparent); font: 700 22px var(--appling-font-mono); letter-spacing: -0.02em; cursor: pointer; transition: color 160ms; }
+.levels button:hover, .levels button:focus-visible { z-index: 2; color: var(--appling-rust); outline: none; }
+.levels button.active { color: var(--appling-rust); }
+.levels [role=tooltip] { position: absolute; left: calc(100% + 10px); top: 50%; translate: -4px -50%; display: grid; gap: 2px; padding: 6px 10px; border: 1px solid var(--appling-line-strong); border-radius: 6px; background: var(--appling-surface-raised); box-shadow: 0 6px 18px var(--appling-shadow); color: var(--appling-ink-muted); font: 11px var(--appling-font-mono); letter-spacing: 0; text-align: left; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 140ms, translate 140ms; }
+.levels [role=tooltip] b { color: var(--appling-ink); font: 600 12.5px var(--appling-font-sans); }
+.levels button:hover [role=tooltip], .levels button:focus-visible [role=tooltip] { opacity: 1; translate: 0 -50%; }
+.tree-bottom { position: absolute; z-index: 3; right: 12px; bottom: 12px; display: flex; gap: 8px; align-items: center; font: 11px var(--appling-font-mono); color: var(--appling-ink-muted); }
+.tool-group { display: flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--appling-line); border-radius: 10px; background: color-mix(in srgb, var(--appling-surface-raised) 88%, transparent); backdrop-filter: blur(8px); box-shadow: 0 6px 18px var(--appling-shadow); }
+.tool-group button { position: relative; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--appling-ink-soft); font: inherit; cursor: pointer; transition: background 140ms, color 140ms; }
+.tool-group button.labelled { padding: 0 9px; letter-spacing: 0.04em; }
+.tool-group button:hover, .tool-group button:focus-visible { background: color-mix(in srgb, var(--appling-ink) 9%, transparent); color: var(--appling-ink); outline: none; }
+.tool-group button[aria-pressed="true"] { background: color-mix(in srgb, var(--appling-leaf) 18%, transparent); color: var(--appling-leaf); }
+.tool-group .zoom { min-width: 38px; text-align: center; font-variant-numeric: tabular-nums; }
+.tool-group [data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 9px); left: 50%; translate: -50% 4px; padding: 4px 8px; border: 1px solid var(--appling-line-strong); border-radius: 6px; background: var(--appling-surface-raised); box-shadow: 0 6px 18px var(--appling-shadow); color: var(--appling-ink); font: 11px var(--appling-font-sans); white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 140ms, translate 140ms; }
+.tool-group [data-tip]:hover::after, .tool-group [data-tip]:focus-visible::after { opacity: 1; translate: -50% 0; }
+.tree-settings { position: absolute; right: 0; bottom: calc(100% + 8px); width: 280px; display: grid; gap: 2px; padding: 6px; border: 1px solid var(--appling-line-strong); border-radius: 10px; background: var(--appling-surface-raised); box-shadow: 0 10px 28px var(--appling-shadow); font-family: var(--appling-font-sans); }
+.tree-settings label, .tree-settings button { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border: 0; border-radius: 7px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.tree-settings label:hover, .tree-settings button:hover { background: color-mix(in srgb, var(--appling-ink) 7%, transparent); }
+.tree-settings span { display: grid; gap: 1px; margin-right: auto; }
+.tree-settings b { color: var(--appling-ink); font: 600 12px var(--appling-font-sans); }
+.tree-settings small { font-size: 11px; }
+.tree-settings input { appearance: none; flex: none; width: 30px; height: 17px; margin: 0; border-radius: 999px; background: var(--appling-line-strong); cursor: pointer; transition: background 160ms; }
+.tree-settings input::after { content: ''; display: block; width: 13px; height: 13px; margin: 2px; border-radius: 50%; background: var(--appling-surface); transition: translate 160ms; }
+.tree-settings input:checked { background: var(--appling-leaf); }
+.tree-settings input:checked::after { translate: 13px 0; }
+.tree-settings button { flex-direction: row-reverse; }
 
 .entity-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .entity-tag { margin-left: auto; flex: none; font: 600 10px var(--appling-font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--appling-ink-muted); }
@@ -193,4 +211,3 @@ button.card-row:hover { background: var(--appling-surface-hover); }
 .file-link { padding: 0; border: 0; background: none; color: var(--appling-leaf); font: 11px var(--appling-font-mono); text-align: left; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .file-link:hover { color: var(--appling-sprout); }
 .cards .loose-bubbles { position: static; grid-column: 1 / -1; max-width: none; max-height: none; }
-.tree-bottom button[aria-pressed="true"] { color: var(--appling-ink); border-color: var(--appling-leaf); }

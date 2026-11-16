@@ -201,7 +201,7 @@ The canvas never moves on its own: a session's view waits as a chip at the top r
 
 | View | Draws | `focus` takes |
 |---|---|---|
-| `node` | The [model tree](inspect.md#the-model-canvas) with only the focused declarations or modules: the trail from the seed through the module to each one, unfolded to what uses it. Its tabs switch the lens | Any declaration or module |
+| `node` | The [model pyramid](inspect.md#the-model-canvas) with only the focused declarations or modules: the trail through the module to each one, unfolded upwards and downwards. Its level blocks switch the entry level | Any declaration or module |
 | `machine` | A flowchart: the states of the machine's field type as boxes, the initial one highlighted and the final ones double framed. The transitions stay hidden until you click a state; then its arrows show where it can go, one per transition, labelled with the action or event that drives it, its guard and the jobs that run it. Click the state again to hide them | Machines |
 | `action` | One card: the states it moves between, whether each actor may run it (`yes`, `no` or `depends` on the data, from the [simulator](simulator.md)), its inputs, preconditions, changes, errors and the declarations that use it | Actions |
 | `usecase` | A flowchart: the use case with its inputs, then its steps in order, with each error handler and timeout branching off its step to the call it makes | Use cases |
@@ -211,7 +211,7 @@ Arrows run in straight segments with right angle corners. Click a node, an arrow
 
 ### One node at a time
 
-The `node` view lets the agent walk you through the model. Each `visualize` with the `node` view adds to the tree on screen instead of replacing it: a declaration the tree already shows, such as one that uses the last node, unfolds where it is; any other one gets its own trail from the seed. A declaration the lens on screen cannot draw switches the tree to the lens of its kind. Another view replaces the tree.
+The `node` view lets the agent walk you through the model. Each `visualize` with the `node` view adds to the pyramid on screen instead of replacing it: a declaration the pyramid already shows, or one that the drawn ones lead to one step up or down, unfolds where it is; any other one of the entry level gets its own trail through its module. A declaration the pyramid on screen cannot draw switches the entry level to the level of its kind. Another view replaces the pyramid.
 
 ### Bubbles
 
@@ -223,7 +223,7 @@ The canvas shows one bubble at a time, so none covers another. It grows as large
 
 To explain how a workflow or a part of the application works, the agent writes a playbook with `visual_playbook`: a title and the ordered steps, each with its own title, a description and the element or member it is about. Ask for it in words, such as "walk me through how an order is placed".
 
-A playbook waits as a chip like every view. Once you open it, the first step plays: its element is selected in the model tree under the lens of its layer, and its description shows in a bubble. The tree grows with each step, and the camera moves only when the step's element is out of view. Nothing moves on a timer: read the step, then go on with Next, go back with Back, or pick any step from the list. The list is the row of steps above the canvas; in VS Code it is the [Playbook view](vscode.md#the-panels) of the Appling sidebar, where picking a step also opens the playbook. A new playbook replaces the session's view and bubbles.
+A playbook waits as a chip like every view. Once you open it, the first step plays: its element is selected in the model pyramid with the level of its kind as the entry level, and its description shows in a bubble. The pyramid grows with each step, and the camera moves only when the step's element is out of view. Nothing moves on a timer: read the step, then go on with Next, go back with Back, or pick any step from the list. The list is the row of steps above the canvas; in VS Code it is the [Playbook view](vscode.md#the-panels) of the Appling sidebar, where picking a step also opens the playbook. A new playbook replaces the session's view and bubbles.
 
 ### Talk about what you see
 

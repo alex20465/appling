@@ -1,15 +1,20 @@
 ---
 title: Descriptions
-description: The optional does clause adds a plain text note where the structured constructs leave something unclear, like a doc block in code.
+description: The optional describe clause notes what an element is where the structure leaves it unclear; does names the work left to the code of an L2 declaration.
 ---
 
-The model describes itself: names, types, `requires`, `set`, `emit` and typed operations already say what an element is and does. Most declarations need nothing more. The `does` clause is an optional note in plain text for the few places where the structure cannot say it: how an external operation maps to a vendor's HTTP API, the format of a value, where a key comes from, why a rule exists. Treat it like a doc block in code: write one only when a reader would otherwise be confused.
+The model describes itself: names, types, `requires`, `set`, `emit` and typed operations already say what an element is and does. Most declarations need nothing more. Two optional clauses in plain text cover the rest:
 
-Code generation turns each description into documentation and a [registry task](../codegen/registry.md), so the note reaches whoever implements the element. A description that only repeats the structure adds a task that says nothing new.
+| Clause | On | Says | Code generation |
+|---|---|---|---|
+| `describe` | every named element | what it is and what it is for: a vendor call, a format, where a key comes from, why a rule exists | documentation |
+| `does` | `event`, `action`, `machine`, `job` | work its code has to do that the model does not state | documentation and a [registry task](../codegen/registry.md) |
+
+Treat both like a doc block in code: write one only when a reader would otherwise be confused.
 
 ## When to write one
 
-| Write `does` | Leave it out |
+| Write `describe` | Leave it out |
 |---|---|
 | The vendor call behind an operation: `POST /users/{id}/ban`, what a 404 means | An action whose `effect` already shows what it changes |
 | A format or source the type cannot carry: "the id Clerk assigns, user_ followed by letters" | A field whose name and type say it all: `email: String` |
@@ -18,24 +23,24 @@ Code generation turns each description into documentation and a [registry task](
 
 ## Writing a description
 
-Write `does` and a string after the head of a declaration (name, signature, `relevance`) and before its body, or at the end of a declaration without a body. In this module only three places need a note; the action and the use case explain themselves:
+Write the clause and a string after the head of a declaration (name, signature, `relevance`) and before its body, or at the end of a declaration without a body; `does` follows `describe`. In this module only four places need a note; the use case explains itself:
 
 ```appling check
 module accounts {
   external Clerk {
-    op BanUser (id: String) does "POST /users/{id}/ban on the Clerk backend API; 404 means the user is gone"
+    op BanUser (id: String) describe "POST /users/{id}/ban on the Clerk backend API; 404 means the user is gone"
   }
 
-  entity Account does """
+  entity Account describe """
     Mirrors the Clerk user;
     @Account.clerk_id is the link between both.
   """ {
-    clerk_id: String unique does "The id Clerk assigns, user_ followed by letters"
+    clerk_id: String unique describe "The id Clerk assigns, user_ followed by letters"
     email: String
     banned: Bool default false
   }
 
-  action Ban on Account {
+  action Ban on Account does "Signs the user out of every device" {
     effect {
       set banned = true
     }
@@ -48,9 +53,9 @@ module accounts {
 }
 ```
 
-Every named element can take one: `module`, `role`, `actor`, `tenant`, `enum` and its values, `value`, `entity`, fields, `event`, `action`, its inputs and errors, `machine`, `job`, `query`, `projection` and its fields, `external` and its operations, `usecase` and its parameters, `interface`, `page`, `navigation`, `flow`, `messages` and `migration`. Fields, parameters, errors, enum values, operations, `role`, `tenant` and `job` put it at the end.
+Every named element can take `describe`: `module`, `role`, `actor`, `tenant`, `enum` and its values, `value`, `entity`, fields, `event`, `action`, its inputs and errors, `machine`, `job`, `query`, `projection` and its fields, `external` and its operations, `usecase` and its parameters, `interface`, `page`, `navigation`, `flow`, `messages` and `migration`. Fields, parameters, errors, enum values, operations, `role`, `tenant` and `job` put it at the end.
 
-`does` stays valid as a name, so a field may be called `does`.
+`does` on another kind than the four of L2 is a syntax error. Both words stay valid as names, so a field may be called `does`.
 
 ## Text blocks
 
@@ -64,11 +69,11 @@ Each name is checked like a reference:
 
 | Rule | Error |
 |---|---|
-| The name resolves to a visible element | `Unknown element "@Nope" in does.` |
+| The name resolves to a visible element | `Unknown element "@Nope" in describe.` (or `in does.`) |
 | The layer rules allow the reference, as for any [reference](overview.md#layers) | `behavior element Action may not reference application element External "@Clerk.BanUser".` |
 
 A module's own description may name anything inside it. In the graph each name is a `uses` edge from the element, and [rename](../reference/edit-operations.md#rename) rewrites it.
 
 ## In the graph and in generated code
 
-The text is the `does` property of the element's [graph node](../reference/graph.md), in `props` and `data`. Each extension turns it into documentation in the generated code ([Django](../codegen/django.md#descriptions): docstrings and `help_text`, [Ash](../codegen/ash.md#descriptions): `@moduledoc` and attribute `description`), and the planner adds one registry task per description: `implement what <Name> does: <text>` for actions, machines, jobs, queries, externals, their operations and use cases, `check that <Name> matches its description: <text>` for everything else.
+Each text is the `describe` or `does` property of the element's [graph node](../reference/graph.md), in `props` and `data`. Each extension turns both into documentation in the generated code ([Django](../codegen/django.md#descriptions): docstrings and `help_text`, [Ash](../codegen/ash.md#descriptions): `@moduledoc` and attribute `description`). Only `does` adds a registry task: `implement what <Name> does: <text>`.

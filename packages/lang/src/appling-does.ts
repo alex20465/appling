@@ -3,8 +3,9 @@ import type { ApplingServices } from './appling-module.js';
 import type { ApplingScopeProvider } from './appling-scope.js';
 
 /**
- * The `does` clause: a plain text description on a declaration, written as `"..."` or as a text block
- * `"""..."""`. `@Name` inside the text names an element the way a qualified name does.
+ * The `describe` clause (what an element is and is for, on every named element) and the `does` clause (the work the
+ * code of an L2 declaration has to do): plain text written as `"..."` or as a text block `"""..."""`. `@Name`
+ * inside the text names an element the way a qualified name does.
  */
 
 /** Strips a text block's quotes, the line break after the opening quotes, and the common indentation of its lines. */
@@ -30,8 +31,9 @@ export class ApplingValueConverter extends DefaultValueConverter {
     }
 }
 
-/** One `@Name` inside a `does` text: the name without `@`, and the document offsets of its first character and its end. */
+/** One `@Name` inside a `describe` or `does` text: the name without `@`, and the document offsets of its first character and its end. */
 export interface DoesName {
+    property: 'describe' | 'does';
     name: string;
     offset: number;
     end: number;
@@ -40,19 +42,21 @@ export interface DoesName {
 // `@` starts a name only where it does not continue a word, so mail addresses stay text.
 const NAME = /(?<![\w.@])@([_a-zA-Z]\w*(?:\.[_a-zA-Z]\w*)*)/g;
 
-/** The `@Name` occurrences in a node's own `does` text, read from the source so offsets stay exact. */
+/** The `@Name` occurrences in a node's own `describe` and `does` texts, read from the source so offsets stay exact. */
 export function doesNames(node: AstNode): DoesName[] {
-    if (typeof (node as { does?: unknown }).does !== 'string') return [];
-    const cst = GrammarUtils.findNodeForProperty(node.$cstNode, 'does');
-    if (!cst) return [];
-    return [...cst.text.matchAll(NAME)].map(m => ({
-        name: m[1],
-        offset: cst.offset + m.index + 1,
-        end: cst.offset + m.index + m[0].length
-    }));
+    return (['describe', 'does'] as const).flatMap(property => {
+        const cst = GrammarUtils.findNodeForProperty(node.$cstNode, property);
+        if (!cst) return [];
+        return [...cst.text.matchAll(NAME)].map(m => ({
+            property,
+            name: m[1],
+            offset: cst.offset + m.index + 1,
+            end: cst.offset + m.index + m[0].length
+        }));
+    });
 }
 
-/** Each `@Name` of a node's `does` text with the element it names, or undefined when nothing visible has that name. */
+/** Each `@Name` of a node's `describe` and `does` texts with the element it names, or undefined when nothing visible has that name. */
 export function doesTargets(node: AstNode, services: ApplingServices): Array<DoesName & { target?: AstNode }> {
     const scope = services.references.ScopeProvider as ApplingScopeProvider;
     return doesNames(node).map(name => ({ ...name, target: scope.lookupElement(node, name.name) }));

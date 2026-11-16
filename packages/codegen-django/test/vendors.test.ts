@@ -10,10 +10,10 @@ const VENDORS = `module shop {
     entity Account { name: String }
     action Sync on Account { set name = "x" }
     external Clerk {
-        setting region: String does "The region of the Clerk instance"
+        setting region: String describe "The region of the Clerk instance"
         setting max_sessions: Int
         setting test_mode: Bool
-        secret secret_key: String does "API keys page of the Clerk dashboard"
+        secret secret_key: String describe "API keys page of the Clerk dashboard"
     }
     interface rest Api {
         auth bearer from Clerk

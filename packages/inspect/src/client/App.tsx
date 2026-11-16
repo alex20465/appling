@@ -10,7 +10,7 @@ import type { AgentView, LiveChanges } from '../shared/live.js';
 import { loadRelease, loadReview, loadRevisions, loadSnapshot, loadView, onEvents, saveView } from './api.js';
 import { TaskBoard } from './TaskBoard.js';
 import { AgentCanvas, AgentStrip } from './AgentView.js';
-import { ModelCanvas } from '@appling/viz/canvas';
+import { Glyph, ModelCanvas } from '@appling/viz/canvas';
 import { elementAt, GraphIndex, type SessionMark } from '@appling/viz/views';
 import { Inspector } from './Inspector.js';
 
@@ -197,12 +197,15 @@ export function App() {
                         release {release.version} · {steps} migration step(s) since
                     </button>
                 )}
-                <span className={snapshot.errors.length ? 'errors' : 'ok'}>{snapshot.errors.length ? `${snapshot.errors.length} error(s)` : 'valid'}</span>
+                <span className={snapshot.errors.length ? 'errors' : 'ok'} role="status" tabIndex={0} aria-label={snapshot.errors.length ? `${snapshot.errors.length} error(s)` : 'The model is valid'}>
+                    <Glyph name={snapshot.errors.length ? 'triangle-alert' : 'circle-check'} />{snapshot.errors.length || ''}
+                    <span role="tooltip">{snapshot.errors.length ? <><b>{snapshot.errors.length} error(s)</b>{snapshot.errors.slice(0, 5).map((error, i) => <span key={i}>{error}</span>)}</> : <b>The model is valid</b>}</span>
+                </span>
             </header>
             <main className="canvas-area">
                 {watched?.show
                     ? <AgentCanvas key={watched.session} index={canvasIndex} view={watched} session={sessions.find(s => s.id === watched.session)} settings={view} selected={element} changes={canvasChanges} at={step} list={!host?.panels} onStep={setStep} onSelect={select} onClose={() => watch()} onOpenFile={openFile} />
-                    : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={element} settings={view} sessions={sessionMarks} onSession={host?.focusSession} implementation={snapshot.implementation} buttons={[{ label: openTasks ? `Tasks ${openTasks}` : 'Tasks', pressed: board, run: () => setBoard(!board) }]} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
+                    : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={element} settings={view} sessions={sessionMarks} onSession={host?.focusSession} implementation={snapshot.implementation} buttons={[{ label: openTasks ? `Tasks ${openTasks}` : 'Tasks', icon: 'list-checks', pressed: board, run: () => setBoard(!board) }]} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
                 {board && !watched?.show && <TaskBoard tasks={snapshot.tasks} sessions={sessions} selected={element} onSelect={select} onClose={() => setBoard(false)} />}
                 <AgentStrip views={Object.values(agentViews)} sessions={sessions} watching={watching} onWatch={watch} />
                 {element && !host?.panels && (

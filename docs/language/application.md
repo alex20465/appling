@@ -96,8 +96,8 @@ An external also declares what the vendor behind it needs to work: the keys, nev
 
 ```appling
 external Clerk {
-  setting region: String does "The region of the Clerk instance"
-  secret secret_key: String does "API keys page of the Clerk dashboard"
+  setting region: String describe "The region of the Clerk instance"
+  secret secret_key: String describe "API keys page of the Clerk dashboard"
   op GetUser (id: String) returns String
 }
 ```
@@ -106,11 +106,11 @@ external Clerk {
 |---|---|
 | `setting name: Type` | A configuration value the vendor needs |
 | `secret name: Type` | A credential; the graph marks it with `kind: "secret"` |
-| `does "..."` | Where to find or how to choose the value, optional |
+| `describe "..."` | Where to find or how to choose the value, optional |
 
 The type is a primitive (`String`, `Int`, `Bool`, `Duration`, ...), optional with `?`; anything else is an error: `A secret has a primitive type, not String[].` Expressions do not read keys. An external that declares keys but that no step calls and no interface names gets a warning: `External Clerk declares settings or secrets, but nothing calls or names it.` Interfaces name an external with [`auth <scheme> from <External>`](interfaces.md#vendors) or `interface webhook <Name> from <External>`.
 
-Code generation reads every key from the environment variable `<EXTERNAL>_<KEY>` in upper snake case (`CLERK_SECRET_KEY`) and lists them with their `does` text in `.env.example` (see [Django](../codegen/django.md#settings-and-secrets) and [Ash](../codegen/ash.md#settings-and-secrets)).
+Code generation reads every key from the environment variable `<EXTERNAL>_<KEY>` in upper snake case (`CLERK_SECRET_KEY`) and lists them with their `describe` text in `.env.example` (see [Django](../codegen/django.md#settings-and-secrets) and [Ash](../codegen/ash.md#settings-and-secrets)).
 
 ## Use cases
 

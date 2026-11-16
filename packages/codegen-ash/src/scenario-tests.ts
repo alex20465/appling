@@ -36,7 +36,7 @@ export function scenarioSteps(scenario: GraphNode, context: MapContext): Step[] 
         if (!(error instanceof Unsupported)) throw error;
         why = error.message;
     }
-    const does = typeof scenario.data.does === 'string' && scenario.data.does.trim() ? `  # ${scenario.data.does.trim().replace(/\s*\n\s*/g, ' ')}\n` : '';
+    const does = typeof scenario.data.describe === 'string' && scenario.data.describe.trim() ? `  # ${scenario.data.describe.trim().replace(/\s*\n\s*/g, ' ')}\n` : '';
     const test = body
         ? `${does}  test ${JSON.stringify(title)} do\n${body.map(l => `    ${l}\n`).join('')}  end\n`
         : `${does}  @tag skip: ${JSON.stringify(`registry task: ${scenario.qn}`)}\n  test ${JSON.stringify(title)}\n`;

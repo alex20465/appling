@@ -1,9 +1,9 @@
 ---
 title: Inspect
-description: The read only inspector of an Appling model, with the model canvas as its main area and a floating inspector for the selected element, to debug and inspect the model.
+description: The read only inspector of an Appling model, with the model canvas as its main area and an inspector sidebar for the selected element, to debug and inspect the model.
 ---
 
-Inspect is the companion you keep open next to an AI coding tool such as Claude Code, Codex or opencode. The agent changes the model and works through the generated project's tasks; the inspector shows what it does, live and read only. It draws the model as a tree you unfold, marks every change the moment it lands on disk, lays the agent's registry tasks out as a board of pending, in progress and done, and opens a floating inspector for the node you select: what it does, who may run it and where it is used. It never writes a model file. You and your agent edit the text; the inspector watches the files and keeps every node up to date.
+Inspect is the companion you keep open next to an AI coding tool such as Claude Code, Codex or opencode. The agent changes the model and works through the generated project's tasks; the inspector shows what it does, live and read only. It draws the model as a pyramid of five levels you unfold, marks every change the moment it lands on disk, lays the agent's registry tasks out as a board of pending, in progress and done, and opens an inspector beside the canvas for the node you select: what it does, who may run it and where it is used. It never writes a model file. You and your agent edit the text; the inspector watches the files and keeps every node up to date.
 
 The agent can drive it too. Through its [MCP server](ai.md#mcp-server) an [agent session](ai.md#agent-sessions) reads what you look at with `ide_context`, selects, reveals and highlights nodes with `ide_act`, and draws its own views and notes on the canvas with the [visual tools](ai.md#visual-tools).
 
@@ -16,56 +16,62 @@ npx appling inspect models
 > [!TIP]
 > To try the inspector without installing anything, open the [demo](https://appling.tools/inspect/). It runs on the sample sales and CRM model entirely in your browser.
 
-The header shows the workspace folder, the release indicator (once a release exists) and either `valid` or the number of errors in the model.
+The header shows the workspace folder, the release indicator (once a release exists) and an icon for the state of the model: a check mark when it is valid, a warning sign with the number of errors otherwise. Pointing at it says so in words and lists the first errors.
 
 In VS Code, **Appling: Show in the inspector** selects the element at the cursor of a `.appling` editor on the canvas, and **Open source** in the inspector opens an element's source in VS Code.
 
 ## The model canvas
 
-The canvas draws the model as a tree that grows from a seed at the bottom, and it shows only what you unfold. The tabs at its top left choose the lens, the kinds of declarations the tree starts from:
+The canvas draws the model as a pyramid of five horizontal bands, one per level, and it shows only what you unfold. Each level answers one question:
 
-| Lens | Starts from |
-|---|---|
-| Domain | Entities, value types and enums |
-| Behavior | Actions, events, state machines and jobs |
-| Application | Queries, projections, external systems and use cases |
-| Interfaces | APIs, pages, navigations, flows and messages |
-| Access | Roles, actors and tenants |
+| Level | Question | Holds |
+|---|---|---|
+| L5 Access | Who can do what? | Roles, actors and tenants |
+| L4 Interfaces | What is exposed and where? | APIs, pages, navigations, flows and messages |
+| L3 Application | How is it exposed? | Queries, projections, external systems and use cases |
+| L2 Behavior | What can happen? | Actions, events, state machines and jobs |
+| L1 Domain | What exists? | Entities, value types and enums |
 
-The tree unfolds one level per click, following the dependencies of the [semantic graph](../reference/graph.md) from what is used to what uses it:
+L5 stands on top and L1 at the bottom. The yellow labels **L1** to **L5** at the left edge, each beside its band, choose the entry level: the level whose declarations the pyramid starts from. The label of the entry level is brighter. Pointing at a label shows its question and how many declarations the level holds. Pick the level that matches your question: L5 to see who can do what, L1 to see what exists and what rests on it, a level in between to walk both ways.
 
-1. The seed holds the modules that declare something of the lens.
-2. A module holds its declarations of the lens, one bud per kind (such as `4 ENTITIES`) when there is more than one kind.
-3. A declaration holds the declarations that use it, by kind again: an entity unfolds into its actions, queries, projections, machines and the pages that show it; an action into the machines, jobs, use cases, APIs and pages that run it.
+The band of the entry level holds one frame per module that declares something of that level. A folded module is a chip; clicking it opens the frame with its declarations of the entry level, and clicking its name folds it again. With up to three modules the frames start open.
 
-Each node is a chip: a box of one size per node type, with a cell on its left in the color of its layer, which holds its icon when it has one. A declaration and a group of declarations have as many pins on each side as the level of their layer, from one for the domain to five for the experience. Right of the cell are the name, the kind and one fact that places it, such as `29 fields · 26 actions on it` for an entity, `on Order · draft, placed → cancelled` for an action, `every 0 3 * * * · runs Cancel` for a job or `/cms/quotes` for a page. A declaration from another module carries its qualified name. A declaration that already appears lower on its branch shows `↺` and does not unfold again. More than four declarations wrap into rows. Every node owns the strip above it and stands below the middle of what unfolds from it. Each wrapped row stands above everything that grows from the row below, and its two halves leave the middle free for the trunk. Unfolding a declaration moves the ones beside it aside and the rows above it upwards to make room. Groups always stand in the same order from left to right: by layer, and within a layer by kind. Declarations of a group stand in the order of their relevance, equally relevant ones by name.
+Every declaration unfolds in two directions, following the references of the [semantic graph](../reference/graph.md):
 
-The [relevance](../language/relevance.md) of a declaration decides how it is drawn: the more relevant, the closer to the middle of its row, while the least relevant sit at the edges. `core` declarations have a stronger outline, a stronger color in their cell and a bolder name, `peripheral` ones are faded until you point at them.
+- The tab on top unfolds what rests on it: the declarations of higher levels that use it. An entity unfolds into its actions, queries and projections and the roles its policies name; an action into the use cases, APIs and pages that run it.
+- The tab below unfolds what it rests on: the declarations of lower levels it uses. A page unfolds into its queries, projections and actions; a query into its entity.
 
-Clicking a node unfolds it and selects it: the inspector opens over the right side of the canvas and shows what it does, who may run it and where it is used, and every link there selects the next element. Clicking the selected declaration again folds it: what it held shrinks back into it. The canvas moves to keep what you unfolded in view.
+Each chip unfolds through a small tab with an arrow on its top and its bottom edge. A declaration of L1 has only the tab on top, one of L5 only the tab below, and a tab shows only where something is. What unfolds stands in the band of its own level, however many bands away: a query reads its entity directly, so the entity stands in L1 and its trace crosses the band of L2. Away from the entry level a branch keeps its direction: what you unfolded upwards unfolds further up, what you unfolded downwards further down. To walk the other way from such a declaration, make its level the entry level. Clicking the tab of an open side, its arrow turned around, folds that side again.
 
-The tree is drawn as a circuit board that grows like a plant. The seed is a chip, and new nodes come out of the bud on top of the node you clicked, one after another, each on a trace that is thicker the more grows from it. A trace runs in straight lines with 45 degree corners: the trunk of a node goes straight up from its middle and branches to both sides in the channel below each row of its children. Because every node owns the room above it, no trace runs through a node and no traces of two nodes cross. Sap runs up the traces from the seed to the current node. A wave of rings spreads from a node when you unfold or fold it, and from every drawn element that a new version of the model added (green) or changed (blue), whether you, your editor or an agent session wrote the change. With reduced motion set in your system, the plant stands still and has no waves.
+A role, actor or tenant leads down through the pages and interfaces that expose what its policies name; an actor may what its roles may, and a query asks for what its entity allows. What such a page or interface already exposes shows under it, not a second time under the role. Scenarios and migrations are outside the pyramid.
+
+Each node is a chip: a box of one size, with a cell on its left in the color of its layer, which holds its icon when it has one. Right of the cell are the name, the kind and one fact that places it, such as `29 fields · 26 actions on it` for an entity, `on Order · draft, placed → cancelled` for an action, `every 0 3 * * * · runs Cancel` for a job or `/cms/quotes` for a page. A declaration from another module carries its qualified name. A declaration is drawn exactly once: where an unfolded node also leads to one that is drawn elsewhere already, a trace joins the two, and it lights up when either end is the current node. Every declaration owns the strip above and below it and stands in the middle of it, so unfolding one moves the ones beside it aside. The declarations of one level wrap into a grid, so a band grows by rows. Unfolding never reorders: a declaration keeps its row and its place in it, and what it unfolds stands in a strip beside the grid. Declarations stand in the order of their level, the nearest first, then by kind, then by their [relevance](../language/relevance.md), equally relevant ones by name.
+
+`core` declarations have a stronger outline, a stronger color in their cell and a bolder name, `peripheral` ones are faded until you point at them.
+
+Clicking a chip selects it: the inspector opens beside the canvas and shows what it does, who may run it and where it is used, and every link there selects the next element. The declarations of its own level it belongs together with, such as the machine an action drives or the role of an actor, get a dashed outline when they are drawn; relations inside one level do not unfold. The canvas moves to keep what you unfolded in view.
+
+The pyramid is drawn as a circuit board that grows like a plant. New nodes come out of the edge you unfolded, one after another, each on a trace in the color of the level it starts from. A trace runs in straight lines with 45 degree corners. All that a node leads to on one side leaves the middle of that edge as one line, runs on a track of its own before each row it ends in and ends at a place of its own on the edge of each chip. No trace runs through a node and no two lines share a stretch; they cross at right angles only, as rarely as the connections allow. A dot marks where a line branches, so a crossing without a dot is no connection. Rows and bands move apart as far as their traces need. With a node selected, its connections stand out and the rest fades. Sap runs along the traces to the current node. A wave of rings spreads from a node when you unfold or fold it, and from every drawn element that a new version of the model added (green) or changed (blue), whether you, your editor or an agent session wrote the change. With reduced motion set in your system, the plant stands still and has no waves.
 
 With a server, the canvas also shows how far the code is: the outline of each declaration's and module's chip tells its [implementation state](implementation.md#implementation-states): solid when implemented, dashed when partly, faint dots when not. Pointing at the chip names the state in words. The inspector does not generate: run [`appling generate`](cli.md#generate), and the marks follow.
 
-- The path at the top left leads from the seed to the current node; click a step to go back to it.
-- The line at the top right describes the current node, such as `quotes.Quote · entity · core · 29 fields · 26 actions on it · used by 84`.
-- At the bottom, **link entities** adds [link entities](../language/domain.md#link-entities) such as join records, which are left out by default. The zoom level, **−** and **+** zoom, **Tasks** opens the [task board](implementation.md#registry-tasks-and-agent-sessions) with the count of open tasks, **Fit** shows the whole tree, and **Replant** folds it back to the seed. **Legend** explains every mark: the code states, the change badges, the pins of the layers, buds, `↺`, claim rings and relevance. **Sound on** or **Sound off** switches the soft notes the plant plays: a rising run when shoots unfold, two falling notes on a fold and a short chime when the model changes. The choice is kept in your browser, and the first sound waits for your first click. Drag to pan and scroll to zoom.
+- The toolbar at the bottom right holds the zoom level with its minus and plus buttons and **Fit**, which shows the whole pyramid. Next to them, **Tasks** opens the [task board](implementation.md#registry-tasks-and-agent-sessions) with the count of open tasks and **Legend** explains every mark: the code states, the change badges, the levels, the unfold arrows, the dashed outline, claim rings and relevance. Pointing at a button names it.
+- **View settings**, the last button, opens the visual options. **Link entities** adds [link entities](../language/domain.md#link-entities) such as join records, which are left out by default. **Sound** switches the soft notes the canvas plays: a rising run when declarations unfold, two falling notes on a fold and a short chime when the model changes. The choice is kept in your browser, and the first sound waits for your first click. **Replant** folds the pyramid back to the modules of the entry level. Drag to pan and scroll to zoom.
 
-The lens and the link entities option are saved in `.appling/view.json` in the workspace folder, so the view opens the same way next time.
+The entry level and the link entities option are saved in `.appling/view.json` in the workspace folder, so the view opens the same way next time.
 
-A node can carry an icon from the [Lucide](https://lucide.dev/icons) catalog, in the middle of its cell. Icons are set by an AI assistant with the [`set_icons`](ai.md#view-tools) tool of the MCP server, for a kind (its group and every declaration of that kind), for one module or declaration, or for the seed. They are kept under `icons` in `.appling/view.json`, which you can also edit by hand, and appear on every open canvas the moment the file changes.
+A node can carry an icon from the [Lucide](https://lucide.dev/icons) catalog, in the middle of its cell. Icons are set by an AI assistant with the [`set_icons`](ai.md#view-tools) tool of the MCP server, for a kind (every declaration of that kind), or for one module or declaration. They are kept under `icons` in `.appling/view.json`, which you can also edit by hand, and appear on every open canvas the moment the file changes.
 
 ## Selection
 
 Selection is shared between the canvas, the inspector and the host's editor:
 
 - Clicking a node or a link in the inspector selects that element and opens the inspector.
-- **Appling: Show in the inspector** in a `.appling` editor of VS Code selects the innermost element at the cursor. When the lens starts from the kind of the declaration that contains it, the canvas unfolds its module and marks it.
+- **Appling: Show in the inspector** in a `.appling` editor of VS Code selects the innermost element at the cursor. When the declaration that contains it is of the entry level, the canvas opens its module and marks it.
 
 ## The inspector
 
-The inspector floats over the right side of the canvas while an element is selected; **×** closes it and clears the selection. It shows the selected element: its kind and layer, its qualified name (with **Open source** where the host has an editor, such as VS Code, which opens its declaration there), and
+The inspector is a sidebar over the full height at the right of the canvas while an element is selected; **×** closes it and clears the selection. It shows the selected element: its kind and layer, its qualified name (with **Open source** where the host has an editor, such as VS Code, which opens its declaration there), and
 
 - **What it does**, for an action: the entity it works on, its inputs, what it requires (with the error raised otherwise), what it changes (its own effects, then each machine transition it drives with that transition's effects), its errors and its consistency,
 - **Actions**, for an entity: the actions declared on it, each with the machine transitions it drives, such as `draft, placed -> cancelled`, followed by the actions elsewhere that create its records, marked `creates`,
@@ -107,7 +113,7 @@ The inspector does not generate. Run [`appling generate`](cli.md#generate) or le
 
 ## Live changes
 
-Every change to the model is marked on the canvas the moment it lands on disk, whoever wrote it: an [agent session](ai.md#agent-sessions) through the MCP tools, an agent or editor that writes the files directly, `appling fmt` or a `git checkout`. Each changed node gets a pulsing halo, a letter on its chip as Source Control marks files (A added, M changed, D removed) and its name in the change's colour: added declarations green, changed ones and the modules that hold them blue, removed declarations red and dashed, drawn ghosted where they were. Marking never moves the camera and never unfolds the tree: what you look at stays where it is.
+Every change to the model is marked on the canvas the moment it lands on disk, whoever wrote it: an [agent session](ai.md#agent-sessions) through the MCP tools, an agent or editor that writes the files directly, `appling fmt` or a `git checkout`. Each changed node gets a pulsing halo, a letter on its chip as Source Control marks files (A added, M changed, D removed) and its name in the change's colour: added declarations green, changed ones and the modules that hold them blue, removed declarations red and dashed, drawn ghosted where they were. Marking never moves the camera and never unfolds the pyramid: what you look at stays where it is.
 
 The changes are compared with the model files at git `HEAD`, the same commit `git status` compares with, so the canvas marks what git shows as changed: everything since the last commit, by you or your agent. The server watches the repository's git folder and follows `HEAD`: after a commit, a checkout or a reset the marks start again from the new commit. Outside a git repository, or before the first commit, the baseline is the model files on disk when the server started, so only what changes while you look is marked; the first commit then makes `HEAD` the baseline.
 
@@ -121,7 +127,7 @@ While a host marks a revision's diff on the canvas, its marks replace the live o
 
 ### Agent views
 
-The [visual tools](ai.md#visual-tools) of the repo's agent sessions draw on this canvas, and `ide_act` selects (`open`, `reveal`) or highlights its nodes. A view a session shows, with its bubbles, its current step and its last reply, waits as a chip at the top right of the canvas under the session's name and colour. Click it to open the view: the canvas draws the session's tree, flowchart or cards, one bubble at a time with Back and Next, and follows each new view and bubble of that session; **Back to the model** returns to your own tree. A [playbook](ai.md#playbooks) lists its steps above the canvas (in VS Code, in the Playbook view of the sidebar); each step selects its element under the lens of its layer. Nothing opens by itself and nothing plays on a timer. The field under the view's bar sends the session a question: it reaches the session's inbox as a message from User, stays listed in the view, and the session's answer (`visual_reply`) shows below it.
+The [visual tools](ai.md#visual-tools) of the repo's agent sessions draw on this canvas, and `ide_act` selects (`open`, `reveal`) or highlights its nodes. A view a session shows, with its bubbles, its current step and its last reply, waits as a chip at the top right of the canvas under the session's name and colour. Click it to open the view: the canvas draws the session's pyramid, flowchart or cards, one bubble at a time with Back and Next, and follows each new view and bubble of that session; **Back to the model** returns to your own pyramid. A [playbook](ai.md#playbooks) lists its steps above the canvas (in VS Code, in the Playbook view of the sidebar); each step selects its element with the level of its kind as the entry level. Nothing opens by itself and nothing plays on a timer. The field under the view's bar sends the session a question: it reaches the session's inbox as a message from User, stays listed in the view, and the session's answer (`visual_reply`) shows below it.
 
 When a session ends, its views go.
 

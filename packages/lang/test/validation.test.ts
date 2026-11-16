@@ -107,12 +107,19 @@ test('does names visible elements', async () => {
         .toEqual([]);
     expect(await check(`module a { export X entity X { } } module b { action Use does "Reads @a.X, not @a.Y" { } }`))
         .toEqual(['Unknown element "@a.Y" in does.']);
+    expect(await check(`module m { ${ORDER} entity Note describe "Kept with @Order, not @Missing" { } }`))
+        .toEqual(['Unknown element "@Missing" in describe.']);
+});
+
+test('does is only for L2 declarations', async () => {
+    expect(await check(`module m { ${ORDER} action Edit on Order describe "A correction" does "Mails the owner" { } }`)).toEqual([]);
+    expect(await check(`module m { entity Note does "Mails the owner" { } }`)).not.toEqual([]);
 });
 
 test('does names follow the layer rules', async () => {
     expect(await check(`module m { external Mail { op Send () } ${ORDER} action Edit on Order does "Calls @Mail.Send" { } }`))
         .toContain('behavior element Action may not reference application element External "@Mail.Send".');
-    expect(await check(`module m { external Mail { op Send () } usecase Notify does "Calls @Mail.Send" { } }`)).toEqual([]);
+    expect(await check(`module m { external Mail { op Send () } usecase Notify describe "Calls @Mail.Send" { } }`)).toEqual([]);
 });
 
 test('a role condition reads only actor, tenant and now', async () => {

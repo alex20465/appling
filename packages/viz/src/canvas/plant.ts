@@ -1,29 +1,34 @@
-import { ROW, type Placed } from '../layout.js';
+import type { Placed, Point } from '../layout.js';
 import type { TreeNode } from '../views.js';
 
-export type Point = [number, number];
+export type { Point };
 
 /** Between two generations that sprout together, and between two siblings. */
 const GENERATION = 240;
 const SIBLING = 45;
 /** How long the 45 degree corners of a trace are. */
-const CORNER = 12;
+const CORNER = 6;
+/** How many points every trace has, so one moves into another. */
+const POINTS = 32;
 
 /**
- * The traces of a circuit board, one per node from the top of its parent to its own bottom: straight up the trunk
- * above the parent into the channel below the node's row, along it and up into the node. The children of one node are
- * one net that shares the trunk. The layout gives every net room of its own and keeps the trunk free (`layoutTree`),
- * so no trace meets a node or the trace of another net.
+ * The traces of a circuit board, one per declaration that unfolded from another, along the route the layout gave it
+ * (`route` in `layout.ts`), every corner cut. What a declaration leads to on one side is one net that shares its
+ * first stretches. A module frames its declarations instead.
  */
 export function traces(placed: Placed[], radius: (node: TreeNode) => number): Map<string, Point[]> {
-    return new Map(placed.filter(p => p.parent).map(({ node, x, y, parent }) => {
-        const start: Point = [parent!.x, parent!.y - radius(parent!.node)];
+    return new Map(placed.filter(p => p.route && p.parent).map(({ node, y, route, parent }) => {
         // a folded node shrinks into the node it hangs from
-        return [node.id, cornered(y >= parent!.y ? [start] : [start, [parent!.x, y + ROW / 2], [x, y + ROW / 2], [x, y + radius(node)]])];
+        return [node.id, cornered(y === parent!.y ? [[parent!.x, parent!.y + (node.side === 'down' ? 1 : -1) * radius(parent!.node)]] : route!)];
     }));
 }
 
-/** Every corner cut at 45 degrees, at most half of the shorter side. Always ten points: the last one repeats for the corners a trace does not take. */
+/** The joins of a pyramid: a trace like the others from a declaration to each one its unfolded side leads to that is drawn elsewhere already. */
+export function joins(placed: Placed[]): { id: string, from: string, to: string, points: Point[] }[] {
+    return placed.flatMap(p => (p.joins ?? []).map(join => ({ id: `${p.node.id}>${join.to}`, from: p.node.id, to: join.to, points: cornered(join.points) })));
+}
+
+/** Every corner cut at 45 degrees, at most half of the shorter side. Always `POINTS` points while they suffice: the last one repeats for the corners a trace does not take. */
 function cornered(route: Point[]): Point[] {
     const points = route.filter(([x, y], i) => !i || x !== route[i - 1][0] || y !== route[i - 1][1]);
     const towards = ([x, y]: Point, [tx, ty]: Point, cut: number): Point => {
@@ -36,7 +41,7 @@ function cornered(route: Point[]): Point[] {
         const size = Math.min(CORNER, Math.hypot(point[0] - before[0], point[1] - before[1]) / 2, Math.hypot(after[0] - point[0], after[1] - point[1]) / 2);
         return [towards(point, before, size), towards(point, after, size)];
     });
-    return Array.from({ length: 10 }, (_, i) => cut[Math.min(i, cut.length - 1)]);
+    return cut.length > POINTS ? cut : Array.from({ length: POINTS }, (_, i) => cut[Math.min(i, cut.length - 1)]);
 }
 
 export function pathOf(points: Point[]): string {

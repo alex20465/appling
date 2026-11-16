@@ -53,7 +53,7 @@
     "partial": 0,
     "todo": 0,
     "tasks": 0,
-    "left": 1
+    "left": 0
   },
   {
     "kind": "Enum",
@@ -101,7 +101,7 @@
     "partial": 0,
     "todo": 0,
     "tasks": 0,
-    "left": 1
+    "left": 0
   },
   {
     "kind": "ExternalOperation",
@@ -109,7 +109,7 @@
     "partial": 0,
     "todo": 0,
     "tasks": 0,
-    "left": 1
+    "left": 0
   },
   {
     "kind": "Field",
@@ -117,7 +117,7 @@
     "partial": 0,
     "todo": 0,
     "tasks": 0,
-    "left": 1
+    "left": 0
   },
   {
     "kind": "Flow",
@@ -317,6 +317,6 @@
     "partial": 17,
     "todo": 5,
     "tasks": 33,
-    "left": 10
+    "left": 6
   }
 ]

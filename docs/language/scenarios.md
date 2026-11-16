@@ -38,7 +38,7 @@ module sales {
     transition draft -> placed via PlaceOrder effect { emit OrderPlaced { order = this } }
   }
 
-  scenario PlaceOwnOrder does "A shopper places their own order" {
+  scenario PlaceOwnOrder describe "A shopper places their own order" {
     given {
       order = create Order { owner = "ann", items = 2 }
     }
@@ -73,7 +73,7 @@ module sales {
 ## Syntax
 
 ```appling
-scenario <Name> [core | supporting | peripheral] [does "..."] {
+scenario <Name> [core | supporting | peripheral] [describe "..."] {
   given { [<name> =] create <Entity> { <field> = <expression>, ... } ... }
   as <Actor or Role> [{ <field> = <expression>, ... }]
   when <Action or UseCase>(<arguments>)

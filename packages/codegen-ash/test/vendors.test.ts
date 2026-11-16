@@ -12,7 +12,7 @@ test('external keys are read from the environment in runtime.exs and listed in .
         external Clerk {
             setting max_sessions: Int
             setting test_mode: Bool
-            secret secret_key: String does "API keys page of the Clerk dashboard"
+            secret secret_key: String describe "API keys page of the Clerk dashboard"
         }
         interface webhook ClerkEvents from Clerk {
             POST "/webhooks/clerk" -> Sync

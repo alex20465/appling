@@ -81,7 +81,7 @@ Appling is set up for Claude Code, Codex. Start your agent in todo and describe 
 
 ## inspect
 
-Opens the read only [inspector](inspect.md) of a folder in your browser, the same view the VS Code extension shows: the model canvas, the floating inspector of the selected element, the task board and the live marks of every change. Keep it open next to your AI coding tool while the agent works. It starts the inspector server for the folder (the current folder without one) on a free port of `127.0.0.1`, prints its address and opens it in your default browser. It runs until you press Ctrl+C.
+Opens the read only [inspector](inspect.md) of a folder in your browser, the same view the VS Code extension shows: the model canvas, the inspector sidebar of the selected element, the task board and the live marks of every change. Keep it open next to your AI coding tool while the agent works. It starts the inspector server for the folder (the current folder without one) on a free port of `127.0.0.1`, prints its address and opens it in your default browser. It runs until you press Ctrl+C.
 
 ```sh
 appling inspect examples

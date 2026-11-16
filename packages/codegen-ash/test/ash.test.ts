@@ -430,11 +430,11 @@ test('once the model has a policy, every resource denies what no policy covers, 
     expect(Object.values(entries).find(e => e.qn.startsWith('ops.Ticket.policy[') && e.qn.includes('fields'))!.missing.map(m => m.what)).toContain('guard writes of note on ops.Ticket for update, which Ash field policies do not cover: actor.is(Clerk)');
 });
 
-test('does texts become the moduledoc and attribute descriptions, and one registry task each', async () => {
+test('describe texts become the moduledoc and attribute descriptions, without a registry task', async () => {
     const result = await planFor({
         'shop.appling': `module shop {
-            entity Item does "Something to sell, #{not} interpolated" { code: String does "Shelf code" }
-            value Address does """
+            entity Item describe "Something to sell, #{not} interpolated" { code: String describe "Shelf code" }
+            value Address describe """
                 Where it ships.
                 Second line.
             """ { street: String }
@@ -459,7 +459,7 @@ test('does texts become the moduledoc and attribute descriptions, and one regist
     const address = template('lib/shop/shop/address.ex');
     expect(address.kind === 'template' && address.write(undefined)).toContain('defmodule Shop.Shop.Address do\n  @moduledoc """\n  Where it ships.\n  Second line.\n  """\n\n  use Ash.Resource');
     const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
-    expect(entries['shop.Item'].missing.map(m => m.what)).toEqual(['check that Item matches its description: Something to sell, #{not} interpolated']);
+    expect(entries['shop.Item'].missing.map(m => m.what)).toEqual([]);
 });
 
 test('entity policies get Ash.can? tests for actors that their actor.is checks decide', async () => {
@@ -578,7 +578,7 @@ test('scenarios become ExUnit tests that seed the given rows, run the action as 
             }
             usecase Batch (item: Item) { step Close(item, "batch") }
 
-            scenario Closes does "A clerk closes an item" {
+            scenario Closes describe "A clerk closes an item" {
                 given {
                     acme = create Customer { name = "Acme" }
                     item = create Item { code = "a", customer = acme, price = 2, count = 1 }

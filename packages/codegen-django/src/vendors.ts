@@ -46,7 +46,7 @@ export function envExample(key: GraphNode, name: string): Step {
     return template('.env.example', existing => {
         if (existing?.split('\n').includes(`${name}=`)) return existing;
         const head = existing ?? '# The settings and secrets of the vendors this app needs. Copy to .env and fill in; never commit values.\n';
-        const about = `# ${key.data.kind} of ${lastOf(key.qn.slice(0, key.qn.lastIndexOf('.')))}${key.data.does ? `: ${String(key.data.does).replace(/\s+/g, ' ').trim()}` : ''}`;
+        const about = `# ${key.data.kind} of ${lastOf(key.qn.slice(0, key.qn.lastIndexOf('.')))}${key.data.describe ? `: ${String(key.data.describe).replace(/\s+/g, ' ').trim()}` : ''}`;
         return `${head.trimEnd()}\n\n${about}\n${name}=\n`;
     });
 }

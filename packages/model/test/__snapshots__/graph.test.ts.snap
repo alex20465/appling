@@ -3081,7 +3081,7 @@ exports[`graph of examples 1`] = `
             },
           },
         ],
-        "does": "A clerk cancels a draft order",
+        "describe": "A clerk cancels a draft order",
         "fixtures": [
           {
             "$type": "Fixture",
@@ -3136,7 +3136,7 @@ exports[`graph of examples 1`] = `
         "checks": [
           "order.status == cancelled",
         ],
-        "does": "A clerk cancels a draft order",
+        "describe": "A clerk cancels a draft order",
         "fixtures": [
           "acme = create crm.Account { name = "Acme" }",
           "order = create Order { reference = "A-1", customer = acme }",

@@ -105,7 +105,7 @@ stateDiagram-v2
   done --> partial: generate --migrate adds a task
 ```
 
-Every element with a [`does`](../language/descriptions.md) text gets one more task, the same in every extension: `implement what <Name> does: <text>` for actions, machines, jobs, queries, externals, their operations and use cases, `check that <Name> matches its description: <text>` for every other kind.
+Every event, action, machine and job with a [`does`](../language/descriptions.md) text gets one more task, the same in every extension: `implement what <Name> does: <text>`. A `describe` text adds no task.
 
 Recording `done` clears `missing`. [`appling generate --migrate`](migrations.md) adds a task to the entry of every element a migration step changed and sets it back to `partial`.
 

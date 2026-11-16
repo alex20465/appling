@@ -175,7 +175,7 @@ export function djangoField(field: GraphNode, context: MapContext, imports: Set<
     const options: string[] = [];
     if (type.optional) options.push('null=True', 'blank=True');
     if (modifiers.includes('unique')) options.push('unique=True');
-    if (typeof field.data.does === 'string') options.push(`help_text=${JSON.stringify(field.data.does)}`);
+    if (typeof field.data.describe === 'string') options.push(`help_text=${JSON.stringify(field.data.describe)}`);
     const fallback = defaultValue(field, context, imports);
     if (fallback !== undefined) options.push(`default=${fallback}`);
     const decl = type.decl ? context.node(type.decl) : undefined;

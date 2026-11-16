@@ -67,7 +67,7 @@ Next to your models, in the workspace folder:
 
 ### View
 
-`.appling/view.json` holds the lens and the option of the inspector's [model canvas](../tools/inspect.md#the-model-canvas), and under `icons` the [Lucide](https://lucide.dev/icons) icon of its nodes: a name per qualified name of a module or a declaration, per kind or for `~`, the seed. The inspector writes it whenever you change the lens or the option, and the [`set_icons`](../tools/ai.md#view-tools) tool of the MCP server writes the icons; it is the only file the inspector writes. It never affects the model. Missing keys take their default.
+`.appling/view.json` holds the entry level and the option of the inspector's [model canvas](../tools/inspect.md#the-model-canvas), and under `icons` the [Lucide](https://lucide.dev/icons) icon of its nodes: a name per qualified name of a module or a declaration, or per kind. The inspector writes it whenever you change the entry level or the option, and the [`set_icons`](../tools/ai.md#view-tools) tool of the MCP server writes the icons; it is the only file the inspector writes. It never affects the model. Missing keys take their default.
 
 ```json
 {
@@ -78,7 +78,7 @@ Next to your models, in the workspace folder:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `lens` | `domain` | The lens the tree starts from: `domain`, `behavior`, `application`, `interfaces` or `access` |
+| `lens` | `domain` | The entry level the pyramid starts from: `domain` (L1), `behavior` (L2), `application` (L3), `interfaces` (L4) or `access` (L5) |
 | `linkEntities` | `false` | Show link entities in the tree |
 
 ### Releases

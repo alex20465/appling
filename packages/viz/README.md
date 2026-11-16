@@ -17,8 +17,9 @@ The root export (also `@appling/viz/protocol`) has the types the visual tools of
 
 | Export | Purpose |
 |---|---|
-| `growTree(index, settings, unfolded, name?, trail?)` | The dependency tree of one lens (`domain`, `behavior`, `application`, `interfaces`, `access`): modules, then the lens's declarations, then what uses each unfolded declaration, the most relevant first; trail nodes show only the children on the trail |
-| `trailOf(index, settings, focus)`, `lensOf(kind)` | The tree state that draws elements one after another, each unfolded in place; the lens of a kind |
+| `growTree(index, settings, unfolded, name?, trail?)` | The pyramid from an entry level (`settings.lens`: `domain` L1, `behavior` L2, `application` L3, `interfaces` L4, `access` L5): modules, then their declarations of the entry level, then for each side of a declaration whose `sideId(id, 'up' \| 'down')` is unfolded the declarations of higher levels that rest on it or of lower levels it rests on; a declaration is drawn once, and what else leads to it lists it in `links`; trail nodes show only the children on the trail |
+| `linked(index, qn, side)`, `peers(index, qn)`, `levelOf(kind)` | The declarations one step up or down from a declaration (for a role, actor or tenant through the pages and interfaces that expose what its policies name); those of its own level it belongs together with; the level of a kind, 1 to 5 |
+| `trailOf(index, settings, focus)`, `lensOf(kind)` | The pyramid state that draws elements one after another, each unfolded in place; the level whose band holds a kind |
 | `modelPulse(before, after, qns)` | Which of these elements a new model added, or changed in itself or in something it holds |
 | `revealPath(index, settings, qn)`, `factOf(index, node)` | The node ids that show a declaration, and the fact a node shows under its name |
 | `cardView(index, view, focus)` | The `action` or `event` view as cards of facts |
@@ -28,7 +29,7 @@ The root export (also `@appling/viz/protocol`) has the types the visual tools of
 
 `@appling/viz/icons` exports `iconOf(name)`, the shapes of a [Lucide](https://lucide.dev/icons) icon by its name, and `ViewSettings.icons` maps nodes to icon names.
 
-`@appling/viz/canvas` exports `ModelCanvas`, the tree that grows from a seed as a circuit board (every node a chip, pins for the level of its layer, traces that never cross) and marks optional `changes` (removed elements drawn ghosted when its index comes from `withRemoved`), sends a wave from the drawn elements a new `index` added or changed and plays soft sounds a button switches off, `FlowCanvas` and `CardCanvas`, each drawing optional bubbles; import `@appling/viz/canvas.css` with them. `react` is a peer dependency.
+`@appling/viz/canvas` exports `ModelCanvas`, the pyramid of five level bands drawn as a circuit board (a rail of yellow L1 to L5 labels picks the entry level, modules frame its declarations, every declaration is one chip with an unfold tab on top and one below that keeps its place when others unfold, and every trace, also to a declaration drawn elsewhere already, runs on a track of its own in the color of the level it starts from, with a dot where it branches) and marks optional `changes` (removed elements drawn ghosted when its index comes from `withRemoved`), sends a wave from the drawn elements a new `index` added or changed and plays soft sounds a button switches off, `FlowCanvas` and `CardCanvas`, each drawing optional bubbles; import `@appling/viz/canvas.css` with them. `react` is a peer dependency.
 
 ## License
 

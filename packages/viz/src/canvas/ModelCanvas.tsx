@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, createElement } from 'react';
-import { layoutTree, type Placed } from '../layout.js';
+import { FRAME, ROW, bandsOf, layoutTree, type Placed } from '../layout.js';
 import { relevanceLevel } from '@appling/model/relevance';
 import type { Bubble } from '../protocol.js';
 import type { ImplementationState } from '@appling/model/implementation';
-import { anchorOf, changeMarks, modelPulse, growTree, IMPLEMENTATION_LABELS, implementationMarks, sessionMarks, kindLabel, LENSES, revealPath, trailOf, type GraphIndex, type Lens, type MarkedChanges, type SessionMark, type TreeNode, type ViewSettings } from '../views.js';
+import { anchorOf, changeMarks, modelPulse, growTree, IMPLEMENTATION_LABELS, implementationMarks, sessionMarks, kindLabel, LENSES, peers, revealPath, sideId, trailOf, type GraphIndex, type Lens, type MarkedChanges, type SessionMark, type Side, type TreeNode, type ViewSettings } from '../views.js';
 import { BubbleView, LooseBubbles, memberOf, type BubbleStep } from './Bubble.js';
 import { iconOf } from '../icons.js';
-import { loads, pathOf, sproutDelays, traces } from './plant.js';
+import { Glyph } from './Glyph.js';
+import { joins, pathOf, sproutDelays, traces } from './plant.js';
 import { play, setSound, soundOn } from './sound.js';
 
 interface CanvasProps {
@@ -31,7 +32,7 @@ interface CanvasProps {
     /** The place of the shown bubble among all, for its back and next buttons. */
     step?: BubbleStep;
     /** More buttons in the bottom bar, such as one that opens a panel over the canvas (`pressed` while it is open). */
-    buttons?: { label: string, pressed?: boolean, run(): void }[];
+    buttons?: { label: string, icon?: string, pressed?: boolean, run(): void }[];
     onSelect(qn: string): void;
     onSettings(settings: ViewSettings): void;
     onOpenFile?(file: string, line: number): void;
@@ -44,9 +45,9 @@ interface Camera {
 }
 
 /** Half the height of the chip of each node type: every node of a type has one size, relevance shows in its outline. */
-const HALF: Record<TreeNode['type'], number> = { seed: 34, module: 26, group: 16, element: 26 };
+const HALF: Record<TreeNode['type'], number> = { seed: 34, module: 26, element: 26 };
 /** A chip from its left to its right, around the node's place where the traces meet it: a cell of `CELL` on the left for the icon, the texts right of it. Inside the slots of `layout.ts`. */
-const WIDE: Record<TreeNode['type'], number> = { seed: 34, module: 116, group: 100, element: 116 };
+const WIDE: Record<TreeNode['type'], number> = { seed: 34, module: 116, element: 116 };
 const CELL = 48;
 
 function radius(node: TreeNode): number {
@@ -68,24 +69,26 @@ interface Ripple {
     kind: 'unfold' | 'fold' | 'touch' | 'added' | 'changed';
 }
 
-/** The level of each layer of the model, as the design names them. */
-const LEVELS: Record<string, number> = { domain: 1, behavior: 2, application: 3, interface: 4, experience: 5 };
+/** The levels from the top of the pyramid down, each with its number. */
+const LEVELS = (Object.keys(LENSES) as Lens[]).map((lens, i) => ({ lens, level: i + 1 })).reverse();
+/** What the level rail takes on the left of the canvas. */
+const RAIL = 72;
+/** How far a module's frame reaches above and below the middle of its band. */
+const FRAME_HALF = 44;
 
 /**
  * The outline of a node: a chip with a cell in the colour of its layer on the left, for its icon, and its texts on the right, the traces meeting it
- * above and below the count. A declaration and a group of them have as many pins on each side as the level of their
- * layer, L1 to L5. The seed is a square chip with pins on three sides. Drawn around the node's place.
+ * above and below the count. The seed is a square without a cell. Drawn around the node's place.
  */
-function outline(node: Pick<TreeNode, 'type' | 'layer'>): string {
+function outline(node: Pick<TreeNode, 'type'>): string {
     const [h, w] = [HALF[node.type], WIDE[node.type]];
     const body = `M ${5 - w} ${-h} H ${w - 5} Q ${w} ${-h} ${w} ${5 - h} V ${h - 5} Q ${w} ${h} ${w - 5} ${h} H ${5 - w} Q ${-w} ${h} ${-w} ${h - 5} V ${5 - h} Q ${-w} ${-h} ${5 - w} ${-h} Z`;
-    if (node.type === 'seed') return `${body} ${[-0.5, 0, 0.5].map(k => `M ${-h} ${k * h} h -7 M ${h} ${k * h} h 7 M ${k * h} ${h} v 7`).join(' ')}`;
-    const pins = node.type === 'module' ? 0 : LEVELS[node.layer ?? ''] ?? 0;
-    return `${body} M ${CELL - w} ${-h} V ${h} ${Array.from({ length: pins }, (_, i) => +(-h + 2 * h * (i + 1) / (pins + 1)).toFixed(1)).map(y => `M ${-w} ${y} h -5 M ${w} ${y} h 5`).join(' ')}`;
+    return node.type === 'seed' ? body : `${body} M ${CELL - w} ${-h} V ${h}`;
 }
 
-/** The bud on top of a node that can unfold. */
-const BUD = 'M 0 2 C -5 -2, -3.5 -8, 0 -11 C 3.5 -8, 5 -2, 0 2 Z';
+/** The tab that swells out of a node's edge to unfold one side of it, drawn on the top edge, and the arrow in it; the arrow turns around once that side is open. */
+const TAB = 'M -22 0 C -13 0, -14 -12, -5 -12 L 5 -12 C 14 -12, 13 0, 22 0';
+const ARROW = 'M -4 -4 L 0 -7.5 L 4 -4';
 
 /**
  * The nodes placed now plus those placed before and no more, moved onto the nearest of their ancestors that stays.
@@ -108,8 +111,8 @@ function folding(before: Placed[], now: Map<string, Placed>): Drawn[] {
 const CHANGE_LETTERS: Record<string, string> = { added: 'A', changed: 'M', removed: 'D' };
 
 /**
- * The model as a tree that grows from a seed: modules first, then the declarations of the lens, then on every
- * unfold what uses the unfolded declaration. Only what you unfold is drawn.
+ * The model as a pyramid of five bands, one per level: the modules frame the declarations of the entry level, and
+ * every declaration unfolds upwards to what rests on it and downwards to what it rests on. Only what you unfold is drawn.
  */
 export function ModelCanvas({ index, name, focus, folded, selected, settings, bubbles = [], changes, sessions, onSession, implementation, buttons = [], onSelect, onSettings, onOpenFile, step }: CanvasProps) {
     const box = useRef<HTMLDivElement>(null);
@@ -127,9 +130,12 @@ export function ModelCanvas({ index, name, focus, folded, selected, settings, bu
     const [follow, setFollow] = useState(start.last ? { id: start.last } : undefined);
 
     const [legend, setLegend] = useState(false);
+    const [options, setOptions] = useState(false);
     const tree = useMemo(() => growTree(index, settings, unfolded, name, trail), [index, settings, unfolded, name, trail]);
-    const placed = useMemo(() => layoutTree(tree), [tree]);
+    const entry = LEVELS.find(l => l.lens === settings.lens)!.level;
+    const placed = useMemo(() => layoutTree(tree, entry), [tree, entry]);
     const byId = useMemo(() => new Map(placed.map(p => [p.node.id, p])), [placed]);
+    const bands = useMemo(() => new Map(bandsOf(placed).map(band => [band.level, band])), [placed, entry]);
     // folded nodes shrink back into the nearest node that stays, then go (same keys, so the transition runs)
     const previous = useRef<Placed[]>([]);
     const [settled, setSettled] = useState(placed);
@@ -145,7 +151,6 @@ export function ModelCanvas({ index, name, focus, folded, selected, settings, bu
     const sprouted = useRef(new Map<string, number>());
     const delays = useMemo(() => sproutDelays(placed, sprouted.current), [placed]);
     useEffect(() => { sprouted.current = delays; }, [delays]);
-    const carried = useMemo(() => loads(placed), [placed]);
     const [ripples, setRipples] = useState<Ripple[]>([]);
     const wave = (waves: Omit<Ripple, 'key'>[]) => setRipples(now => [...now, ...waves.map((w, i) => ({ ...w, key: (now.at(-1)?.key ?? 0) + 1 + i }))].slice(-12));
     const [sound, setSoundOn] = useState(soundOn);
@@ -156,14 +161,16 @@ export function ModelCanvas({ index, name, focus, folded, selected, settings, bu
         const before = known.current;
         known.current = index;
         if (before === index) return;
-        const pulse = modelPulse(before, index, placed.flatMap(p => p.node.qn && p.node.type !== 'group' ? [p.node.qn] : []));
+        const pulse = modelPulse(before, index, placed.flatMap(p => p.node.qn ? [p.node.qn] : []));
         if (!pulse.size) return;
-        wave(placed.flatMap(p => p.node.type !== 'group' && pulse.has(p.node.qn!) ? [{ id: p.node.id, kind: pulse.get(p.node.qn!)! }] : []));
+        wave(placed.flatMap(p => pulse.has(p.node.qn!) ? [{ id: p.node.id, kind: pulse.get(p.node.qn!)! }] : []));
         play([...pulse.values()].includes('added') ? 'added' : 'changed');
     }, [index]);
     const here = byId.get(current) ?? byId.get('~')!;
     const lit = new Set(lineage(here).map(p => p.node.id));
     const chosen = selected && index.declaration(selected);
+    const related = useMemo(() => new Set(chosen && index.nodes.has(chosen) ? peers(index, chosen) : []), [index, chosen]);
+    const counts = useMemo(() => Map.groupBy(index.graph.nodes.filter(n => index.declaration(n.qn) === n.qn), n => n.kind), [index]);
     const marks = useMemo(() => changes ? changeMarks(index, changes, true) : new Map<string, string>(), [index, changes]);
     const claimed = useMemo(() => sessions?.length ? sessionMarks(index, sessions) : new Map<string, SessionMark>(), [index, sessions]);
     const implemented = useMemo(() => implementation ? implementationMarks(index, implementation) : new Map<string, ImplementationState>(), [index, implementation]);
@@ -191,7 +198,7 @@ export function ModelCanvas({ index, name, focus, folded, selected, settings, bu
         const path = revealPath(index, settings, selected);
         if (!path.length) return;
         const next = new Set([...unfolded, ...path]);
-        const found = layoutTree(growTree(index, settings, next, name)).find(p => p.node.type !== 'seed' && p.node.qn === chosen && p.node.id.split('/').length <= 4);
+        const found = layoutTree(growTree(index, settings, next, name), entry).find(p => p.node.type !== 'seed' && p.node.qn === chosen);
         setUnfolded(next);
         if (found) {
             setCurrent(found.node.id);
@@ -213,16 +220,16 @@ export function ModelCanvas({ index, name, focus, folded, selected, settings, bu
         glide.current = requestAnimationFrame(step);
     }, []);
 
-    /** Frames these nodes between the toolbars, never closer than `most`. */
+    /** Frames these nodes between the toolbars and right of the level rail, never closer than `most`. */
     const frame = useCallback((nodes: Placed[], most: number) => {
         const element = box.current;
         if (!element || !nodes.length) return;
         const xs = nodes.flatMap(p => [p.x - WIDE[p.node.type] - 8, p.x + WIDE[p.node.type] + 8]);
         const ys = nodes.flatMap(p => [p.y - radius(p.node) - 16, p.y + radius(p.node) + (p.node.type === 'seed' ? 80 : 24)]);
         const [left, right, top, bottom] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-        const [width, height] = [element.clientWidth, element.clientHeight - 130];
+        const [width, height] = [element.clientWidth - RAIL, element.clientHeight - 80];
         const k = Math.min(most, (width / (right - left)) * 0.94, (height / (bottom - top)) * 0.94);
-        move({ k, x: width / 2 - ((left + right) / 2) * k, y: 85 + height / 2 - ((top + bottom) / 2) * k });
+        move({ k, x: RAIL + width / 2 - ((left + right) / 2) * k, y: 30 + height / 2 - ((top + bottom) / 2) * k });
     }, []);
 
     const fit = useCallback(() => frame(placed, 1.1), [frame, placed]);
@@ -244,7 +251,7 @@ export function ModelCanvas({ index, name, focus, folded, selected, settings, bu
         const group = [node, ...placed.filter(p => p.parent === node)];
         const inside = group.every(p => {
             const [x, y] = [camera.x + p.x * camera.k, camera.y + p.y * camera.k];
-            return x > 20 && x + 200 * camera.k < element.clientWidth - 20 && y > 90 && y < element.clientHeight - 50;
+            return x - 120 * camera.k > RAIL && x + 120 * camera.k < element.clientWidth - 20 && y > 40 && y < element.clientHeight - 50;
         });
         if (!inside) frame(group, camera.k);
     }, [follow, placed]);
@@ -273,26 +280,41 @@ export function ModelCanvas({ index, name, focus, folded, selected, settings, bu
         return { k, x: px - (px - c.x) * (k / c.k), y: py - (py - c.y) * (k / c.k) };
     });
 
-    /** A click unfolds or folds the node; on an element it also selects it, so the inspector shows it. */
+    /** Folds what these ids opened and everything under these nodes. */
+    const fold = (keys: string[], under: string[]) => {
+        const below = (id: string) => under.some(node => id.startsWith(`${node}/`) || id.startsWith(`${node}^`));
+        setUnfolded(new Set([...unfolded].filter(id => !keys.includes(id) && !below(id))));
+        setTrail(new Set([...trail].filter(id => !(keys.includes(id) && id.includes('^')) && !below(id))));
+    };
+
+    /** A click selects the node, so the inspector shows it; on a module it also unfolds or folds its frame. */
     const press = (node: TreeNode) => {
         if (drag.current?.moved) return;
         setCurrent(node.id);
-        if (node.type === 'element') onSelect(node.qn!);
-        if (node.type === 'module') onSelect(node.qn!);
-        if (node.count === 0 || node.cycle) return wave([{ id: node.id, kind: 'touch' }]);
+        onSelect(node.qn!);
+        if (node.type !== 'module' || node.count === 0) return wave([{ id: node.id, kind: 'touch' }]);
         setFollow({ id: node.id });
-        const inside = (id: string) => id === node.id || id.startsWith(`${node.id}/`);
-        const fold = unfolded.has(node.id) && (node.type !== 'element' || current === node.id || !node.children);
-        if (fold) {
-            setUnfolded(new Set([...unfolded].filter(id => !inside(id))));
-            setTrail(new Set([...trail].filter(id => !id.startsWith(`${node.id}/`))));
-        } else setUnfolded(new Set([...unfolded, node.id]));
-        const kind = fold ? 'fold' : 'unfold';
+        if (node.children) fold([node.id], [node.id]);
+        else setUnfolded(new Set([...unfolded, node.id]));
+        const kind = node.children ? 'fold' : 'unfold';
         wave([{ id: node.id, kind }]);
-        if (fold || !node.children) play(kind, { count: node.count, depth: node.id.split('/').length - 1, gesture: true });
+        play(kind, { count: node.count, depth: 1, gesture: true });
     };
 
-    const drawn = new Map(placed.filter(p => p.node.type !== 'seed' && p.node.type !== 'group').reverse().map(p => [p.node.qn!, p]));
+    /** A click on a bud unfolds that side of the declaration, or folds it again. */
+    const grow = (node: TreeNode, side: Side) => {
+        if (drag.current?.moved) return;
+        setCurrent(node.id);
+        setFollow({ id: node.id });
+        const open = node.open?.includes(side);
+        if (open) fold([sideId(node.id, side)], (node.children ?? []).filter(child => child.side === side).map(child => child.id));
+        else setUnfolded(new Set([...unfolded, sideId(node.id, side)]));
+        const kind = open ? 'fold' : 'unfold';
+        wave([{ id: node.id, kind }]);
+        play(kind, { count: node[side] ?? 0, depth: node.id.split('/').length - 1, gesture: true });
+    };
+
+    const drawn = new Map(placed.filter(p => p.node.type !== 'seed').reverse().map(p => [p.node.qn!, p]));
     const anchored = bubbles.map(bubble => ({ bubble, anchor: index.nodes.has(bubble.target) ? anchorOf(index, bubble.target, new Set(drawn.keys())) : undefined }));
 
     /** The shown bubble makes the node it points at the current one; the camera glides only when the node or the room for its bubble below is out of view. */
@@ -309,15 +331,21 @@ export function ModelCanvas({ index, name, focus, folded, selected, settings, bu
         move({ k: zoom, x: element.clientWidth / 2 - p.x * zoom, y: Math.max(140, element.clientHeight * 0.35) - p.y * zoom });
     }, [bubbles[0], anchored[0]?.anchor]);
 
-    const crumbs = lineage(here);
-    const info = here.node.type === 'element'
-        ? `${here.node.qn} · ${kindLabel(here.node.kind!)} · ${relevanceLevel(here.node.relevance)}${here.node.fact ? ` · ${here.node.fact}` : ''}${here.node.cycle ? ' · already on this branch' : here.node.count ? ` · used by ${here.node.count}` : ' · used by nothing'}`
-        : here.node.type === 'module' ? `module ${here.node.qn} · ${relevanceLevel(here.node.relevance)} · ${here.node.fact}`
-        : here.node.type === 'group' ? `${here.node.count} ${here.node.label.toLowerCase()} · ${here.parent?.node.qn ?? ''}`
-        : `${here.node.label} · ${here.node.fact}`;
-
+    /** The side of a level's block in the rail: a square as high as one row on screen, within what stays readable and out of the way. */
+    const block = Math.max(28, Math.min(72, ROW * camera.k));
     const routed = useMemo(() => traces(drawing, radius), [drawing]);
-    const stems = drawing.filter(p => p.parent).map(p => ({ p, curve: routed.get(p.node.id)!, state: p.leaving ? 'leaving' : lit.has(p.node.id) ? 'lit' : '' }));
+    const joined = useMemo(() => joins(placed), [placed]);
+    /** With a drawn declaration selected, what it is connected to stands out and the rest fades: the nodes its traces and joins lead to and those of its own level it belongs together with. */
+    const picked = placed.find(p => p.node.type === 'element' && p.node.qn === chosen);
+    const touches = (a: string, b: string) => !!picked && (a === picked.node.id || b === picked.node.id);
+    const near = new Set(picked ? [
+        picked.node.id,
+        ...placed.filter(p => p.node.type === 'element' && p.parent?.node.type === 'element' && touches(p.node.id, p.parent.node.id)).flatMap(p => [p.node.id, p.parent!.node.id]),
+        ...joined.filter(join => touches(join.from, join.to)).flatMap(join => [join.from, join.to]),
+        ...placed.filter(p => related.has(p.node.qn!)).map(p => p.node.id)
+    ] : []);
+    const shade = (on: boolean) => picked ? on ? 'lit' : 'dim' : '';
+    const stems = drawing.filter(p => routed.has(p.node.id)).map(p => ({ p, curve: routed.get(p.node.id)!, state: p.leaving ? 'leaving' : picked ? shade(touches(p.node.id, p.parent!.node.id)) : lit.has(p.node.id) ? 'lit' : '' }));
 
     return (
         <div
@@ -338,11 +366,13 @@ export function ModelCanvas({ index, name, focus, folded, selected, settings, bu
             }}
             onPointerUp={() => setTimeout(() => { drag.current = undefined; })}
         >
-            <svg className="tree" role="tree" aria-label={`${LENSES[settings.lens].label} tree`}>
+            <svg className="tree" role="tree" aria-label={`Pyramid from ${LENSES[settings.lens].label}`}>
                 <g transform={`translate(${camera.x} ${camera.y}) scale(${camera.k})`}>
-                    <line className="ground" x1={-6000} x2={6000} y1={48} y2={48} />
+                    {LEVELS.map(({ lens, level }) => <rect key={lens} className={`band${level === entry ? ' entry' : ''}`} x={-20000} width={40000} y={bands.get(level)!.top} height={bands.get(level)!.bottom - bands.get(level)!.top} />)}
+                    {joined.map(join => <path key={join.id} className={`branch join layer-${byId.get(join.from)?.node.layer} ${picked ? shade(touches(join.from, join.to)) : join.from === current || join.to === current ? 'lit' : ''}`} style={{ d: `path("${pathOf(join.points)}")`, strokeWidth: picked && touches(join.from, join.to) ? 2.4 : 1.4 } as React.CSSProperties} />)}
+                    {placed.flatMap(p => (p.dots ?? []).map(([x, y], i) => <circle key={`dot ${p.node.id} ${i}`} className={`junction layer-${p.node.layer} ${shade(p === picked)}`} cx={x} cy={y} r={2.6} />))}
                     {stems.map(({ p, curve, state }) => (
-                        <path key={`branch ${p.node.id}`} className={`branch ${state}`} style={{ d: `path("${pathOf(curve)}")`, '--seedling': `path("${pathOf(curve.map(() => curve[0]))}")`, strokeWidth: 1.4 + Math.min(4, Math.log2(1 + (carried.get(p.node.id) ?? 0)) * 0.9) + (state === 'lit' ? 1 : 0), animationDelay: `${delays.get(p.node.id) ?? 0}ms` } as React.CSSProperties} />
+                        <path key={`branch ${p.node.id}`} className={`branch layer-${p.parent!.node.layer} ${state}`} style={{ d: `path("${pathOf(curve)}")`, '--seedling': `path("${pathOf(curve.map(() => curve[0]))}")`, strokeWidth: state === 'lit' ? 2.4 : 1.4, animationDelay: `${delays.get(p.node.id) ?? 0}ms` } as React.CSSProperties} />
                     ))}
                     {stems.filter(s => s.state === 'lit').map(({ p, curve }) => (
                         <path key={`sap ${p.node.id}`} className="sap" pathLength={1} style={{ d: `path("${pathOf(curve)}")` } as React.CSSProperties} />
@@ -351,13 +381,12 @@ export function ModelCanvas({ index, name, focus, folded, selected, settings, bu
                         const at = byId.get(ripple.id);
                         return at && (
                             <g key={ripple.key} className={`ripple ${ripple.kind}${at.node.layer ? ` layer-${at.node.layer}` : ''}`} style={{ transform: `translate(${at.x}px, ${at.y}px)` }}>
-                                <circle r={radius(at.node) + 3} />
-                                <circle r={radius(at.node) + 3} onAnimationEnd={() => setRipples(now => now.filter(r => r.key !== ripple.key))} />
+                                {[0, 1].map(i => <rect key={i} x={-WIDE[at.node.type] - 3} y={-radius(at.node) - 3} width={2 * WIDE[at.node.type] + 6} height={2 * radius(at.node) + 6} rx={7} onAnimationEnd={i ? () => setRipples(now => now.filter(r => r.key !== ripple.key)) : undefined} />)}
                             </g>
                         );
                     })}
-                    {drawing.map(p => p.leaving ? <TreeItem key={p.node.id} placed={p} current={false} chosen={false} unfolded={false} leaving onPress={() => {}} /> : (
-                        <TreeItem key={p.node.id} placed={p} delay={delays.get(p.node.id)} current={p.node.id === current} chosen={!!chosen && p.node.qn === chosen} unfolded={!!p.node.children} icon={settings.icons?.[p.node.type === 'seed' ? '~' : p.node.qn ?? ''] ?? settings.icons?.[p.node.kind ?? '']} mark={p.node.qn && marks.get(p.node.qn) && [marks.get(p.node.qn)].join(' ')} session={p.node.qn ? claimed.get(p.node.qn) : undefined} onSession={onSession} implementation={p.node.qn && p.node.type !== 'group' ? implemented.get(p.node.qn) : undefined} onPress={press} />
+                    {drawing.filter(p => p.node.type !== 'seed').map(p => p.leaving ? <TreeItem key={p.node.id} placed={p} current={false} chosen={false} leaving onPress={() => {}} onGrow={() => {}} /> : (
+                        <TreeItem key={p.node.id} placed={p} delay={delays.get(p.node.id)} current={p.node.id === current} chosen={!!chosen && p.node.qn === chosen} related={related.has(p.node.qn!)} dim={!!picked && p.node.type === 'element' && !near.has(p.node.id)} icon={settings.icons?.[p.node.qn ?? ''] ?? settings.icons?.[p.node.kind ?? '']} mark={p.node.qn && marks.get(p.node.qn) && [marks.get(p.node.qn)].join(' ')} session={p.node.qn ? claimed.get(p.node.qn) : undefined} onSession={onSession} implementation={p.node.qn ? implemented.get(p.node.qn) : undefined} onPress={press} onGrow={grow} />
                     ))}
                 </g>
             </svg>
@@ -372,96 +401,108 @@ export function ModelCanvas({ index, name, focus, folded, selected, settings, bu
             })}
             <LooseBubbles bubbles={anchored.filter(a => !a.anchor).map(a => a.bubble)} step={step} onOpenFile={onOpenFile} />
             {legend && <Legend />}
-            <div className="tree-top">
-                <nav className="lenses" aria-label="Lens">
-                    {(Object.keys(LENSES) as Lens[]).map(key => (
-                        <button key={key} className={key === settings.lens ? 'active' : ''} onClick={() => onSettings({ ...settings, lens: key })}>{LENSES[key].label}</button>
-                    ))}
-                </nav>
-                <ol className="crumbs" aria-label="Path">
-                    {crumbs.map(p => <li key={p.node.id}><button onClick={() => setCurrent(p.node.id)}>{p.node.label}</button></li>)}
-                </ol>
-                <p className="tree-info">{info}</p>
-            </div>
-            <div className="tree-bottom">
-                <span className="hint">click a bud to unfold what uses it · click again to fold · drag to pan · scroll to zoom</span>
-                <label className="tree-option"><input type="checkbox" checked={settings.linkEntities} onChange={e => onSettings({ ...settings, linkEntities: e.target.checked })} />link entities</label>
-                <span className="zoom">{Math.round(camera.k * 100)}%</span>
-                <button onClick={() => zoom(1 / 1.25)} aria-label="Zoom out">−</button>
-                <button onClick={() => zoom(1.25)} aria-label="Zoom in">+</button>
-                {buttons.map(b => <button key={b.label} onClick={b.run} aria-pressed={b.pressed}>{b.label}</button>)}
-                <button onClick={fit}>Fit</button>
-                <button onClick={replant}>Replant</button>
-                <button onClick={() => setLegend(!legend)} aria-pressed={legend}>Legend</button>
-                <button onClick={() => { setSound(!sound); setSoundOn(!sound); if (!sound) play('unfold', { count: 3, gesture: true }); }} aria-pressed={sound} title="Soft sounds when the plant grows, folds or changes">{sound ? 'Sound on' : 'Sound off'}</button>
+            <nav className="levels" aria-label="Entry level">
+                {LEVELS.map(({ lens, level }) => (
+                    <button key={lens} className={lens === settings.lens ? 'active' : ''} style={{ top: camera.y + (bands.get(level)!.top + bands.get(level)!.bottom) / 2 * camera.k - block / 2, width: block, height: block, fontSize: block * 0.36 }} aria-pressed={lens === settings.lens} aria-label={`L${level} ${LENSES[lens].label}: ${LENSES[lens].question}`} onClick={() => onSettings({ ...settings, lens })}>
+                        L{level}
+                        <span role="tooltip"><b>{LENSES[lens].question}</b>{LENSES[lens].label} · {LENSES[lens].kinds.reduce((all, kind) => all + (counts.get(kind)?.length ?? 0), 0)} declarations</span>
+                    </button>
+                ))}
+            </nav>
+            <div className="tree-bottom" role="toolbar" aria-label="Canvas">
+                {options && (
+                    <div className="tree-settings" role="group" aria-label="View settings">
+                        <label><span><b>Link entities</b><small>Also draw the entities that only join two others</small></span><input type="checkbox" checked={settings.linkEntities} onChange={e => onSettings({ ...settings, linkEntities: e.target.checked })} /></label>
+                        <label><span><b>Sound</b><small>Soft sounds when the model unfolds, folds or changes</small></span><input type="checkbox" checked={sound} onChange={() => { setSound(!sound); setSoundOn(!sound); if (!sound) play('unfold', { count: 3, gesture: true }); }} /></label>
+                        <button onClick={replant}><Glyph name="rotate-ccw" size={14} /><span><b>Replant</b><small>Fold everything back to the start</small></span></button>
+                    </div>
+                )}
+                <div className="tool-group">
+                    <button onClick={() => zoom(1 / 1.25)} aria-label="Zoom out" data-tip="Zoom out"><Glyph name="minus" /></button>
+                    <span className="zoom">{Math.round(camera.k * 100)}%</span>
+                    <button onClick={() => zoom(1.25)} aria-label="Zoom in" data-tip="Zoom in"><Glyph name="plus" /></button>
+                    <button onClick={fit} aria-label="Fit" data-tip="Fit everything into view"><Glyph name="maximize" /></button>
+                </div>
+                <div className="tool-group">
+                    {buttons.map(b => <button key={b.label} className="labelled" onClick={b.run} aria-pressed={b.pressed}>{b.icon && <Glyph name={b.icon} />}{b.label}</button>)}
+                    <button onClick={() => setLegend(!legend)} aria-label="Legend" aria-pressed={legend} data-tip="Legend"><Glyph name="info" /></button>
+                    <button onClick={() => setOptions(!options)} aria-label="View settings" aria-pressed={options} data-tip="View settings"><Glyph name="sliders-horizontal" /></button>
+                </div>
             </div>
         </div>
     );
 }
 
-function TreeItem({ placed, delay = 0, current, chosen, unfolded, icon, mark, session, onSession, implementation, leaving, onPress }: { placed: Placed, delay?: number, current: boolean, chosen: boolean, unfolded: boolean, icon?: string, mark?: string, session?: SessionMark, onSession?(session: string): void, implementation?: ImplementationState, leaving?: boolean, onPress(node: TreeNode): void }) {
+function TreeItem({ placed, delay = 0, current, chosen, related, dim, icon, mark, session, onSession, implementation, leaving, onPress, onGrow }: { placed: Placed, delay?: number, current: boolean, chosen: boolean, related?: boolean, dim?: boolean, icon?: string, mark?: string, session?: SessionMark, onSession?(session: string): void, implementation?: ImplementationState, leaving?: boolean, onPress(node: TreeNode): void, onGrow(node: TreeNode, side: Side): void }) {
     const { node, x, y, parent } = placed;
     const r = radius(node);
-    // a new node comes out of the bud of the node it grows from
-    const sprout = { animationDelay: `${delay}ms`, '--from-x': `${parent ? parent.x - x : 0}px`, '--from-y': `${parent ? parent.y - radius(parent.node) - y : 0}px` } as React.CSSProperties;
-    const bud = node.count > 0 && !node.cycle && !unfolded;
-    const classes = ['tree-item', node.type, node.type !== 'seed' && relevanceLevel(node.relevance), node.layer && `layer-${node.layer}`, current && 'current', chosen && 'chosen', node.cycle && 'cycle', unfolded && 'open', implementation && `code-${implementation}`, leaving && 'leaving', mark];
+    // a new node comes out of the bud of the node it unfolds from
+    const from = parent?.node.type === 'element' ? parent.y + (node.side === 'down' ? r : -r) - y : 0;
+    const sprout = { animationDelay: `${delay}ms`, '--from-x': `${parent ? parent.x - x : 0}px`, '--from-y': `${from}px` } as React.CSSProperties;
+    const framed = node.type === 'module' && !!node.children;
+    const open = (side: Side) => !!node.open?.includes(side);
+    const classes = ['tree-item', node.type, relevanceLevel(node.relevance), node.layer && `layer-${node.layer}`, current && 'current', chosen && 'chosen', related && 'related', dim && 'dim', framed && 'open', implementation && `code-${implementation}`, leaving && 'leaving', mark];
     const change = mark?.split(' ').find(c => c in CHANGE_LETTERS);
     const glyph = icon && iconOf(icon);
-    // the icon stands in the middle of the cell, in the seed above the name; a declaration already on its branch has its mark beside it
+    // the icon stands in the middle of the cell
     const w = WIDE[node.type];
-    const cell = node.type === 'seed' ? 0 : CELL / 2 - w;
+    const cell = CELL / 2 - w;
     const text = CELL - w + 10;
-    const [size, glyphX, glyphY] = node.type === 'seed' ? [16, 0, -23] : node.type === 'group' ? [14, node.cycle ? cell - 10 : cell, 0] : [18, cell, node.cycle ? -10 : 0];
+    const half = (placed.width - FRAME) / 2;
     return (
         <g
             className={classes.filter(Boolean).join(' ')}
             style={{ transform: `translate(${x}px, ${y}px)` }}
             role="treeitem"
-            aria-expanded={node.count > 0 ? unfolded : undefined}
-            aria-label={`${node.label}${node.kind && node.type !== 'group' ? `, ${kindLabel(node.kind)}` : ''}${node.fact ? `, ${node.fact}` : ''}`}
+            aria-expanded={node.type === 'module' && node.count > 0 ? framed : undefined}
+            aria-label={`${node.label}${node.type === 'element' ? `, ${kindLabel(node.kind!)}` : ''}${node.fact ? `, ${node.fact}` : ''}`}
             tabIndex={0}
             onClick={() => onPress(node)}
             onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onPress(node); } }}
         >
-            <g className="grow" style={sprout}>
-                <title>{node.qn ?? node.label}{node.type === 'element' ? `\n${kindLabel(node.kind!)}, ${relevanceLevel(node.relevance)}` : ''}{node.fact ? `\n${node.fact}` : ''}{session ? `\nClaimed by ${session.label}` : ''}{implementation ? `\nCode: ${IMPLEMENTATION_LABELS[implementation]}` : ''}</title>
-                {session && <rect className={`session-ring${onSession ? ' jump' : ''}`} x={-w - 5} y={-r - 5} width={2 * w + 10} height={2 * r + 10} rx={9} style={{ stroke: session.color }}
-                    onClick={onSession ? event => { event.stopPropagation(); onSession(session.session); } : undefined}><title>{`Claimed by ${session.label}${onSession ? '. Click to go to the session' : ''}`}</title></rect>}
-                {change && <rect className="change-halo" x={-w - 8} y={-r - 8} width={2 * w + 16} height={2 * r + 16} rx={12} />}
-                <path className="ring" d={outline(node)} />
-                {node.type !== 'seed' && <rect className="cell" x={3 - w} y={3 - r} width={CELL - 6} height={2 * r - 6} rx={3} />}
-                {change && (
-                    <g className="change-badge" transform={`translate(${-w} ${-r})`}>
-                        <circle r={8} />
-                        <text y={3.5}>{CHANGE_LETTERS[change]}</text>
-                    </g>
-                )}
-                {node.type === 'seed' ? (
-                    <>
-                        <text className="seed-name" y={-2}>{clip(node.label, 12)}</text>
-                        <text className="seed-kind" y={12}>{node.fact}</text>
-                    </>
-                ) : (
-                    <>
-                        <text className="count" x={glyph && node.type === 'group' ? cell + 10 : cell} y={glyph && node.type !== 'group' ? 17 : 4}>{node.cycle ? '↺' : ''}</text>
-                        {node.type === 'group'
-                            ? <text className="group-label" x={text} y={4}>{node.label}</text>
-                            : node.type === 'module'
-                            ? <>
-                                <text className="name" x={text} y={-3}>{clip(node.label, 20)}</text>
-                                <text className="fact" x={text} y={12}>{clip(node.fact, 25)}</text>
-                            </>
-                            : <>
-                                <text className="name" x={text} y={-10}>{clip(node.label, 20)}</text>
-                                <text className="kind" x={text} y={2}>{kindLabel(node.kind!)}</text>
-                                {node.fact && <text className="fact" x={text} y={15}>{clip(node.fact, 25)}</text>}
-                            </>}
-                    </>
-                )}
-                {glyph && <g className="icon" transform={`translate(${glyphX - size / 2} ${glyphY - size / 2}) scale(${size / 24})`}>{glyph.map(([tag, attributes], i) => createElement(tag, { key: i, ...attributes }))}</g>}
-                {bud && <path className="bud" d={BUD} transform={`translate(0 ${-r})`} />}
-            </g>
+            {framed ? (
+                <g className="grow" style={sprout}>
+                    <title>{`module ${node.qn}\n${node.fact}`}</title>
+                    <rect className="frame" x={-half} y={-FRAME_HALF} width={2 * half} height={2 * FRAME_HALF} rx={8} />
+                    <text className="frame-name" x={12 - half} y={-FRAME_HALF - 6}>{node.label}</text>
+                </g>
+            ) : (
+                <g className="grow" style={sprout}>
+                    <title>{node.qn}{node.type === 'element' ? `\n${kindLabel(node.kind!)}, ${relevanceLevel(node.relevance)}` : ''}{node.fact ? `\n${node.fact}` : ''}{session ? `\nClaimed by ${session.label}` : ''}{implementation ? `\nCode: ${IMPLEMENTATION_LABELS[implementation]}` : ''}</title>
+                    {session && <rect className={`session-ring${onSession ? ' jump' : ''}`} x={-w - 5} y={-r - 5} width={2 * w + 10} height={2 * r + 10} rx={9} style={{ stroke: session.color }}
+                        onClick={onSession ? event => { event.stopPropagation(); onSession(session.session); } : undefined}><title>{`Claimed by ${session.label}${onSession ? '. Click to go to the session' : ''}`}</title></rect>}
+                    {change && <rect className="change-halo" x={-w - 8} y={-r - 8} width={2 * w + 16} height={2 * r + 16} rx={12} />}
+                    <path className="ring" d={outline(node)} />
+                    <rect className="cell" x={3 - w} y={3 - r} width={CELL - 6} height={2 * r - 6} rx={3} />
+                    {change && (
+                        <g className="change-badge" transform={`translate(${-w} ${-r})`}>
+                            <circle r={8} />
+                            <text y={3.5}>{CHANGE_LETTERS[change]}</text>
+                        </g>
+                    )}
+                    {node.type === 'module'
+                        ? <>
+                            <text className="name" x={text} y={-3}>{clip(node.label, 20)}</text>
+                            <text className="fact" x={text} y={12}>{clip(node.fact, 25)}</text>
+                        </>
+                        : <>
+                            <text className="name" x={text} y={-10}>{clip(node.label, 20)}</text>
+                            <text className="kind" x={text} y={2}>{kindLabel(node.kind!)}</text>
+                            {node.fact && <text className="fact" x={text} y={15}>{clip(node.fact, 25)}</text>}
+                        </>}
+                    {glyph && <g className="icon" transform={`translate(${cell - 9} -9) scale(0.75)`}>{glyph.map(([tag, attributes], i) => createElement(tag, { key: i, ...attributes }))}</g>}
+                    {!leaving && (['up', 'down'] as const).filter(side => node[side]).map(side => (
+                        <g key={side} className={`bud-button${open(side) ? ' open' : ''}`} transform={`translate(0 ${side === 'up' ? -r : r})${side === 'down' ? ' rotate(180)' : ''}`} role="button" tabIndex={0}
+                            aria-label={`${open(side) ? 'Fold' : 'Unfold'} the ${node[side]} ${side === 'up' ? 'above' : 'below'} ${node.label}`}
+                            onClick={event => { event.stopPropagation(); onGrow(node, side); }}
+                            onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); onGrow(node, side); } }}>
+                            <title>{side === 'up' ? `${node[side]} above: what rests on it` : `${node[side]} below: what it rests on`}</title>
+                            <path className="bud-disc" d={TAB} />
+                            <path className="bud-arrow" d={ARROW} />
+                        </g>
+                    ))}
+                </g>
+            )}
         </g>
     );
 }
@@ -482,14 +523,16 @@ function Legend() {
                 {badge('changed', 'changed')}
                 {badge('removed', 'removed')}
             </ul>
-            <h4>Layers</h4>
+            <h4>Levels</h4>
             <ul>
-                {Object.entries(LEVELS).map(([layer, level]) => <li key={layer} className={`layer-${layer}`}><svg width="18" height="18" viewBox="-9 -9 18 18"><rect className="legend-ring layer" x={-6} y={-6} width={12} height={12} rx={2} /></svg>L{level} {layer}: {level} {level > 1 ? 'pins' : 'pin'} on each side of the chip</li>)}
+                {LEVELS.map(({ lens, level }) => <li key={lens}><b>L{level}</b> {LENSES[lens].label}: {LENSES[lens].question}</li>)}
             </ul>
-            <h4>Tree</h4>
+            <h4>Pyramid</h4>
             <ul>
-                <li><svg width="18" height="18" viewBox="-9 -9 18 18"><circle className="legend-ring" cy={3} r={5} /><path className="bud" d={BUD} transform="translate(0 -2) scale(0.6)" /></svg>bud: click to unfold what uses it</li>
-                <li><span className="legend-glyph">↺</span>already on this branch</li>
+                <li><svg width="18" height="18" viewBox="-9 -9 18 18"><g className="bud-button" transform="translate(0 5) scale(0.6)"><path className="bud-disc" d={TAB} /><path className="bud-arrow" d={ARROW} /></g></svg>arrow on top: unfold what rests on it, on higher levels</li>
+                <li><svg width="18" height="18" viewBox="-9 -9 18 18"><g className="bud-button" transform="translate(0 -5) scale(0.6) rotate(180)"><path className="bud-disc" d={TAB} /><path className="bud-arrow" d={ARROW} /></g></svg>arrow below: unfold what it rests on, on lower levels</li>
+                <li><span className="legend-glyph">✥</span>drag to pan, scroll to zoom</li>
+                <li><span className="legend-glyph">┄</span>dashed outline: belongs to the selected one on its own level</li>
                 <li><svg width="18" height="18" viewBox="-9 -9 18 18"><circle className="legend-ring session" r={7} /></svg>ring in a session's colour: claimed by that agent session</li>
                 <li><span className="legend-glyph">▭</span>bolder outline: more relevant; faded: peripheral</li>
             </ul>
@@ -505,7 +548,7 @@ function initial(index: GraphIndex, settings: ViewSettings, focus?: string[], fo
     }
     const open = new Set(['~']);
     const modules = growTree(index, settings, open).children ?? [];
-    if (modules.length === 1) open.add(modules[0].id);
+    if (modules.length <= 3) for (const module of modules) open.add(module.id);
     return { unfolded: open, trail: new Set() };
 }
 

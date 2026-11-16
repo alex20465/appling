@@ -40,7 +40,7 @@ A project without `appling.config.json` is not set up yet: the Projects view mar
 
 ## The inspector tab
 
-Each project's tab shows the [inspector](inspect.md)'s canvas and task board; its floating inspector is the **Inspector** view in the sidebar. The tab keeps its state while it is in the background. Everything that opens a file opens it in VS Code: where it is already open, its tab comes to the front at the element; otherwise it opens in the editor group beside the tab. Selecting an element on the canvas changes nothing in your editors: you open its source or its code when you ask for it. Nothing in the tab or the panels changes the model; you edit the text in VS Code's editors or through your agent.
+Each project's tab shows the [inspector](inspect.md)'s canvas and task board; its inspector is the **Inspector** view in the sidebar. The tab keeps its state while it is in the background. Everything that opens a file opens it in VS Code: where it is already open, its tab comes to the front at the element; otherwise it opens in the editor group beside the tab. Selecting an element on the canvas changes nothing in your editors: you open its source or its code when you ask for it. Nothing in the tab or the panels changes the model; you edit the text in VS Code's editors or through your agent.
 
 ### The panels
 

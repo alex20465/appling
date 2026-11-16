@@ -43,7 +43,7 @@ const canonical = print(document.parseResult.value as Model);
 | `projectionSourceEntity(projection)` | The entity behind a projection, also when its source is a query |
 | `effectEntity(node)` | The entity of the action or machine an effect belongs to |
 | `ApplingScopeProvider` | The scope provider; `lookup(container, type, name)` resolves a dotted name as a reference would, `lookupElement(container, name)` an element of any kind |
-| `doesNames(node)`, `doesTargets(node, services)` | The `@Name` occurrences of a node's [`does`](../language/descriptions.md) text with their document offsets, and with the element each names |
+| `doesNames(node)`, `doesTargets(node, services)` | The `@Name` occurrences of a node's [`describe` and `does`](../language/descriptions.md) texts with the text they stand in (`property`) and their document offsets, and with the element each names |
 | `textBlockValue(raw)`, `printTextBlock(raw, indent, outer)` | The value of a `"""` text block, and its canonical spelling |
 | `ExpressionTyper` | Types expressions: `checkModel(model)` fills `types`, `targets` (the element each name stands for) and `problems` (`Problem[]`); `typeOf(expr)` types one expression in its position, `namesAt(effect)` lists the names an effect sees |
 | `show(type)`, `typeOfRef(ref)` | The display name of a `Type`, such as `Money?`, and the `Type` a `TypeRef` declares |
@@ -168,6 +168,7 @@ Planning and running:
 |---|---|
 | `plan(graph, extension, name, options)` | The ordered steps and one registry entry per node (`Plan`) |
 | `doesTask(node)` | The registry task of a node's [`does`](../language/descriptions.md) text, which `plan` adds to its entry |
+| `aboutOf(node)` | The documentation of a node in generated code: its `describe` text, then its `does` text |
 | `describe(step)` | A one line description of a step, as `--plan` prints it |
 | `coverage(entries)` | The registry entries per node kind: generated, partial, todo, the number of tasks (generator gaps) and of tasks left to code, plus a total (`Coverage`); an entry whose only tasks are left to code counts as generated |
 | `coverageTable(coverage)` | That coverage as the Markdown table `--plan` prints, the total with the generated share |
@@ -286,17 +287,19 @@ The root export (also `@appling/viz/protocol`) has the types the [visual tools](
 | Export | Purpose |
 |---|---|
 | `GraphIndex` | The graph with children, parents and lineage by qualified name, and `relevanceOf(qn)`, the relevance of the declaration an element belongs to |
-| `growTree(index, settings, unfolded, name?, trail?)` | The dependency tree of `settings.lens` as a `TreeNode`: the seed holds the modules, a module the declarations of the lens, a declaration the declarations that use it, grouped by kind when there is more than one; only the node ids in `unfolded` have children, the most relevant first; a node id in `trail` shows only its children in `unfolded` or `trail` |
-| `trailOf(index, settings, focus)`, `lensOf(kind)` | The `unfolded` and `trail` sets that draw the focused elements one after another, each unfolded in place, with the node id of each; the lens that starts from a kind |
+| `growTree(index, settings, unfolded, name?, trail?)` | The pyramid from the entry level `settings.lens` as a `TreeNode`: the seed holds the modules, a module its declarations of the entry level, a declaration the declarations of higher levels that rest on it (`side: 'up'`) and those of lower levels it rests on (`side: 'down'`), each with its `level`; the seed and a module unfold with their id in `unfolded`, a side of a declaration with its `sideId`; away from the entry level a branch keeps its side; a declaration is drawn once, and a node whose unfolded side also leads to one drawn before lists it in `links` (`open` lists the unfolded sides); a node id in `trail` shows only its children in `unfolded` or `trail` |
+| `sideId(id, side)`, `Side` | The id in `unfolded` that opens one side of a declaration: `<id>^up` or `<id>^down` |
+| `linked(index, qn, side)`, `peers(index, qn)`, `levelOf(kind)` | The declarations one step up or down from a declaration, a role, actor or tenant leading through the pages and interfaces that expose what its policies name; the declarations of its own level it belongs together with; the level of a kind, 1 to 5, none for scenarios and migrations |
+| `trailOf(index, settings, focus)`, `lensOf(kind)` | The `unfolded` and `trail` sets that draw the focused elements one after another, each unfolded in place, with the node id of each; the level whose band holds a kind |
 | `changeMarks(index, changes, modules?)`, `MarkedChanges`, `ChangeMark` | The declarations that added, changed and removed elements belong to, each `added` or `removed` when the declaration itself is new or gone, else `changed`; removed elements count only when the index has them (see `withRemoved`); with `modules`, the modules that hold a marked declaration are `changed` too |
 | `sessionMarks(index, marks)`, `SessionMark` | The declarations that the elements claimed or highlighted by agent sessions belong to, each with the first session's mark |
 | `revealPath(index, settings, qn)` | The node ids to unfold so that an element's declaration shows in its module |
 | `factOf(index, node)` | The short fact a tree node shows under its name, such as `on Order · draft, placed → cancelled` |
-| `LENSES`, `Lens` | The lenses (`domain`, `behavior`, `application`, `interfaces`, `access`) with their label and the kinds the tree starts from |
+| `LENSES`, `Lens` | The levels L1 to L5 (`domain`, `behavior`, `application`, `interfaces`, `access`) with their label, their question and their kinds |
 | `cardView(index, view, focus)` | The `action` or `event` view of the focused elements as `Card`s: a title, a tag and sections of rows, each row selecting an element |
 | `flowView(index, view, focus)` | The `machine` or `usecase` view as a `Flow`: nodes for the states or steps, edges for the transitions or the step order |
 | `viewFor(kind)`, `VIEW_KINDS`, `ViewKind`, `anchorOf(index, qn, drawn)` | The view that draws an element kind; the innermost of an element and its ancestors that a view draws |
 | `relations`, `entityActions`, `actionSummary`, `memberText`, `kindLabel`, `elementAt` | The relations and summaries the inspector shows |
-| `ViewSettings`, `DEFAULT_VIEW` | The canvas options, the lens included |
+| `ViewSettings`, `DEFAULT_VIEW` | The canvas options, the entry level (`lens`) included |
 
-`@appling/viz/canvas` exports the SVG tree `ModelCanvas` (one lens at a time, unfolded node by node, circles sized by relevance, only trails when given a `focus`), the SVG flowchart `FlowCanvas` and the card grid `CardCanvas`, each with optional `bubbles`; `ModelCanvas` also marks the declarations and modules of optional `changes` (any `MarkedChanges`, such as a `GraphDiff`), draws removed ones ghosted and rings those of optional `sessions` (`SessionMark[]`) in the session's colour; import `@appling/viz/canvas.css` with them; it takes its colours from the `--appling-*` theme tokens. They need `react` as a peer dependency.
+`@appling/viz/canvas` exports the SVG pyramid `ModelCanvas` (five level bands from one entry level, unfolded side by side of each declaration, only trails when given a `focus`), the SVG flowchart `FlowCanvas` and the card grid `CardCanvas`, each with optional `bubbles`; `ModelCanvas` also marks the declarations and modules of optional `changes` (any `MarkedChanges`, such as a `GraphDiff`), draws removed ones ghosted and rings those of optional `sessions` (`SessionMark[]`) in the session's colour; import `@appling/viz/canvas.css` with them; it takes its colours from the `--appling-*` theme tokens. They need `react` as a peer dependency.

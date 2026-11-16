@@ -330,7 +330,7 @@ const SCENARIOS = `module s {
   machine Flow on Basket.phase {
     transition draft -> placed via Place
   }
-  scenario PlaceBasket does "A basket with an item is placed" {
+  scenario PlaceBasket describe "A basket with an item is placed" {
     given {
       ada = create Customer { name = "Ada" }
       ink = create Item { sku = "ink", price = 2.5 }

@@ -61,12 +61,12 @@ export class ApplingValidator {
         }
     }
 
-    /** `@Name` in a `does` text must name a visible element, within the layer rules of a reference. */
+    /** `@Name` in a `describe` or `does` text must name a visible element, within the layer rules of a reference. */
     checkDoesNames(model: Model, accept: ValidationAcceptor): void {
         for (const node of AstUtils.streamAst(model)) {
-            for (const { name, target } of doesTargets(node, this.services)) {
+            for (const { name, target, property } of doesTargets(node, this.services)) {
                 if (!target) {
-                    accept('error', `Unknown element "@${name}" in does.`, { node, property: 'does' });
+                    accept('error', `Unknown element "@${name}" in ${property}.`, { node, property });
                     continue;
                 }
                 const from = memberOf(node);
@@ -74,7 +74,7 @@ export class ApplingValidator {
                 if (!from || !to || isModule(from) || !LAYER_OF[from.$type] || isAllowed(from, to)) continue;
                 accept('error',
                     `${LAYER_OF[from.$type]} element ${from.$type} may not reference ${LAYER_OF[to.$type]} element ${to.$type} "@${name}".`,
-                    { node, property: 'does' });
+                    { node, property });
             }
         }
     }

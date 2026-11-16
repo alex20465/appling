@@ -977,7 +977,7 @@ function covered(context: MapContext): Set<string> {
 
 /** A scenario inside `GraphNode.data`. */
 interface ScenarioData {
-    does?: string;
+    describe?: string;
     fixtures?: { name?: string, entity: string, assignments?: Assignment[] }[];
     actor?: { persona: string, assignments?: Assignment[] };
     checks?: { $type: 'Expectation' | 'Emitted', condition?: ExprData, event?: string, assignments?: Assignment[] }[];
@@ -1131,7 +1131,7 @@ function scenarioTest(scenario: GraphNode, name: string, context: MapContext): {
         const reads = body.filter(l => !declared.test(l) && new RegExp(`\\b${binding}\\b`).test(l));
         if (!reads.length) body.forEach((l, i) => { if (declared.test(l)) body[i] = l.replace(new RegExp(`\\b${binding}\\b`), `_${binding}`); });
     }
-    const doc = data.does ? `/// ${data.does}` : `/// The scenario ${scenario.qn}.`;
+    const doc = data.describe ? `/// ${data.describe}` : `/// The scenario ${scenario.qn}.`;
     return { code: [doc, '#[test]', `fn ${name}() {`, ...body.map(l => `    ${l}`), '}'].join('\n'), local };
 }
 

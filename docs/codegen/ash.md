@@ -225,7 +225,7 @@ config :shop, Shop.Sales.Clerk, secret_key: System.fetch_env!("CLERK_SECRET_KEY"
 
 A missing setting is `nil` (`false` for a `Bool`). A `secret` is required: `System.fetch_env!` stops the app at startup with `could not fetch environment variable "CLERK_SECRET_KEY" because it is not set`. `runtime.exs` runs on every start, `mix test` included, so fill `.env` from `.env.example` and load it into the environment. While generating, Appling runs its own `mix ash.codegen` with a placeholder for each secret.
 
-`.env.example` lists every key with an empty value, under a comment with its kind, its external and its `does` text. The setup on the vendor's side becomes [registry](registry.md) tasks: for every endpoint of an `interface webhook ... from <External>` one to register it at the vendor and one to receive it and verify its signature, and for `auth <scheme> from <External>` one to let the vendor issue the tokens, naming the model's roles for the role claim.
+`.env.example` lists every key with an empty value, under a comment with its kind, its external and its `describe` text. The setup on the vendor's side becomes [registry](registry.md) tasks: for every endpoint of an `interface webhook ... from <External>` one to register it at the vendor and one to receive it and verify its signature, and for `auth <scheme> from <External>` one to let the vendor issue the tokens, naming the model's roles for the role claim.
 
 ### Tests
 
@@ -468,7 +468,7 @@ Ash field policies guard reads only: a field policy that also names `create`, `u
 
 ## Descriptions
 
-A [`does`](../language/descriptions.md) text goes into the generated code as documentation:
+A [`describe`](../language/descriptions.md) text goes into the generated code as documentation:
 
 | Element | Becomes |
 |---|---|
@@ -476,7 +476,7 @@ A [`does`](../language/descriptions.md) text goes into the generated code as doc
 | Value type | `@moduledoc` of the embedded resource |
 | Entity field | `description` of the attribute |
 
-Each text is also a [registry task](registry.md#status), which carries it for every other element.
+A `does` text of an event, action, machine or job is a [registry task](registry.md#status); a `describe` text is not.
 
 ## What becomes a task
 

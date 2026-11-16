@@ -45,7 +45,7 @@ flowchart BT
 | `@appling/ai` | The workspace `Project`, the tool definitions of the MCP server, agent sessions and the registry skill |
 | `@appling/cli` | `check`, `fmt`, `graph`, `release`, `generate`, `inspect` |
 | `@appling/viz` | The pure view logic (tree, search, flowcharts, cards) and the SVG canvases |
-| `@appling/inspect` | The read only inspector next to an AI coding tool: a server per repo (snapshot, live changes, review, sessions, `/mcp`) and a React client with the canvases of `@appling/viz`, the floating inspector and the task board; run by the VS Code extension and `appling inspect`, also built as the browser demo of the landing site |
+| `@appling/inspect` | The read only inspector next to an AI coding tool: a server per repo (snapshot, live changes, review, sessions, `/mcp`) and a React client with the canvases of `@appling/viz`, the inspector sidebar and the task board; run by the VS Code extension and `appling inspect`, also built as the browser demo of the landing site |
 | `@appling/landing` | The Astro site, which also renders `docs/` |
 
 Extensions read only `GraphNode.data`, never the Langium AST. That keeps third party extensions independent of the grammar's internals.
@@ -77,7 +77,7 @@ sequenceDiagram
 
 **Expressions.** A CEL subset parsed into plain AST nodes. Names inside expressions are strings, not cross references: the `ExpressionTyper` resolves them per position, types them and records the element each name stands for. The validator reports its problems, the graph turns the targets into `uses` edges, and rename follows them.
 
-**Edit operations.** `applyEdit` finds the target by qualified name and splices text. Rename and retype touch only tokens; add, remove and set reprint the touched element canonically with `printRange`. The result is rebuilt and rejected if it adds an error. Rename must find every place that names an element, including names that are not references (export lists, message keys, transition states, `@Name` in `does` texts).
+**Edit operations.** `applyEdit` finds the target by qualified name and splices text. Rename and retype touch only tokens; add, remove and set reprint the touched element canonically with `printRange`. The result is rebuilt and rejected if it adds an error. Rename must find every place that names an element, including names that are not references (export lists, message keys, transition states, `@Name` in `describe` and `does` texts).
 
 **Releases.** `appling release` writes the graph to `.appling/releases/<version>.json`. Later edits to released domain elements append `rename`, `retype` or `remove` steps to the module's `since_v<version>` block, which code generation carries into generated projects.
 

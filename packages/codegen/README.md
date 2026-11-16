@@ -67,7 +67,7 @@ Third party extensions are named `appling-codegen-*` or `@scope/appling-codegen-
 | `steps`, `files` | What produced the element |
 | `missing` | Open tasks with their model context: the element's properties and related elements |
 
-Every graph node has an entry, so the registry is also the coverage report and the AI work queue. An element with a `does` text gets one task for it in every extension (`doesTask(node)`): implement it on actions, machines, jobs, queries, externals, operations and use cases, check it on everything else.
+Every graph node has an entry, so the registry is also the coverage report and the AI work queue. An event, action, machine or job with a `does` text gets one task for it in every extension (`doesTask(node)`): `implement what <Name> does`. A `describe` text is documentation only (`aboutOf(node)`: the `describe` text, then the `does` text).
 
 ## Code references and the implementation state
 

@@ -6,7 +6,7 @@ entry Model:
 // Cross cutting
 
 Module:
-    'module' name=Ident relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{'
+    'module' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{'
         (exports+=Export | members+=Member)*
     '}';
 
@@ -24,20 +24,21 @@ Member:
 
 // The condition says when an actor counts as the role; it reads only actor, tenant and now.
 Role:
-    'role' name=Ident relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? ('{' condition=Expr '}')?;
+    'role' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('{' condition=Expr '}')?;
 
 // `is` binds the actor to the entity that stores it, such as the user.
 Actor:
     'actor' kind=('human' | 'system' | 'service') name=Ident ('is' entity=[Entity:QualifiedName])?
-    ('roles' roles+=[Role:QualifiedName] (',' roles+=[Role:QualifiedName])*)? relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))?
+    ('roles' roles+=[Role:QualifiedName] (',' roles+=[Role:QualifiedName])*)? relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))?
     ('{' fields+=Field* '}')?;
 
 Tenant:
-    'tenant' name=Ident 'on' entity=[Entity:QualifiedName] relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))?;
+    'tenant' name=Ident 'on' entity=[Entity:QualifiedName] relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))?;
 
-// `('does' does=(TEXT_BLOCK | STRING))?` describes in plain text what a named element is or does; `@Name`
-// inside names an element (appling-does.ts). It follows the head (name, signature, relevance) and comes
-// before the body, at the end without one. Kept inline in every rule so `set` finds its keyword.
+// `('describe' describe=(TEXT_BLOCK | STRING))?` says in plain text what a named element is and is for; the
+// L2 declarations (event, action, machine, job) also take `('does' does=(TEXT_BLOCK | STRING))?`, the work their
+// code has to do. `@Name` inside names an element (appling-does.ts). Both follow the head (name, signature,
+// relevance) and come before the body, at the end without one. Kept inline in every rule so `set` finds its keyword.
 
 // How much a declaration matters to what the application does; a module's level applies to its members.
 Relevance returns string:
@@ -46,22 +47,22 @@ Relevance returns string:
 // L1 Domain
 
 Enum:
-    'enum' name=Ident relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{' literals+=EnumLiteral* '}';
+    'enum' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{' literals+=EnumLiteral* '}';
 
 EnumLiteral:
-    name=Ident ('does' does=(TEXT_BLOCK | STRING))?;
+    name=Ident ('describe' describe=(TEXT_BLOCK | STRING))?;
 
 ValueType:
-    'value' name=Ident relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{' fields+=Field* '}';
+    'value' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{' fields+=Field* '}';
 
 Entity:
-    'entity' link?='link'? name=Ident relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{'
+    'entity' link?='link'? name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{'
         (fields+=Field | invariants+=Invariant | policies+=Policy)*
     '}';
 
 Field:
     name=Ident ':' type=TypeRef modifiers+=FieldModifier*
-    ('default' default=Expr)? ('=' derived=Expr)? ('does' does=(TEXT_BLOCK | STRING))?;
+    ('default' default=Expr)? ('=' derived=Expr)? ('describe' describe=(TEXT_BLOCK | STRING))?;
 
 FieldModifier returns string:
     'unique' | 'state' | 'owned';
@@ -88,10 +89,10 @@ Operation returns string:
 // L2 Behavior
 
 Event:
-    'event' name=Ident relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{' fields+=Field* '}';
+    'event' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('does' does=(TEXT_BLOCK | STRING))? '{' fields+=Field* '}';
 
 Action:
-    'action' name=Ident ('on' entity=[Entity:QualifiedName])? relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{'
+    'action' name=Ident ('on' entity=[Entity:QualifiedName])? relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('does' does=(TEXT_BLOCK | STRING))? '{'
         ('input' '{' inputs+=Param* '}')?
         preconditions+=Precondition*
         ('effect' '{' effects+=Effect* '}')?
@@ -101,10 +102,10 @@ Action:
     '}';
 
 Param:
-    name=Ident ':' type=TypeRef ('does' does=(TEXT_BLOCK | STRING))?;
+    name=Ident ':' type=TypeRef ('describe' describe=(TEXT_BLOCK | STRING))?;
 
 ErrorDecl:
-    name=Ident ('does' does=(TEXT_BLOCK | STRING))?;
+    name=Ident ('describe' describe=(TEXT_BLOCK | STRING))?;
 
 Precondition:
     'requires' '{' condition=Expr '}' ('else' error=[ErrorDecl:Ident])?;
@@ -138,7 +139,7 @@ DeleteEffect:
     'delete' (self?='self' | target=Expr);
 
 Machine:
-    'machine' name=Ident 'on' field=[Field:QualifiedName] relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{' transitions+=Transition* '}';
+    'machine' name=Ident 'on' field=[Field:QualifiedName] relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('does' does=(TEXT_BLOCK | STRING))? '{' transitions+=Transition* '}';
 
 Transition:
     'transition' from+=Ident (',' from+=Ident)* '->' to=Ident
@@ -148,12 +149,12 @@ Transition:
 
 Job:
     'job' name=Ident ('every' schedule=STRING | 'on' event=[Event:QualifiedName])
-    'run' action=[Action:QualifiedName] ('where' '{' filter=Expr '}')? relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))?;
+    'run' action=[Action:QualifiedName] ('where' '{' filter=Expr '}')? relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('does' does=(TEXT_BLOCK | STRING))?;
 
 // L3 Application
 
 Query:
-    'query' name=Ident 'from' entity=[Entity:QualifiedName] relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{'
+    'query' name=Ident 'from' entity=[Entity:QualifiedName] relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{'
         ('input' '{' inputs+=Param* '}')?
         ('where' '{' filter=Expr '}')?
         ('sort' sorts+=Sort (',' sorts+=Sort)*)?
@@ -165,30 +166,30 @@ Sort:
     field=[Field:Ident] direction=('asc' | 'desc')?;
 
 Projection:
-    'projection' name=Ident 'from' source=[ProjectionSource:QualifiedName] relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{'
+    'projection' name=Ident 'from' source=[ProjectionSource:QualifiedName] relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{'
         fields+=ProjectionField*
     '}';
 
 type ProjectionSource = Entity | Query;
 
 ProjectionField:
-    name=Ident ('=' value=Expr)? ('does' does=(TEXT_BLOCK | STRING))?;
+    name=Ident ('=' value=Expr)? ('describe' describe=(TEXT_BLOCK | STRING))?;
 
 External:
-    'external' name=Ident relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{' (operations+=ExternalOperation | keys+=ExternalKey)* '}';
+    'external' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{' (operations+=ExternalOperation | keys+=ExternalKey)* '}';
 
 // What the vendor behind an external needs: a typed setting or secret, never its value.
 ExternalKey:
-    kind=('setting' | 'secret') name=Ident ':' type=TypeRef ('does' does=(TEXT_BLOCK | STRING))?;
+    kind=('setting' | 'secret') name=Ident ':' type=TypeRef ('describe' describe=(TEXT_BLOCK | STRING))?;
 
 ExternalOperation:
     'op' name=Ident '(' (params+=Param (',' params+=Param)*)? ')'
     ('returns' returns=TypeRef)?
     ('errors' errors+=ErrorDecl (',' errors+=ErrorDecl)*)?
-    ('does' does=(TEXT_BLOCK | STRING))?;
+    ('describe' describe=(TEXT_BLOCK | STRING))?;
 
 UseCase:
-    'usecase' name=Ident ('(' (params+=Param (',' params+=Param)*)? ')')? relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{'
+    'usecase' name=Ident ('(' (params+=Param (',' params+=Param)*)? ')')? relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{'
         (steps+=Step | policies+=Policy)*
     '}';
 
@@ -212,7 +213,7 @@ type Callable = Action | Query | UseCase | ExternalOperation;
 // L4 Interfaces
 
 Interface:
-    'interface' protocol=Ident name=Ident ('from' source=[External:QualifiedName])? relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{'
+    'interface' protocol=Ident name=Ident ('from' source=[External:QualifiedName])? relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{'
         ('auth' auth=Ident ('from' authBy=[External:QualifiedName])?)?
         ('limit' rateLimit=NUMBER 'per' rateUnit=('second' | 'minute' | 'hour'))?
         ('cors' origins+=STRING (',' origins+=STRING)*)?
@@ -228,7 +229,7 @@ type Exposable = Query | Action | UseCase;
 // L5 Experience
 
 Page:
-    'page' name=Ident 'route' route=STRING relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{' components+=Component* '}';
+    'page' name=Ident 'route' route=STRING relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{' components+=Component* '}';
 
 Component:
     ListView | DetailView | FormView;
@@ -249,17 +250,17 @@ FormView:
 type Submittable = Action | UseCase;
 
 Navigation:
-    'navigation' name=Ident relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{' items+=NavItem* '}';
+    'navigation' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{' items+=NavItem* '}';
 
 NavItem:
     label=STRING '->' page=[Page:QualifiedName] ('{' children+=NavItem* '}')?;
 
 Flow:
-    'flow' name=Ident 'for' usecase=[UseCase:QualifiedName] relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))?
+    'flow' name=Ident 'for' usecase=[UseCase:QualifiedName] relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))?
     '{' pages+=[Page:QualifiedName] ('->' pages+=[Page:QualifiedName])* '}';
 
 Messages:
-    'messages' name=Ident relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{' entries+=Message* '}';
+    'messages' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{' entries+=Message* '}';
 
 Message:
     key=QualifiedName '=' text=STRING;
@@ -267,7 +268,7 @@ Message:
 // Evolution
 
 Migration:
-    'migration' name=Ident ('does' does=(TEXT_BLOCK | STRING))? '{' steps+=MigrationStep* '}';
+    'migration' name=Ident ('describe' describe=(TEXT_BLOCK | STRING))? '{' steps+=MigrationStep* '}';
 
 // Targets are paths inside the migration's module, as they were before the step.
 MigrationStep:
@@ -279,7 +280,7 @@ MigrationStep:
 // and every target generates as a test. Given rows, as an actor, when one call, then what holds.
 
 Scenario:
-    'scenario' name=Ident relevance=Relevance? ('does' does=(TEXT_BLOCK | STRING))? '{'
+    'scenario' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{'
         ('given' '{' fixtures+=Fixture* '}')?
         actor=ScenarioActor?
         'when' call=Call
@@ -356,7 +357,7 @@ Ident returns string:
     | 'page' | 'timeout' | 'sort' | 'when' | 'create' | 'read' | 'update' | 'delete' | 'per'
     | 'flow' | 'actor' | 'tenant' | 'set' | 'op' | 'human' | 'system' | 'service' | 'asc'
     | 'desc' | 'remove' | 'rename' | 'retype' | 'roles' | 'second' | 'minute' | 'hour' | 'link'
-    | 'core' | 'supporting' | 'peripheral' | 'default' | 'limit' | 'messages' | 'migration' | 'is' | 'does'
+    | 'core' | 'supporting' | 'peripheral' | 'default' | 'limit' | 'messages' | 'migration' | 'is' | 'does' | 'describe'
     | 'setting' | 'secret' | 'scenario' | 'given' | 'then' | 'fails' | 'refused';
 
 hidden terminal WS: /\s+/;

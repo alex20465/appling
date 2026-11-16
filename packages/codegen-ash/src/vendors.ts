@@ -31,7 +31,7 @@ export function externalKeySteps(key: GraphNode, context: MapContext): Step[] {
             kind: 'template', phase: 2, file: '.env.example', write: existing => {
                 if (existing?.split('\n').includes(`${name}=`)) return existing;
                 const head = existing ?? '# The settings and secrets of the vendors this app needs. Copy to .env and fill in; never commit values.\n';
-                const about = `# ${key.data.kind} of ${externalOf(key)}${key.data.does ? `: ${String(key.data.does).replace(/\s+/g, ' ').trim()}` : ''}`;
+                const about = `# ${key.data.kind} of ${externalOf(key)}${key.data.describe ? `: ${String(key.data.describe).replace(/\s+/g, ' ').trim()}` : ''}`;
                 return `${head.trimEnd()}\n\n${about}\n${name}=\n`;
             }
         }

@@ -3,25 +3,32 @@ import { relevance } from '@appling/model/relevance';
 import { Simulator } from '@appling/model/simulator';
 import { rollupState, type ImplementationState } from '@appling/model/implementation';
 
-/** The layers the tree starts from: each tab grows the model from the declarations of its kinds, module by module. */
+/** The levels of the pyramid, L1 first: each answers one question and is one band of the canvas. */
 export type Lens = 'domain' | 'behavior' | 'application' | 'interfaces' | 'access';
 
-export const LENSES: Record<Lens, { label: string, kinds: string[] }> = {
-    domain: { label: 'Domain', kinds: ['Entity', 'ValueType', 'Enum'] },
-    behavior: { label: 'Behavior', kinds: ['Action', 'Event', 'Machine', 'Job'] },
-    application: { label: 'Application', kinds: ['Query', 'Projection', 'External', 'UseCase'] },
-    interfaces: { label: 'Interfaces', kinds: ['Interface', 'Page', 'Navigation', 'Flow', 'Messages'] },
-    access: { label: 'Access', kinds: ['Role', 'Actor', 'Tenant'] }
+export const LENSES: Record<Lens, { label: string, question: string, kinds: string[] }> = {
+    domain: { label: 'Domain', question: 'What exists?', kinds: ['Entity', 'ValueType', 'Enum'] },
+    behavior: { label: 'Behavior', question: 'What can happen?', kinds: ['Action', 'Event', 'Machine', 'Job'] },
+    application: { label: 'Application', question: 'How is it exposed?', kinds: ['Query', 'Projection', 'External', 'UseCase'] },
+    interfaces: { label: 'Interfaces', question: 'What is exposed and where?', kinds: ['Interface', 'Page', 'Navigation', 'Flow', 'Messages'] },
+    access: { label: 'Access', question: 'Who can do what?', kinds: ['Role', 'Actor', 'Tenant'] }
 };
+
+/** The level of a kind, 1 to 5; none for kinds outside the pyramid, such as scenarios and migrations. */
+export function levelOf(kind: string): number | undefined {
+    const at = Object.values(LENSES).findIndex(lens => lens.kinds.includes(kind));
+    return at < 0 ? undefined : at + 1;
+}
 
 /** What the canvas shows, kept in `.appling/view.json` outside the model. */
 export interface ViewSettings {
+    /** The entry level: the band whose declarations the pyramid starts from. */
     lens: Lens;
     /** Link entities, such as join records. */
     linkEntities: boolean;
     /**
-     * The Lucide icon of nodes, by what they are: the qualified name of a module or a declaration, a kind (its group
-     * and every declaration of it without an icon of its own) or `~` for the seed. Set by the `set_icons` tool.
+     * The Lucide icon of nodes, by what they are: the qualified name of a module or a declaration, a kind (every
+     * declaration of it without an icon of its own) or `~` for the seed. Set by the `set_icons` tool.
      */
     icons?: Record<string, string>;
 }
@@ -29,114 +36,173 @@ export interface ViewSettings {
 export const DEFAULT_VIEW: ViewSettings = { lens: 'domain', linkEntities: false };
 
 /**
- * One node of the dependency tree. The seed holds the modules, a module the declarations of the lens, a declaration
- * the declarations that use it, grouped by kind as soon as there is more than one kind.
+ * One node of the pyramid. The seed holds the modules, a module its declarations of the entry level, a declaration
+ * the declarations of higher levels that rest on it (`up`) and those of lower levels it rests on (`down`).
  */
 export interface TreeNode {
     /** The path from the seed, unique in the tree. */
     id: string;
-    type: 'seed' | 'module' | 'group' | 'element';
+    type: 'seed' | 'module' | 'element';
     /** The module or the element. */
     qn?: string;
-    /** The element kind, or the kind of a group's elements. */
     kind?: string;
     layer?: string;
+    /** The level of an element, 1 to 5: the band it stands in. */
+    level?: number;
+    /** Where an element stands from the node it unfolded from; none on the entry level. */
+    side?: Side;
     label: string;
     /** For an element: what it is about, such as `on Order · draft → placed`. For a module: what it holds. */
     fact: string;
-    /** How many nodes unfolding shows: dependents for an element, members for a module or group. */
+    /** How many nodes unfolding shows: both sides for an element, members for a module. */
     count: number;
-    /** From 0 to 1, how much it matters to the application (`relevance` in `@appling/model`); a group takes its most relevant element's. */
+    /** How many declarations unfolding an element upwards and downwards shows. */
+    up?: number;
+    down?: number;
+    /** From 0 to 1, how much it matters to the application (`relevance` in `@appling/model`). */
     relevance: number;
-    /** The element already appears on the path below, so it does not unfold again. */
-    cycle?: boolean;
+    /** The sides that are unfolded. */
+    open?: Side[];
+    /** What an unfolded side also leads to but is drawn elsewhere already: the canvas joins the two instead of drawing it again. */
+    links?: string[];
     /** Present when unfolded. */
     children?: TreeNode[];
 }
 
+export type Side = 'up' | 'down';
+
+/** The id in the unfolded set that opens one side of an element. */
+export function sideId(id: string, side: Side): string {
+    return `${id}^${side}`;
+}
+
+const pyramids = new WeakMap<GraphIndex, Map<string, Set<string>>>();
+
 /**
- * Grows the tree of a lens: the seed and every node whose id is in `unfolded` show their children. A node on the
- * `trail` shows only the children in `unfolded` or on the trail.
+ * Which declarations of the pyramid belong together, in both directions: every reference and name between two of
+ * them, and for a role, actor or tenant the pages and interfaces that expose what its policies name.
+ */
+function links(index: GraphIndex): Map<string, Set<string>> {
+    if (pyramids.has(index)) return pyramids.get(index)!;
+    const found = new Map<string, Set<string>>();
+    const level = (qn: string) => levelOf(index.nodes.get(qn)?.kind ?? '');
+    const link = (a: string, b: string) => {
+        if (a === b || !level(a) || !level(b)) return;
+        for (const [from, to] of [[a, b], [b, a]]) found.set(from, (found.get(from) ?? new Set()).add(to));
+    };
+    for (const edge of index.graph.edges) if (edge.kind !== 'contains') link(index.declaration(edge.from), index.declaration(edge.to));
+    const of = (qn: string) => [...found.get(qn) ?? []];
+    const exposures = [...found.keys()].filter(qn => level(qn) === 4);
+    for (const who of [...found.keys()].filter(qn => level(qn) === 5)) {
+        // an actor may what its roles may; a query asks for what its entity allows
+        const named = [who, ...of(who).filter(qn => index.nodes.get(qn)!.kind === 'Role')].flatMap(of).filter(qn => level(qn)! < 4);
+        const granted = new Set([...named, ...named.flatMap(of).filter(qn => index.nodes.get(qn)!.kind === 'Query')]);
+        for (const exposure of exposures) if (of(exposure).some(qn => granted.has(qn))) link(who, exposure);
+    }
+    pyramids.set(index, found);
+    return found;
+}
+
+/**
+ * The declarations one step up or down from a declaration: those of higher or lower levels it belongs together with.
+ * Downwards from the top level, what a page or interface of it already exposes shows under that one only.
+ */
+export function linked(index: GraphIndex, qn: string, side: Side): GraphNode[] {
+    const level = (q: string) => levelOf(index.nodes.get(q)!.kind)!;
+    const all = links(index);
+    const found = [...all.get(qn) ?? []].filter(q => side === 'up' ? level(q) > level(qn) : level(q) < level(qn));
+    const exposures = level(qn) === 5 ? found.filter(q => level(q) === 4) : [];
+    return found.filter(q => level(q) === 4 || !exposures.some(e => all.get(e)!.has(q))).map(q => index.nodes.get(q)!);
+}
+
+/** The declarations of its own level a declaration belongs together with: the canvas lights them up, they do not unfold. */
+export function peers(index: GraphIndex, qn: string): string[] {
+    const level = (q: string) => levelOf(index.nodes.get(q)?.kind ?? '');
+    return [...links(index).get(index.declaration(qn)) ?? []].filter(q => level(q) === level(index.declaration(qn)));
+}
+
+/**
+ * Grows the pyramid from an entry level: the seed and every module whose id is in `unfolded` show their children, an
+ * element the side whose `sideId` is in it. A node on the `trail` shows only the children in `unfolded` or on the
+ * trail. Away from the entry level a branch keeps its direction, so every level stands in its own band.
  */
 export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Set<string>, name = 'model', trail = new Set<string>()): TreeNode {
     const shown = (n: GraphNode) => settings.linkEntities || !n.props.link;
     const roots = index.graph.nodes.filter(n => LENSES[settings.lens].kinds.includes(n.kind) && index.declaration(n.qn) === n.qn && shown(n));
-    // an empty module shows in every lens, such as right after an agent wrote it
+    // an empty module shows on every level, such as right after an agent wrote it
     const filled = new Set(index.graph.nodes.filter(n => n.kind !== 'Module').map(n => n.module));
     const empty = index.graph.nodes.filter(n => n.kind === 'Module' && !filled.has(n.qn)).map(n => n.qn);
     const modules = [...new Set([...roots.map(n => n.module), ...empty])];
-    const dependents = new Map<string, GraphNode[]>();
-    const dependentsOf = (qn: string) => {
-        if (!dependents.has(qn)) {
-            const used = [...relations(index, qn, 'usedBy').values()].flat().map(r => index.nodes.get(r.qn)!).filter(n => n.kind !== 'Module' && shown(n));
-            dependents.set(qn, used);
-        }
-        return dependents.get(qn)!;
+    // the nearest level first, then by kind, the most relevant first, by name among equals
+    const order = (nodes: GraphNode[], side?: Side) => [...nodes].sort((a, b) => (levelOf(a.kind)! - levelOf(b.kind)!) * (side === 'down' ? -1 : 1) || rank(a.kind) - rank(b.kind) || index.relevanceOf(b.qn) - index.relevanceOf(a.qn) || a.qn.localeCompare(b.qn));
+    const open = (id: string) => unfolded.has(id) || trail.has(id);
+    /** What the node with this key shows of these children: all when unfolded, on a trail only those unfolded or on it. */
+    const kept = <T>(key: string, items: T[], idOf: (item: T) => string) => unfolded.has(key) ? items : items.filter(item => open(idOf(item)) || SIDES.some(side => open(sideId(idOf(item), side))));
+    const drawn = new Set<string>();
+    /** The elements one after another, without those drawn before; all of them count as drawn before anything unfolds from the first. */
+    const elements = (nodes: GraphNode[], parent: string, module: string, side?: Side): TreeNode[] => {
+        const fresh = nodes.filter(node => !drawn.has(node.qn));
+        for (const node of fresh) drawn.add(node.qn);
+        return fresh.map(node => element(node, parent, module, side));
     };
-    const childrenOf = (id: string, grow: () => TreeNode[]) => {
-        if (unfolded.has(id)) return grow();
-        if (!trail.has(id)) return undefined;
-        // the end of a trail that stays folded keeps nothing
-        const kept = grow().filter(child => unfolded.has(child.id) || trail.has(child.id));
-        return kept.length ? kept : undefined;
-    };
-    const element = (node: GraphNode, parent: string, module: string, path: string[]): TreeNode => {
+    const element = (node: GraphNode, parent: string, module: string, side?: Side): TreeNode => {
         const id = `${parent}/${node.qn}`;
-        const cycle = path.includes(node.qn);
-        const used = cycle ? [] : dependentsOf(node.qn);
+        const sides = SIDES.filter(s => !side || s === side).map(s => ({ side: s, nodes: order(linked(index, node.qn, s).filter(shown), s) }));
+        const count = (s: Side) => sides.find(x => x.side === s)?.nodes.length ?? 0;
         const label = node.module === module ? localName(node.qn, index) : node.qn;
-        const tree: TreeNode = { id, type: 'element', qn: node.qn, kind: node.kind, layer: node.layer, label, fact: factOf(index, node), count: used.length, relevance: index.relevanceOf(node.qn), cycle };
-        if (tree.count) tree.children = childrenOf(id, () => grouped(used, id, node.module, [...path, node.qn]));
+        const tree: TreeNode = { id, type: 'element', qn: node.qn, kind: node.kind, layer: node.layer, level: levelOf(node.kind), side, label, fact: factOf(index, node), count: count('up') + count('down'), up: count('up'), down: count('down'), relevance: index.relevanceOf(node.qn) };
+        const unfolding = sides.filter(s => s.nodes.length && open(sideId(id, s.side))).map(s => ({ side: s.side, nodes: kept(sideId(id, s.side), s.nodes, n => `${id}/${n.qn}`) }));
+        const links = unfolding.flatMap(s => s.nodes.filter(n => drawn.has(n.qn)).map(n => n.qn));
+        const children = unfolding.flatMap(s => elements(s.nodes, id, node.module, s.side));
+        if (unfolding.length) tree.open = unfolding.map(s => s.side);
+        if (links.length) tree.links = links;
+        if (children.length) tree.children = children;
         return tree;
     };
-    /** Elements directly when they are of one kind, the most relevant first, by name among equals; else one group per kind, always in the order of the kinds. */
-    const grouped = (nodes: GraphNode[], parent: string, module: string, path: string[]): TreeNode[] => {
-        const sorted = [...nodes].sort((a, b) => index.relevanceOf(b.qn) - index.relevanceOf(a.qn) || rank(a.kind) - rank(b.kind) || a.qn.localeCompare(b.qn));
-        const byKind = Map.groupBy(sorted, n => n.kind);
-        if (byKind.size === 1) return sorted.map(n => element(n, parent, module, path));
-        return [...byKind].sort(([a], [b]) => rank(a) - rank(b)).map(([kind, members]) => {
-            const id = `${parent}/#${kind}`;
-            const group: TreeNode = { id, type: 'group', kind, layer: members[0].layer, label: plural(kind), fact: '', count: members.length, relevance: index.relevanceOf(members[0].qn) };
-            group.children = childrenOf(id, () => members.map(n => element(n, id, module, path)));
-            return group;
-        });
-    };
     const seed: TreeNode = { id: '~', type: 'seed', label: name, fact: `${modules.length} module${modules.length === 1 ? '' : 's'}`, count: modules.length, relevance: 1 };
-    seed.children = childrenOf(seed.id, () => modules.sort((a, b) => index.relevanceOf(b) - index.relevanceOf(a) || a.localeCompare(b)).map(module => {
-            const members = roots.filter(n => n.module === module);
-            const id = `~/${module}`;
-            const kinds = [...Map.groupBy(members, n => n.kind)].sort(([a], [b]) => rank(a) - rank(b)).map(([kind, list]) => `${list.length} ${list.length === 1 ? kindLabel(kind) : plural(kind).toLowerCase()}`);
-            const tree: TreeNode = { id, type: 'module', qn: module, label: module, fact: kinds.join(' · ') || (filled.has(module) ? '' : 'empty'), count: members.length, relevance: index.relevanceOf(module) };
-            tree.children = childrenOf(id, () => grouped(members, id, module, []));
-            return tree;
-        }));
+    if (open(seed.id)) seed.children = kept(seed.id, modules.sort((a, b) => index.relevanceOf(b) - index.relevanceOf(a) || a.localeCompare(b)), module => `~/${module}`).map(module => {
+        const members = order(roots.filter(n => n.module === module));
+        const id = `~/${module}`;
+        const kinds = [...Map.groupBy(members, n => n.kind)].map(([kind, list]) => `${list.length} ${list.length === 1 ? kindLabel(kind) : plural(kind).toLowerCase()}`);
+        const tree: TreeNode = { id, type: 'module', qn: module, label: module, fact: kinds.join(' · ') || (filled.has(module) ? '' : 'empty'), count: members.length, relevance: index.relevanceOf(module) };
+        const inside = open(id) ? elements(kept(id, members, n => `${id}/${n.qn}`), id, module) : [];
+        if (inside.length) tree.children = inside;
+        return tree;
+    });
     return seed;
 }
 
+const SIDES: Side[] = ['up', 'down'];
+
 /**
- * The tree that draws these elements one after another and nothing else: each unfolds where the tree already shows
- * it, else its trail from the seed through its module is added. `ids` are the drawn nodes, undefined when the lens
- * has no place for the element. With `folded` the elements stay folded: each stands in its module's group, without what uses it.
+ * The pyramid that draws these elements one after another and nothing else: each unfolds where the pyramid already
+ * shows it, else its trail from the seed through its module is added. `ids` are the drawn nodes, undefined when the
+ * entry level has no place for the element. With `folded` the elements stay folded: each stands in its module.
  */
 export function trailOf(index: GraphIndex, settings: ViewSettings, focus: string[], folded = false): { unfolded: Set<string>, trail: Set<string>, ids: (string | undefined)[] } {
     const unfolded = new Set<string>();
     const trail = new Set(['~']);
-    const find = (qn: string, open: string[]) => flatten(growTree(index, settings, new Set([...unfolded, ...open]), undefined, trail))
-        .find(n => n.type !== 'group' && n.qn === qn);
+    const grow = (open: string[]) => flatten(growTree(index, settings, new Set([...unfolded, ...open]), undefined, trail));
     const ids = focus.map(qn => {
         const declaration = index.declaration(qn);
-        const groups = flatten(growTree(index, settings, unfolded, undefined, trail)).filter(n => n.type === 'group').map(n => n.id);
-        const found = find(declaration, groups) ?? find(declaration, revealPath(index, settings, declaration));
+        const sides = grow([]).filter(n => n.type === 'element').flatMap(n => SIDES.map(side => sideId(n.id, side)));
+        const found = [...grow(sides), ...grow(revealPath(index, settings, declaration))].find(n => n.qn === declaration);
         if (!found) return undefined;
         const parts = found.id.split('/');
-        parts.slice(1).forEach((_, i) => trail.add(parts.slice(0, i + 1).join('/')));
-        (folded ? trail : unfolded).add(found.id);
+        parts.forEach((_, i) => {
+            const id = parts.slice(0, i + 1).join('/');
+            trail.add(id);
+            // below the module, every node on the way opens the side the element stands on
+            if (found.side && i > 1 && id !== found.id) trail.add(sideId(id, found.side));
+        });
+        if (found.type === 'module' && !folded) unfolded.add(found.id);
+        if (found.type === 'element' && !folded) for (const side of SIDES) unfolded.add(sideId(found.id, side));
         return found.id;
     });
     return { unfolded, trail, ids };
 }
 
-/** The lens whose tree starts from declarations of this kind. */
+/** The level whose band holds declarations of this kind. */
 export function lensOf(kind: string): Lens | undefined {
     return (Object.keys(LENSES) as Lens[]).find(lens => LENSES[lens].kinds.includes(kind));
 }
@@ -145,15 +211,15 @@ function flatten(tree: TreeNode): TreeNode[] {
     return [tree, ...(tree.children ?? []).flatMap(flatten)];
 }
 
-/** The node ids to unfold so that the declaration of an element shows on the first level of its module, if the lens has it. */
+/** The node ids to unfold so that the declaration of an element shows in its module, if it is of the entry level. */
 export function revealPath(index: GraphIndex, settings: ViewSettings, qn: string): string[] {
     const node = index.nodes.get(index.declaration(qn));
     if (node?.kind === 'Module') return ['~', `~/${node.qn}`];
     if (!node || !LENSES[settings.lens].kinds.includes(node.kind)) return [];
-    return ['~', `~/${node.module}`, `~/${node.module}/#${node.kind}`];
+    return ['~', `~/${node.module}`];
 }
 
-/** Groups come in the order of the layers, and within a layer the kind a developer looks for first. */
+/** Declarations stand in the order of their kinds: by layer, and within a layer the kind a developer looks for first. */
 const KIND_ORDER = [
     'Role', 'Actor', 'Tenant', 'Entity', 'ValueType', 'Enum', 'Action', 'Event', 'Machine', 'Job',
     'UseCase', 'Query', 'Projection', 'External', 'Interface', 'Page', 'Navigation', 'Flow', 'Messages'
@@ -166,7 +232,7 @@ function rank(kind: string): number {
 
 const PLURALS: Record<string, string> = { Query: 'Queries', Policy: 'Policies', Entity: 'Entities', UseCase: 'Use cases', ValueType: 'Value types', Messages: 'Messages' };
 
-/** A kind as a group label: `Entities`, `Use cases`. */
+/** A kind in the plural: `Entities`, `Use cases`. */
 export function plural(kind: string): string {
     if (PLURALS[kind]) return PLURALS[kind];
     const label = kindLabel(kind);

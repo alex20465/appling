@@ -137,17 +137,17 @@ function entry(node: GraphNode, steps: Step[] | undefined, extension: string, co
     };
 }
 
-/** Kinds whose `does` text describes work to implement; on every other kind it describes what to check. */
-const ACTING = new Set(['Action', 'Machine', 'Job', 'Query', 'External', 'ExternalOperation', 'UseCase']);
-
 /** The registry task of a node's `does` text, the same for every extension. */
 export function doesTask(node: GraphNode): string | undefined {
-    // A scenario's text describes its example, and its generated test is what checks it.
-    if (node.kind === 'Scenario') return undefined;
     const text = node.data.does;
     if (typeof text !== 'string' || !text.trim()) return undefined;
-    const name = node.qn.split('.').pop();
-    return ACTING.has(node.kind) ? `implement what ${name} does: ${text}` : `check that ${name} matches its description: ${text}`;
+    return `implement what ${node.qn.split('.').pop()} does: ${text}`;
+}
+
+/** The documentation of a node in generated code: its `describe` text, then its `does` text. */
+export function aboutOf(node: GraphNode): string | undefined {
+    const texts = [node.data.describe, node.data.does].filter((text): text is string => typeof text === 'string' && !!text.trim());
+    return texts.length ? texts.join('\n\n') : undefined;
 }
 
 /** Modules first; scenarios last, as their tests call what every layer generates. */

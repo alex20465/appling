@@ -44,7 +44,8 @@ Requires `uv` on the PATH. Python and Django (6.1) are installed by uv into the 
 | `policy` | entity policies become `can_<operation>_<entity>(actor, record)`, `can_read_<entity>_<field>` and `readable_<entity>_rows(actor, rows)` in `<app>/policies.py`; actions, queries and use cases check them and their own policies and raise `PermissionDenied`, serializers and pages hide fields the actor may not read. Calls with `actor=None` (jobs, receivers) are not checked; a model without policies generates no checks |
 | groups | the groups of roles and actors are created after `migrate` by a `post_migrate` receiver in `<app>/groups.py` |
 
-| `does` | the docstring of the generated class or function, `help_text` on model fields, and a registry task |
+| `describe` | the docstring of the generated class or function, `help_text` on model fields |
+| `does` | follows `describe` in the docstring, and a registry task |
 | rules | a `TestCase` per invariant, policy, transition and action with preconditions in `<app>/tests.py`, one method per case; tests of invariants enforced as check constraints, of entity, action and query policies (and the denied case of use case policies) that read the actor only through `actor.is(...)`, of transitions and of preconditions get bodies (rows from `make_<entity>()` factories in `<app>/factories.py`) where the simulator proves the fixture satisfies the guards, preconditions and invariants; the other cases are skipped and writing them is a registry task |
 | `scenario` | a `TestCase` in `<app>/tests.py` that creates the given rows, signs in the actor, calls the action or use case and asserts the `then`: the checks on the reloaded rows, the emitted events, the declared error or `PermissionDenied`. It replaces the precondition and transition tests of what it runs; a scenario the generated code cannot reproduce stays a skipped test and a registry task |
 

@@ -178,7 +178,7 @@ CLERK_INSTANCE = int(required_env("CLERK_INSTANCE"))   # a secret of type Int
 
 Every management command loads the settings, so tests, `migrate` and `runserver` need the secrets too: fill `.env` from `.env.example` and load it into the environment. While generating, Appling runs its own `makemigrations` with a placeholder for each secret.
 
-`.env.example` lists every key with an empty value, under a comment with its kind, its external and its `does` text:
+`.env.example` lists every key with an empty value, under a comment with its kind, its external and its `describe` text:
 
 ```sh
 # secret of Clerk: API keys page of the Clerk dashboard
@@ -403,7 +403,7 @@ Views pass `request.user`, and REST framework and Django answer `PermissionDenie
 
 ## Descriptions
 
-A [`does`](../language/descriptions.md) text goes into the generated code as documentation:
+A [`describe`](../language/descriptions.md) text goes into the generated code as documentation, followed by the `does` text of an action:
 
 | Element | Becomes |
 |---|---|
@@ -413,7 +413,7 @@ A [`does`](../language/descriptions.md) text goes into the generated code as doc
 | External operation | The docstring of its `Protocol` method |
 | Entity field | `help_text` of the model field |
 
-Each text is also a [registry task](registry.md#status).
+A `does` text is also a [registry task](registry.md#status); a `describe` text is not.
 
 ## What becomes a task
 

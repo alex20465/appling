@@ -146,7 +146,7 @@ function patchResource(text: string, entity: GraphNode, context: MapContext): st
     for (const field of fields) {
         const value = defaultValue(field, context);
         if (value !== undefined) text = text.replace(new RegExp(`(\\n([ \\t]*)attribute :${lastOf(field.qn)}, [^\\n]* do\\n)`), `$1$2  default ${value}\n`);
-        if (typeof field.data.does === 'string') text = text.replace(new RegExp(`(\\n([ \\t]*)attribute :${lastOf(field.qn)}, [^\\n]* do\\n)`), (_, head: string, indent: string) => `${head}${indent}  description ${elixirString(field.data.does as string)}\n`);
+        if (typeof field.data.describe === 'string') text = text.replace(new RegExp(`(\\n([ \\t]*)attribute :${lastOf(field.qn)}, [^\\n]* do\\n)`), (_, head: string, indent: string) => `${head}${indent}  description ${elixirString(field.data.describe as string)}\n`);
     }
     text = withModuledoc(text, entity);
     const blocks = [

@@ -2,10 +2,10 @@ import { expect, test } from 'vitest';
 import type { Model } from '@appling/lang';
 import { buildGraph, diffGraphs, Simulator, withRemoved } from '@appling/model';
 import { buildWorkspace, examples } from '../../lang/test/workspace.js';
-import { layoutFlow, layoutTree } from '../src/layout.js';
-import { loads, sproutDelays, traces } from '../src/canvas/plant.js';
+import { bandsOf, layoutFlow, layoutTree } from '../src/layout.js';
+import { joins, loads, sproutDelays, traces } from '../src/canvas/plant.js';
 import {
-    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, implementationMarks, sessionMarks, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, modelPulse, policyText, relations, revealPath, trailOf, viewFor,
+    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, implementationMarks, sessionMarks, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, linked, modelPulse, peers, policyText, relations, revealPath, sideId, trailOf, viewFor,
     type Card, type Flow, type TreeNode
 } from '../src/views.js';
 
@@ -32,36 +32,73 @@ const CATALOG = `module catalog {
 }
 `;
 
-/** Each node as `label (count)`, with its children indented below it. */
-const outline = (node: TreeNode, depth = 0): string[] => [`${'  '.repeat(depth)}${node.label} (${node.count})`, ...(node.children ?? []).flatMap(c => outline(c, depth + 1))];
+/** Each node as its level, label and what it unfolds upwards and downwards, with its children indented below it. */
+const outline = (node: TreeNode, depth = 0): string[] => [
+    `${'  '.repeat(depth)}${node.type === 'element' ? `L${node.level} ${node.label} ${node.up}↑ ${node.down}↓${node.links ? ` also ${node.links.join(', ')}` : ''}` : `${node.label} (${node.count})`}`,
+    ...(node.children ?? []).flatMap(c => outline(c, depth + 1))
+];
 
-test('the tree starts folded at the seed and unfolds modules, then the lens declarations, then what uses them, by kind', async () => {
+test('the pyramid starts folded at the seed and unfolds modules, then the declarations of the entry level, then each side of a declaration', async () => {
     const index = await indexOf(examples());
     expect(outline(growTree(index, DOMAIN, new Set(), 'shop'))).toEqual(['shop (2)']);
-    const open = new Set(['~', '~/sales', '~/sales/#Entity', '~/sales/#Entity/sales.Order', '~/sales/#Entity/sales.Order/#Action']);
+    const open = new Set(['~', '~/sales', sideId('~/sales/sales.Order', 'up'), sideId('~/sales/sales.Order/sales.Cancel', 'up')]);
     expect(outline(growTree(index, DOMAIN, open))).toEqual([
         'model (2)',
         '  sales (3)',
-        '    Entities (1)',
-        '      Order (13)',
-        '        Actions (2)',
-        '          Cancel (6)',
-        '          PlaceOrder (6)',
-        '        Events (2)',
-        '        Machines (1)',
-        '        Jobs (1)',
-        '        Use cases (1)',
-        '        Queries (2)',
-        '        Projections (1)',
-        '        Scenarios (3)',
-        '    Value types (1)',
-        '    Enums (1)',
+        '    L1 Order 13↑ 0↓',
+        '      L2 Cancel 4↑ 0↓ also sales.Checkout, crm.Clerk',
+        '        L4 Orders 4↑ 0↓',
+        '        L4 OrderDetail 4↑ 0↓',
+        '      L2 PlaceOrder 5↑ 0↓',
+        '      L2 PaymentReceived 1↑ 0↓',
+        '      L2 OrderPlaced 0↑ 0↓',
+        '      L2 OrderFlow 0↑ 0↓',
+        '      L2 ExpireDrafts 0↑ 0↓',
+        '      L3 Checkout 1↑ 0↓',
+        '      L3 OpenOrders 2↑ 0↓',
+        '      L3 OrdersOf 1↑ 0↓',
+        '      L3 OrderSummary 3↑ 0↓',
+        '      L5 crm.Clerk 0↑ 0↓',
+        '      L5 Customer 0↑ 0↓',
+        '      L5 Shopper 0↑ 0↓',
+        '    L1 Line 0↑ 0↓',
+        '    L1 OrderStatus 2↑ 0↓',
         '  crm (1)'
     ]);
     expect(growTree(index, DOMAIN, open).children!.find(m => m.label === 'sales')!.fact).toBe('1 entity · 1 value · 1 enum');
 });
 
-test('an empty module shows in every lens', async () => {
+test('a level in between unfolds both ways, and away from it a branch keeps its direction', async () => {
+    const index = await indexOf(examples());
+    const open = new Set(['~', '~/sales', sideId('~/sales/sales.OpenOrders', 'up'), sideId('~/sales/sales.OpenOrders', 'down'), sideId('~/sales/sales.OpenOrders/sales.Orders', 'up')]);
+    const query = growTree(index, { ...DOMAIN, lens: 'application' }, open).children!.find(m => m.label === 'sales')!.children!.find(n => n.qn === 'sales.OpenOrders')!;
+    expect(outline(query)).toEqual([
+        'L3 OpenOrders 2↑ 2↓',
+        '  L4 PublicApi 5↑ 0↓',
+        '  L4 Orders 4↑ 0↓',
+        '    L5 crm.Clerk 0↑ 0↓',
+        '    L5 Customer 0↑ 0↓',
+        '    L5 Shopper 0↑ 0↓',
+        '    L5 crm.Employee 0↑ 0↓',
+        '  L1 Order 0↑ 0↓',
+        '  L1 OrderStatus 0↑ 0↓'
+    ]);
+    expect(query.children!.map(n => n.side)).toEqual(['up', 'up', 'down', 'down']);
+});
+
+test('the top level leads through the pages and interfaces that expose what its policies name', async () => {
+    const index = await indexOf(examples());
+    const names = (qn: string, side: 'up' | 'down') => linked(index, qn, side).map(n => n.qn).sort();
+    // what a page of the role already exposes shows under the page, the entities its policies name stay direct
+    expect(names('crm.Clerk', 'down')).toEqual(['crm.Account', 'sales.Order', 'sales.OrderDetail', 'sales.Orders', 'sales.PublicApi']);
+    expect(names('crm.Employee', 'down')).toEqual(['sales.OrderDetail', 'sales.Orders', 'sales.PublicApi']);
+    expect(names('sales.Orders', 'up')).toEqual(['crm.Clerk', 'crm.Employee', 'sales.Customer', 'sales.Shopper']);
+    expect(names('sales.Orders', 'down')).toEqual(['sales.Cancel', 'sales.OpenOrders', 'sales.OrderSummary']);
+    expect(peers(index, 'sales.Order.customer').sort()).toEqual(['crm.Account', 'sales.Line', 'sales.OrderStatus']);
+    expect(peers(index, 'crm.Clerk')).toEqual(['crm.Employee']);
+});
+
+test('an empty module shows on every level', async () => {
     const index = await indexOf({ ...examples(), 'billing.appling': 'module billing {\n}\n' });
     const open = new Set(['~', '~/billing']);
     const behavior = growTree(index, { ...DOMAIN, lens: 'behavior' }, open);
@@ -69,58 +106,28 @@ test('an empty module shows in every lens', async () => {
     expect(behavior.children!.map(m => m.label)).not.toContain('crm');
 });
 
-test('a trail draws only the elements shown one after another, each unfolded where the tree already has it', async () => {
+test('a trail draws only the elements shown one after another, each unfolded where the pyramid already has it', async () => {
     const index = await indexOf(examples());
-    const { unfolded, trail, ids } = trailOf(index, DOMAIN, ['sales.Order', 'sales.Cancel', 'crm.Account', 'crm.Clerk']);
-    expect(ids).toEqual(['~/sales/#Entity/sales.Order', '~/sales/#Entity/sales.Order/#Action/sales.Cancel', '~/crm/crm.Account', undefined]);
-    expect(outline(growTree(index, DOMAIN, unfolded, 'shop', trail))).toEqual([
-        'shop (2)',
-        '  sales (3)',
-        '    Entities (1)',
-        '      Order (13)',
-        '        Actions (2)',
-        '          Cancel (6)',
-        '            Machines (1)',
-        '            Jobs (1)',
-        '            Use cases (1)',
-        '            Pages (2)',
-        '            Scenarios (1)',
-        '        Events (2)',
-        '        Machines (1)',
-        '        Jobs (1)',
-        '        Use cases (1)',
-        '        Queries (2)',
-        '        Projections (1)',
-        '        Scenarios (3)',
-        '  crm (1)',
-        '    Account (8)',
-        '      Actors (1)',
-        '      Tenants (1)',
-        '      Entities (1)',
-        '      Queries (1)',
-        '      Projections (1)',
-        '      Scenarios (3)'
-    ]);
-    expect(trailOf(index, { ...DOMAIN, lens: 'behavior' }, ['sales.OrderFlow']).ids).toEqual(['~/sales/#Machine/sales.OrderFlow']);
+    const { unfolded, trail, ids } = trailOf(index, DOMAIN, ['sales.Order', 'sales.Cancel', 'crm.Account', 'sales.Main']);
+    expect(ids).toEqual(['~/sales/sales.Order', '~/sales/sales.Order/sales.Cancel', '~/crm/crm.Account', undefined]);
+    const tree = growTree(index, DOMAIN, unfolded, 'shop', trail);
+    expect(tree.children!.map(m => [m.label, m.children!.map(n => n.label)])).toEqual([['sales', ['Order']], ['crm', ['Account']]]);
+    const cancel = tree.children![0].children![0].children!.find(n => n.qn === 'sales.Cancel')!;
+    // what Order already drew is joined, not drawn again
+    expect(cancel.children!.map(n => n.label)).toEqual(['Orders', 'OrderDetail']);
+    expect(cancel.links).toEqual(['sales.Checkout', 'crm.Clerk']);
+    expect(trailOf(index, { ...DOMAIN, lens: 'behavior' }, ['sales.OrderFlow']).ids).toEqual(['~/sales/sales.OrderFlow']);
     expect([lensOf('Machine'), lensOf('Field')]).toEqual(['behavior', undefined]);
 });
 
-test('a folded trail draws each element in its module without what uses it', async () => {
+test('a folded trail draws each element in its module without what unfolds from it', async () => {
     const index = await indexOf(examples());
-    const { unfolded, trail, ids } = trailOf(index, DOMAIN, ['sales.Order', 'sales.OrderStatus', 'sales.PlaceOrder'], true);
-    expect(ids).toEqual(['~/sales/#Entity/sales.Order', '~/sales/#Enum/sales.OrderStatus', undefined]);
+    const { unfolded, trail, ids } = trailOf(index, DOMAIN, ['sales.Order', 'sales.OrderStatus', 'sales.Main'], true);
+    expect(ids).toEqual(['~/sales/sales.Order', '~/sales/sales.OrderStatus', undefined]);
     const drawn: string[] = [];
     const walk = (node: { id: string, children?: unknown[] }) => { drawn.push(node.id); (node.children as typeof node[] | undefined)?.forEach(walk); };
     walk(growTree(index, DOMAIN, unfolded, undefined, trail));
-    expect(drawn).toEqual(['~', '~/sales', '~/sales/#Entity', '~/sales/#Entity/sales.Order', '~/sales/#Enum', '~/sales/#Enum/sales.OrderStatus']);
-});
-
-test('a declaration that is already on its branch does not unfold again', async () => {
-    const index = await indexOf({ 'a.appling': 'module a {\n  entity Node {\n    parent: Node?\n    owner: Owner\n  }\n  entity Owner {\n    nodes: Node[]\n  }\n}\n' });
-    const open = new Set(['~', '~/a', '~/a/a.Owner', '~/a/a.Owner/a.Node']);
-    const owner = growTree(index, DOMAIN, open).children![0].children!.find(n => n.qn === 'a.Owner')!;
-    expect(owner.children!.map(n => n.qn)).toEqual(['a.Node']);
-    expect(owner.children![0].children!.map(n => [n.qn, n.cycle, n.count])).toEqual([['a.Owner', true, 0]]);
+    expect(drawn).toEqual(['~', '~/sales', '~/sales/sales.Order', '~/sales/sales.OrderStatus']);
 });
 
 test('facts say what a declaration is about, and a selection reveals its declaration in the lens that has it', async () => {
@@ -131,7 +138,7 @@ test('facts say what a declaration is about, and a selection reveals its declara
     expect(fact('sales.OrderFlow')).toBe('on Order.status · 4 states');
     expect(fact('sales.ExpireDrafts')).toBe('every 0 3 * * * · runs Cancel');
     expect(fact('sales.OpenOrders')).toBe('from Order');
-    expect(revealPath(index, { ...DOMAIN, lens: 'behavior' }, 'sales.PlaceOrder.EmptyOrder')).toEqual(['~', '~/sales', '~/sales/#Action']);
+    expect(revealPath(index, { ...DOMAIN, lens: 'behavior' }, 'sales.PlaceOrder.EmptyOrder')).toEqual(['~', '~/sales']);
     expect(revealPath(index, DOMAIN, 'sales.PlaceOrder')).toEqual([]);
 });
 
@@ -321,12 +328,12 @@ test('a new model pulses the elements it added or changed inside', async () => {
 
 test('new nodes sprout generation by generation, siblings one after another', async () => {
     const index = await indexOf(examples());
-    const first = layoutTree(growTree(index, DOMAIN, new Set(['~'])));
+    const first = layoutTree(growTree(index, DOMAIN, new Set(['~'])), 1);
     const seedOnly = sproutDelays(first, new Map());
     expect(seedOnly.get('~')).toBe(0);
     expect(first.filter(p => p.parent).map(p => seedOnly.get(p.node.id))).toEqual(expect.arrayContaining([240, 285]));
     const module = first.find(p => p.node.type === 'module')!.node.id;
-    const next = layoutTree(growTree(index, DOMAIN, new Set(['~', module])));
+    const next = layoutTree(growTree(index, DOMAIN, new Set(['~', module])), 1);
     const delays = sproutDelays(next, seedOnly);
     expect(delays.get(module)).toBe(seedOnly.get(module));
     const shoots = next.filter(p => p.parent?.node.id === module);
@@ -334,44 +341,64 @@ test('new nodes sprout generation by generation, siblings one after another', as
     expect(loads(next).get(module)).toBe(shoots.length);
 });
 
-/** Two stretches of traces share a point. */
-function meet([ax, ay]: number[], [bx, by]: number[], [cx, cy]: number[], [dx, dy]: number[]): boolean {
-    const side = (px: number, py: number, qx: number, qy: number, rx: number, ry: number) => Math.sign((qx - px) * (ry - py) - (qy - py) * (rx - px));
-    return side(ax, ay, bx, by, cx, cy) !== side(ax, ay, bx, by, dx, dy) && side(cx, cy, dx, dy, ax, ay) !== side(cx, cy, dx, dy, bx, by);
-}
-
-test('however far the tree unfolds, no nodes overlap, no trace runs through a node and no traces of two nodes cross', async () => {
+test('unfolding a declaration moves none of its level past another: each keeps its row and its place in it', async () => {
     const index = await indexOf(examples());
-    for (const lens of ['domain', 'behavior', 'application', 'interfaces', 'access'] as const) {
-        const settings = { lens, linkEntities: true };
-        const open = new Set(['~']);
-        let after = layoutTree(growTree(index, settings, open));
-        for (let level = 0; level < 4; level++) {
-            for (const { node } of after.filter(p => p.node.count && !p.node.cycle)) open.add(node.id);
-            after = layoutTree(growTree(index, settings, open));
-        }
-        for (const a of after) for (const b of after) if (a !== b && Math.abs(a.y - b.y) < 100 && a.x <= b.x) expect(b.x - a.x, `${a.node.id} and ${b.node.id}`).toBeGreaterThanOrEqual(200);
-        const routed = [...traces(after, () => 26)].map(([id, points]) => ({ id, net: id.slice(0, id.lastIndexOf('/')), parts: points.slice(1).map((to, i) => [points[i], to]).filter(([from, to]) => from[0] !== to[0] || from[1] !== to[1]) }));
-        for (const { id, parts } of routed) {
-            const samples = parts.flatMap(([[x1, y1], [x2, y2]]) => [0.25, 0.5, 0.75].map(t => [x1 + (x2 - x1) * t, y1 + (y2 - y1) * t]));
-            for (const p of after) if (p.node.id !== id && p.node.id !== routed.find(r => r.id === id)!.net) for (const [x, y] of samples) expect(Math.abs(x - p.x) < 100 && Math.abs(y - p.y) < 28, `${id} through ${p.node.id}`).toBe(false);
-        }
-        for (const a of routed) for (const b of routed) if (a.net < b.net) for (const [p, q] of a.parts) for (const [r, s] of b.parts) expect(meet(p, q, r, s), `${a.id} crosses ${b.id}`).toBe(false);
-        if (lens === 'domain') expect(after.length).toBeGreaterThan(60);
+    const open = new Set(['~', '~/sales', sideId('~/sales/sales.Order', 'up')]);
+    const level = (unfolded: Set<string>) => layoutTree(growTree(index, DOMAIN, unfolded), 1).filter(p => p.node.level === 2);
+    const order = (chips: ReturnType<typeof level>) => [...chips].sort((a, b) => a.y - b.y || a.x - b.x).map(p => p.node.label);
+    const rowOf = (chips: ReturnType<typeof level>) => Object.fromEntries(chips.map(p => [p.node.label, new Set(chips.filter(c => c.y < p.y).map(c => c.y)).size]));
+    const before = level(open);
+    expect(before.length).toBe(6);
+    for (const { node } of before.filter(p => p.node.up)) {
+        const after = level(new Set([...open, sideId(node.id, 'up')]));
+        expect(order(after), node.label).toEqual(order(before));
+        expect(rowOf(after), node.label).toEqual(rowOf(before));
     }
 });
 
-test('many children wrap into rows, and what grows from a row stands between it and the row above', () => {
-    const leaf = (id: string, children?: TreeNode[]): TreeNode => ({ id, type: 'element', label: id, fact: '', count: 0, relevance: 0, children });
-    const group = (open?: string) => leaf('~', Array.from({ length: 12 }, (_, i) => leaf(`~/${i}`, `~/${i}` === open ? [leaf(`~/${i}/a`), leaf(`~/${i}/b`)] : undefined)));
-    const rows = (placed: ReturnType<typeof layoutTree>) => [...new Set(placed.filter(p => p.node.id.split('/').length === 2).map(p => p.y))];
-    const folded = layoutTree(group());
-    expect(rows(folded)).toEqual([-120, -240, -360]);
-    // the trunk runs straight up between the two halves of every row
-    for (const p of folded.slice(1)) expect(Math.abs(p.x)).toBeGreaterThanOrEqual(128);
-    const unfolded = layoutTree(group('~/0'));
-    expect(rows(unfolded)).toEqual([-120, -360, -480]);
-    for (const child of unfolded.filter(p => p.parent?.node.id === '~/0')) expect(child.y).toBe(-240);
+test('however far the pyramid unfolds, every level keeps its band, no nodes overlap and no trace runs through a node', async () => {
+    const index = await indexOf(examples());
+    const lenses = ['domain', 'behavior', 'application', 'interfaces', 'access'] as const;
+    for (const lens of lenses) {
+        const settings = { lens, linkEntities: true };
+        const entry = lenses.indexOf(lens) + 1;
+        const open = new Set(['~']);
+        let after = layoutTree(growTree(index, settings, open), entry);
+        for (let step = 0; step < 5; step++) {
+            for (const { node } of after) open.add(node.id).add(sideId(node.id, 'up')).add(sideId(node.id, 'down'));
+            after = layoutTree(growTree(index, settings, open), entry);
+        }
+        const chips = after.filter(p => p.node.type === 'element');
+        // every declaration is drawn once, and every join leads to a drawn one on another level
+        expect(new Set(chips.map(p => p.node.qn)).size).toBe(chips.length);
+        const joined = joins(after);
+        expect(joined.length).toBe(after.reduce((all, p) => all + (p.node.links?.length ?? 0), 0));
+        // a join runs in straight stretches and through no chip but the two it joins
+        for (const { id, from, to, points } of joined) for (const [i, [x2, y2]] of points.slice(1).entries()) {
+            const [x1, y1] = points[i];
+            for (const t of [0.1, 0.3, 0.5, 0.7, 0.9]) for (const chip of chips) if (chip.node.id !== from && chip.node.id !== to) {
+                expect(Math.abs(x1 + (x2 - x1) * t - chip.x) < 116 && Math.abs(y1 + (y2 - y1) * t - chip.y) < 26, `${id} through ${chip.node.id}`).toBe(false);
+            }
+        }
+        const bands = bandsOf(after);
+        for (const [i, band] of bands.entries()) if (i) expect(band.bottom, `L${band.level}`).toBe(bands[i - 1].top);
+        for (const p of chips) {
+            const band = bands.find(b => b.level === p.node.level)!;
+            expect(p.y - 26 > band.top && p.y + 26 < band.bottom, p.node.id).toBe(true);
+        }
+        for (const a of chips) for (const b of chips) if (a !== b && Math.abs(a.y - b.y) < 60 && a.x <= b.x) expect(b.x - a.x, `${a.node.id} and ${b.node.id}`).toBeGreaterThanOrEqual(240);
+        const routed = [...traces(after, () => 26)].map(([id, points]) => ({ id, net: id.slice(0, id.lastIndexOf('/')), parts: points.slice(1).map((to, i) => [points[i], to]).filter(([from, to]) => from[0] !== to[0] || from[1] !== to[1]) }));
+        expect(routed.length).toBe(chips.filter(p => p.node.side).length);
+        for (const { id, net, parts } of routed) {
+            const samples = parts.flatMap(([[x1, y1], [x2, y2]]) => [0.25, 0.5, 0.75].map(t => [x1 + (x2 - x1) * t, y1 + (y2 - y1) * t]));
+            for (const p of chips) if (p.node.id !== id && p.node.id !== net) for (const [x, y] of samples) expect(Math.abs(x - p.x) < 116 && Math.abs(y - p.y) < 26, `${id} through ${p.node.id}`).toBe(false);
+        }
+        // two traces run along the same stretch only as one net: from the same node on the same side
+        const runs = [...routed.map(r => ({ net: `${r.net} ${after.find(p => p.node.id === r.id)!.node.side}`, parts: r.parts })), ...joined.map(j => ({ net: `${j.from} ${j.points[1][1] < j.points[0][1] ? 'up' : 'down'}`, parts: j.points.slice(1).map((to, i) => [j.points[i], to]) }))]
+            .flatMap(r => r.parts.filter(([a, b]) => a[0] === b[0] || a[1] === b[1]).map(([a, b]) => ({ net: r.net, upright: a[0] === b[0], at: a[0] === b[0] ? a[0] : a[1], lo: Math.min(a[0] === b[0] ? a[1] : a[0], a[0] === b[0] ? b[1] : b[0]), hi: Math.max(a[0] === b[0] ? a[1] : a[0], a[0] === b[0] ? b[1] : b[0]) })));
+        for (const a of runs) for (const b of runs) if (a.net < b.net && a.upright === b.upright && Math.abs(a.at - b.at) < 3) expect(Math.min(a.hi, b.hi) - Math.max(a.lo, b.lo), `${a.net} along ${b.net}`).toBeLessThanOrEqual(0);
+        if (lens === 'domain') expect(after.length).toBeGreaterThan(20);
+    }
 });
 
 test('equally relevant nodes stand in the order of their names, whatever the order of the source', async () => {

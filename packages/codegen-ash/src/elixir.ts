@@ -1,4 +1,5 @@
 import type { ExprData, GraphNode } from '@appling/model';
+import { aboutOf } from '@appling/codegen';
 
 type Lookup = (qn: string) => GraphNode | undefined;
 
@@ -193,10 +194,10 @@ export function elixirString(text: string): string {
     return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/#\{/g, '\\#{').replace(/\n/g, '\\n')}"`;
 }
 
-/** The `@moduledoc` lines of a node's `does` text, a heredoc when it spans lines; none without a text. */
+/** The `@moduledoc` lines of a node's `describe` and `does` texts, a heredoc when they span lines; none without a text. */
 export function moduledoc(node: GraphNode): string {
-    const text = node.data.does;
-    if (typeof text !== 'string' || !text.trim()) return '';
+    const text = aboutOf(node);
+    if (!text) return '';
     if (!text.includes('\n')) return `  @moduledoc ${elixirString(text)}\n\n`;
     const body = text.replace(/\\/g, '\\\\').replace(/#\{/g, '\\#{').replace(/"""/g, '\\"""').split('\n').map(l => l ? `  ${l}` : '').join('\n');
     return `  @moduledoc """\n${body}\n  """\n\n`;

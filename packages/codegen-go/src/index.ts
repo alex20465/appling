@@ -1096,7 +1096,7 @@ function scenarioSteps(scenario: GraphNode, context: MapContext): Step[] {
     const imports = new Set(['testing']);
     try {
         const lines = scenarioTest(scenario, context, imports);
-        const does = scenario.data.does ? `: ${String(scenario.data.does).trim().replace(/\s+/g, ' ')}` : '.';
+        const does = scenario.data.describe ? `: ${String(scenario.data.describe).trim().replace(/\s+/g, ' ')}` : '.';
         const comment = [`// ${name} runs the scenario ${scenario.qn}${does}`];
         const helper = goFile(scenario.module, file, context, new Set(), '// ptr returns a pointer to a copy of v, for optional fields.\nfunc ptr[T any](v T) *T { return &v }', true) as Extract<Step, { kind: 'template' }>;
         return [

@@ -134,7 +134,7 @@ module sales {
   }
 
   // Scenarios: checked by the simulator in `appling check`, generated as tests
-  scenario ClerkCancelsDraft does "A clerk cancels a draft order" {
+  scenario ClerkCancelsDraft describe "A clerk cancels a draft order" {
     given {
       acme = create crm.Account { name = "Acme" }
       order = create Order { reference = "A-1", customer = acme }

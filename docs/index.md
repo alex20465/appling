@@ -63,7 +63,7 @@ Each concept is defined once, in the layer that owns it. References only point d
 ## What you can do with it
 
 - **Validate** the whole model on every build: references, types, layer rules, exports and migrations. See [the CLI](tools/cli.md).
-- **Inspect** it next to your AI coding tool with [the inspector](tools/inspect.md), in [VS Code](tools/vscode.md) or the browser: the model canvas, a floating inspector for the selected element, live marks of every change and the task board of the agent's work.
+- **Inspect** it next to your AI coding tool with [the inspector](tools/inspect.md), in [VS Code](tools/vscode.md) or the browser: the model canvas, an inspector sidebar for the selected element, live marks of every change and the task board of the agent's work.
 - **Work with AI** through [the MCP server](tools/ai.md), from any agent or as agent sessions that show their work on the canvas. AI changes pass the same validation and are marked live on the canvas.
 - **Generate** a draft [Django](codegen/django.md) or [Ash](codegen/ash.md) project, or the domain and behavior layers as [Go](codegen/go.md) packages or a [Rust](codegen/rust.md) crate. What the generator cannot write becomes a task in a [registry](codegen/registry.md) for you or an AI.
 - **Evolve** it safely: once you cut a [release](language/migrations.md), renames and type changes of stored data are recorded as migration steps and [carried into generated projects](codegen/migrations.md).

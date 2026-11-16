@@ -423,24 +423,24 @@ test('a model without policies keeps open queries and actions', async () => {
     expect(files['shop/actions.py']).not.toContain('PermissionDenied');
 });
 
-test('does texts become docstrings and help texts, and one registry task each', async () => {
+test('describe and does texts become docstrings and help texts, and each does a registry task', async () => {
     const { files, entries } = await generate({
         'shop.appling': `module shop {
-            entity Account does """
+            entity Account describe """
                 Someone who buys.
                   Pays by "card".
             """ {
-                email: String does "Login address"
+                email: String describe "Login address"
             }
             action Close on Account does "Closes the @Account" { }
-            external Clerk { op Ban (id: String) does "Bans the user" }
+            external Clerk { op Ban (id: String) describe "Bans the user" }
         }`
     });
     expect(files['shop/models.py']).toContain('class Account(models.Model):\n    """Someone who buys.\n      Pays by "card".\n    """\n    email = models.CharField(max_length=255, help_text="Login address")');
     expect(files['shop/actions.py']).toContain('def close(account: Account, *, actor=None) -> None:\n    """Closes the @Account"""\n    pass');
     expect(files['shop/externals.py']).toContain('    def ban(self, id: str) -> None:\n        """Bans the user"""\n        ...');
-    expect(entries['shop.Account'].missing.map(m => m.what)).toEqual(['check that Account matches its description: Someone who buys.\n  Pays by "card".']);
-    expect(entries['shop.Account.email'].status).toBe('partial');
+    expect(entries['shop.Account'].missing.map(m => m.what)).toEqual([]);
+    expect(entries['shop.Account.email'].status).toBe('generated');
     expect(entries['shop.Close'].missing.map(m => m.what)).toContain('implement what Close does: Closes the @Account');
 });
 

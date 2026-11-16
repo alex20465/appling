@@ -1,4 +1,4 @@
-import type { MapContext, Step } from '@appling/codegen';
+import { aboutOf, type MapContext, type Step } from '@appling/codegen';
 import type { GraphNode, TypeData } from '@appling/model';
 import { appOf, lastOf } from './python.js';
 
@@ -13,10 +13,10 @@ export function template(file: string, write: (existing: string | undefined) => 
     return { kind: 'template', file, write };
 }
 
-/** A Python docstring holding a node's `does` text, as lines at the given indentation; none without a text. */
+/** A Python docstring holding a node's `describe` and `does` texts, as lines at the given indentation; none without a text. */
 export function docstring(node: GraphNode, indent: string): string[] {
-    const text = node.data.does;
-    if (typeof text !== 'string' || !text.trim()) return [];
+    const text = aboutOf(node);
+    if (!text) return [];
     const escaped = text.replace(/\\/g, '\\\\').replace(/"(?="")|"$/g, '\\"');
     const lines = escaped.split('\n');
     if (lines.length === 1) return [`${indent}"""${escaped}"""`];

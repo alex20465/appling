@@ -90,7 +90,7 @@ module accounts {
   }
 
   external Clerk {
-    secret secret_key: String does "API keys page of the Clerk dashboard"
+    secret secret_key: String describe "API keys page of the Clerk dashboard"
     secret webhook_secret: String
   }
 
