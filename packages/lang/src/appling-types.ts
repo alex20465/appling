@@ -474,7 +474,8 @@ export class ExpressionTyper {
     }
 }
 
-export function typeOfRef(ref: TypeRef): Type {
+export function typeOfRef(ref: TypeRef | undefined): Type {
+    if (!ref) return ERROR;
     const decl = ref.decl?.ref;
     const base: Type = ref.primitive ? primitive(ref.primitive) : decl ? { kind: 'decl', decl } : ERROR;
     const type: Type = ref.many ? { kind: 'list', item: base } : base;

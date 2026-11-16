@@ -19,6 +19,12 @@ test('export names an existing member', async () => {
     expect(await check('module m { module inner { export Outer } role Outer }')).toContain("Could not resolve reference to Member named 'Outer'.");
 });
 
+test('a field without a type after a syntax error does not crash the typer', async () => {
+    const found = await check('module m { entity User { hash: String does "no" invariant "i" { hash.size() > 0 } } }');
+    expect(found.some(e => e.includes("Expecting token of type ':'"))).toBe(true);
+    expect(found.some(e => e.includes('An error occurred during validation'))).toBe(false);
+});
+
 test('machine governs a state field with an enum type', async () => {
     expect(await check(`module m { ${ORDER} machine Flow on Order.kind { } }`))
         .toContain('A machine must govern an entity field marked "state" with an enum type.');
