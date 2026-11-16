@@ -1,5 +1,5 @@
 ---
-name: release
+name: publish
 description: Release the public @appling/* npm packages with pnpm 12's built in release management. Collects the changes per package since its last release from the git log, records change intents in .changeset/, bumps versions with `pnpm version -r` (independent versions, dependents follow), writes the committed CHANGELOG.md files, commits, pushes and publishes with `pnpm publish -r`. Use when the user asks to release, publish, bump versions, cut a version, ship to npm or update the changelogs.
 metadata:
   anchors:
