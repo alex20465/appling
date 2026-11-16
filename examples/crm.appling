@@ -5,8 +5,6 @@ module crm {
   actor human Employee roles Clerk
 
   entity Account {
-
-
     name: String unique
     email: String
     policy read { actor.is(Clerk) || (actor.is(sales.Customer) && actor.account == this) }
