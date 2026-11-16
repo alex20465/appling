@@ -191,6 +191,7 @@ export function App() {
             <header className="bar">
                 <img src="/appling-icon.svg" alt="" width={20} height={20} />
                 <strong>Appling</strong>
+                <span className="sponsor">sponsored by <a href="https://www.techthos.net/" target="_blank" rel="noopener">Techthos.net</a></span>
                 <span className="muted">{decodeURIComponent(snapshot.root.replace('file://', ''))}</span>
                 {release && (
                     <button className="release" onClick={() => pending[0] && select(pending[0].qn)} disabled={!pending.length}>

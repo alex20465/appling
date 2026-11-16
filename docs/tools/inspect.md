@@ -16,7 +16,7 @@ npx appling inspect models
 > [!TIP]
 > To try the inspector without installing anything, open the [demo](https://appling.tools/inspect/). It runs on the sample sales and CRM model entirely in your browser.
 
-The header shows the workspace folder, the release indicator (once a release exists) and an icon for the state of the model: a check mark when it is valid, a warning sign with the number of errors otherwise. Pointing at it says so in words and lists the first errors.
+The header shows the workspace folder, the release indicator (once a release exists) and an icon for the state of the model: a check mark when it is valid, a warning sign with the number of errors otherwise. Pointing at it says so in words and lists the first errors. Next to the Appling name, "sponsored by Techthos.net" links to the sponsor, https://www.techthos.net/.
 
 In VS Code, **Appling: Show in the inspector** selects the element at the cursor of a `.appling` editor on the canvas, and **Open source** in the inspector opens an element's source in VS Code.
 
