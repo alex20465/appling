@@ -1,5 +1,16 @@
 # @appling/viz
 
+## 0.3.0
+
+### Minor Changes
+
+- The model canvas is a pyramid of five level bands with an L1 to L5 rail that picks the entry level; every declaration unfolds upwards and downwards (`sideId`), with the new exports `linked`, `peers`, `levelOf` and `Glyph`.
+
+### Patch Changes
+
+- Updated dependencies:
+  - @appling/model@0.1.4
+
 ## 0.2.0
 
 ### Minor Changes

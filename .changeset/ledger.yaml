@@ -12,6 +12,10 @@
   dir: packages/ai
   intents:
     - chilly-peaches-repeat
+"@appling/ai@0.2.1":
+  dir: packages/ai
+  intents:
+    - light-worms-punch
 "@appling/cli@0.2.0":
   dir: packages/cli
   intents:
@@ -41,6 +45,10 @@
     - smart-waves-taste
     - tame-rivers-study
     - tiny-tables-add
+"@appling/codegen-ash@0.1.4":
+  dir: packages/codegen-ash
+  intents:
+    - giant-horses-chew
 "@appling/codegen-django@0.1.2":
   dir: packages/codegen-django
   intents:
@@ -53,6 +61,10 @@
     - smart-waves-taste
     - tame-rivers-study
     - tiny-tables-add
+"@appling/codegen-django@0.1.4":
+  dir: packages/codegen-django
+  intents:
+    - giant-horses-chew
 "@appling/codegen-go@0.1.3":
   dir: packages/codegen-go
   intents:
@@ -60,6 +72,10 @@
     - smart-waves-taste
     - tame-rivers-study
     - tiny-tables-add
+"@appling/codegen-go@0.1.4":
+  dir: packages/codegen-go
+  intents:
+    - giant-horses-chew
 "@appling/codegen-rust@0.1.3":
   dir: packages/codegen-rust
   intents:
@@ -67,11 +83,19 @@
     - smart-waves-taste
     - tame-rivers-study
     - tiny-tables-add
+"@appling/codegen-rust@0.1.4":
+  dir: packages/codegen-rust
+  intents:
+    - giant-horses-chew
 "@appling/codegen@0.1.3":
   dir: packages/codegen
   intents:
     - fast-ants-fix
     - smart-waves-taste
+"@appling/codegen@0.2.0":
+  dir: packages/codegen
+  intents:
+    - slow-shirts-perform
 "@appling/ide@0.1.2":
   dir: packages/ide
   intents:
@@ -82,6 +106,10 @@
   dir: packages/ide
   intents:
     - heavy-clocks-stand
+"@appling/inspect@0.1.4":
+  dir: packages/inspect
+  intents:
+    - soft-fireants-shine
 "@appling/lang@0.2.0":
   dir: packages/lang
   intents:
@@ -111,6 +139,10 @@
     - smart-waves-taste
     - tame-rivers-study
     - tiny-tables-add
+"@appling/lang@0.4.0":
+  dir: packages/lang
+  intents:
+    - vast-insects-exist
 "@appling/model@0.1.1":
   dir: packages/model
   intents:
@@ -140,3 +172,7 @@
   dir: packages/viz
   intents:
     - curvy-mails-unite
+"@appling/viz@0.3.0":
+  dir: packages/viz
+  intents:
+    - loud-peaches-kneel

@@ -1,5 +1,17 @@
 # @appling/ai
 
+## 0.2.1
+
+### Patch Changes
+
+- The bundled skills use `describe` for notes and `does` only on event, action, machine and job.
+
+- Updated dependencies:
+  - @appling/codegen@0.2.0
+  - @appling/lang@0.4.0
+  - @appling/model@0.1.4
+  - @appling/viz@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes

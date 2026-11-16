@@ -1,6 +1,6 @@
 {
   "name": "@appling/codegen-rust",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Appling code generation extension for Rust",
   "homepage": "https://www.appling.tools/docs/",
   "repository": {

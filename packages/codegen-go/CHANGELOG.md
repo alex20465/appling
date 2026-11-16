@@ -1,5 +1,15 @@
 # @appling/codegen-go
 
+## 0.1.4
+
+### Patch Changes
+
+- Generated documentation (docstrings, `help_text`, `@moduledoc`, attribute descriptions, scenario comments) comes from the `describe` text, followed by a `does` text.
+
+- Updated dependencies:
+  - @appling/codegen@0.2.0
+  - @appling/model@0.1.4
+
 ## 0.1.3
 
 ### Patch Changes

@@ -1,5 +1,18 @@
 # @appling/ide
 
+## 0.1.4
+
+### Patch Changes
+
+- The canvas draws the five level pyramid, and the header shows the model state as an icon with the first errors in a tooltip.
+
+- Updated dependencies:
+  - @appling/ai@0.2.1
+  - @appling/codegen@0.2.0
+  - @appling/lang@0.4.0
+  - @appling/model@0.1.4
+  - @appling/viz@0.3.0
+
 ## 0.1.3
 
 ### Patch Changes

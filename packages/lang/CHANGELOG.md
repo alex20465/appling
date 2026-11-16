@@ -1,5 +1,11 @@
 # @appling/lang
 
+## 0.4.0
+
+### Minor Changes
+
+- The `does` clause is renamed `describe` on every named element; `does` remains only on `event`, `action`, `machine` and `job` for the work their code has to do and is a syntax error elsewhere.
+
 ## 0.3.0
 
 ### Minor Changes
