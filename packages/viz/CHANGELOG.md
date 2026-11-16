@@ -1,5 +1,12 @@
 # @appling/viz
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies:
+  - @appling/model@0.1.5
+
 ## 0.3.0
 
 ### Minor Changes

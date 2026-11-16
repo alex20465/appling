@@ -1,5 +1,13 @@
 # @appling/codegen-rust
 
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies:
+  - @appling/codegen@0.2.1
+  - @appling/model@0.1.5
+
 ## 0.1.4
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @appling/codegen
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies:
+  - @appling/model@0.1.5
+
 ## 0.2.0
 
 ### Minor Changes

@@ -1,5 +1,12 @@
 # @appling/model
 
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies:
+  - @appling/lang@0.4.1
+
 ## 0.1.4
 
 ### Patch Changes

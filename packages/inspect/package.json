@@ -1,6 +1,6 @@
 {
   "name": "@appling/inspect",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Appling Inspect: a read only server per repo and its client (canvas, floating inspector, task board) that follows the model live next to an AI coding tool, for Appling Desktop, the VS Code extension and `appling inspect`, plus the browser demo of the landing site",
   "homepage": "https://www.appling.tools/docs/",
   "repository": {

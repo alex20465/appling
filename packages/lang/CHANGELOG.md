@@ -1,5 +1,11 @@
 # @appling/lang
 
+## 0.4.1
+
+### Patch Changes
+
+- A field whose type is missing after a syntax error no longer crashes type checking, the graph and the inspector snapshot; the syntax error is reported instead.
+
 ## 0.4.0
 
 ### Minor Changes

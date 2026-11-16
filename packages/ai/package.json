@@ -1,6 +1,6 @@
 {
   "name": "@appling/ai",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Appling for AI: MCP server, agent sessions and the registry skill",
   "homepage": "https://www.appling.tools/docs/",
   "repository": {

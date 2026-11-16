@@ -143,6 +143,10 @@
   dir: packages/lang
   intents:
     - vast-insects-exist
+"@appling/lang@0.4.1":
+  dir: packages/lang
+  intents:
+    - olive-maps-invent
 "@appling/model@0.1.1":
   dir: packages/model
   intents:
