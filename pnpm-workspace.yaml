@@ -24,6 +24,10 @@ overrides:
   '@azure/msal-node': '>=7.1.0'
   file-type: '>=21.3.2'
   postcss-selector-parser: '>=7.1.6'
+auditConfig:
+  ignoreGhsas:
+    # zod 3 only through bunny-transfer, the deploy tool of the private landing; it needs zod 3, which has no fix
+    - GHSA-mrhx-c7xc-m3w5
 packageExtensions:
   bunny-transfer:
     dependencies:
