@@ -7,7 +7,8 @@
     "check": "appling check",
     "fmt": "appling fmt",
     "test": "vitest run",
-    "sandbox": "node scripts/sandbox/start.mjs"
+    "sandbox": "node scripts/sandbox/start.mjs",
+    "publish": "pnpm publish -r --access public --report-summary"
   },
   "devDependencies": {
     "@appling/cli": "workspace:*",
