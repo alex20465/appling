@@ -33,15 +33,26 @@ const targets = [
     href: "/docs/codegen/rust/",
   },
 ];
+
+const gains = [
+  { name: "Faster", text: "a generator writes a whole project in seconds. An agent writing the same files takes many turns." },
+  { name: "Less AI consumption", text: "generation costs no tokens. The agent spends them only on the registry tasks, the part that needs thought." },
+  { name: "Same result every time", text: "the same model gives the same code, so the agent builds on a base it does not have to reread or repair." },
+];
 ---
 
 <section id="targets" class="border-t border-line px-4 py-16 sm:px-8">
   <div class="mx-auto flex max-w-[1200px] flex-col gap-8">
     <div class="flex max-w-[640px] flex-col gap-3">
-      <span class="eyebrow">Targets</span>
-      <h2 class="text-h1">Your model, in your stack</h2>
-      <p class="text-ink-soft">Each target is an installable extension that turns the same model into a draft project. What a generator cannot write becomes a task in a registry, for you or an AI to finish.</p>
+      <span class="eyebrow">Code generation</span>
+      <h2 class="text-h1">Generated code, so your AI writes less</h2>
+      <p class="text-ink-soft">Everything the model already says is written by a generator, not by an AI. Each target is an installable extension that turns the model into a draft project, and what a generator cannot write becomes a task in a registry for your agent to finish.</p>
     </div>
+    <ul class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-6">
+      {gains.map((gain) => (
+        <li class="border-l-2 border-leaf pl-4 text-sm leading-[22px] text-ink-muted"><strong class="font-semibold text-ink">{gain.name}:</strong>{" "}{gain.text}</li>
+      ))}
+    </ul>
     <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-px border border-line bg-line">
       {targets.map((target) => (
         <a href={target.href} class="step flex min-w-0 flex-col gap-3 bg-surface-raised p-6 text-ink no-underline hover:bg-surface-elevated hover:text-ink">

@@ -2,27 +2,27 @@
 const steps = [
   {
     key: "text",
-    title: "Text",
-    text: "Write the model in plain .appling files. The text is the canonical source.",
+    title: "Model with text",
+    text: "You or your agent write the model in plain .appling files. The text is the canonical source.",
     icon: '<path class="sr" d="M6 3h8l4 4v14H6z M14 3v4h4 M9 12h6 M9 16h6" stroke="#5cbf63" stroke-width="1.5"></path>',
   },
   {
-    key: "graph",
-    title: "Graph",
-    text: "Parsed and linked across files and modules, every element by its qualified name.",
-    icon: '<path class="sr" d="M6 6 L18 8 L12 18 Z" stroke="#5cbf63" stroke-width="1.5"></path><circle cx="6" cy="6" r="2.6" fill="#5cbf63"></circle><circle cx="18" cy="8" r="2.6" fill="#5cbf63"></circle><circle cx="12" cy="18" r="2.6" fill="#a6dc5a"></circle>',
-  },
-  {
     key: "validated",
-    title: "Validated",
-    text: "Layer rules, exports and migrations are checked on every build.",
+    title: "Validate",
+    text: "Linked across files and modules, then checked: layer rules, exports and migrations, on every build.",
     icon: '<path class="sr" d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z M9 12l2 2 4-4" stroke="#5cbf63" stroke-width="1.5"></path>',
   },
   {
+    key: "inspect",
+    title: "Inspect",
+    text: "See the model on the inspector's canvas and follow what agents change, before any code exists.",
+    icon: '<path class="sr" d="M20 20l-4.5-4.5" stroke="#5cbf63" stroke-width="1.5"></path><circle class="sr" cx="11" cy="11" r="6" stroke="#5cbf63" stroke-width="1.5"></circle>',
+  },
+  {
     key: "generate",
-    title: "Visualize and generate",
-    text: "Explore the model in the inspector, follow what agents change on the canvas, and generate a Django, Ash, Go or Rust project, all from the same source.",
-    icon: '<path class="sr" d="M20 20l-4.5-4.5 M11 8v6 M8 11h6" stroke="#5cbf63" stroke-width="1.5"></path><circle class="sr" cx="11" cy="11" r="6" stroke="#5cbf63" stroke-width="1.5"></circle>',
+    title: "Generate",
+    text: "Generators write the Django, Ash, Go or Rust project without a single AI call. Your agent only finishes what is left.",
+    icon: '<path class="sr" d="M9 8l-4 4 4 4 M15 8l4 4-4 4" stroke="#5cbf63" stroke-width="1.5"></path>',
     highlight: true,
   },
 ];
@@ -30,25 +30,25 @@ const steps = [
 // The section plays one 10s cycle (see .stage in global.css): step i lights at i * 2s, then the edit runs back to the text
 const SLOT = 2;
 
-const graphNodes = [
-  [20, 46, 0.2],
-  [80, 14, 0.5],
-  [140, 46, 0.8],
+// A small piece of the canvas: one chip on the lower level, two resting on it
+const chips = [
+  [62, 40, 0.2],
+  [14, 6, 0.6],
+  [110, 6, 0.8],
 ];
-const graphEdges = [
-  ["M20 46 L80 14", 0.4],
-  ["M80 14 L140 46", 0.7],
-  ["M20 46 L140 46", 1],
+const traces = [
+  ["M80 40 V30 H32 V20", 0.4],
+  ["M80 40 V30 H128 V20", 0.5],
 ];
 const checks = ["layer rules", "exports", "migrations"];
-const outputs = ["canvas", "django", "ash", "go", "rust"];
+const outputs = ["django", "ash", "go", "rust"];
 ---
 
 <section id="how" class="border-t border-line px-4 py-16 sm:px-8">
   <div class="mx-auto flex max-w-[1200px] flex-col gap-8">
     <div class="flex max-w-[640px] flex-col gap-3">
       <span class="eyebrow">How it works</span>
-      <h2 class="text-h1">From text to a living graph</h2>
+      <h2 class="text-h1">Model, validate, inspect, generate. Repeat.</h2>
     </div>
     <div class="flex flex-col">
       <div class="flex items-stretch gap-2 max-[960px]:flex-col">
@@ -82,13 +82,13 @@ const outputs = ["canvas", "django", "ash", "go", "rust"];
                     <span class="tline block w-fit" style="--o: 1s"><span class="pu">{"}"}</span></span>
                   </div>
                 )}
-                {step.key === "graph" && (
+                {step.key === "inspect" && (
                   <svg viewBox="0 0 160 60" class="h-[60px] w-full">
-                    {graphEdges.map(([d, o]) => (
-                      <path class="sr drawloop" pathLength="1" d={d as string} stroke="#7a6e5e" stroke-width="1.5" style={`--o: ${o}s`}></path>
+                    {traces.map(([d, o]) => (
+                      <path class="sr drawloop" pathLength="1" d={d as string} stroke="#5cbf63" stroke-width="1.5" style={`--o: ${o}s`}></path>
                     ))}
-                    {graphNodes.map(([x, y, o], n) => (
-                      <circle class="popin" cx={x} cy={y} r="6" fill={n === 1 ? "#a6dc5a" : "#5cbf63"} style={`--o: ${o}s`}></circle>
+                    {chips.map(([x, y, o], n) => (
+                      <rect class="popin" x={x} y={y} width="36" height="14" rx="2" fill="#142215" stroke={n === 0 ? "#5cbf63" : "#a6dc5a"} style={`--o: ${o}s`}></rect>
                     ))}
                   </svg>
                 )}
@@ -122,7 +122,7 @@ const outputs = ["canvas", "django", "ash", "go", "rust"];
           <path class="sr" d="M2 10 L8 2 L14 10" stroke="#7a6e5e" stroke-width="2.5"></path>
         </svg>
         <span class="writeback absolute size-2.5 rounded-full bg-leaf"></span>
-        <span class="backlabel absolute -bottom-3 left-1/2 -translate-x-1/2 bg-surface px-3 font-mono text-xs leading-[22px] whitespace-nowrap text-ink-muted">edits write back to text</span>
+        <span class="backlabel absolute -bottom-3 left-1/2 -translate-x-1/2 bg-surface px-3 font-mono text-xs leading-[22px] whitespace-nowrap text-ink-muted">change the model, run the loop again</span>
       </div>
     </div>
   </div>

@@ -146,9 +146,6 @@
   .backlabel { animation: backlabel 10s ease infinite; }
   .step { transition: transform .2s cubic-bezier(.23,1,.32,1); }
   .step:hover { transform: translateY(-2px); }
-  .edge { marker-end: url(#ah); }
-  .edgelabel { paint-order: stroke; stroke: var(--color-surface-raised); stroke-width: 6px; stroke-linejoin: round; }
-  .node { animation: fadein .7s ease both; }
   .type { animation: typing 1.1s steps(32) both; }
   .cursor { display: inline-block; width: 9px; height: 18px; margin-left: 4px; vertical-align: -3px; background: var(--color-leaf); animation: blink 1s steps(1) infinite; }
 

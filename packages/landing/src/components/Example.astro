@@ -22,32 +22,14 @@ const source = `<span class="kw">module</span> sales <span class="pu">{</span>
     <span class="kw">transition</span> <span class="va">draft</span> <span class="pu">-&gt;</span> <span class="va">placed</span> <span class="kw">via</span> <span class="ty">PlaceOrder</span>
   <span class="pu">}</span>
 <span class="pu">}</span>`;
-
-// Symmetric layout in a 336 x 284 viewBox: Behavior (L2) on top, Domain (L1) below, every node 132 x 56
-const W = 132;
-const H = 56;
-const nodes = [
-  { x: 8, y: 20, kind: "L2 · ACTION", name: "PlaceOrder", delay: 0.2 },
-  { x: 196, y: 20, kind: "L2 · MACHINE", name: "OrderFlow", delay: 0.3 },
-  { x: 102, y: 120, kind: "L1 · ENTITY", name: "sales.Order", delay: 0, highlight: true },
-  { x: 102, y: 220, kind: "L1 · ENUM", name: "OrderStatus", delay: 0.1 },
-];
-
-// Each edge starts on a port at its source border and ends where the arrow tip touches the target
-const edges = [
-  { from: [74, 76], d: "M74 76 C74 100 138 96 138 119", delay: 0.6, label: { x: 100, y: 98, text: "on", anchor: "end" } },
-  { from: [262, 76], d: "M262 76 C262 100 198 96 198 119", delay: 0.8, label: { x: 236, y: 98, text: "on status", anchor: "start" } },
-  { from: [196, 48], d: "M196 48 L141 48", delay: 1, label: { x: 168, y: 48, text: "via", anchor: "middle" } },
-  { from: [168, 176], d: "M168 176 L168 219", delay: 1.2, label: { x: 176, y: 198, text: "status", anchor: "start" } },
-];
 ---
 
 <section id="example" class="border-t border-line px-4 py-16 sm:px-8">
   <div class="mx-auto flex max-w-[1200px] flex-col gap-8">
     <div class="flex max-w-[640px] flex-col gap-3">
       <span class="eyebrow">Example</span>
-      <h2 class="text-h1">The graph</h2>
-      <p class="text-ink-soft">The same sales module, as text and as the graph Appling builds from it.</p>
+      <h2 class="text-h1">The canvas</h2>
+      <p class="text-ink-soft">A sales module as text, and the same model on the canvas the inspector draws from it.</p>
     </div>
     <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,440px),1fr))] gap-px border border-line bg-line">
       <div class="min-w-0 bg-surface-raised">
@@ -58,33 +40,9 @@ const edges = [
         <pre class="overflow-x-auto p-6 text-code" set:html={source}></pre>
       </div>
       <div class="flex min-w-0 flex-col gap-4 bg-surface-raised p-6">
-        <span class="eyebrow">Linked model</span>
+        <span class="eyebrow">Inspector canvas</span>
         <div class="grid flex-1 place-items-center">
-          <svg viewBox="0 0 336 284" aria-hidden="true" class="block w-full max-w-[400px]">
-            <defs>
-              <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#7a6e5e"></path></marker>
-            </defs>
-            {edges.map((edge) => (
-              <g>
-                <path class="sr ref edge" d={edge.d} stroke="#7a6e5e" stroke-width="1.5" style={`animation-delay: 0s, ${edge.delay}s`}></path>
-                <circle class="appear" cx={edge.from[0]} cy={edge.from[1]} r="2.5" fill="#7a6e5e" style={`animation-delay: ${edge.delay}s`}></circle>
-                <text class="edgelabel appear fill-ink-muted font-mono text-[10.5px]" x={edge.label.x} y={edge.label.y} text-anchor={edge.label.anchor} dominant-baseline="central" style={`animation-delay: ${edge.delay}s`}>{edge.label.text}</text>
-              </g>
-            ))}
-            {nodes.map((node) => (
-              <g class="node" style={`animation-delay: ${node.delay}s`}>
-                <rect x={node.x} y={node.y} width={W} height={H} rx="4" fill={node.highlight ? "#142215" : "#1b1712"} stroke={node.highlight ? "#5cbf6366" : "#7a6e5e"} vector-effect="non-scaling-stroke"></rect>
-                <text x={node.x + 12} y={node.y + 22} class:list={["font-mono text-[10px] font-semibold tracking-[0.1em]", node.highlight ? "fill-rust" : "fill-ink-muted"]}>{node.kind}</text>
-                <text x={node.x + 12} y={node.y + 40} class="fill-ink font-mono text-[13px]">{node.name}</text>
-                {node.highlight && (
-                  <g>
-                    <rect x={node.x + W - 52} y={node.y + H - 7} width="40" height="14" rx="7" fill="#5cbf63"></rect>
-                    <text x={node.x + W - 32} y={node.y + H} text-anchor="middle" dominant-baseline="central" class="fill-on-leaf font-mono text-[8px] font-semibold tracking-[0.06em]">EXPORT</text>
-                  </g>
-                )}
-              </g>
-            ))}
-          </svg>
+          <img src="/inspect-canvas.webp" width="960" height="480" loading="lazy" alt="The inspector canvas with the Order entity on the domain level and what rests on it unfolded above: actions, events and a machine, then queries and a use case, then roles and an actor" class="block h-auto w-full border border-line" />
         </div>
       </div>
     </div>

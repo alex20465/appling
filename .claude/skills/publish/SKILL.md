@@ -75,7 +75,9 @@ Retake the two screenshots of the landing site's VS Code section (`packages/land
 - `packages/landing/public/vscode-canvas.webp`: the canvas in a tab, the sales module unfolded up to `sales.Order`, the Inspector panel listing its actions, fields and what uses it.
 - `packages/landing/public/vscode-editor.webp`: the canvas on the left, `sales.appling` on the right at `entity Order`, the gutter marks visible.
 
-Take them as PNG under `.sandbox/output`, convert to WebP at the same names, look at both, and update the `alt` and `text` in `VSCode.astro` when what they show changed.
+- `packages/landing/public/inspect-canvas.webp` (Example section, `Example.astro`): from `pnpm sandbox inspect`, the canvas only at 960x480, `sales.Order` unfolded upwards and centred.
+
+A user with VSCodium starts the target with `CODE=codium pnpm sandbox vscode`. Replace the home path in the inspector header with `~/workspace` before a shot. Take them as PNG under `.sandbox/output`, convert to WebP at the same names, look at both, and update the `alt` and `text` in `VSCode.astro` when what they show changed.
 
 ## 5. Commit, push, publish
 
