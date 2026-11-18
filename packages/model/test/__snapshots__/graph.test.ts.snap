@@ -1440,12 +1440,16 @@ exports[`graph of examples 1`] = `
       "qn": "sales.Line.amount",
     },
     {
-      "data": {},
+      "data": {
+        "holds": "The reference is ORD, the year and a running number, assigned when the order is created",
+      },
       "kind": "Entity",
       "layer": "domain",
       "level": "medium",
       "module": "sales",
-      "props": {},
+      "props": {
+        "holds": "The reference is ORD, the year and a running number, assigned when the order is created",
+      },
       "qn": "sales.Order",
     },
     {
@@ -2196,13 +2200,16 @@ exports[`graph of examples 1`] = `
     },
     {
       "data": {
+        "does": "Tells the customer by email why the order was cancelled",
         "entity": "sales.Order",
       },
       "kind": "Action",
       "layer": "behavior",
       "level": "medium",
       "module": "sales",
-      "props": {},
+      "props": {
+        "does": "Tells the customer by email why the order was cancelled",
+      },
       "qn": "sales.Cancel",
     },
     {
@@ -2680,12 +2687,16 @@ exports[`graph of examples 1`] = `
       "qn": "sales.OrderSummary.customer_name",
     },
     {
-      "data": {},
+      "data": {
+        "handles": "Charges through the payment vendor and maps each of its decline codes to Declined",
+      },
       "kind": "External",
       "layer": "application",
       "level": "medium",
       "module": "sales",
-      "props": {},
+      "props": {
+        "handles": "Charges through the payment vendor and maps each of its decline codes to Declined",
+      },
       "qn": "sales.Payments",
     },
     {
@@ -2840,6 +2851,7 @@ exports[`graph of examples 1`] = `
         "protocol": "rest",
         "rateLimit": 100,
         "rateUnit": "minute",
+        "serves": "Answers GET /orders as CSV as well when the client accepts text/csv",
       },
       "kind": "Interface",
       "layer": "interface",
@@ -2850,6 +2862,7 @@ exports[`graph of examples 1`] = `
         "protocol": "rest",
         "rateLimit": 100,
         "rateUnit": "minute",
+        "serves": "Answers GET /orders as CSV as well when the client accepts text/csv",
       },
       "qn": "sales.PublicApi",
     },
@@ -2931,6 +2944,7 @@ exports[`graph of examples 1`] = `
           },
         ],
         "route": "/orders",
+        "shows": "Marks orders placed more than two days ago as late",
       },
       "kind": "Page",
       "layer": "experience",
@@ -2941,6 +2955,7 @@ exports[`graph of examples 1`] = `
           "list OpenOrders as OrderSummary { reference, status, total } actions Cancel",
         ],
         "route": "/orders",
+        "shows": "Marks orders placed more than two days ago as late",
       },
       "qn": "sales.Orders",
     },
