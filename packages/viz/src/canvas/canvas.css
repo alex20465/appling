@@ -211,3 +211,6 @@ button.card-row:hover { background: var(--appling-surface-hover); }
 .file-link { padding: 0; border: 0; background: none; color: var(--appling-leaf); font: 11px var(--appling-font-mono); text-align: left; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .file-link:hover { color: var(--appling-sprout); }
 .cards .loose-bubbles { position: static; grid-column: 1 / -1; max-width: none; max-height: none; }
+
+/* fingers need larger targets than a pointer */
+@media (pointer: coarse) { .tool-group button { min-width: 38px; height: 38px; } }

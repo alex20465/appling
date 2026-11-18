@@ -44,6 +44,12 @@ interface Camera {
     k: number;
 }
 
+/** The camera zoomed by a factor, within its limits, around a point of the canvas that stays where it is. */
+function scaled(c: Camera, factor: number, px: number, py: number): Camera {
+    const k = Math.min(2.5, Math.max(0.15, c.k * factor));
+    return { k, x: px - (px - c.x) * (k / c.k), y: py - (py - c.y) * (k / c.k) };
+}
+
 /** Half the height of the chip of each node type: every node of a type has one size, relevance shows in its outline. */
 const HALF: Record<TreeNode['type'], number> = { seed: 34, module: 26, element: 26 };
 /** A chip from its left to its right, around the node's place where the traces meet it: a cell of `CELL` on the left for the icon, the texts right of it. Inside the slots of `layout.ts`. */
@@ -117,6 +123,8 @@ const CHANGE_LETTERS: Record<string, string> = { added: 'A', changed: 'M', remov
 export function ModelCanvas({ index, name, focus, folded, selected, settings, bubbles = [], changes, sessions, onSession, implementation, buttons = [], onSelect, onSettings, onOpenFile, step }: CanvasProps) {
     const box = useRef<HTMLDivElement>(null);
     const drag = useRef<{ x: number, y: number, moved: boolean }>(undefined);
+    /** The pointers that are down, for the pinch of two fingers. */
+    const fingers = useRef(new Map<number, { x: number, y: number }>());
     const [camera, setCamera] = useState<Camera>({ x: 0, y: 0, k: 1 });
     const seen = useRef(camera);
     seen.current = camera;
@@ -264,21 +272,21 @@ export function ModelCanvas({ index, name, focus, folded, selected, settings, bu
             cancelAnimationFrame(glide.current!);
             const rect = element.getBoundingClientRect();
             const [px, py] = [event.clientX - rect.left, event.clientY - rect.top];
-            setCamera(c => {
-                const k = Math.min(2.5, Math.max(0.15, c.k * Math.exp(-event.deltaY * 0.0015)));
-                return { k, x: px - (px - c.x) * (k / c.k), y: py - (py - c.y) * (k / c.k) };
-            });
+            setCamera(c => scaled(c, Math.exp(-event.deltaY * 0.0015), px, py));
         };
         element.addEventListener('wheel', wheel, { passive: false });
         return () => element.removeEventListener('wheel', wheel);
     }, []);
 
-    const zoom = (factor: number) => setCamera(c => {
-        const element = box.current!;
-        const [px, py] = [element.clientWidth / 2, element.clientHeight / 2];
-        const k = Math.min(2.5, Math.max(0.15, c.k * factor));
-        return { k, x: px - (px - c.x) * (k / c.k), y: py - (py - c.y) * (k / c.k) };
-    });
+    const zoom = (factor: number) => setCamera(c => scaled(c, factor, box.current!.clientWidth / 2, box.current!.clientHeight / 2));
+
+    /** A finger or the button left: the finger that stays pans on from where it is, and never clicks. */
+    const lift = (event: React.PointerEvent) => {
+        fingers.current.delete(event.pointerId);
+        const [rest] = fingers.current.values();
+        if (rest) drag.current = { ...rest, moved: true };
+        else setTimeout(() => { drag.current = undefined; });
+    };
 
     /** Folds what these ids opened and everything under these nodes. */
     const fold = (keys: string[], under: string[]) => {
@@ -352,9 +360,23 @@ export function ModelCanvas({ index, name, focus, folded, selected, settings, bu
             className="tree-canvas"
             ref={box}
             onPointerDown={event => {
-                if (event.button === 0) drag.current = { x: event.clientX, y: event.clientY, moved: false };
+                fingers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+                if (event.button === 0) drag.current = { x: event.clientX, y: event.clientY, moved: fingers.current.size > 1 };
             }}
             onPointerMove={event => {
+                if (fingers.current.size === 2 && fingers.current.has(event.pointerId)) {
+                    const before = [...fingers.current.values()];
+                    fingers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+                    const [a, b] = [...fingers.current.values()];
+                    const rect = box.current!.getBoundingClientRect();
+                    const middle = (p: typeof a, q: typeof a) => [(p.x + q.x) / 2 - rect.left, (p.y + q.y) / 2 - rect.top];
+                    const [fx, fy] = middle(before[0], before[1]);
+                    const [tx, ty] = middle(a, b);
+                    const factor = Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, Math.hypot(before[0].x - before[1].x, before[0].y - before[1].y));
+                    cancelAnimationFrame(glide.current!);
+                    setCamera(c => { const to = scaled(c, factor, fx, fy); return { ...to, x: to.x + tx - fx, y: to.y + ty - fy }; });
+                    return;
+                }
                 const start = drag.current;
                 if (!start || !(event.buttons & 1)) return;
                 const [dx, dy] = [event.clientX - start.x, event.clientY - start.y];
@@ -364,7 +386,8 @@ export function ModelCanvas({ index, name, focus, folded, selected, settings, bu
                 cancelAnimationFrame(glide.current!);
                 setCamera(c => ({ ...c, x: c.x + dx, y: c.y + dy }));
             }}
-            onPointerUp={() => setTimeout(() => { drag.current = undefined; })}
+            onPointerUp={lift}
+            onPointerCancel={lift}
         >
             <svg className="tree" role="tree" aria-label={`Pyramid from ${LENSES[settings.lens].label}`}>
                 <g transform={`translate(${camera.x} ${camera.y}) scale(${camera.k})`}>
