@@ -34,6 +34,8 @@ description: What @appling/codegen-ash generates from a model, how it uses Ash's
 
 The app name also sets the Elixir module prefix: `shop` becomes `Shop`, `shop_api` becomes `ShopApi`.
 
+The code comes from the Nunjucks templates in `templates/` of `@appling/codegen-ash`; to change it for your project, see [templates](templates.md).
+
 ## Project setup
 
 | Step | Command |

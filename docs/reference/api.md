@@ -161,12 +161,13 @@ Configuration and extensions:
 | `CodegenExtension` | The extension contract: `name`, `prerequisites`, `test`, `setup`, `steps`, `migrate` |
 | `Step`, `CommandStep`, `TemplateStep`, `TaskStep` | The three step kinds |
 | `MapContext`, `Prerequisite` | What an extension gets per node, and a tool it needs |
+| `templateRenderer(root, extension, options)`, `Render`, `overrideFolder(root, extension, options)`, `ORIGINAL` | The Nunjucks renderer behind `context.render`: the project's [override folder](../codegen/templates.md) first, then the extension's `templates`; `original:` names the extension's own template |
 
 Planning and running:
 
 | Export | Purpose |
 |---|---|
-| `plan(graph, extension, name, options)` | The ordered steps and one registry entry per node (`Plan`) |
+| `plan(graph, extension, name, options, root?)` | The ordered steps and one registry entry per node (`Plan`); `root` (default `.`) is the project folder that holds the template overrides |
 | `doesTask(node)` | The registry task of a node's [`does`](../language/descriptions.md) text, which `plan` adds to its entry |
 | `aboutOf(node)` | The documentation of a node in generated code: its `describe` text, then its `does` text |
 | `describe(step)` | A one line description of a step, as `--plan` prints it |

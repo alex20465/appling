@@ -1,0 +1,6 @@
+{# Defined once in config/settings.py before the first secret: reads an environment variable or stops the app naming it. #}
+def required_env(name):
+    try:
+        return os.environ[name]
+    except KeyError:
+        raise ImproperlyConfigured(f"Set the environment variable {name} (see .env.example)") from None

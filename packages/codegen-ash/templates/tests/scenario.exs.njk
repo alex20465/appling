@@ -1,0 +1,14 @@
+{# The test of a scenario; one the generated project cannot pass yet is skipped with a pointer to its registry entry. -#}
+{% if describe %}
+  # {{ describe }}
+{% endif %}
+{% if body %}
+  test {{ title | dump }} do
+{% for line in body %}
+    {{ line }}
+{% endfor %}
+  end
+{% else %}
+  @tag skip: {{ ("registry task: " + qn) | dump }}
+  test {{ title | dump }}
+{% endif %}

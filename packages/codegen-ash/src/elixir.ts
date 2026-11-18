@@ -198,13 +198,13 @@ export function elixirString(text: string): string {
 export function moduledoc(node: GraphNode): string {
     const text = aboutOf(node);
     if (!text) return '';
-    if (!text.includes('\n')) return `  @moduledoc ${elixirString(text)}\n\n`;
+    if (!text.includes('\n')) return `  @moduledoc ${elixirString(text)}`;
     const body = text.replace(/\\/g, '\\\\').replace(/#\{/g, '\\#{').replace(/"""/g, '\\"""').split('\n').map(l => l ? `  ${l}` : '').join('\n');
-    return `  @moduledoc """\n${body}\n  """\n\n`;
+    return `  @moduledoc """\n${body}\n  """`;
 }
 
 /** Puts the node's `@moduledoc` first in the module. */
 export function withModuledoc(text: string, node: GraphNode): string {
     const doc = moduledoc(node);
-    return doc ? text.replace(/^(defmodule [^\n]* do\n)/, head => head + doc) : text;
+    return doc ? text.replace(/^(defmodule [^\n]* do\n)/, head => `${head}${doc}\n\n`) : text;
 }

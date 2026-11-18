@@ -1,0 +1,6 @@
+{# The body of the test that an action raises its declared error (or ValueError) when one precondition fails and the earlier ones hold. #}
+{% if instance %}
+{{ instance }} = make_{{ instance }}()
+{% endif %}
+with self.assertRaises({{ error }}):
+    {{ call }}

@@ -1,0 +1,86 @@
+{# A page: a LiveView. Lists read through the query's read action into a `.table`, details load the record of the route's
+   `:id` into a `.list`, forms are AshPhoenix forms for the action. Row actions and forms run the action and report the
+   outcome as a flash. In lib/<app>_web/live/<page>_live.ex. -#}
+{% macro buttons(actions, record) %}{% for a in actions %}<.button phx-click="{{ a.event }}" phx-value-id={{ "{" + record + ".id}" }}>{{ a.label }}</.button>{{ " " if not loop.last }}{% endfor %}{% endmacro %}
+defmodule {{ web }}.{{ name }} do
+  use {{ web }}, :live_view
+
+{% block mount %}
+  @impl true
+  def mount({% if params %}params{% elif byId %}%{"id" => id}{% else %}_params{% endif %}, _session, socket) do
+    {:ok, socket |> assign(:page_title, {{ title | dump }}){% if params %} |> assign(:params, params){% endif %}{% if byId %} |> assign(:id, {{ 'params["id"]' if params else "id" }}){% endif %} |> load()}
+  end
+{% endblock %}
+
+{% block load %}
+  defp load(socket) do
+    socket
+{% for c in components %}
+    |> assign(:{{ c.id }}, {{ c.load }})
+{% endfor %}
+  end
+{% endblock %}
+{% block events %}
+{% for e in events %}
+
+  @impl true
+{% if e.kind == "run" %}
+  def handle_event("{{ e.event }}", %{"id" => id}, socket) do
+    case Ash.update(Ash.get!({{ e.resource }}, id), %{}, action: :{{ e.action }}) do
+      {:ok, _} -> {:noreply, socket |> put_flash(:info, {{ (e.label + " done.") | dump }}) |> load()}
+      {:error, error} -> {:noreply, put_flash(socket, :error, {{ (e.label + " failed: ") | dump }} <> Exception.message(error))}
+    end
+  end
+{% else %}
+  def handle_event("{{ e.event }}", %{"form" => params}, socket) do
+    case AshPhoenix.Form.submit(socket.assigns.{{ e.id }}, params: params) do
+      {:ok, _} -> {:noreply, socket |> put_flash(:info, {{ (e.label + " done.") | dump }}) |> load()}
+      {:error, form} -> {:noreply, assign(socket, :{{ e.id }}, form)}
+    end
+  end
+{% endif %}
+{% endfor %}
+{% endblock %}
+
+{% block render %}
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <Layouts.app flash={@flash}>
+{% if nav.length %}
+      <nav class="flex gap-4 mb-6">{% for link in nav %}<.link navigate="{{ link.route }}">{{ link.label }}</.link>{{ " " if not loop.last }}{% endfor %}</nav>
+{% endif %}
+      <.header>{{ title }}</.header>
+{% for c in components %}
+{% if c.type == "list" %}
+      <.table id="{{ c.domId }}" rows={@{{ c.id }}}>
+{% for col in c.columns %}
+        <:col :let={row} label={{ col.label | dump }}>{to_string(row.{{ col.field }})}</:col>
+{% endfor %}
+{% if c.actions.length %}
+        <:action :let={row}>{{ buttons(c.actions, "row") }}</:action>
+{% endif %}
+      </.table>
+{% elif c.type == "detail" %}
+      <.list>
+{% for col in c.columns %}
+        <:item title={{ col.label | dump }}>{to_string(@{{ c.id }}.{{ col.field }})}</:item>
+{% endfor %}
+      </.list>
+{% if c.actions.length %}
+      {{ buttons(c.actions, "@" + c.id) }}
+{% endif %}
+{% else %}
+      <.form for={@{{ c.id }}} phx-submit="{{ c.event }}">
+{% for input in c.inputs %}
+        <.input field={@{{ c.id }}[:{{ input.name }}]} label={{ input.label | dump }} />
+{% endfor %}
+        <.button>{{ c.label }}</.button>
+      </.form>
+{% endif %}
+{% endfor %}
+    </Layouts.app>
+    """
+  end
+{% endblock %}
+end

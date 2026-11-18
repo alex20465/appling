@@ -1,0 +1,7 @@
+{# A declared error: an exception class. In <app>/errors.py. #}
+{% import "python/macros.njk" as py %}
+class {{ name }}(Exception):
+{% block docstring %}
+{{ py.docstring(doc) -}}
+{% endblock %}
+    pass

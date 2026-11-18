@@ -1,0 +1,20 @@
+{# An update or delete effect on a related record (or delete self): sets the fields, checks Can<Operation><Entity>
+   once the model has policies, and hands the record to the update<Entity> or delete<Entity> store function.
+   An optional path changes nothing when it is nil. #}
+{% import "go/macros.njk" as go %}
+{% set pad = "\t" if optional else "" %}
+{% if optional %}
+if {{ path }} != nil {
+{% endif %}
+{% if check %}
+{{ go.denied(pad, check, action, forbidden) -}}
+{% endif %}
+{% for assignment in sets %}
+{{ pad }}{{ path }}.{{ assignment.name }} = {{ assignment.value }}
+{% endfor %}
+{{ pad }}if err := {{ operation }}{{ entity }}({{ path }}); err != nil {
+{{ pad }}	return nil, err
+{{ pad }}}
+{% if optional %}
+}
+{% endif %}

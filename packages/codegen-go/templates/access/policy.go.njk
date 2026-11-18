@@ -1,0 +1,5 @@
+{# A policy, in internal/<module>/policies.go: its condition over the actor and what its element's check receives. #}
+// {{ name }} is the policy {{ qn }}: {{ text }}
+func {{ name }}({{ signature }}) bool {
+	return {{ condition or "false" }}
+}

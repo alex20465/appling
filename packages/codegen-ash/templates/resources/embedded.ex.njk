@@ -1,0 +1,18 @@
+{# A value type: an embedded resource with its stored fields as public attributes. In lib/<app>/<module>/<value>.ex. -#}
+defmodule {{ module }} do
+{% block moduledoc %}
+{% if moduledoc %}
+{{ moduledoc }}
+
+{% endif %}
+{% endblock %}
+  use Ash.Resource, data_layer: :embedded
+
+{% block attributes %}
+  attributes do
+{% for a in attributes %}
+    attribute :{{ a.name }}, {{ a.type }}, allow_nil?: {{ "true" if a.optional else "false" }}, public?: true
+{% endfor %}
+  end
+{% endblock %}
+end

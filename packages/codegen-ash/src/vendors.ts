@@ -19,40 +19,24 @@ function externalOf(key: GraphNode): string {
  */
 export function externalKeySteps(key: GraphNode, context: MapContext): Step[] {
     const name = envName(key);
-    const line = `config :${app(context)}, ${moduleName(key.module, context)}.${externalOf(key)}, ${lastOf(key.qn)}: ${elixirRead(name, key.data.type as TypeData, key.data.kind === 'secret')}`;
+    const type = (key.data.type as TypeData).primitive;
+    const line = context.render('config/runtime-key.exs.njk', { app: app(context), module: `${moduleName(key.module, context)}.${externalOf(key)}`, key: lastOf(key.qn), env: name, type, secret: key.data.kind === 'secret' });
     return [
         {
             kind: 'template', phase: 2, file: 'config/runtime.exs', write: existing => {
-                const text = existing ?? 'import Config\n';
+                const text = existing ?? `${context.render('config/runtime.exs.njk', {})}\n`;
                 return text.includes(line) ? text : `${text.trimEnd()}\n\n${line}\n`;
             }
         },
         {
             kind: 'template', phase: 2, file: '.env.example', write: existing => {
                 if (existing?.split('\n').includes(`${name}=`)) return existing;
-                const head = existing ?? '# The settings and secrets of the vendors this app needs. Copy to .env and fill in; never commit values.\n';
-                const about = `# ${key.data.kind} of ${externalOf(key)}${key.data.describe ? `: ${String(key.data.describe).replace(/\s+/g, ' ').trim()}` : ''}`;
-                return `${head.trimEnd()}\n\n${about}\n${name}=\n`;
+                const head = existing ?? context.render('config/env.example.njk', {});
+                const about = context.render('config/env-key.njk', { kind: key.data.kind, external: externalOf(key), describe: key.data.describe ? String(key.data.describe).replace(/\s+/g, ' ').trim() : '', env: name });
+                return `${head.trimEnd()}\n\n${about}\n`;
             }
         }
     ];
-}
-
-function elixirRead(name: string, type: TypeData, required: boolean): string {
-    if (required) {
-        const fetch = `System.fetch_env!(${JSON.stringify(name)})`;
-        switch (type.primitive) {
-            case 'Int': return `${fetch} |> String.to_integer()`;
-            case 'Bool': return `${fetch} in ~w(1 true yes)`;
-            default: return fetch;
-        }
-    }
-    const get = `System.get_env(${JSON.stringify(name)})`;
-    switch (type.primitive) {
-        case 'Int': return `${get} |> then(&(&1 && String.to_integer(&1)))`;
-        case 'Bool': return `${get} in ~w(1 true yes)`;
-        default: return get;
-    }
 }
 
 /**

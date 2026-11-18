@@ -1,5 +1,6 @@
 import { fingerprints, type Graph, type GraphNode } from '@appling/model';
 import type { CodegenExtension, MapContext, Step } from './contract.js';
+import { templateRenderer, type Render } from './templates.js';
 
 export type Status = 'generated' | 'partial' | 'todo' | 'done';
 
@@ -46,9 +47,9 @@ export const PROJECT = '(project)';
 
 const RANK: Record<string, number> = { domain: 1, cross: 2, behavior: 3, application: 4, interface: 5, experience: 6 };
 
-/** Asks the extension for the steps of every node, in dependency order: modules, domain, behavior, application, interfaces, experience. */
-export function plan(graph: Graph, extension: CodegenExtension, name: string, options: Record<string, unknown> = {}): Plan {
-    const context = mapContext(graph, name, options);
+/** Asks the extension for the steps of every node, in dependency order: modules, domain, behavior, application, interfaces, experience. `root` is the project folder that holds the template overrides. */
+export function plan(graph: Graph, extension: CodegenExtension, name: string, options: Record<string, unknown> = {}, root = '.'): Plan {
+    const context = mapContext(graph, name, options, templateRenderer(root, extension, options));
     const ordered = graph.nodes.map((node, index) => ({ node, index }))
         .sort((a, b) => rank(a.node) - rank(b.node) || a.index - b.index)
         .map(({ node }) => node);
@@ -156,7 +157,7 @@ function rank(node: GraphNode): number {
     return node.kind === 'Scenario' ? 7 : RANK[node.layer];
 }
 
-export function mapContext(graph: Graph, name: string, options: Record<string, unknown>): MapContext {
+export function mapContext(graph: Graph, name: string, options: Record<string, unknown>, render: Render): MapContext {
     const nodes = new Map(graph.nodes.map(n => [n.qn, n]));
     const outgoing = Map.groupBy(graph.edges, e => e.from);
     const incoming = Map.groupBy(graph.edges, e => e.to);
@@ -167,6 +168,7 @@ export function mapContext(graph: Graph, name: string, options: Record<string, u
         node: qn => nodes.get(qn),
         children: qn => (outgoing.get(qn) ?? []).filter(e => e.kind === 'contains').map(e => nodes.get(e.to)!),
         outgoing: (qn, kind) => (outgoing.get(qn) ?? []).filter(e => !kind || e.kind === kind),
-        incoming: (qn, kind) => (incoming.get(qn) ?? []).filter(e => !kind || e.kind === kind)
+        incoming: (qn, kind) => (incoming.get(qn) ?? []).filter(e => !kind || e.kind === kind),
+        render
     };
 }

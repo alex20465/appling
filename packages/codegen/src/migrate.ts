@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import type { Graph, TypeData } from '@appling/model';
 import type { CodegenExtension } from './contract.js';
 import { mapContext, type PlannedStep } from './plan.js';
+import { templateRenderer } from './templates.js';
 import { readRegistry, runSteps, writeRegistry } from './run.js';
 
 /** One Appling migration step, with where the element lives now. */
@@ -66,9 +67,9 @@ export function pendingChanges(graph: Graph, applied: string[], stamp: string): 
 }
 
 /** Asks the extension for the steps of every pending change; tasks go to the registry entry of the changed element. */
-export function planMigrations(graph: Graph, extension: CodegenExtension, name: string, options: Record<string, unknown>, out: string, changes: MigrationChange[]): { steps: PlannedStep[], tasks: { qn: string, what: string }[] } {
+export function planMigrations(graph: Graph, extension: CodegenExtension, name: string, options: Record<string, unknown>, out: string, changes: MigrationChange[], root = '.'): { steps: PlannedStep[], tasks: { qn: string, what: string }[] } {
     if (!extension.migrate) throw new Error(`${extension.name} does not generate migrations.`);
-    const context = mapContext(graph, name, options);
+    const context = mapContext(graph, name, options, templateRenderer(root, extension, options));
     const files = projectFiles(out);
     const steps: PlannedStep[] = [];
     const tasks: { qn: string, what: string }[] = [];

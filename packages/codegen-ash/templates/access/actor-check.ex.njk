@@ -1,0 +1,6 @@
+{# The check of an actor that `actor.is(Actor)` names: it matches every record of the actor's resource or struct. -#}
+{% extends "access/check.ex.njk" %}
+{% block clauses %}
+  def match?(%{{ actor }}{}, _context, _opts), do: true
+
+{% endblock %}

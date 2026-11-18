@@ -1,0 +1,15 @@
+{# The check of a role: one clause per actor record that carries the role. The record has the role in its `roles`, the
+   roles the condition names hold, and the rest of the condition holds as the calculation `:<role>?` of the actor resource. -#}
+{% extends "access/check.ex.njk" %}
+{% block clauses %}
+{% for c in clauses %}
+  def match?(%{{ c.module }}{} = actor, {{ "context" if (c.calculation or c.checks.length) else "_context" }}, _opts) do
+{% if c.calculation %}
+    actor = Ash.load!(actor, :{{ role }}?, authorize?: false, tenant: context.subject.tenant)
+{% endif %}
+    :{{ role }} in (actor.roles || []){% for check in c.checks %} and {{ check }}.match?(actor, context, []){% endfor %}{% if c.calculation %} and actor.{{ role }}?{% endif %}
+
+  end
+
+{% endfor %}
+{% endblock %}

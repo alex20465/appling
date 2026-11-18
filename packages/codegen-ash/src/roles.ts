@@ -2,7 +2,7 @@ import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode } from '@appling/model';
 import { homeAt, homeFields, homeOf, homes, rolesOf, type ActorHome } from './actors.js';
 import { ashExpr, isActor, lastOf, parentOf } from './elixir.js';
-import { calculation, fileOf, moduleName, patch, snake, storedAttributes, task } from './naming.js';
+import { calculation, fileOf, moduleName, patch, sectionLines, snake, storedAttributes, task } from './naming.js';
 import { addAuthorizer, addToSection } from './resource.js';
 
 const ACTION_TYPES: Record<string, string> = { read: ':read', create: ':create', update: ':update', delete: ':destroy' };
@@ -16,22 +16,11 @@ export function roleSteps(role: GraphNode, context: MapContext): Step[] {
     const name = lastOf(role.qn);
     const carriers = homes(context).filter(h => rolesOf(h).includes(role.qn));
     const clauses = carriers.map(home => ({ home, clause: roleClause(role, home, context) }));
-    const lines = clauses.flatMap(({ home, clause }) => {
-        if (clause === 'never' || clause === 'unknown') return [];
-        const uses = clause.calculation !== undefined || clause.checks.length > 0;
-        const holds = [`:${snake(name)} in (actor.roles || [])`, ...clause.checks.map(c => `${c}.match?(actor, context, [])`), ...(clause.calculation ? [`actor.${snake(name)}?`] : [])];
-        return [
-            `  def match?(%${home.module}{} = actor, ${uses ? 'context' : '_context'}, _opts) do`,
-            ...(clause.calculation ? [`    actor = Ash.load!(actor, :${snake(name)}?, authorize?: false, tenant: context.subject.tenant)`] : []),
-            `    ${holds.join(' and ')}`,
-            '  end',
-            ''
-        ];
-    });
+    const matching = clauses.flatMap(({ home, clause }) => clause === 'never' || clause === 'unknown' ? [] : [{ module: home.module, checks: clause.checks, calculation: clause.calculation }]);
     const unknown = clauses.filter(c => c.clause === 'unknown').map(c => c.home.module);
     return [
         // Phase 2: the clauses match the actor resources' structs, which exist only once every resource is generated.
-        { kind: 'template', file: checkFile(role, context), write: () => checkModuleCode(checkModule(role, context), `actor is ${name}`, lines), phase: 2 },
+        { kind: 'template', file: checkFile(role, context), write: () => `${context.render('access/role-check.ex.njk', { module: checkModule(role, context), description: `actor is ${name}`, role: snake(name), clauses: matching })}\n`, phase: 2 },
         ...(unknown.length ? [task(`check the condition of ${name} for ${unknown.join(', ')} in ${checkModule(role, context)}: ${role.props.condition}`)] : [])
     ];
 }
@@ -43,8 +32,8 @@ export function actorCheckSteps(actor: GraphNode, context: MapContext): Step[] {
     if (home.actors.length > 1) {
         return [task(`tell ${lastOf(actor.qn)} apart from ${home.actors.filter(a => a !== actor).map(a => lastOf(a.qn)).join(', ')} on ${home.module} for actor.is(${lastOf(actor.qn)})`)];
     }
-    const lines = [`  def match?(%${home.module}{}, _context, _opts), do: true`, ''];
-    return [{ kind: 'template', file: checkFile(actor, context), write: () => checkModuleCode(checkModule(actor, context), `actor is ${lastOf(actor.qn)}`, lines), phase: 2 }];
+    const data = { module: checkModule(actor, context), description: `actor is ${lastOf(actor.qn)}`, actor: home.module };
+    return [{ kind: 'template', file: checkFile(actor, context), write: () => `${context.render('access/actor-check.ex.njk', data)}\n`, phase: 2 }];
 }
 
 /** The calculations of an actor resource that hold the role conditions, such as `calculate :operator?, :boolean, expr(active)`. */
@@ -93,12 +82,12 @@ export function policySteps(policy: GraphNode, context: MapContext): Step[] | un
     const target = policyTarget(owner, operations, guarded, context);
     if (!target) return undefined;
     const checks = checkLines(policy.data.condition as ExprData, context, fields.length > 0);
-    const lines = [`${target.header} do`, ...(checks ?? ['forbid_if always()']).map(c => `  ${c}`), 'end'];
+    const lines = (otherFields: boolean) => sectionLines(context, 'access/policy.ex.njk', { header: target.header, checks: checks ?? [], otherFields });
     return [
         patch(fileOf(target.entity, context), existing => {
             const withPolicy = fields.length
-                ? addToSection(existing, 'field_policies', existing.includes('\n  field_policies do\n') ? lines : [...lines, '', 'field_policy :* do', '  authorize_if always()', 'end'])
-                : addToSection(existing, 'policies', lines);
+                ? addToSection(existing, 'field_policies', lines(!existing.includes('\n  field_policies do\n')))
+                : addToSection(existing, 'policies', lines(false));
             return addAuthorizer(withPolicy);
         }),
         ...(checks ? [] : [policyTask(policy)]),
@@ -123,7 +112,7 @@ export function closeResource(text: string, node: GraphNode, context: MapContext
         const target = policyTarget(context.node(parentOf(p.qn))!, (p.data.operations ?? []) as string[], (p.data.fields ?? []) as string[], context);
         return target?.entity.qn === node.qn && target.header.startsWith('policy ');
     });
-    return addAuthorizer(guarded ? text : addToSection(text, 'policies', ['policy always() do', '  forbid_if always()', 'end']));
+    return addAuthorizer(guarded ? text : addToSection(text, 'policies', sectionLines(context, 'access/policy.ex.njk', { header: 'policy always()', checks: [], otherFields: false })));
 }
 
 function policyTarget(owner: GraphNode, operations: string[], fields: string[], context: MapContext): { entity: GraphNode, header: string } | undefined {
@@ -205,22 +194,6 @@ function checkModule(node: GraphNode, context: MapContext): string {
 
 function checkFile(node: GraphNode, context: MapContext): string {
     return ['lib', ...fileOf(node, context).split('/').slice(1, -1), 'checks', `${snake(lastOf(node.qn))}.ex`].join('/');
-}
-
-function checkModuleCode(module: string, description: string, clauses: string[]): string {
-    return [
-        `defmodule ${module} do`,
-        '  use Ash.Policy.SimpleCheck',
-        '',
-        '  @impl true',
-        `  def describe(_opts), do: ${JSON.stringify(description)}`,
-        '',
-        '  @impl true',
-        ...clauses,
-        '  def match?(_actor, _context, _opts), do: false',
-        'end',
-        ''
-    ].join('\n');
 }
 
 /** The role or actor of `actor.is(X)`, or undefined for any other expression. */

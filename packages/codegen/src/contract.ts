@@ -1,5 +1,6 @@
 import type { Graph, GraphEdge, GraphNode } from '@appling/model';
 import type { MigrationChange, ProjectFiles } from './migrate.js';
+import type { Render } from './templates.js';
 
 interface StepOrder {
     /** Steps run by phase, then in plan order. Use a later phase for work that needs every element of an earlier one, such as relationships. */
@@ -53,6 +54,8 @@ export interface MapContext {
     children(qn: string): GraphNode[];
     outgoing(qn: string, kind?: string): GraphEdge[];
     incoming(qn: string, kind?: string): GraphEdge[];
+    /** Renders one of the extension's Nunjucks templates; a template at the same path in the project's override folder wins. */
+    render: Render;
 }
 
 /**
@@ -61,6 +64,8 @@ export interface MapContext {
  */
 export interface CodegenExtension {
     name: string;
+    /** The folder of the extension's Nunjucks templates, by convention `templates/` in its package. */
+    templates?: string;
     prerequisites?: Prerequisite[];
     /** The command that runs the generated project's tests, from its root. */
     test?: string[];

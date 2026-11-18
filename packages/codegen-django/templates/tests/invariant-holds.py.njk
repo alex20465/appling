@@ -1,0 +1,3 @@
+{# The body of the test that an entity's factory row passes an invariant enforced as a check constraint. #}
+{{ instance }} = {{ factory }}()
+self.assertTrue({{ model }}.objects.filter(pk={{ instance }}.pk).exists())

@@ -1,0 +1,31 @@
+{# An action, in internal/<module>/actions.go: a function that checks the actor and the preconditions, runs the
+   transitions and effects (precomputed lines of behavior/transitions.go.njk and behavior/effects/) and returns the events. #}
+{% import "go/macros.njk" as go %}
+{% block signature %}
+// {{ name }} is the action {{ qn }}. It returns the events it emits.{{ " The records it creates, updates or deletes go to the store functions, which write them." if stores }}
+func {{ name }}({{ params | join(", ") }}) ([]any, error) {
+	var events []any
+{% endblock %}
+{% block guard %}
+{% if guard %}
+{{ go.denied("\t", guard, name, forbidden) -}}
+{% endif %}
+{% endblock %}
+{% block preconditions %}
+{% for precondition in preconditions %}
+	if !({{ precondition.condition }}) {
+{% if precondition.error %}
+		return nil, {{ precondition.error }}
+{% else %}
+		return nil, errors.New({{ precondition.text | dump }})
+{% endif %}
+	}
+{% endfor %}
+{% endblock %}
+{% block body %}
+{% for line in body %}
+	{{ line }}
+{% endfor %}
+	return events, nil
+}
+{% endblock %}

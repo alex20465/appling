@@ -7,3 +7,4 @@ export * from './sync.js';
 export * from './written.js';
 export * from './generate.js';
 export * from './report.js';
+export * from './templates.js';

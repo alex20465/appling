@@ -1,0 +1,7 @@
+{# A form component of a page: the inputs of an action, posted to the action's runner view. Inside the page view. #}
+components.append({
+    "kind": "form",
+    "label": {{ label | dump }},
+    "url": "/_actions/{{ app }}/{{ action }}/"{{ ' + str(id) + "/"' if byEntity }},
+    "inputs": [{% for input in inputs %}({{ input.name | dump }}, {{ input.title | dump }}){{ ", " if not loop.last }}{% endfor %}],
+})

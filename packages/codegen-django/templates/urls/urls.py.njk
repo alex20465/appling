@@ -1,0 +1,6 @@
+{# The routes of an app: a URL module, mounted in config/urls.py. In <app>/urls.py (pages) or <app>/api_urls.py (interfaces). #}
+urlpatterns = [
+{% for route in routes %}
+{{ route }}
+{% endfor %}
+]

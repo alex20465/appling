@@ -1,0 +1,3 @@
+{# The ptr helper, in internal/<module>/support.go and in each module's scenarios_test.go. #}
+// ptr returns a pointer to a copy of v, for optional fields.
+func ptr[T any](v T) *T { return &v }

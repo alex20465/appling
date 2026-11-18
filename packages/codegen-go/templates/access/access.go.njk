@@ -1,0 +1,142 @@
+{# The access package, in internal/access/access.go (internal/accessctl when a module is named access): the actor,
+   the role and actor constants, one Is<Role> check per role, and the tenant helpers. #}
+{% block header %}
+// Package {{ pkg }} holds the actors, roles and tenant of the model and the checks its policies call.
+package {{ pkg }}
+
+import (
+{% for path in imports %}
+	"{{ path }}"
+{% endfor %}
+)
+
+// ErrForbidden is returned by an action when its policies do not grant it to the actor.
+var ErrForbidden = errors.New("forbidden")
+{% endblock %}
+{% block constants %}
+
+// Role is a role of the model, by qualified name.
+type Role string
+{% if roles.length %}
+
+const (
+{% for role in roles %}
+	// Role{{ role.name }} is the role {{ role.qn }}.
+	Role{{ role.name }} Role = {{ role.qn | dump }}
+{% endfor %}
+)
+{% endif %}
+
+// ActorType is a declared actor of the model, by qualified name.
+type ActorType string
+{% if actors.length %}
+
+const (
+{% for actor in actors %}
+	// Actor{{ actor.name }} is the {{ actor.kind }} actor {{ actor.qn }}.
+	Actor{{ actor.name }} ActorType = {{ actor.qn | dump }}
+{% endfor %}
+)
+{% endif %}
+{% endblock %}
+{% block actor %}
+
+// Actor is who acts: a declared actor with the roles it carries, the tenant it acts in, and the fields
+// the actors declare. A field is nil for actors that do not declare it; fields that hold records hold their ID.
+type Actor struct {
+	Type  ActorType `json:"type"`
+	Roles []Role    `json:"roles"`
+	// ID is the record the actor is stored as, for actors declared with `is`.
+	ID *int64 `json:"id"`
+{% if tenant %}
+	// Tenant is the ID of the {{ tenant.entity }} the actor acts in (the tenant {{ tenant.qn }}); nil when it acts across tenants.
+	Tenant *int64 `json:"tenant"`
+{% endif %}
+{% for field in fields %}
+	// {{ field.name }} is the field {{ field.field }} of {{ field.owner }}{{ (", the ID of a " + field.record) if field.record }}.
+	{{ field.name }} {{ field.type }} `json:"{{ field.field }}"`
+{% endfor %}
+	// system marks a call the system makes; only System sets it.
+	system bool
+}
+
+// System returns the actor of a call the system makes, such as a job, an event handler or a scenario without
+// an actor: the actions check no policy and no tenant for it. The zero Actor is not the system.
+func System() Actor {
+	return Actor{system: true}
+}
+
+// IsSystem reports whether the call is one the system makes, which the actions do not check.
+func (a Actor) IsSystem() bool {
+	return a.system
+}
+{% endblock %}
+{% block actors %}
+{% for actor in actors %}
+
+// New{{ actor.name }} returns the actor {{ actor.qn }} with the roles it declares.
+func New{{ actor.name }}() Actor {
+	return Actor{Type: Actor{{ actor.name }}, Roles: []Role{ {{- actor.roles | join(", ") }}}}
+}
+{% endfor %}
+{% endblock %}
+{% block roles %}
+
+// Has reports whether the actor carries the role, without checking the role's condition.
+func (a Actor) Has(role Role) bool {
+	return slices.Contains(a.Roles, role)
+}
+{% for role in roles %}
+
+// Is{{ role.name }} reports whether the actor is {{ role.qn }}: it carries the role{{ " and the role's condition holds" if role.conditional }}.
+func Is{{ role.name }}(actor Actor) bool {
+{% if not role.conditional %}
+	return actor.Has(Role{{ role.name }})
+{% elif role.condition %}
+	return actor.Has(Role{{ role.name }}) && ({{ role.condition }})
+{% else %}
+	return false
+{% endif %}
+}
+{% endfor %}
+{% endblock %}
+{% block helpers %}
+
+// Value returns what an optional actor field points to, or the zero value when the actor does not have it.
+func Value[T any](p *T) T {
+	if p == nil {
+		var zero T
+		return zero
+	}
+	return *p
+}
+
+// Same reports whether a record ID of the actor refers to the record with the given ID.
+func Same(ref *int64, id int64) bool {
+	return ref != nil && *ref == id
+}
+
+// SameRef reports whether two record IDs of the actor refer to the same record.
+func SameRef(a, b *int64) bool {
+	return a != nil && b != nil && *a == *b
+}
+{% endblock %}
+{% block tenant %}
+{% if tenant %}
+
+// Tenanted is a record that belongs to a {{ tenant.entity }}, the entity of the tenant {{ tenant.qn }}.
+type Tenanted interface {
+	// TenantID returns the ID of the {{ tenant.entity }}, and false when the record does not reach one.
+	TenantID() (int64, bool)
+}
+
+// InTenant reports whether the record belongs to the tenant the actor acts in. An actor without a tenant acts across tenants.
+func InTenant(actor Actor, record Tenanted) bool {
+	if actor.Tenant == nil {
+		return true
+	}
+	id, ok := record.TenantID()
+	return ok && id == *actor.Tenant
+}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,53 @@
+{# The body of a scenario's test: its given rows, its actor as a user in the actor's group, the call, then the outcome: refused, failed, or the checks with the given rows reloaded and the emitted events recorded. #}
+{% block given %}
+{% for row in rows %}
+{{ row.variable + " = " if row.variable }}{{ row.model }}.objects.create({{ row.values | join(", ") }})
+{% for list in row.lists %}
+{{ row.variable }}.{{ list.field }}.set({{ list.code }})
+{% endfor %}
+{% endfor %}
+{% if actor %}
+{% if actor.values %}
+actor = get_user_model().objects.create({{ actor.values | join(", ") }})
+{% endif %}
+actor.groups.add(Group.objects.get_or_create(name={{ actor.group | dump }})[0])
+{% endif %}
+{% endblock %}
+{% block then %}
+{% if outcome == "refused" %}
+with self.assertRaises(PermissionDenied):
+    {{ call }}
+{% elif outcome == "error" %}
+with self.assertRaises({{ error }}):
+    {{ call }}
+{% elif outcome == "fails" %}
+with self.assertRaises(Exception){{ " as raised" if refusable }}:
+    {{ call }}
+{% if refusable %}
+self.assertNotIsInstance(raised.exception, PermissionDenied)
+{% endif %}
+{% else %}
+{% for signal in signals %}
+{{ signal }}_sent = []
+
+def record_{{ signal }}(sender, **fields):
+    {{ signal }}_sent.append(fields)
+
+{{ signal }}.connect(record_{{ signal }}, weak=False)
+self.addCleanup({{ signal }}.disconnect, record_{{ signal }})
+{% endfor %}
+{% if signals.length %}
+
+with self.captureOnCommitCallbacks(execute=True):
+    {{ call }}
+{% else %}
+{{ call }}
+{% endif %}
+{% for name in reloads %}
+{{ name }}.refresh_from_db()
+{% endfor %}
+{% for line in assertions %}
+{{ line }}
+{% endfor %}
+{% endif %}
+{% endblock %}

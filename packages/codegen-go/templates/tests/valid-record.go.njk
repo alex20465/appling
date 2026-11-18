@@ -1,0 +1,10 @@
+{# The test helper valid<Entity>, in internal/<module>/<module>_test.go: New<Entity> with a sample value for every
+   required stored field without a default. #}
+// {{ name }} returns {{ article }} {{ entity }} with the defaults of the model and a sample value for every other required field.
+func {{ name }}() *{{ entity }} {
+	x := New{{ entity }}()
+{% for sample in samples %}
+	x.{{ sample.field }} = {{ sample.value }}
+{% endfor %}
+	return x
+}

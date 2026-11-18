@@ -1,0 +1,58 @@
+{# An entity in its module's file: a struct with an id, `new` taking the fields without a default, a method per
+   derived field, `validate` for its invariants, and `Tenanted` when it belongs to the tenant. #}
+{% import "rust/macros.njk" as rust %}
+{% block struct %}
+/// The entity {{ qn }}.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct {{ name }} {
+    pub id: i64,
+{{ rust.fields(fields) -}}
+}
+{% endblock %}
+
+impl {{ name }} {
+{% block new %}
+    /// A new {{ name }} with the defaults of the model; the arguments are the fields without one.
+    pub fn new({{ params | join(", ") }}) -> Self {
+        Self {
+            id: 0,
+{% for value in initial %}
+            {{ value }},
+{% endfor %}
+        }
+    }
+{% endblock %}
+{% block derived %}
+{% for field in derived %}
+
+    /// The derived field {{ field.qn }}.
+    pub fn {{ field.name }}(&self) -> {{ field.type }} {
+        {{ field.code }}
+    }
+{% endfor %}
+{% endblock %}
+{% block validate %}
+
+    /// Checks the invariants of {{ name }} and returns the labels of those that do not hold.
+    pub fn validate(&self) -> Result<(), Vec<&'static str>> {
+        let {{ "mut " if checks.length else "" }}errors = Vec::new();
+{% for check in checks %}
+        if !({{ check.condition }}) {
+            errors.push({{ check.label | dump }});
+        }
+{% endfor %}
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
+    }
+{% endblock %}
+}
+{% block tenant %}
+{% if tenant %}
+
+impl {{ tenant.trait }} for {{ name }} {
+    /// The id of the {{ tenant.entity }} this {{ name }} belongs to, for the tenant {{ tenant.qn }}.
+    fn tenant_id(&self) -> Option<i64> {
+        Some({{ tenant.path }}.id)
+    }
+}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,8 @@
+{# A scenario as a test in its module's test module: the given rows, the actor, one call of the action and its `then`. #}
+/// {{ doc }}
+#[test]
+fn {{ name }}() {
+{% for line in body %}
+    {{ line }}
+{% endfor %}
+}

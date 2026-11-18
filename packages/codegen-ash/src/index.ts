@@ -1,9 +1,10 @@
+import { fileURLToPath } from 'node:url';
 import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
 import type { GraphNode, TypeData } from '@appling/model';
 import { interfaceSteps } from './api.js';
 import { projectionFieldSteps, querySteps } from './application.js';
 import { actionSteps, jobSteps, machineSteps } from './behavior.js';
-import { elixirString, lastOf, parentOf, withModuledoc } from './elixir.js';
+import { elixirString, lastOf, moduledoc, parentOf, withModuledoc } from './elixir.js';
 import { migrationSteps } from './migrations.js';
 import { hasPages, navigationSteps, pageSteps } from './pages.js';
 import { actorAttributeSpecs, actorFieldSteps, actorSteps, constrainRoles, homeAt, homeFields } from './actors.js';
@@ -17,6 +18,7 @@ import { app, attributeType, calculation, fieldPolicyOf, fieldsOf, fileOf, mix, 
 
 const extension: CodegenExtension = {
     name: '@appling/codegen-ash',
+    templates: fileURLToPath(new URL('../templates', import.meta.url)),
     test: ['mix', 'test'],
     syncExclude: ['deps/**', '_build/**', 'priv/repo/migrations/**', 'priv/resource_snapshots/**', 'priv/static/**', 'mix.lock'],
     migrate: migrationSteps,
@@ -149,27 +151,21 @@ function patchResource(text: string, entity: GraphNode, context: MapContext): st
         if (typeof field.data.describe === 'string') text = text.replace(new RegExp(`(\\n([ \\t]*)attribute :${lastOf(field.qn)}, [^\\n]* do\\n)`), (_, head: string, indent: string) => `${head}${indent}  description ${elixirString(field.data.describe as string)}\n`);
     }
     text = withModuledoc(text, entity);
-    const blocks = [
-        block('identities', fields.filter(f => ((f.data.modifiers ?? []) as string[]).includes('unique')).map(f => `identity :unique_${lastOf(f.qn)}, [:${lastOf(f.qn)}]`)),
-        block('calculations', [...fields.flatMap(f => calculation(f, context) ?? []), ...roleCalculations(entity, context)]),
-        block('validations', context.children(entity.qn).filter(n => n.kind === 'Invariant').flatMap(n => {
+    const sections = context.render('resources/sections.ex.njk', {
+        identities: fields.filter(f => ((f.data.modifiers ?? []) as string[]).includes('unique')).map(f => lastOf(f.qn)),
+        calculations: [...fields.flatMap(f => calculation(f, context) ?? []), ...roleCalculations(entity, context)],
+        validations: context.children(entity.qn).filter(n => n.kind === 'Invariant').flatMap(n => {
             const rule = check(n, context);
-            return rule ? [`validate ${rule}, message: ${JSON.stringify(n.data.label)}`] : [];
-        }))
-    ].filter(Boolean).join('');
-    return closeResource(blocks ? text.replace(/\nend\n?$/, `\n${blocks}end\n`) : text, entity, context);
-}
-
-function block(name: string, lines: string[]): string {
-    return lines.length ? `\n  ${name} do\n${lines.map(l => `    ${l}\n`).join('')}  end\n` : '';
+            return rule ? [{ rule, message: n.data.label }] : [];
+        })
+    });
+    return closeResource(sections ? text.replace(/\nend\n?$/, `\n\n${sections}\nend\n`) : text, entity, context);
 }
 
 function embedded(node: GraphNode, context: MapContext): string {
     const attributes = fieldsOf(node, context).filter(f => !f.data.derived).map(f => {
         const type = f.data.type as TypeData;
-        const elixirType = type.many ? `{:array, ${attributeType(type, context, true)}}` : attributeType(type, context, true);
-        return `    attribute :${lastOf(f.qn)}, ${elixirType}, allow_nil?: ${type.optional ? 'true' : 'false'}, public?: true\n`;
+        return { name: lastOf(f.qn), type: type.many ? `{:array, ${attributeType(type, context, true)}}` : attributeType(type, context, true), optional: type.optional };
     });
-    return withModuledoc(`defmodule ${typeModule(node, context)} do\n  use Ash.Resource, data_layer: :embedded\n\n  attributes do\n${attributes.join('')}  end\nend\n`, node);
+    return `${context.render('resources/embedded.ex.njk', { module: typeModule(node, context), moduledoc: moduledoc(node), attributes })}\n`;
 }
-

@@ -1,0 +1,9 @@
+{# An enum in its module's file: one variant per literal, serialized as the literal. #}
+/// The enum {{ qn }}.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum {{ name }} {
+{% for variant in variants %}
+    #[serde(rename = {{ variant.literal | dump }})]
+    {{ variant.name }},
+{% endfor %}
+}

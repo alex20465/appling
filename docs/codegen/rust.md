@@ -21,6 +21,8 @@ Rust 1.85 or later with Cargo. Setup adds `serde`, `rust_decimal` and `chrono` w
 
 The crate name is the project name in snake case. The module `sales` is `src/sales.rs`, declared in `src/lib.rs`; nested modules `a.b` become `src/a/b.rs`, declared in `src/a.rs`.
 
+The code comes from the Nunjucks templates in `templates/` of `@appling/codegen-rust`; to change it for your project, see [templates](templates.md).
+
 ## Model to Rust
 
 | Model | Rust |

@@ -1,0 +1,35 @@
+{# The policies of an entity. In <app>/policies.py:
+   can_<operation>_<entity>(actor, record) per operation, the conjunction of the policies that cover it (False when none does);
+   can_read_<entity>_<field> per field with a read policy;
+   readable_<entity>_rows(actor, rows), which narrows a queryset to the rows the actor may read. #}
+{% block can %}
+{% for check in checks %}
+def {{ check.name }}(actor, {{ record }}) -> bool:
+{% if check.condition %}
+    if not getattr(actor, "is_authenticated", False):
+        return False
+    return {{ check.condition }}
+{% elif check.untranslated %}
+    return False  # see the registry task of {{ check.untranslated }}
+{% else %}
+    return False  # no policy grants {{ check.operation }}
+{% endif %}
+
+
+{% endfor %}
+{% endblock %}
+{% block field_reads %}
+{% for check in fieldReads %}
+def {{ check.name }}(actor, {{ record }}) -> bool:
+    return {{ check.condition }}
+
+
+{% endfor %}
+{% endblock %}
+{% block readable %}
+def {{ readable }}(actor, rows):
+    """Narrows a queryset of {{ entity }} to the rows the actor may read."""
+    if not getattr(actor, "is_authenticated", False):
+        return rows.none()
+    return {{ narrowed }}
+{% endblock %}

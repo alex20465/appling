@@ -58,6 +58,8 @@ All types come from `@appling/codegen`:
 ```ts
 interface CodegenExtension {
   name: string;
+  /** The folder of the extension's Nunjucks templates, by convention `templates/` in its package. */
+  templates?: string;
   prerequisites?: Prerequisite[];
   /** The command that runs the generated project's tests, from its root. */
   test?: string[];
@@ -115,6 +117,8 @@ interface MapContext {
   children(qn: string): GraphNode[];
   outgoing(qn: string, kind?: string): GraphEdge[];
   incoming(qn: string, kind?: string): GraphEdge[];
+  /** Renders one of the extension's Nunjucks templates; a template at the same path in the project's override folder wins. */
+  render(template: string, data: object): string;
 }
 ```
 
@@ -139,6 +143,22 @@ interface MapContext {
 | `task` | Never runs. Its `what` becomes an open task in the node's registry entry, with the node's properties and related elements as context. Write it as an instruction a person or an AI can act on. Set `leftToCode` when the model leaves the work to the code by design ([design concept, section 8](../concept.md#8-what-belongs-in-the-model)), such as an external system's client or a cron entry: the task stays open in the registry, but it does not lower the coverage. Leave it unset for a generator gap, something the model says that the extension does not produce yet. |
 
 Prefer the target framework's own command line generators and patch their output with templates; the result then looks like a project a developer of that framework would start.
+
+### Templates
+
+Write the code of each element kind as a [Nunjucks](https://mozilla.github.io/nunjucks/templating.html) template in a `templates/` folder of your package, list that folder in `files` of `package.json`, and point `templates` at it:
+
+```ts
+import { fileURLToPath } from 'node:url';
+
+const extension: CodegenExtension = {
+  name: 'appling-codegen-sql',
+  templates: fileURLToPath(new URL('../templates', import.meta.url)),
+  // ...
+};
+```
+
+`context.render('tables/entity.sql.njk', data)` renders a template without the blank lines around it. It looks the path up in the project's override folder first (`.appling/templates/<target>/`, or the target option `templates`), then in yours, and `original:<path>` always names yours, so a project can [override a template](templates.md) or extend it and replace single blocks. Keep translation, imports and file patches in code and hand the template data and finished code strings; name its sections as blocks so an override can replace one of them. An unknown name in a template throws.
 
 ### setup
 

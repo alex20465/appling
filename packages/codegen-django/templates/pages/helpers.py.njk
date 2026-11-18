@@ -1,0 +1,10 @@
+{# The helpers of an app's page views, the head of <app>/pages.py. #}
+def value(obj, path):
+    """Follows a dotted path such as "customer.name"; None when a step is missing."""
+    for part in path.split("."):
+        obj = getattr(obj, part, None) if obj is not None else None
+    return obj
+
+
+def label(key, default):
+    return LABELS.get(get_language()[:2], {}).get(key, default)

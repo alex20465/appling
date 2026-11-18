@@ -1,0 +1,13 @@
+{# A detail component of a page: the record of the route's id, checked against its read policies, with the projection's fields and the record's actions. Inside the page view. #}
+{% import "pages/macros.njk" as pg %}
+record = get_object_or_404({{ model }}, pk=id)
+{% if readCheck %}
+if not {{ readCheck }}(request.user, record):
+    raise PermissionDenied()
+{% endif %}
+components.append({
+    "kind": "detail",
+    "id": record.pk,
+    "fields": [{% for c in columns %}(label({{ c.key | dump }}, {{ c.title | dump }}), {{ c.value }}){{ ", " if not loop.last }}{% endfor %}],
+    "actions": {{ pg.actions(app, actions) }},
+})

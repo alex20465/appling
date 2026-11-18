@@ -1,0 +1,18 @@
+{# A query: a function that returns the rows of its entity, filtered and sorted; with policies it takes the actor and narrows the rows to what the actor may read. In <app>/queries.py. #}
+{% import "python/macros.njk" as py %}
+{% block page_size %}
+{% if pageSize %}
+{{ pageSizeName }} = {{ pageSize }}
+
+
+{% endif %}
+{% endblock %}
+def {{ name }}({{ params | join(", ") }}):
+{% block docstring %}
+{{ py.docstring(doc) -}}
+{% endblock %}
+{% block body %}
+{% for line in body %}
+    {{ line }}
+{% endfor %}
+{% endblock %}

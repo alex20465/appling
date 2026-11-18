@@ -1,0 +1,9 @@
+{# The transitions of a machine that one event triggers, in internal/<module>/machines.go. #}
+// {{ name }} applies the transitions of {{ machine }} that {{ event }} triggers.
+func {{ name }}(event {{ type }}) ([]any, error) {
+	var events []any
+{% for line in transitions %}
+	{{ line }}
+{% endfor %}
+	return events, nil
+}

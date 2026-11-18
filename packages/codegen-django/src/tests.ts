@@ -12,6 +12,11 @@ export interface TestCase {
     why?: string;
 }
 
+/** The lines of a rendered test body template, for a `TestCase`. */
+export function bodyOf(context: MapContext, name: string, data: object): string[] {
+    return context.render(name, data).split('\n');
+}
+
 /**
  * A test class per rule in `<app>/tests.py`, one method per case. A case with a body runs; one without
  * skips with a pointer to its registry entry, which gets a task to write the missing bodies.
@@ -19,11 +24,7 @@ export interface TestCase {
 export function testSteps(node: GraphNode, rule: string, cases: (string | TestCase)[], context: MapContext, imports: Iterable<string> = [], steps: Step[] = []): Step[] {
     const name = `${words(node, context)}Test`;
     const all = cases.map(c => typeof c === 'string' ? { name: c } : c);
-    const code = [
-        `class ${name}(TestCase):`,
-        `    """${node.qn}: ${rule.replaceAll('"', '\\"')}"""`,
-        ...all.flatMap(c => ['', `    def test_${c.name}(self):`, ...(c.body ?? [`self.skipTest(${JSON.stringify(`registry task: ${node.qn}`)})`]).map(l => l ? `        ${l}` : '')])
-    ].join('\n');
+    const code = context.render('tests/test-class.py.njk', { name, about: `${node.qn}: ${rule.replaceAll('"', '\\"')}`, cases: all, skip: `registry task: ${node.qn}` });
     const missing = all.filter(c => !c.body);
     const why = missing.flatMap(c => c.why ? [c.why] : []);
     return [

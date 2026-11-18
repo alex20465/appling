@@ -1,0 +1,13 @@
+{# A role: a django-rules predicate that holds when the user is in the role's group, or in the group of an actor carrying the role, and the role's condition holds. In <app>/roles.py. #}
+{% import "python/macros.njk" as py %}
+{% if groups.length == 1 %}
+{% set filter = "name=" + (groups[0] | dump) %}
+{% else %}
+{% set filter = "name__in=[" + py.strings(groups) + "]" %}
+{% endif %}
+@rules.predicate
+def {{ name }}(user):
+{% block docstring %}
+{{ py.docstring(doc) -}}
+{% endblock %}
+    return user is not None and user.groups.filter({{ filter }}).exists(){{ " and " + condition if condition }}

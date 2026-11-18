@@ -28,9 +28,8 @@ export function pageSteps(page: GraphNode, context: MapContext): Step[] {
     const name = `${lastOf(page.qn)}Live`;
     const route = String(page.data.route).replace(/\{(\w+)\}/g, ':$1');
     const byId = route.includes(':id');
-    const assigns: string[] = [];
-    const markup: string[] = [];
-    const events = new Map<string, string>();
+    const components: object[] = [];
+    const events = new Map<string, object>();
     let params = false;
     (page.data.components as { $type: string, query?: string, projection?: string, picks?: string[], actions?: string[], submits?: string }[]).forEach((component, i) => {
         const id = `${component.$type === 'ListView' ? 'list' : component.$type === 'DetailView' ? 'record' : 'form'}_${i + 1}`;
@@ -38,9 +37,11 @@ export function pageSteps(page: GraphNode, context: MapContext): Step[] {
             const ok = !!action.data.entity && !children(action, context, 'Param').some(p => !(p.data.type as TypeData).optional);
             if (!ok) tasks.push(task(`offer ${lastOf(action.qn)} on ${lastOf(page.qn)}; it needs inputs, so it needs a form`));
             return ok;
+        }).map(action => {
+            const event = `run_${snake(lastOf(action.qn))}`;
+            events.set(event, { kind: 'run', event, resource: typeModule(context.node(action.data.entity as string)!, context), action: snake(lastOf(action.qn)), label: lastOf(action.qn) });
+            return { event, label: lastOf(action.qn) };
         });
-        for (const action of actions) events.set(`run_${snake(lastOf(action.qn))}`, runEvent(action, context));
-        const buttons = (record: string) => actions.map(a => `<.button phx-click="run_${snake(lastOf(a.qn))}" phx-value-id={${record}.id}>${lastOf(a.qn)}</.button>`).join(' ');
         if (component.$type === 'ListView') {
             const query = context.node(component.query!)!;
             const entity = context.node(query.data.entity as string)!;
@@ -53,13 +54,7 @@ export function pageSteps(page: GraphNode, context: MapContext): Step[] {
             const read = inputs.length
                 ? `Ash.read!(Ash.Query.for_read(${typeModule(entity, context)}, :${snake(lastOf(query.qn))}, Map.take(socket.assigns.params, [${inputs.join(', ')}]))${options})`
                 : `Ash.read!(${typeModule(entity, context)}, action: :${snake(lastOf(query.qn))}${options})`;
-            assigns.push(`|> assign(:${id}, ${query.data.pageSize ? `${read}.results` : read})`);
-            markup.push(
-                `<.table id="${id.replace('_', '-')}" rows={@${id}}>`,
-                ...columns.map(c => `  <:col :let={row} label=${JSON.stringify(c.label)}>{to_string(row.${c.field})}</:col>`),
-                ...(actions.length ? [`  <:action :let={row}>${buttons('row')}</:action>`] : []),
-                '</.table>'
-            );
+            components.push({ type: 'list', id, domId: id.replace('_', '-'), load: query.data.pageSize ? `${read}.results` : read, columns, actions });
         } else if (component.$type === 'DetailView') {
             if (!byId) {
                 tasks.push(task(`show ${lastOf(component.projection!)} on ${lastOf(page.qn)}; the route has no :id`));
@@ -68,8 +63,7 @@ export function pageSteps(page: GraphNode, context: MapContext): Step[] {
             const entity = sourceEntity(component.projection!, context);
             const columns = columnsOf(component.projection!, component.picks, context, tasks);
             const load = columns.filter(c => c.load).map(c => `:${c.field}`);
-            assigns.push(`|> assign(:${id}, Ash.get!(${typeModule(entity, context)}, socket.assigns.id${load.length ? `, load: [${load.join(', ')}]` : ''}))`);
-            markup.push('<.list>', ...columns.map(c => `  <:item title=${JSON.stringify(c.label)}>{to_string(@${id}.${c.field})}</:item>`), '</.list>', ...(actions.length ? [buttons(`@${id}`)] : []));
+            components.push({ type: 'detail', id, load: `Ash.get!(${typeModule(entity, context)}, socket.assigns.id${load.length ? `, load: [${load.join(', ')}]` : ''})`, columns, actions });
         } else if (component.$type === 'FormView') {
             const action = context.node(component.submits!)!;
             const entity = action.kind === 'Action' && action.data.entity ? context.node(action.data.entity as string) : undefined;
@@ -78,77 +72,29 @@ export function pageSteps(page: GraphNode, context: MapContext): Step[] {
                 return;
             }
             const event = `submit_${snake(lastOf(action.qn))}`;
-            assigns.push(`|> assign(:${id}, AshPhoenix.Form.for_update(Ash.get!(${typeModule(entity, context)}, socket.assigns.id), :${snake(lastOf(action.qn))}) |> to_form())`);
-            events.set(event, [
-                `def handle_event("${event}", %{"form" => params}, socket) do`,
-                `  case AshPhoenix.Form.submit(socket.assigns.${id}, params: params) do`,
-                `    {:ok, _} -> {:noreply, socket |> put_flash(:info, ${JSON.stringify(`${lastOf(action.qn)} done.`)}) |> load()}`,
-                `    {:error, form} -> {:noreply, assign(socket, :${id}, form)}`,
-                '  end',
-                'end'
-            ].join('\n'));
-            markup.push(
-                `<.form for={@${id}} phx-submit="${event}">`,
-                ...children(action, context, 'Param').map(p => `  <.input field={@${id}[:${lastOf(p.qn)}]} label=${JSON.stringify(title(lastOf(p.qn)))} />`),
-                `  <.button>${lastOf(action.qn)}</.button>`,
-                '</.form>'
-            );
+            events.set(event, { kind: 'submit', event, id, label: lastOf(action.qn) });
+            components.push({
+                type: 'form', id, event, label: lastOf(action.qn),
+                load: `AshPhoenix.Form.for_update(Ash.get!(${typeModule(entity, context)}, socket.assigns.id), :${snake(lastOf(action.qn))}) |> to_form()`,
+                inputs: children(action, context, 'Param').map(p => ({ name: lastOf(p.qn), label: title(lastOf(p.qn)) }))
+            });
         }
     });
-    const nav = navigationLinks(page.module, context);
-    const code = [
-        `defmodule ${web(context)}.${name} do`,
-        `  use ${web(context)}, :live_view`,
-        '',
-        '  @impl true',
-        `  def mount(${params ? 'params' : byId ? '%{"id" => id}' : '_params'}, _session, socket) do`,
-        `    {:ok, socket |> assign(:page_title, ${JSON.stringify(title(lastOf(page.qn)))})${params ? ' |> assign(:params, params)' : ''}${byId ? ` |> assign(:id, ${params ? 'params["id"]' : 'id'})` : ''} |> load()}`,
-        '  end',
-        '',
-        '  defp load(socket) do',
-        '    socket',
-        ...assigns.map(a => `    ${a}`),
-        '  end',
-        ...[...events.values()].flatMap(handler => ['', '  @impl true', ...handler.split('\n').map(l => `  ${l}`)]),
-        '',
-        '  @impl true',
-        '  def render(assigns) do',
-        '    ~H"""',
-        '    <Layouts.app flash={@flash}>',
-        ...(nav ? [`      ${nav}`] : []),
-        `      <.header>${title(lastOf(page.qn))}</.header>`,
-        ...markup.map(l => `      ${l}`),
-        '    </Layouts.app>',
-        '    """',
-        '  end',
-        'end',
-        ''
-    ].join('\n');
+    const code = context.render('pages/live.ex.njk', {
+        web: web(context), name, title: title(lastOf(page.qn)), params, byId, components, events: [...events.values()], nav: navigationLinks(page.module, context)
+    });
     return [
-        { kind: 'template', file: `lib/${app(context)}_web/live/${snake(lastOf(page.qn))}_live.ex`, write: () => code, phase: 2 },
+        { kind: 'template', file: `lib/${app(context)}_web/live/${snake(lastOf(page.qn))}_live.ex`, write: () => `${code}\n`, phase: 2 },
         patch(`lib/${app(context)}_web/router.ex`, existing => existing.includes(`live "${route}", ${name}`) ? existing
             : existing.replace(/(\n(\s*)get "\/", PageController, :home\n)/, `$1$2live "${route}", ${name}\n`)),
         ...tasks
     ];
 }
 
-function runEvent(action: GraphNode, context: MapContext): string {
-    const entity = context.node(action.data.entity as string)!;
-    return [
-        `def handle_event("run_${snake(lastOf(action.qn))}", %{"id" => id}, socket) do`,
-        `  case Ash.update(Ash.get!(${typeModule(entity, context)}, id), %{}, action: :${snake(lastOf(action.qn))}) do`,
-        `    {:ok, _} -> {:noreply, socket |> put_flash(:info, ${JSON.stringify(`${lastOf(action.qn)} done.`)}) |> load()}`,
-        `    {:error, error} -> {:noreply, put_flash(socket, :error, ${JSON.stringify(`${lastOf(action.qn)} failed: `)} <> Exception.message(error))}`,
-        '  end',
-        'end'
-    ].join('\n');
-}
-
 /** The navigation of the module as links; items to pages that need an id are left out. */
-function navigationLinks(module: string, context: MapContext): string | undefined {
+function navigationLinks(module: string, context: MapContext): { route: string, label: string }[] {
     const items = context.graph.nodes.filter(n => n.kind === 'Navigation' && n.module === module).flatMap(n => (n.data.items ?? []) as { label: string, page: string }[]);
-    const links = items.filter(i => !String(context.node(i.page)?.data.route ?? '').includes('{')).map(i => `<.link navigate="${context.node(i.page)!.data.route}">${i.label}</.link>`);
-    return links.length ? `<nav class="flex gap-4 mb-6">${links.join(' ')}</nav>` : undefined;
+    return items.filter(i => !String(context.node(i.page)?.data.route ?? '').includes('{')).map(i => ({ route: String(context.node(i.page)!.data.route), label: i.label }));
 }
 
 export function navigationSteps(navigation: GraphNode, context: MapContext): Step[] {

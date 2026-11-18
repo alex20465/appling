@@ -1,0 +1,40 @@
+{# The Django template every page of an app renders: its list, detail and form components. In <app>/templates/<app>/page.html. #}
+{% raw %}{% extends "{% endraw %}{{ app }}/base.html{% raw %}" %}{% endraw %}
+{% raw %}
+{% block content %}
+<h1>{{ title }}</h1>
+{% for component in components %}
+  {% if component.kind == "list" %}
+    <table>
+      <thead><tr>{% for column in component.columns %}<th>{{ column }}</th>{% endfor %}<th></th></tr></thead>
+      <tbody>
+        {% for item in component.items %}
+          <tr>
+            {% for value in item.values %}<td>{{ value|default_if_none:"" }}</td>{% endfor %}
+            <td>{% for action in component.actions %}<form method="post" action="{{ action.url }}{{ item.id }}/">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button>{{ action.label }}</button></form>{% endfor %}</td>
+          </tr>
+        {% empty %}
+          <tr><td>Nothing here yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if component.page.has_other_pages %}
+      <p>
+        {% if component.page.has_previous %}<a href="?page={{ component.page.previous_page_number }}">Previous</a>{% endif %}
+        {% if component.page.has_next %}<a href="?page={{ component.page.next_page_number }}">Next</a>{% endif %}
+      </p>
+    {% endif %}
+  {% elif component.kind == "detail" %}
+    <dl>{% for name, value in component.fields %}<dt>{{ name }}</dt><dd>{{ value|default_if_none:"" }}</dd>{% endfor %}</dl>
+    {% for action in component.actions %}<form method="post" action="{{ action.url }}{{ component.id }}/">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button>{{ action.label }}</button></form>{% endfor %}
+  {% elif component.kind == "form" %}
+    <form method="post" action="{{ component.url }}">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.path }}">
+      {% for name, field_label in component.inputs %}<label>{{ field_label }} <input name="{{ name }}"></label>{% endfor %}
+      <button>{{ component.label }}</button>
+    </form>
+  {% endif %}
+{% endfor %}
+{% endblock %}
+{% endraw %}

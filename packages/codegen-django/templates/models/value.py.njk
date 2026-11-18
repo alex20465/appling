@@ -1,0 +1,9 @@
+{# A value type: a typed dict of its stored fields. In <app>/values.py. #}
+{% import "python/macros.njk" as py %}
+class {{ name }}(TypedDict):
+{{ py.docstring(doc) -}}
+{% for field in fields %}
+    {{ field.name }}: {{ field.annotation }}
+{% else %}
+    pass
+{% endfor %}

@@ -1,0 +1,7 @@
+{# The body of the test that the trigger of a transition raises InvalidTransition in the states no transition of it leaves. #}
+{% import "tests/macros.njk" as t %}
+for state in {{ t.tuple(states) }}:
+    with self.subTest(state=state):
+        {{ instance }} = make_{{ instance }}({{ field }}=state)
+        with self.assertRaises(InvalidTransition):
+            {{ fire }}

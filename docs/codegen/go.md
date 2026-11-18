@@ -21,6 +21,8 @@ Go 1.22 or later on the `PATH`. Decimal and money values use [shopspring/decimal
 
 The Go module path is the project name: the `name` option, or the output folder's name. Each module becomes `internal/<module>`, so `sales` is imported as `shop/internal/sales`.
 
+The code comes from the Nunjucks templates in `templates/` of `@appling/codegen-go`; to change it for your project, see [templates](templates.md).
+
 ## Model to Go
 
 | Model | Go |

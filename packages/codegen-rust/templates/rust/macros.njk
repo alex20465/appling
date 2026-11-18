@@ -1,0 +1,14 @@
+{% macro fields(list) %}
+{% for field in list %}
+{% if field.attribute %}
+    {{ field.attribute }}
+{% endif %}
+    pub {{ field.name }}: {{ field.type }},
+{% endfor %}
+{% endmacro %}
+
+{% macro ignored(qn, name) %}
+#[test]
+#[ignore = {{ ("registry task: " + qn) | dump }}]
+fn {{ name }}() {}
+{% endmacro %}

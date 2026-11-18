@@ -1,0 +1,38 @@
+{# A GET endpoint on a query with a projection: a REST framework list view, with a serializer narrowed to the picked fields and page number pagination when the query pages.
+   The query's inputs come from the path and the query string. In <app>/api.py. #}
+{% import "python/macros.njk" as py %}
+{% block serializer %}
+{% if serializer != projection %}
+class {{ serializer }}({{ projection }}):
+    class Meta({{ projection }}.Meta):
+        fields = [{{ py.strings(picks) }}]
+
+
+{% endif %}
+{% endblock %}
+{% block pagination %}
+{% if pageSize %}
+class {{ name }}Pagination(pagination.PageNumberPagination):
+    page_size = {{ pageSize }}
+
+
+{% endif %}
+{% endblock %}
+class {{ name }}(generics.ListAPIView):
+{% block attributes %}
+    serializer_class = {{ serializer }}
+{% if pageSize %}
+    pagination_class = {{ name }}Pagination
+{% endif %}
+{% if throttle %}
+    throttle_classes = [{{ throttle }}]
+{% endif %}
+{% endblock %}
+
+    def get_queryset(self):
+{% block get_queryset %}
+{% for line in inputs %}
+        {{ line }}
+{% endfor %}
+        return {{ query }}
+{% endblock %}

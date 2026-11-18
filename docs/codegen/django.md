@@ -29,6 +29,8 @@ description: What @appling/codegen-django generates from a model, how the genera
 
 The Django settings package is always `config`.
 
+The code comes from the Nunjucks templates in `templates/` of `@appling/codegen-django`; to change it for your project, see [templates](templates.md).
+
 ## Project setup
 
 The extension creates the project with uv and Django's own commands, then patches the files they create:

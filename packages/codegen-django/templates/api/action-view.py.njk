@@ -1,0 +1,23 @@
+{# A write endpoint on an action: a REST framework view that loads the instance by its id, calls the action as the requesting user and answers the action's errors with 400. In <app>/api.py. #}
+class {{ name }}(views.APIView):
+{% block attributes %}
+{% if throttle %}
+    throttle_classes = [{{ throttle }}]
+
+{% endif %}
+{% endblock %}
+    def {{ method }}(self, request{{ ", id" if instance }}):
+{% block body %}
+{% if instance %}
+        {{ instance }} = get_object_or_404({{ model }}, pk=id)
+{% endif %}
+{% if errors.length %}
+        try:
+            {{ call }}
+        except ({{ errors | join(", ") }}{{ "," if errors.length == 1 }}) as error:
+            return Response({"error": type(error).__name__}, status=400)
+{% else %}
+        {{ call }}
+{% endif %}
+        return Response(status=204)
+{% endblock %}

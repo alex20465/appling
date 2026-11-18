@@ -1,0 +1,30 @@
+{# A tenant: a context variable with the current tenant, read by current_<tenant>(), and a middleware that sets it per request from the signed in user. The whole of <app>/tenants.py. #}
+{% block current %}
+from contextvars import ContextVar
+
+
+{{ variable }}: ContextVar = ContextVar({{ key | dump }}, default=None)
+
+
+def {{ getter }}():
+    """The {{ entity }} that is the current tenant, or None outside a request."""
+    return {{ variable }}.get()
+{% endblock %}
+
+
+{% block middleware %}
+class {{ middleware }}:
+    """Sets the current tenant for each request{{ ": " + description if description }}."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+{% block resolve %}
+        token = {{ variable }}.set({{ resolve }})
+{% endblock %}
+        try:
+            return self.get_response(request)
+        finally:
+            {{ variable }}.reset(token)
+{% endblock %}

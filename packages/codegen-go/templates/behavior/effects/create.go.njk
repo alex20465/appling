@@ -1,0 +1,20 @@
+{# A create effect: builds the record with New<Entity> and the given fields, checks CanCreate<Entity> once the
+   model has policies, and hands it to the create<Entity> store function. A record without a name lives in a block. #}
+{% import "go/macros.njk" as go %}
+{% set pad = "" if variable else "\t" %}
+{% if not variable %}
+{
+{% endif %}
+{{ pad }}{{ record }} := {{ constructor }}()
+{% for field in fields %}
+{{ pad }}{{ record }}.{{ field.name }} = {{ field.value }}
+{% endfor %}
+{% if check %}
+{{ go.denied(pad, check, action, forbidden) -}}
+{% endif %}
+{{ pad }}if err := create{{ entity }}({{ record }}); err != nil {
+{{ pad }}	return nil, err
+{{ pad }}}
+{% if not variable %}
+}
+{% endif %}

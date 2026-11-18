@@ -1,0 +1,6 @@
+{# A factory that creates a valid row of an entity: a value for every required stored field without a default, related rows through their own factories; the fields given replace them. In <app>/factories.py. #}
+def {{ name }}(**fields):
+    """{{ article }} {{ model }} with a value for every required field; the fields given replace them."""
+    values = {{ "{" }}{% for v in values %}{{ v.name | dump }}: {{ v.code }}{{ ", " if not loop.last }}{% endfor %}{{ "}" }}
+    values.update(fields)
+    return {{ model }}.objects.create(**values)

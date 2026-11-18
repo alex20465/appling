@@ -1,0 +1,5 @@
+{# The body of a test of a query policy: the factory row is or is not in the query's result for a user in an actor's group. #}
+{% import "tests/macros.njk" as t %}
+{{ t.signIn(user, actor) -}}
+{{ record }} = {{ factory }}()
+self.{{ assertion }}({{ record }}, list({{ query }}(actor={{ user.variable }})))

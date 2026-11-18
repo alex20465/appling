@@ -1,0 +1,6 @@
+{# The check of an action, a query or a use case, in internal/<module>/policies.go: its policies and, for an
+   action or a query, the update or read check of its entity (or the tenant), combined with &&. #}
+// {{ name }} reports whether the actor may {{ what }}{% if inherited %}, including the {{ inherited }} check of {{ entity }}{% endif %}{% if not parts.length %}; no policy grants it{% endif %}.
+func {{ name }}({{ signature }}) bool {
+	return {{ parts | join(" && ") if parts.length else "false" }}
+}

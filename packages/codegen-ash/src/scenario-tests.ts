@@ -36,28 +36,15 @@ export function scenarioSteps(scenario: GraphNode, context: MapContext): Step[] 
         if (!(error instanceof Unsupported)) throw error;
         why = error.message;
     }
-    const does = typeof scenario.data.describe === 'string' && scenario.data.describe.trim() ? `  # ${scenario.data.describe.trim().replace(/\s*\n\s*/g, ' ')}\n` : '';
-    const test = body
-        ? `${does}  test ${JSON.stringify(title)} do\n${body.map(l => `    ${l}\n`).join('')}  end\n`
-        : `${does}  @tag skip: ${JSON.stringify(`registry task: ${scenario.qn}`)}\n  test ${JSON.stringify(title)}\n`;
-    const repo = `${pascal(app(context))}.Repo`;
+    const data = {
+        module: `${moduleName(scenario.module, context)}.ScenariosTest`, repo: `${pascal(app(context))}.Repo`, title, qn: scenario.qn, body,
+        describe: typeof scenario.data.describe === 'string' ? scenario.data.describe.trim().replace(/\s*\n\s*/g, ' ') : ''
+    };
     return [
         {
             kind: 'template', file, write: existing => existing
-                ? existing.replace(/end\n?$/, `\n${test}end\n`)
-                : [
-                    `defmodule ${moduleName(scenario.module, context)}.ScenariosTest do`,
-                    '  use ExUnit.Case, async: false',
-                    '',
-                    '  setup do',
-                    `    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(${repo}, shared: true)`,
-                    '    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)',
-                    '    :ok',
-                    '  end',
-                    '',
-                    `${test}end`,
-                    ''
-                ].join('\n')
+                ? existing.replace(/end\n?$/, `\n${context.render('tests/scenario.exs.njk', data)}\nend\n`)
+                : `${context.render('tests/scenarios.exs.njk', data)}\n`
         },
         ...(body ? [] : [task(`write the test "${title}" in ${file}: ${why}`)])
     ];

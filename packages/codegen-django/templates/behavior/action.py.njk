@@ -1,0 +1,16 @@
+{# An action: a function that checks the actor's policies and the preconditions, applies the state transitions and runs the effects, in one transaction unless its consistency is eventual. In <app>/actions.py. #}
+{% import "python/macros.njk" as py %}
+{% if atomic %}
+@transaction.atomic
+{% endif %}
+def {{ name }}({{ params | join(", ") }}) -> None:
+{% block docstring %}
+{{ py.docstring(doc) -}}
+{% endblock %}
+{% block body %}
+{% for line in body %}
+    {{ line }}
+{% else %}
+    pass
+{% endfor %}
+{% endblock %}

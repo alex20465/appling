@@ -1,0 +1,65 @@
+{# A scenario, in internal/<module>/scenarios_test.go (package <module>_test): the given rows, the actor, one call
+   of the action and the checks of `then`. #}
+// {{ name }} runs the scenario {{ qn }}{{ does }}
+func {{ name }}(t *testing.T) {
+{% block given %}
+{% for row in rows %}
+	{{ row.variable }} := {{ row.constructor }}()
+	{{ row.variable }}.ID = {{ row.id }}
+{% for field in row.fields %}
+	{{ row.variable }}.{{ field.name }} = {{ field.value }}
+{% endfor %}
+{% endfor %}
+{% endblock %}
+{% block actor %}
+{% if actor %}
+	actor := {{ actor.constructor }}()
+{% for field in actor.fields %}
+	actor.{{ field.name }} = {{ field.value }}
+{% endfor %}
+{% if actor.unused %}
+	_ = actor
+{% endif %}
+{% endif %}
+{% endblock %}
+{% block when %}
+	{{ result }}, err := {{ call }}
+{% endblock %}
+{% block then %}
+{% if refused %}
+	if !errors.Is(err, {{ refused }}) {
+		t.Fatalf("{{ label }}: want {{ refused }}, got %v", err)
+	}
+{% elif error %}
+	if !errors.Is(err, {{ error }}) {
+		t.Fatalf("{{ label }}: want {{ error }}, got %v", err)
+	}
+{% elif forbidden %}
+	if err == nil || errors.Is(err, {{ forbidden }}) {
+		t.Fatalf("{{ label }}: want an error, got %v", err)
+	}
+{% elif fails %}
+	if err == nil {
+		t.Fatalf("{{ label }}: want an error, got none")
+	}
+{% else %}
+	if err != nil {
+		t.Fatalf("{{ label }}: %v", err)
+	}
+{% for check in checks %}
+{% if check.condition %}
+	if !({{ check.condition }}) {
+		t.Error({{ (check.shown + " is false") | dump }})
+	}
+{% else %}
+	if !slices.ContainsFunc(events, func(event any) bool {
+		{{ "got" if check.compared.length else "_" }}, ok := event.({{ check.event }})
+		return ok{{ " && " if check.compared.length }}{{ check.compared | join(" && ") }}
+	}) {
+		t.Error({{ (check.shown + " did not happen") | dump }})
+	}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endblock %}
+}

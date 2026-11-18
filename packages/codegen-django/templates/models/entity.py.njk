@@ -1,0 +1,36 @@
+{# An entity: a Django model with its fields, derived fields as properties and its invariants as check constraints. In <app>/models.py.
+   The entity the actors are bound to is the user model: it extends AbstractUser and stores the actor fields it lacks. #}
+{% import "python/macros.njk" as py %}
+class {{ name }}({{ base }}):
+{% block docstring %}
+{{ py.docstring(doc) -}}
+{% endblock %}
+{% block fields %}
+{% for field in fields %}
+    {{ field.name }} = {{ field.field }}
+{% endfor %}
+{{ py.properties(properties) -}}
+{% endblock %}
+{% block actor_fields %}
+{% if actorFields.length and (fields.length or properties.length) %}
+
+{% endif %}
+{% for field in actorFields %}
+    {{ field.name }} = {{ field.field }}
+{% endfor %}
+{{ py.properties(actorProperties) -}}
+{% endblock %}
+{% block meta %}
+{% if constraints.length %}
+
+    class Meta:
+        constraints = [
+{% for c in constraints %}
+            models.CheckConstraint(condition={{ c.condition }}, name={{ c.name | dump }}),
+{% endfor %}
+        ]
+{% endif %}
+{% endblock %}
+{% if not (fields.length or properties.length or actorFields.length or actorProperties.length or constraints.length) %}
+    pass
+{% endif %}

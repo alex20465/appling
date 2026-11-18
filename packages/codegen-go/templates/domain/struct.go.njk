@@ -1,0 +1,9 @@
+{# A value type (in internal/<module>/types.go) or an event (in internal/<module>/events.go): a struct of its stored fields. #}
+// {{ name }} is the {{ what }} {{ qn }}.
+type {{ name }} struct {
+{% for field in fields %}
+	{{ field.name }} {{ field.type }} `json:"{{ field.json }}"`
+{% else %}
+
+{% endfor %}
+}

@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import { throughPath, type ExprData, type GraphNode, type TypeData } from '@appling/model';
-import { annotation, children, documented, importOnReady, leftToCode, pythonFile, task, template } from './files.js';
+import { annotation, children, doc, importOnReady, leftToCode, pythonFile, task, template } from './files.js';
 import { actionGuard, canName, enforced, guardedCreate, policyImport } from './access.js';
 import { scope, storedFields } from './models.js';
 import { preconditionTests, transitionTests } from './behavior-tests.js';
@@ -19,14 +19,13 @@ interface Code {
     deletes?: boolean;
 }
 
-export function errorSteps(error: GraphNode): Step[] {
-    return [template(`${appOf(error.module)}/errors.py`, existing => pythonFile(existing ?? ERRORS, [], documented(`class ${lastOf(error.qn)}(Exception):\n    pass`, error)))];
+export function errorSteps(error: GraphNode, context: MapContext): Step[] {
+    const code = context.render('behavior/error.py.njk', { name: lastOf(error.qn), doc: doc(error) });
+    return [template(`${appOf(error.module)}/errors.py`, existing => pythonFile(existing ?? `${context.render('behavior/invalid-transition.py.njk', {})}\n`, [], code))];
 }
 
-const ERRORS = 'class InvalidTransition(Exception):\n    """The state field does not allow this transition."""\n';
-
-export function eventSteps(event: GraphNode): Step[] {
-    return [template(`${appOf(event.module)}/events.py`, existing => pythonFile(existing, ['from django.dispatch import Signal'], `${snake(lastOf(event.qn))} = Signal()`))];
+export function eventSteps(event: GraphNode, context: MapContext): Step[] {
+    return [template(`${appOf(event.module)}/events.py`, existing => pythonFile(existing, ['from django.dispatch import Signal'], context.render('behavior/event.py.njk', { name: snake(lastOf(event.qn)) })))];
 }
 
 /** An action becomes a function in `actions.py`: preconditions, state transitions and effects, in one transaction. */
@@ -70,13 +69,9 @@ export function actionSteps(action: GraphNode, context: MapContext): Step[] {
         }),
         'actor=None'
     ];
-    const body = [
-        ...(atomic ? ['@transaction.atomic'] : []),
-        `def ${snake(lastOf(action.qn))}(${params.join(', ')}) -> None:`,
-        ...(code.lines.length ? code.lines : ['pass']).map(l => `    ${l}`)
-    ].join('\n');
+    const body = context.render('behavior/action.py.njk', { atomic, name: snake(lastOf(action.qn)), params, doc: doc(action), body: code.lines });
     const tests = preconditions.length && !covered(context).has(action.qn) ? preconditionTests(action, context) : [];
-    return [template(`${appOf(action.module)}/actions.py`, existing => pythonFile(existing, code.imports, documented(body, action))), ...code.tasks, ...tests];
+    return [template(`${appOf(action.module)}/actions.py`, existing => pythonFile(existing, code.imports, body)), ...code.tasks, ...tests];
 }
 
 /** The tests of a transition, unless a scenario runs its action: then the scenario test replaces them. */
@@ -246,7 +241,7 @@ export function machineSteps(machine: GraphNode, context: MapContext): Step[] {
         transitionChain(transitions, instance, snake(lastOf(eventQn)), context, { ...scope(context, code.imports), self: instance }, code);
         code.lines.push(`${instance}.${code.deletes ? 'delete' : 'save'}()`);
         const name = `${snake(lastOf(machine.qn))}_on_${snake(lastOf(eventQn))}`;
-        const body = [`@receiver(${snake(lastOf(eventQn))})`, `def ${name}(sender, ${instance}, **kwargs) -> None:`, ...code.lines.map(l => `    ${l}`)].join('\n');
+        const body = context.render('behavior/machine-receiver.py.njk', { event: snake(lastOf(eventQn)), name, instance, body: code.lines });
         steps.push(template(`${appOf(machine.module)}/handlers.py`, existing => pythonFile(existing, code.imports, body)), importOnReady(machine.module, 'handlers'), ...code.tasks);
     }
     return steps;
@@ -267,14 +262,8 @@ export function jobSteps(job: GraphNode, context: MapContext): Step[] {
         if (!filter) return [task(`select the rows of ${lastOf(job.qn)} where ${job.props.filter}`)];
         imports.add('from django.db import models');
         imports.add('from django.tasks import task');
-        const body = ['@task', `def ${name}() -> None:`, `    for ${instance} in ${lastOf(entity.qn)}.objects.filter(${filter}):`, `        ${snake(lastOf(action.qn))}(${instance})`].join('\n');
-        const command = [
-            'class Command(BaseCommand):',
-            `    help = ${JSON.stringify(`Runs the job ${lastOf(job.qn)}, scheduled as "${job.data.schedule}".`)}`,
-            '',
-            '    def handle(self, *args, **options):',
-            `        ${name}.enqueue()`
-        ].join('\n');
+        const body = context.render('behavior/job-task.py.njk', { name, instance, model: lastOf(entity.qn), filter, action: snake(lastOf(action.qn)) });
+        const command = context.render('behavior/job-command.py.njk', { name, help: `Runs the job ${lastOf(job.qn)}, scheduled as "${job.data.schedule}".` });
         return [
             template(`${app}/jobs.py`, existing => pythonFile(existing, imports, body)),
             template(`${app}/management/__init__.py`, existing => existing ?? ''),
@@ -291,10 +280,6 @@ export function jobSteps(job: GraphNode, context: MapContext): Step[] {
     if (!condition) return [task(`run ${lastOf(action.qn)} when ${lastOf(event.qn)} happens and ${job.props.filter}`)];
     imports.add('from django.dispatch import receiver');
     imports.add(`from ${appOf(event.module)}.events import ${snake(lastOf(event.qn))}`);
-    const body = [
-        `@receiver(${snake(lastOf(event.qn))})`,
-        `def ${name}(sender, ${variable}, **kwargs) -> None:`,
-        ...(condition === 'True' ? [`    ${snake(lastOf(action.qn))}(${variable})`] : [`    if ${condition}:`, `        ${snake(lastOf(action.qn))}(${variable})`])
-    ].join('\n');
+    const body = context.render('behavior/job-receiver.py.njk', { event: snake(lastOf(event.qn)), name, variable, condition, action: snake(lastOf(action.qn)) });
     return [template(`${app}/handlers.py`, existing => pythonFile(existing, imports, body)), importOnReady(job.module, 'handlers')];
 }

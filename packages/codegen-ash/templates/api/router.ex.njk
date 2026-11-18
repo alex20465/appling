@@ -1,0 +1,4 @@
+{# The JSON:API router of the REST interfaces, which Bandit serves without Phoenix. In lib/<app>/api_router.ex. -#}
+defmodule {{ module }} do
+  use AshJsonApi.Router, domains: [{{ domain }}], open_api: "/open_api"
+end

@@ -1,0 +1,5 @@
+{# The filter of a query in its module's file: whether a record is among the query's results. Loading, sorting and paging stay with the storage. #}
+/// Whether a record is among the results of the query {{ qn }}{{ " for the inputs" if inputs else "" }}.
+pub fn in_{{ name }}({{ params | join(", ") }}) -> bool {
+    {{ condition }}
+}

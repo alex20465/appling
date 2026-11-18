@@ -1,0 +1,12 @@
+{# An action in its module's file: a function on `&mut` its entity that checks the actor and the preconditions,
+   runs the transition and the effects, and returns the events it emits. #}
+/// The action {{ qn }}. It returns the events it emits.{{ " The records it creates, updates or deletes go to the store functions, which write them." if stores else "" }}
+pub fn {{ name }}({{ params | join(", ") }}) -> Result<Vec<Event>, Error> {
+    let {{ "mut " if emits else "" }}events = Vec::new();
+{% block body %}
+{% for line in body %}
+    {{ line }}
+{% endfor %}
+{% endblock %}
+    Ok(events)
+}

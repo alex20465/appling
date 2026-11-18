@@ -1,0 +1,36 @@
+{# A projection: a REST framework model serializer; computed fields that follow references read their `source` path.
+   Fields guarded by field policies are hidden from actors who may not read them. In <app>/serializers.py. #}
+{% import "python/macros.njk" as py %}
+class {{ name }}(serializers.ModelSerializer):
+{% block docstring %}
+{{ py.docstring(doc) -}}
+{% endblock %}
+{% block declared %}
+{% for field in declared %}
+    {{ field.name }} = serializers.ReadOnlyField({{ "source=" + (field.source | dump) if field.source }})
+{% endfor %}
+{% if declared.length %}
+
+{% endif %}
+{% endblock %}
+{% block meta %}
+    class Meta:
+        model = {{ model }}
+        fields = [{{ py.strings(fields) }}]
+{% endblock %}
+{% block hidden %}
+{% if hidden.length %}
+
+    def to_representation(self, instance):
+        """Hides the fields the requesting actor may not read; without a request nothing is hidden."""
+        data = super().to_representation(instance)
+        actor = getattr(self.context.get("request"), "user", None)
+        if actor is None:
+            return data
+{% for field in hidden %}
+        if {{ field.name | dump }} in data and not {{ field.check }}(actor, instance):
+            data[{{ field.name | dump }}] = None
+{% endfor %}
+        return data
+{% endif %}
+{% endblock %}

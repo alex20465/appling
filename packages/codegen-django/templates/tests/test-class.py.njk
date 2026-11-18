@@ -1,0 +1,16 @@
+{# The tests of one rule: a test class with one method per case. In <app>/tests.py.
+   A case without a body skips with a pointer to its registry task, which asks for the missing bodies. #}
+{% import "python/macros.njk" as py %}
+class {{ name }}(TestCase):
+    """{{ about }}"""
+{% block cases %}
+{% for case in cases %}
+
+    def test_{{ case.name }}(self):
+{% if case.body %}
+{{ py.lines(case.body, "        ") -}}
+{% else %}
+        self.skipTest({{ skip | dump }})
+{% endif %}
+{% endfor %}
+{% endblock %}

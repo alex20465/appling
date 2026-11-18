@@ -13,23 +13,14 @@ export function template(file: string, write: (existing: string | undefined) => 
     return { kind: 'template', file, write };
 }
 
-/** A Python docstring holding a node's `describe` and `does` texts, as lines at the given indentation; none without a text. */
-export function docstring(node: GraphNode, indent: string): string[] {
+/** A Python docstring holding a node's `describe` and `does` texts at the given indentation, for a template; empty without a text. */
+export function doc(node: GraphNode, indent = '    '): string {
     const text = aboutOf(node);
-    if (!text) return [];
+    if (!text) return '';
     const escaped = text.replace(/\\/g, '\\\\').replace(/"(?="")|"$/g, '\\"');
     const lines = escaped.split('\n');
-    if (lines.length === 1) return [`${indent}"""${escaped}"""`];
-    return [`${indent}"""${lines[0]}`, ...lines.slice(1).map(l => l ? indent + l : ''), `${indent}"""`];
-}
-
-/** Puts the node's docstring under the first `class` or `def` line of the code. */
-export function documented(code: string, node: GraphNode): string {
-    const lines = code.split('\n');
-    const at = lines.findIndex(l => /^\s*(class|def) .*:$/.test(l));
-    if (at < 0) return code;
-    const indent = `${lines[at].match(/^\s*/)![0]}    `;
-    return [...lines.slice(0, at + 1), ...docstring(node, indent), ...lines.slice(at + 1)].join('\n');
+    if (lines.length === 1) return `${indent}"""${escaped}"""`;
+    return [`${indent}"""${lines[0]}`, ...lines.slice(1).map(l => l ? indent + l : ''), `${indent}"""`].join('\n');
 }
 
 export function task(what: string): Step {
@@ -95,10 +86,10 @@ export function hasKind(context: MapContext, ...kinds: string[]): boolean {
 }
 
 /** Adds routes to a URL module of an app, `<app>/<file>.py`, whose views live in `<app>/<views>.py`. */
-export function routesStep(app: string, file: string, views: string, routes: string[]): Step {
+export function routesStep(app: string, file: string, views: string, routes: string[], context: MapContext): Step {
     return template(`${app}/${file}.py`, existing => existing
         ? existing.replace(/\n\]\n$/, `\n${routes.join('\n')}\n]\n`)
-        : pythonFile(undefined, ['from django.urls import path', `from ${app} import ${views}`], `urlpatterns = [\n${routes.join('\n')}\n]`));
+        : pythonFile(undefined, ['from django.urls import path', `from ${app} import ${views}`], context.render('urls/urls.py.njk', { routes })));
 }
 
 /** Mounts a URL module of an app in `config/urls.py` under a prefix, such as "api/" or "" for the site root. */

@@ -1,0 +1,19 @@
+{# The test of a policy on a whole entity, in internal/<module>/<module>_test.go: an actor the simulator proves the
+   policy lets through passes Can<Op><Entity>, and one it keeps out fails it. A case without such an actor is skipped. #}
+func {{ name }}(t *testing.T) {
+{% for run in runs %}
+	t.Run({{ run.label | dump }}, func(t *testing.T) {
+{% if run.actor %}
+		actor := {{ run.actor }}()
+		{{ record }} := {{ valid }}()
+{% for check in run.checks %}
+		if {{ "!" if run.want else "" }}{{ check }}(actor, {{ record }}) {
+			t.Error({{ (check + ": want " + run.want + " for " + run.qn) | dump }})
+		}
+{% endfor %}
+{% else %}
+		t.Skip({{ ("registry task: " + qn) | dump }})
+{% endif %}
+	})
+{% endfor %}
+}

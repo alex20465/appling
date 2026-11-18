@@ -1,0 +1,14 @@
+{# An Ash.Policy.SimpleCheck that `actor.is(...)` names: a role or an actor. In lib/<app>/<module>/checks/<name>.ex. -#}
+defmodule {{ module }} do
+  use Ash.Policy.SimpleCheck
+
+{% block describe %}
+  @impl true
+  def describe(_opts), do: {{ description | dump }}
+{% endblock %}
+
+  @impl true
+{% block clauses %}
+{% endblock %}
+  def match?(_actor, _context, _opts), do: false
+end

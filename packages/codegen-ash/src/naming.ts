@@ -46,6 +46,12 @@ export function snake(name: string): string {
     return name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
 }
 
+/** The lines of a rendered template, for a DSL section; none when it renders nothing. */
+export function sectionLines(context: MapContext, template: string, data: object): string[] {
+    const text = context.render(template, data);
+    return text ? text.split('\n') : [];
+}
+
 export function mix(args: string[]): CommandStep {
     return { kind: 'command', run: ['mix', ...args, '--yes'] };
 }

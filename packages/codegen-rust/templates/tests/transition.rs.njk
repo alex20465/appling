@@ -1,0 +1,17 @@
+{# The test of a transition an action runs, in its module's test module: a record in a `from` state goes to the `to` state,
+   and a state no transition leaves is refused with Error::InvalidTransition. #}
+#[test]
+fn {{ name }}() {
+{% if actor %}
+    let actor = {{ actor }};
+{% endif %}
+    let mut x = {{ valid }}();
+    x.{{ state }} = {{ from }};
+    {{ call }}.expect({{ runs }});
+    assert_eq!(x.{{ state }}, {{ to }}, {{ goes }});
+{% if invalid %}
+    let mut x = {{ valid }}();
+    x.{{ state }} = {{ invalid }};
+    assert!(matches!({{ call }}, Err(Error::InvalidTransition { .. })), {{ refuses }});
+{% endif %}
+}

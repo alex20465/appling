@@ -1,0 +1,12 @@
+{# One migration step on a column, in the `change` of the block's Ecto migration: rename, retype or remove. -#}
+{% if kind == "rename" %}
+    rename table(:{{ table }}), :{{ column }}, to: :{{ newName }}
+{% elif kind == "retype" %}
+    alter table(:{{ table }}) do
+      modify :{{ column }}, {{ type }}
+    end
+{% else %}
+    alter table(:{{ table }}) do
+      remove :{{ column }}
+    end
+{% endif %}

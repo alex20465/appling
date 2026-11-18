@@ -1,0 +1,2 @@
+{# An emit effect: appends the event with its fields to the events the function returns. #}
+events = append(events, {{ event }}{ {{- values | join(", ") }}})

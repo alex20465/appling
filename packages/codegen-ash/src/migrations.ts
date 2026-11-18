@@ -25,28 +25,28 @@ export function migrationSteps(change: MigrationChange, context: MapContext, fil
     const old = lastOf(change.target);
     const atom = new RegExp(`:${old}\\b`, 'g');
     let patch: (text: string) => string;
-    let statement: string;
+    let statement: object;
     if (change.kind === 'rename') {
         patch = text => text.replace(atom, `:${change.newName}`);
-        statement = `rename table(:${table}), :${old}, to: :${change.newName}`;
+        statement = { newName: change.newName };
     } else if (change.kind === 'retype') {
         const type = element!.data.type as TypeData;
         patch = text => text.replace(new RegExp(`(\\n\\s+attribute :${old}, )[^,\\n]+( do|,)`), `$1${elixirType(type, context)}$2`);
-        statement = `alter table(:${table}) do\n      modify :${old}, ${column(type, context)}\n    end`;
+        statement = { type: column(type, context) };
     } else {
         patch = text => text
             .replace(new RegExp(`\\n\\s+attribute :${old}, [^\\n]* do\\n[\\s\\S]*?\\n\\s+end\\n`), '\n')
             .replace(new RegExp(`\\n\\s+attribute :${old}, [^\\n]*\\n`), '\n')
             .replace(new RegExp(`(, )?:${old}\\b(, )?`, 'g'), (_, before, after) => (before && after ? ', ' : ''));
-        statement = `alter table(:${table}) do\n      remove :${old}\n    end`;
+        statement = {};
     }
     const migration = `priv/repo/migrations/${change.stamp}_appling_${change.block}.exs`;
     const module = `${pascal(app(context))}.Repo.Migrations.Appling${pascal(change.block)}`;
     return [
         { kind: 'template', file: resource, write: existing => patch(existing!) },
         {
-            kind: 'template', file: migration, write: existing => (existing
-                ?? `defmodule ${module} do\n  use Ecto.Migration\n\n  def change do\n  end\nend\n`).replace(/\n  end\nend\n$/, `\n    ${statement}\n  end\nend\n`)
+            kind: 'template', file: migration, write: existing => (existing ?? `${context.render('migrations/migration.exs.njk', { module })}\n`)
+                .replace(/\n  end\nend\n$/, `\n${context.render('migrations/statement.exs.njk', { kind: change.kind, table, column: old, ...statement })}\n  end\nend\n`)
         },
         { kind: 'command', run: ['mix', 'ash_postgres.generate_migrations', '--snapshots-only'], phase: 1 },
         task(`update the code that uses ${change.target} after the ${change.kind}${change.newName ? ` to ${change.newName}` : ''}; resources and migrations are done`)

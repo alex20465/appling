@@ -1,0 +1,7 @@
+{# An enum: Django text choices, one constant per literal. In <app>/enums.py. #}
+{% import "python/macros.njk" as py %}
+class {{ name }}(models.TextChoices):
+{{ py.docstring(doc) -}}
+{% for literal in literals %}
+    {{ literal.constant }} = {{ literal.value | dump }}
+{% endfor %}

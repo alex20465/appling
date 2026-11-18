@@ -1,0 +1,23 @@
+{# An action on an entity, or the action of an event's transitions: an update (or destroy) action in the `actions`
+   section of its resource with its inputs as arguments, preconditions and guards as validations, effects as changes. -#}
+{{ type }} :{{ name }} do
+  require_atomic? false
+{% block arguments %}
+{% for a in arguments %}
+  argument :{{ a.name }}, {{ a.type }}, allow_nil?: {{ "true" if a.optional else "false" }}
+{% endfor %}
+{% endblock %}
+{% block validations %}
+{% for v in validations %}
+  validate {{ v.rule }}, message: {{ v.message | dump }}
+{% endfor %}
+{% endblock %}
+{% block changes %}
+{% for change in changes %}
+  change {{ change }}
+{% endfor %}
+{% if state %}
+  change transition_state(:{{ state }})
+{% endif %}
+{% endblock %}
+end

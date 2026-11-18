@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { annotation, children, documented, pythonFile, task, template } from './files.js';
+import { annotation, children, doc, pythonFile, task, template } from './files.js';
 import { invariantTests } from './model-tests.js';
 import { appOf, constantOf, lastOf, parentOf, python, q, type PythonScope } from './python.js';
 
@@ -31,21 +31,21 @@ export function installApp(app: string): Step {
 }
 
 export function enumSteps(node: GraphNode, context: MapContext): Step[] {
-    const literals = children(node, context).map(l => lastOf(l.qn));
-    const code = documented([`class ${lastOf(node.qn)}(models.TextChoices):`, ...literals.map(l => `    ${constantOf(l)} = ${JSON.stringify(l)}`)].join('\n'), node);
+    const literals = children(node, context).map(l => ({ constant: constantOf(lastOf(l.qn)), value: lastOf(l.qn) }));
+    const code = context.render('models/enum.py.njk', { name: lastOf(node.qn), doc: doc(node), literals });
     return [template(`${appOf(node.module)}/enums.py`, existing => pythonFile(existing, ['from django.db import models'], code))];
 }
 
 export function valueSteps(node: GraphNode, context: MapContext): Step[] {
     const imports = new Set(['from typing import TypedDict']);
-    const lines = children(node, context, 'Field').filter(f => !f.data.derived).map(f => `    ${lastOf(f.qn)}: ${annotation(f.data.type as TypeData, context, imports)}`);
-    const code = documented([`class ${lastOf(node.qn)}(TypedDict):`, ...(lines.length ? lines : ['    pass'])].join('\n'), node);
+    const fields = children(node, context, 'Field').filter(f => !f.data.derived).map(f => ({ name: lastOf(f.qn), annotation: annotation(f.data.type as TypeData, context, imports) }));
+    const code = context.render('models/value.py.njk', { name: lastOf(node.qn), doc: doc(node), fields });
     return [template(`${appOf(node.module)}/values.py`, existing => pythonFile(existing, imports, code))];
 }
 
 export function entitySteps(entity: GraphNode, context: MapContext): Step[] {
     const imports = new Set(['from django.db import models']);
-    const code = documented(modelClass(entity, context, imports), entity);
+    const code = modelClass(entity, context, imports);
     const model = template(`${appOf(entity.module)}/models.py`, existing => pythonFile(existing, imports, code));
     if (userEntity(context) !== entity.qn) return [model];
     const setting = `AUTH_USER_MODEL = ${JSON.stringify(modelLabel(entity))}`;
@@ -98,27 +98,31 @@ export function actorFields(context: MapContext): GraphNode[] {
 /** The `AbstractUser` model of actors without a bound entity, holding the fields the actors declare. */
 export function actorUserSteps(user: UserModel, context: MapContext): Step[] {
     const imports = new Set(['from django.db import models', 'from django.contrib.auth.models import AbstractUser']);
-    const lines = actorFieldLines(context, imports, new Set());
-    const code = [`class ${user.name}(AbstractUser):`, ...(lines.length ? lines : ['    pass'])].join('\n');
+    const code = context.render('models/actor-user.py.njk', { name: user.name, ...actorFieldData(context, imports, new Set()) });
     return [
         template(`${user.app}/models.py`, existing => pythonFile(existing, imports, code)),
         template('config/settings.py', existing => `${existing!.trimEnd()}\n\nAUTH_USER_MODEL = ${JSON.stringify(`${user.app}.${user.name}`)}\n`)
     ];
 }
 
-/** Model lines for the actor fields that the user model does not already have; all are optional, since not every actor declares them. */
-function actorFieldLines(context: MapContext, imports: Set<string>, existing: Set<string>): string[] {
-    const lines: string[] = [];
+/** The actor fields that the user model does not already have, as fields and properties; all are optional, since not every actor declares them. */
+function actorFieldData(context: MapContext, imports: Set<string>, existing: Set<string>) {
     const fields = actorFields(context).filter(f => !existing.has(lastOf(f.qn)));
-    for (const field of fields.filter(f => !f.data.derived)) {
-        const optional = { ...field, data: { ...field.data, type: { ...(field.data.type as TypeData), optional: true } } };
-        lines.push(`    ${lastOf(field.qn)} = ${djangoField(optional, context, imports)}`);
-    }
-    for (const field of fields.filter(f => f.data.derived)) {
+    return {
+        fields: fields.filter(f => !f.data.derived).map(field => {
+            const optional = { ...field, data: { ...field.data, type: { ...(field.data.type as TypeData), optional: true } } };
+            return { name: lastOf(field.qn), field: djangoField(optional, context, imports) };
+        }),
+        properties: properties(fields, context, imports)
+    };
+}
+
+/** The derived fields that translate to Python, as properties. */
+function properties(fields: GraphNode[], context: MapContext, imports: Set<string>): { name: string, code: string }[] {
+    return fields.filter(f => f.data.derived).flatMap(field => {
         const code = property(field, context, imports);
-        if (code) lines.push('', '    @property', `    def ${lastOf(field.qn)}(self):`, `        return ${code}`);
-    }
-    return lines;
+        return code ? [{ name: lastOf(field.qn), code }] : [];
+    });
 }
 
 export function fieldSteps(field: GraphNode, context: MapContext): Step[] | undefined {
@@ -148,25 +152,24 @@ export function invariantSteps(invariant: GraphNode, context: MapContext): Step[
 function modelClass(entity: GraphNode, context: MapContext, imports: Set<string>): string {
     const name = lastOf(entity.qn);
     const fields = children(entity, context, 'Field');
-    const lines: string[] = [];
-    for (const field of fields.filter(f => !f.data.derived)) lines.push(`    ${lastOf(field.qn)} = ${djangoField(field, context, imports)}`);
-    for (const field of fields.filter(f => f.data.derived)) {
-        const code = property(field, context, imports);
-        if (code) lines.push('', '    @property', `    def ${lastOf(field.qn)}(self):`, `        return ${code}`);
-    }
     const user = userEntity(context) === entity.qn;
-    if (user) {
-        const own = actorFieldLines(context, imports, new Set(fields.map(f => lastOf(f.qn))));
-        if (own.length) lines.push(...(lines.length && own[0] !== '' ? [''] : []), ...own);
-    }
+    const actor = user ? actorFieldData(context, imports, new Set(fields.map(f => lastOf(f.qn)))) : { fields: [], properties: [] };
     const constraints = children(entity, context, 'Invariant').flatMap(invariant => {
         const condition = constraint(invariant, context);
         const id = `${appOf(entity.module)}_${name}_${String(invariant.data.label)}`.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-        return condition ? [`            models.CheckConstraint(condition=${condition}, name=${JSON.stringify(id)}),`] : [];
+        return condition ? [{ condition, name: id }] : [];
     });
-    if (constraints.length) lines.push('', '    class Meta:', '        constraints = [', ...constraints, '        ]');
     if (user) imports.add('from django.contrib.auth.models import AbstractUser');
-    return [`class ${name}(${user ? 'AbstractUser' : 'models.Model'}):`, ...(lines.length ? lines : ['    pass'])].join('\n');
+    return context.render('models/entity.py.njk', {
+        name,
+        base: user ? 'AbstractUser' : 'models.Model',
+        doc: doc(entity),
+        fields: fields.filter(f => !f.data.derived).map(field => ({ name: lastOf(field.qn), field: djangoField(field, context, imports) })),
+        properties: properties(fields, context, imports),
+        actorFields: actor.fields,
+        actorProperties: actor.properties,
+        constraints
+    });
 }
 
 export function djangoField(field: GraphNode, context: MapContext, imports: Set<string>): string {

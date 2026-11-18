@@ -1,0 +1,17 @@
+{# The Django groups of a module's roles and actors, created after `migrate`. In <app>/groups.py, connected in AppConfig.ready; later roles and actors add their names to GROUPS. #}
+{% block groups %}
+GROUPS = [
+{% for name in groups %}
+    {{ name | dump }},
+{% endfor %}
+]
+{% endblock %}
+
+
+{% block create_groups %}
+@receiver(post_migrate)
+def create_groups(sender, **kwargs) -> None:
+    """Creates the Django groups of the module's roles and actors."""
+    for name in GROUPS:
+        Group.objects.get_or_create(name=name)
+{% endblock %}

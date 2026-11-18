@@ -1,0 +1,4 @@
+{# Shared pieces of the page components: column labels and the buttons of row and record actions. #}
+{% macro labels(columns) %}{% for c in columns %}label({{ c.key | dump }}, {{ c.title | dump }}){{ ", " if not loop.last }}{% endfor %}{% endmacro %}
+
+{% macro actions(app, list) %}[{% for a in list %}{"label": {{ a.label | dump }}, "url": "/_actions/{{ app }}/{{ a.name }}/"}{{ ", " if not loop.last }}{% endfor %}]{% endmacro %}

@@ -1,0 +1,6 @@
+{# The inputs of a query read from URL parameters (the path and the query string): a REST framework serializer. In <app>/serializers.py. #}
+class {{ name }}(serializers.Serializer):
+    """The inputs of {{ query }}, read from URL parameters."""
+{% for field in fields %}
+    {{ field.name }} = {{ field.field }}
+{% endfor %}

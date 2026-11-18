@@ -1,0 +1,24 @@
+{# The test of an invariant, in internal/<module>/<module>_test.go: a valid record passes Validate, and one field
+   the simulator proves to break the invariant fails with its label. #}
+func {{ name }}(t *testing.T) {
+{% block holds %}
+	t.Run("holds for a valid record", func(t *testing.T) {
+		if err := {{ valid }}().Validate(); err != nil {
+			t.Fatalf("a valid {{ entity }}: %v", err)
+		}
+	})
+{% endblock %}
+{% block rejects %}
+	t.Run("rejects a violation", func(t *testing.T) {
+{% if violation %}
+		x := {{ valid }}()
+		{{ violation }}
+		if err := x.Validate(); err == nil || !strings.Contains(err.Error(), {{ label | dump }}) {
+			t.Fatalf({{ (violation + ": want the error %q, got %v") | dump }}, {{ label | dump }}, err)
+		}
+{% else %}
+		t.Skip({{ ("registry task: " + qn) | dump }})
+{% endif %}
+	})
+{% endblock %}
+}

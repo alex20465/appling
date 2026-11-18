@@ -1,0 +1,6 @@
+{# A scheduled job's management command, for the scheduler (cron) to run. In <app>/management/commands/<job>.py. #}
+class Command(BaseCommand):
+    help = {{ help | dump }}
+
+    def handle(self, *args, **options):
+        {{ name }}.enqueue()

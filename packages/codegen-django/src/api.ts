@@ -20,7 +20,7 @@ export function interfaceSteps(api: GraphNode, context: MapContext): Step[] | un
     const throttle = api.data.rateLimit ? `${name}Throttle` : undefined;
     if (throttle) {
         imports.add('from rest_framework import throttling');
-        blocks.push(`class ${throttle}(throttling.UserRateThrottle):\n    rate = ${JSON.stringify(`${api.data.rateLimit}/${api.data.rateUnit}`)}`);
+        blocks.push(context.render('api/throttle.py.njk', { name: throttle, rate: `${api.data.rateLimit}/${api.data.rateUnit}` }));
     }
     for (const endpoint of children(api, context, 'Endpoint')) {
         const view = endpointView(endpoint, `${name}${pascal(lastOf(endpoint.data.target as string))}`, throttle, context, imports);
@@ -36,7 +36,7 @@ export function interfaceSteps(api: GraphNode, context: MapContext): Step[] | un
     if (!blocks.length) return tasks;
     return [
         template(`${app}/api.py`, existing => pythonFile(existing, imports, blocks.join('\n\n\n'))),
-        routesStep(app, 'api_urls', 'api', routes),
+        routesStep(app, 'api_urls', 'api', routes, context),
         includeStep(app, 'api_urls', 'api/'),
         ...tasks
     ];
@@ -45,39 +45,31 @@ export function interfaceSteps(api: GraphNode, context: MapContext): Step[] | un
 function endpointView(endpoint: GraphNode, name: string, throttle: string | undefined, context: MapContext, imports: Set<string>): { name: string, code: string } | undefined {
     const target = context.node(endpoint.data.target as string)!;
     const verb = endpoint.data.verb as string;
-    const throttles = throttle ? [`    throttle_classes = [${throttle}]`] : [];
     if (verb === 'GET' && target.kind === 'Query' && endpoint.data.projection) {
         if (!queryCode(target, context, new Set())) return undefined;
         // The inputs come from the path and the query string; parameters that do not parse answer 400.
         const inputs = inputLines(target, ['self.request.query_params', 'self.kwargs'], undefined, context, imports);
         if (!inputs) return undefined;
         const projection = context.node(endpoint.data.projection as string)!;
-        const picks = ((endpoint.data.picks ?? []) as string[]).map(p => JSON.stringify(lastOf(p)));
+        const picks = ((endpoint.data.picks ?? []) as string[]).map(lastOf);
         imports.add('from rest_framework import generics');
         imports.add(`from ${appOf(target.module)}.queries import ${snake(lastOf(target.qn))}`);
         imports.add(`from ${appOf(projection.module)}.serializers import ${lastOf(projection.qn)}`);
-        const lines: string[] = [];
-        let serializer = lastOf(projection.qn);
-        if (picks.length) {
-            serializer = `${name}Serializer`;
-            lines.push(`class ${serializer}(${lastOf(projection.qn)}):`, `    class Meta(${lastOf(projection.qn)}.Meta):`, `        fields = [${picks.join(', ')}]`, '', '');
-        }
         if (target.data.pageSize) {
             imports.add('from rest_framework import pagination');
             imports.add(`from ${appOf(target.module)}.queries import ${pageSizeName(target)}`);
-            lines.push(`class ${name}Pagination(pagination.PageNumberPagination):`, `    page_size = ${pageSizeName(target)}`, '', '');
         }
-        lines.push(
-            `class ${name}(generics.ListAPIView):`,
-            `    serializer_class = ${serializer}`,
-            ...(target.data.pageSize ? [`    pagination_class = ${name}Pagination`] : []),
-            ...throttles,
-            '',
-            '    def get_queryset(self):',
-            ...inputs.map(l => `        ${l}`),
-            `        return ${queryCall(target, 'self.request.user', context, inputs.length ? ['**inputs.validated_data'] : [])}`
-        );
-        return { name, code: lines.join('\n') };
+        const code = context.render('api/list-view.py.njk', {
+            name,
+            projection: lastOf(projection.qn),
+            serializer: picks.length ? `${name}Serializer` : lastOf(projection.qn),
+            picks,
+            pageSize: target.data.pageSize ? pageSizeName(target) : '',
+            throttle: throttle ?? '',
+            inputs,
+            query: queryCall(target, 'self.request.user', context, inputs.length ? ['**inputs.validated_data'] : [])
+        });
+        return { name, code };
     }
     if (WRITES.includes(verb) && target.kind === 'Action') {
         const entity = target.data.entity ? context.node(target.data.entity as string) : undefined;
@@ -96,22 +88,16 @@ function endpointView(endpoint: GraphNode, name: string, throttle: string | unde
             imports.add(`from ${appOf(entity.module)}.models import ${lastOf(entity.qn)}`);
         }
         const inputs = children(target, context, 'Param').map(p => `${lastOf(p.qn)}=request.data.get(${JSON.stringify(lastOf(p.qn))})`);
-        const call = `${action}(${[...(instance ? [instance] : []), ...inputs, 'actor=request.user'].join(', ')})`;
-        const body = errors.length
-            ? ['        try:', `            ${call}`, `        except (${errors.join(', ')}${errors.length === 1 ? ',' : ''}) as error:`, '            return Response({"error": type(error).__name__}, status=400)']
-            : [`        ${call}`];
-        return {
+        const code = context.render('api/action-view.py.njk', {
             name,
-            code: [
-                `class ${name}(views.APIView):`,
-                ...throttles,
-                ...(throttles.length ? [''] : []),
-                `    def ${verb.toLowerCase()}(self, request${entity ? ', id' : ''}):`,
-                ...(entity ? [`        ${instance} = get_object_or_404(${lastOf(entity.qn)}, pk=id)`] : []),
-                ...body,
-                '        return Response(status=204)'
-            ].join('\n')
-        };
+            throttle: throttle ?? '',
+            method: verb.toLowerCase(),
+            instance: instance ?? '',
+            model: entity ? lastOf(entity.qn) : '',
+            errors,
+            call: `${action}(${[...(instance ? [instance] : []), ...inputs, 'actor=request.user'].join(', ')})`
+        });
+        return { name, code };
     }
     return undefined;
 }
