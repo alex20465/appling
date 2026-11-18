@@ -47,7 +47,10 @@ const extension: CodegenExtension = {
     steps(node, context) {
         switch (node.kind) {
             case 'Module': return [mix(['ash.gen.domain', moduleName(node.qn, context)])];
-            case 'Enum': return [mix(['ash.gen.enum', typeModule(node, context), context.children(node.qn).map(l => lastOf(l.qn)).join(',')])];
+            case 'Enum': return [
+                mix(['ash.gen.enum', typeModule(node, context), context.children(node.qn).map(l => lastOf(l.qn)).join(',')]),
+                ...(moduledoc(node) ? [patch(fileOf(node, context), existing => withModuledoc(existing, node))] : [])
+            ];
             case 'ValueType': return [{ kind: 'template', file: fileOf(node, context), write: () => embedded(node, context) }];
             case 'Entity': return entitySteps(node, context);
             case 'EnumLiteral': return [];

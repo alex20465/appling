@@ -1,3 +1,4 @@
+import { annotationOf } from '@appling/lang/layers';
 import { fingerprints, type Graph, type GraphNode } from '@appling/model';
 import type { CodegenExtension, MapContext, Step } from './contract.js';
 import { templateRenderer, type Render } from './templates.js';
@@ -120,9 +121,9 @@ function entry(node: GraphNode, steps: Step[] | undefined, extension: string, co
     // Code exists when the node has its own steps or is covered by its parent's (`[]`) and leaves no task of its own.
     const work = (steps ?? []).filter(s => s.kind !== 'task');
     const hasCode = work.length > 0 || (steps !== undefined && tasks.length === 0);
-    // The `does` text is prose the model does not formalize, so implementing it is left to the code.
-    const does = doesTask(node);
-    if (does) tasks.push({ what: does, leftToCode: true });
+    // An annotation is prose the model does not formalize, so implementing it is left to the code.
+    const annotation = annotationTask(node);
+    if (annotation) tasks.push({ what: annotation, leftToCode: true });
     const related = [
         ...context.outgoing(node.qn).filter(e => e.kind !== 'contains').map(e => ({ qn: e.to, kind: context.node(e.to)!.kind, edge: e.kind })),
         ...context.incoming(node.qn).filter(e => e.kind !== 'contains').map(e => ({ qn: e.from, kind: context.node(e.from)!.kind, edge: `${e.kind} by` }))
@@ -138,16 +139,15 @@ function entry(node: GraphNode, steps: Step[] | undefined, extension: string, co
     };
 }
 
-/** The registry task of a node's `does` text, the same for every extension. */
-export function doesTask(node: GraphNode): string | undefined {
-    const text = node.data.does;
-    if (typeof text !== 'string' || !text.trim()) return undefined;
-    return `implement what ${node.qn.split('.').pop()} does: ${text}`;
+/** The registry task of a node's annotation, the same for every extension: `implement what <Name> handles: <text>`. */
+export function annotationTask(node: GraphNode): string | undefined {
+    const annotation = annotationOf(node);
+    return annotation && `implement what ${node.qn.split('.').pop()} ${annotation.keyword}: ${annotation.text}`;
 }
 
-/** The documentation of a node in generated code: its `describe` text, then its `does` text. */
+/** The documentation of a node in generated code: its `describe` text, then its annotation. */
 export function aboutOf(node: GraphNode): string | undefined {
-    const texts = [node.data.describe, node.data.does].filter((text): text is string => typeof text === 'string' && !!text.trim());
+    const texts = [node.data.describe, annotationOf(node)?.text].filter((text): text is string => typeof text === 'string' && !!text.trim());
     return texts.length ? texts.join('\n\n') : undefined;
 }
 

@@ -1,2 +1,5 @@
 {# Messages: the labels of the columns and fields of pages in one language. A line in <app>/messages.py. #}
+{% if about %}
+{{ about }}
+{% endif %}
 LABELS[{{ name | dump }}] = {{ "{" }}{% for entry in entries %}{{ entry.key | dump }}: {{ entry.text | dump }}{{ ", " if not loop.last }}{% endfor %}{{ "}" }}

@@ -77,7 +77,7 @@ sequenceDiagram
 
 **Expressions.** A CEL subset parsed into plain AST nodes. Names inside expressions are strings, not cross references: the `ExpressionTyper` resolves them per position, types them and records the element each name stands for. The validator reports its problems, the graph turns the targets into `uses` edges, and rename follows them.
 
-**Edit operations.** `applyEdit` finds the target by qualified name and splices text. Rename and retype touch only tokens; add, remove and set reprint the touched element canonically with `printRange`. The result is rebuilt and rejected if it adds an error. Rename must find every place that names an element, including names that are not references (export lists, message keys, transition states, `@Name` in `describe` and `does` texts).
+**Edit operations.** `applyEdit` finds the target by qualified name and splices text. Rename and retype touch only tokens; add, remove and set reprint the touched element canonically with `printRange`. The result is rebuilt and rejected if it adds an error. Rename must find every place that names an element, including names that are not references (export lists, message keys, transition states, `@Name` in `describe` texts and annotations).
 
 **Releases.** `appling release` writes the graph to `.appling/releases/<version>.json`. Later edits to released domain elements append `rename`, `retype` or `remove` steps to the module's `since_v<version>` block, which code generation carries into generated projects.
 

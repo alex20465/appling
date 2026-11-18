@@ -33,6 +33,27 @@ test('does parses in both forms on declarations, fields and operations, and stay
     expect(doesNames(account.fields[0])).toEqual([]);
 });
 
+test('each level takes its annotation, which stays a valid name', async () => {
+    const text = [
+        'module m {',
+        '  entity A holds "Mirrors the ERP" { holds: String handles: String serves: String shows: String }',
+        '  query Q from A handles """',
+        '    Joins the ledger',
+        '  """ { }',
+        '  interface rest Api serves "A CSV export of @Q" { }',
+        '  page P route "/p" shows "A chart of @Q" { }',
+        '}'
+    ].join('\n');
+    const [doc] = await build({ 'm.appling': text });
+    expect(errors([doc])).toEqual([]);
+    const [entity, query, api, page] = (doc.parseResult.value as Model).modules[0].members as unknown as Array<Record<string, unknown>>;
+    expect([entity.holds, query.handles, api.serves, page.shows]).toEqual(['Mirrors the ERP', 'Joins the ledger', 'A CSV export of @Q', 'A chart of @Q']);
+    expect(doesNames(page as never).map(n => [n.property, n.name])).toEqual([['shows', 'Q']]);
+    const once = print(doc.parseResult.value);
+    const [again] = await build({ 'm.appling': once });
+    expect(print(again.parseResult.value)).toBe(once);
+});
+
 test('fmt re-indents a text block with its block and is idempotent', async () => {
     const [doc] = await build({ 'm.appling': 'module m { entity A describe """\n      Line one.\n        Two.\n   """ { x: Int describe "x" } }' });
     const once = print(doc.parseResult.value);

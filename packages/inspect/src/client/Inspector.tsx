@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { annotationOf } from '@appling/lang/layers';
 import { Simulator, type Access, type Verdict } from '@appling/model/simulator';
 import type { ElementChange } from '@appling/model/diff';
 import { abilities, actionSummary, entityActions, kindLabel, LAYER_LABELS, memberText, policyText, relations, type Ability, type GraphIndex } from '@appling/viz/views';
@@ -22,6 +23,7 @@ export function Inspector({ index, qn, onSelect, onClose, onOpenSource, change, 
     if (!node) return null;
 
     const link = (target: string, text = target) => <button className="link" onClick={() => onSelect(target)}>{text}</button>;
+    const note = annotationOf(node);
 
     return (
         <aside className={`inspector layer-${node.layer}`} aria-label="Inspector">
@@ -38,6 +40,8 @@ export function Inspector({ index, qn, onSelect, onClose, onOpenSource, change, 
                     {change.status}{change.was && ` from ${change.was}`}{change.status === 'changed' && change.props.length > 0 && ` · ${change.props.join(', ')}`}
                 </p>
             )}
+            {typeof node.props.describe === 'string' && <Note title="Describe" text={node.props.describe} />}
+            {note && <Note title={note.keyword} text={note.text} hint="for the code: the model does not state it" />}
             {node.kind === 'Action' && <WhatItDoes index={index} qn={node.qn} link={link} />}
             {node.kind === 'Actor' && <WhatTheyCanDo index={index} qn={node.qn} link={link} />}
             {node.kind === 'Entity' && <Section title="Actions" items={entityActions(index, node.qn).map(a => (
@@ -145,6 +149,11 @@ function Relations({ title, index, qn, direction, link }: { title: string, index
             ))}
         </section>
     );
+}
+
+/** A text of the model in its own words, a `describe` or an annotation. */
+function Note({ title, text, hint }: { title: string, text: string, hint?: string }) {
+    return <section className="note"><h3>{title}{hint && <span className="muted"> {hint}</span>}</h3><p>{text}</p></section>;
 }
 
 function Section({ title, items }: { title: string, items: React.ReactNode[] }) {

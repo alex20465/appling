@@ -1,5 +1,9 @@
 {# A page: a Django view that collects its components for the shared page.html template. In <app>/pages.py, routed in <app>/urls.py at the site root. #}
+{% import "python/macros.njk" as py %}
 def {{ name }}(request{{ ", id" if byId }}):
+{% block docstring %}
+{{ py.docstring(doc) -}}
+{% endblock %}
     components = []
 {% block components %}
 {% for line in body %}

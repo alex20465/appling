@@ -462,6 +462,34 @@ test('describe texts become the moduledoc and attribute descriptions, without a 
     expect(entries['shop.Item'].missing.map(m => m.what)).toEqual([]);
 });
 
+test('annotations land in the generated code next to their registry task', async () => {
+    const result = await planFor({
+        'shop.appling': `module shop {
+            enum Status holds "Mirrors the ERP states" { open done }
+            entity Item holds "Synced from the ERP" { code: String  status: Status }
+            action Close on Item { set status = done }
+            query OpenItems from Item describe "Items still on sale" handles "Reads the ERP replica" { where { status == open } }
+            interface rest Api serves "A CSV export" { GET "/items" -> OpenItems  PATCH "/items/{id}/close" -> Close }
+            page Items route "/items" shows "Highlights old items" { list OpenItems as ItemView }
+            projection ItemView from Item { code }
+        }`
+    });
+    // Every template step of the file in plan order, starting from what the commands created.
+    const write = (file: string, created?: string) => result.steps
+        .flatMap(({ step }) => step.kind === 'template' && step.file === file ? [step] : [])
+        .reduce<string | undefined>((text, step) => step.write(text), created);
+    expect(write('lib/shop/shop/status.ex', 'defmodule Shop.Shop.Status do\n  use Ash.Type.Enum, values: [:open, :done]\nend\n'))
+        .toBe('defmodule Shop.Shop.Status do\n  @moduledoc "Mirrors the ERP states"\n\n  use Ash.Type.Enum, values: [:open, :done]\nend\n');
+    const item = write('lib/shop/shop/item.ex', 'defmodule Shop.Shop.Item do\n  actions do\n  end\nend\n');
+    expect(item).toContain('  @moduledoc "Synced from the ERP"\n');
+    expect(item).toContain('    read :open_items do\n      description "Items still on sale\\n\\nReads the ERP replica"\n');
+    expect(write('lib/shop/shop.ex', 'defmodule Shop.Shop do\n  use Ash.Domain\nend\n'))
+        .toContain('index :open_items, route: "/items", description: "A CSV export"\n        patch :close, route: "/items/:id/close", description: "A CSV export"\n');
+    expect(write('lib/shop_web/live/items_live.ex')).toContain('defmodule ShopWeb.ItemsLive do\n  @moduledoc "Highlights old items"\n\n  use ShopWeb, :live_view\n');
+    const entries = Object.fromEntries(result.entries.map(e => [e.qn, e]));
+    expect(entries['shop.OpenItems'].missing.map(m => m.what)).toContain('implement what OpenItems handles: Reads the ERP replica');
+});
+
 test('entity policies get Ash.can? tests for actors that their actor.is checks decide', async () => {
     const result = await planFor({
         'ops.appling': `module ops {

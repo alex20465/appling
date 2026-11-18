@@ -73,7 +73,7 @@ scenario ClerkCancelsDraft {
 
 A module or declaration may state its relevance to the business before its opening brace: `core`, `supporting` or `peripheral` (`entity Quote core { ... }`, `module observability peripheral { ... }`). A module's level applies to its members unless they state their own.
 
-Where the structure leaves something unclear, an element may add a plain text note with the optional `describe` clause, like a doc block in code, after its head and before its body, or at the end without one: `entity Account describe "Mirrors the Clerk user" { ... }`, `op BanUser (id: String) describe "..."`. An `event`, `action`, `machine` or `job` may also say with `does`, after `describe`, what its code has to do beyond the model: `action Ban on Account does "Signs the user out of every device" { ... }`; `does` on another kind is a syntax error. A text block `"""..."""` spans lines; its common indentation is stripped and `fmt` re indents it with its block. `@Name` inside the text names an element like a qualified name.
+Where the structure leaves something unclear, an element may add a plain text note with the optional `describe` clause, like a doc block in code, after its head and before its body, or at the end without one: `entity Account describe "Mirrors the Clerk user" { ... }`, `op BanUser (id: String) describe "..."`. A top level declaration may also say with the annotation of its level, after `describe`, what its code has to do beyond the model: `holds` on `enum`, `value`, `entity`; `does` on `event`, `action`, `machine`, `job`; `handles` on `query`, `projection`, `external`, `usecase`; `serves` on `interface`; `shows` on `page`, `navigation`, `flow`, `messages`: `action Ban on Account does "Signs the user out of every device" { ... }`. An annotation on another kind is a syntax error. A text block `"""..."""` spans lines; its common indentation is stripped and `fmt` re indents it with its block. `@Name` inside the text names an element like a qualified name.
 
 Expressions inside `{ ... }` use a subset of [CEL](https://cel.dev): `&&`, `||`, `!`, comparisons, `in`, arithmetic, member access, calls and list literals.
 
@@ -112,7 +112,7 @@ actor human Shopper roles Customer {
 - Action effects `set` fields, `create` records (`as name` for later effects), `emit` events, loop with `for x in <collection relationship>`, change a related record with `update <path> { set ... }` and delete with `delete self` or `delete <path>`; a path starts at a field, a loop variable or an `as` name and leads to one record.
 - Expressions must type check: conditions are Bool, values fit the field they are assigned to, `null` only fits optional fields, and calls in use cases pass the right number and types of arguments (an action on an entity takes the entity first, then its inputs; a query takes its inputs).
 - `migration` steps target elements by their path inside the module, as it was before the step: `rename Order.code -> reference`, `retype Order.total: Decimal -> Money`, `remove Order.legacy`. Renamed and retyped elements must exist, removed ones must not.
-- `@Name` in a `describe` or `does` text must name a visible element and follow the layer order, except in a module's own description.
+- `@Name` in a `describe` text or an annotation must name a visible element and follow the layer order, except in a module's own description.
 - A scenario binds each given name once, names an actor or a role some actor holds after `as` (actor fields only after an actor), calls an action or a use case (directly or through an endpoint of the interface, with the target's arguments), and `fails` only with an error of what it calls.
 
 ## API
@@ -141,11 +141,12 @@ const canonical = print(model);
 | `modulePath(module)` | The dotted path of a module, such as `a.b` |
 | `LAYER_OF` | The layer of every top level declaration type |
 | `mayReference(from, to)` | Whether a declaration of kind `from` may reference one of kind `to`; also at `@appling/lang/layers`, without langium |
+| `ANNOTATIONS`, `annotationOf(node)` | The annotation keyword of each layer, and a graph node's annotation (`{ keyword, text }`) from its `layer` and `props`; also at `@appling/lang/layers` |
 | `scenarioTarget(scenario)`, `scenarioErrors(scenario)`, `scenarioActor(scenario, actors)` | What a scenario's `when` runs, the errors it may fail with and the actor it runs as |
 | `ExpressionTyper` | Types expressions (`checkModel(model)`) and records `types`, `targets` (the element each name in an expression stands for) and `problems` |
 | `show(type)`, `typeOfRef(ref)` | The display name of a type, and the type a `TypeRef` declares |
 | `ApplingScopeProvider` | The scope provider; `lookup(container, type, name)` resolves a dotted name as a reference would, `lookupElement(container, name)` an element of any kind |
-| `doesNames(node)`, `doesTargets(node, services)` | The `@Name` occurrences of a node's `describe` and `does` texts with the text they stand in (`property`) and their document offsets, and with the element each names |
+| `doesNames(node)`, `doesTargets(node, services)` | The `@Name` occurrences of a node's `describe` and annotation texts with the text they stand in (`property`) and their document offsets, and with the element each names |
 | `textBlockValue(raw)`, `printTextBlock(raw, indent, outer)` | The value of a `"""` text block, and its canonical spelling |
 | AST types and guards | `Model`, `Entity`, `isEntity` and the rest of the generated AST |
 

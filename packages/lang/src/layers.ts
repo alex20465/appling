@@ -11,6 +11,18 @@ export const LAYER_OF: Record<string, Layer> = {
     Scenario: 'cross'
 };
 
+/** The annotation keyword of each level, also the property of its text: the work the code of its declarations has to do. */
+export const ANNOTATIONS = { domain: 'holds', behavior: 'does', application: 'handles', interface: 'serves', experience: 'shows' } as const;
+
+export type Annotation = typeof ANNOTATIONS[keyof typeof ANNOTATIONS];
+
+/** The annotation of a graph node, the keyword of its level and its text, when it has one. */
+export function annotationOf(node: { layer: string, props: Record<string, unknown> }): { keyword: Annotation, text: string } | undefined {
+    const keyword = ANNOTATIONS[node.layer as keyof typeof ANNOTATIONS];
+    const text = keyword && node.props[keyword];
+    return typeof text === 'string' && text.trim() ? { keyword, text } : undefined;
+}
+
 /** Whether a top level declaration of kind `from` may reference one of kind `to`: the reference DAG of `docs/concept.md` section 2.3. */
 export function mayReference(from: string, to: string): boolean {
     if (from === 'Scenario') return true;

@@ -84,6 +84,9 @@
 .tree-legend .added { --change: var(--appling-change-added); }
 .tree-legend .changed { --change: var(--appling-change-changed); }
 .tree-legend .removed { --change: var(--appling-change-removed); }
+/* an annotation: a note in the corner of the chip, its text in the hint */
+.note-badge circle { fill: var(--appling-surface); stroke: var(--layer, var(--appling-ink)); stroke-width: 1.5; }
+.note-badge path, .note-badge rect { fill: none; stroke: var(--layer, var(--appling-ink)); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .tree-legend .change-badge circle { fill: var(--change); }
 .tree-legend .change-badge text { fill: var(--appling-surface); font: 700 10px var(--appling-font-mono); text-anchor: middle; }
 .tree-legend .legend-ring { fill: none; stroke: var(--appling-branch); stroke-width: 1.5; }

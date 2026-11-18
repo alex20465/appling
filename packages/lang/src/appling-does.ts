@@ -1,12 +1,16 @@
 import { DefaultValueConverter, GrammarUtils, type AstNode, type CstNode, type GrammarAST, type ValueType } from 'langium';
 import type { ApplingServices } from './appling-module.js';
 import type { ApplingScopeProvider } from './appling-scope.js';
+import { ANNOTATIONS } from './layers.js';
 
 /**
- * The `describe` clause (what an element is and is for, on every named element) and the `does` clause (the work the
- * code of an L2 declaration has to do): plain text written as `"..."` or as a text block `"""..."""`. `@Name`
- * inside the text names an element the way a qualified name does.
+ * The `describe` clause (what an element is and is for, on every named element) and the annotations, the work the
+ * code of a top level declaration has to do that the model does not state, one keyword per level (`ANNOTATIONS`):
+ * plain text written as `"..."` or as a text block `"""..."""`. `@Name` inside the text names an element the
+ * way a qualified name does.
  */
+
+const TEXTS = ['describe', ...Object.values(ANNOTATIONS)] as const;
 
 /** Strips a text block's quotes, the line break after the opening quotes, and the common indentation of its lines. */
 export function textBlockValue(raw: string): string {
@@ -31,9 +35,9 @@ export class ApplingValueConverter extends DefaultValueConverter {
     }
 }
 
-/** One `@Name` inside a `describe` or `does` text: the name without `@`, and the document offsets of its first character and its end. */
+/** One `@Name` inside a `describe` or annotation text: the name without `@`, and the document offsets of its first character and its end. */
 export interface DoesName {
-    property: 'describe' | 'does';
+    property: typeof TEXTS[number];
     name: string;
     offset: number;
     end: number;
@@ -42,9 +46,9 @@ export interface DoesName {
 // `@` starts a name only where it does not continue a word, so mail addresses stay text.
 const NAME = /(?<![\w.@])@([_a-zA-Z]\w*(?:\.[_a-zA-Z]\w*)*)/g;
 
-/** The `@Name` occurrences in a node's own `describe` and `does` texts, read from the source so offsets stay exact. */
+/** The `@Name` occurrences in a node's own `describe` and annotation texts, read from the source so offsets stay exact. */
 export function doesNames(node: AstNode): DoesName[] {
-    return (['describe', 'does'] as const).flatMap(property => {
+    return TEXTS.flatMap(property => {
         const cst = GrammarUtils.findNodeForProperty(node.$cstNode, property);
         if (!cst) return [];
         return [...cst.text.matchAll(NAME)].map(m => ({
@@ -56,7 +60,7 @@ export function doesNames(node: AstNode): DoesName[] {
     });
 }
 
-/** Each `@Name` of a node's `describe` and `does` texts with the element it names, or undefined when nothing visible has that name. */
+/** Each `@Name` of a node's `describe` and annotation texts with the element it names, or undefined when nothing visible has that name. */
 export function doesTargets(node: AstNode, services: ApplingServices): Array<DoesName & { target?: AstNode }> {
     const scope = services.references.ScopeProvider as ApplingScopeProvider;
     return doesNames(node).map(name => ({ ...name, target: scope.lookupElement(node, name.name) }));

@@ -26,6 +26,7 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@appling/lang": "workspace:*",
     "@appling/model": "workspace:*",
     "nunjucks": "^3.2.4"
   },

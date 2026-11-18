@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
+import { aboutOf, type CodegenExtension, type MapContext, type Step } from '@appling/codegen';
 import { coveredByScenarios, scenarioCall, Simulator, throughPath, UNKNOWN, type Actor as SimActor, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
 import { accessFile, accessOf, accessSteps, actorFields, actorFieldType, crateHead, durationAttribute, durationSteps, libStep, PRIMITIVES, roleCondition, tenantOf, tenantPaths } from './access.js';
 import { enumVariant, pascal, qualify, rustExpr, rustTerm, snake, type RustScope } from './rust.js';
@@ -88,13 +88,18 @@ function moduleSteps(module: GraphNode, context: MapContext): Step[] {
 
 function enumBlock(node: GraphNode, context: MapContext): string {
     const variants = context.children(node.qn).map(l => ({ literal: last(l.qn), name: pascal(last(l.qn)) }));
-    return context.render('domain/enum.rs.njk', { qn: node.qn, name: last(node.qn), variants });
+    return context.render('domain/enum.rs.njk', { qn: node.qn, name: last(node.qn), about: about(node), variants });
+}
+
+/** A node's `describe` text and annotation as doc comment lines, trimmed so an indented line does not become a doctest. */
+function about(node: GraphNode): string[] {
+    return aboutOf(node)?.split('\n').map(line => line.trim()) ?? [];
 }
 
 function structBlock(node: GraphNode, context: MapContext, what: string): string {
     const scope = rustScope(node, context);
     const fields = fieldsOf(node, context).filter(f => !f.data.derived).map(f => fieldData(f, scope));
-    return context.render('domain/struct.rs.njk', { what, qn: node.qn, name: last(node.qn), fields });
+    return context.render('domain/struct.rs.njk', { what, qn: node.qn, name: last(node.qn), about: about(node), fields });
 }
 
 /** A stored field of a struct, with its serde attribute when it holds a duration. */
@@ -130,7 +135,7 @@ function entityBlock(entity: GraphNode, context: MapContext): string {
     const path = tenantPaths(context).get(entity.qn);
     const tenant = path && tenantOf(context)!;
     return context.render('domain/entity.rs.njk', {
-        qn: entity.qn, name,
+        qn: entity.qn, name, about: about(entity),
         fields: stored.map(f => fieldData(f, scope)),
         params: requiredFields(entity, context, scope).map(f => `${last(f.qn)}: ${typeOf(f.data.type as TypeData, scope)}`),
         initial, derived, checks,
@@ -209,6 +214,7 @@ function actionCode(action: GraphNode, context: MapContext): { code: string, tas
     const code = context.render('behavior/action.rs.njk', {
         qn: action.qn,
         name: snake(last(action.qn)),
+        about: about(action),
         params: [...actor, ...(entity ? [`${self}: &mut ${qualify(entity, scope)}`] : []), ...params, ...stores],
         stores: stores.length > 0, emits, body
     });
@@ -237,7 +243,7 @@ function queryFilterSteps(query: GraphNode, context: MapContext): Step[] {
         `${used(self)}: &${qualify(entity, scope)}`,
         ...inputs.map(p => `${used(last(p.qn))}: ${borrowed(p, context) ? `&${qualify(context.node((p.data.type as TypeData).decl!)!, scope)}` : typeOf(p.data.type as TypeData, scope)}`)
     ];
-    return [append(query.module, context.render('application/query-filter.rs.njk', { qn: query.qn, name: snake(last(query.qn)), inputs: inputs.length > 0, params, condition }))];
+    return [append(query.module, context.render('application/query-filter.rs.njk', { qn: query.qn, name: snake(last(query.qn)), about: about(query), inputs: inputs.length > 0, params, condition }))];
 }
 
 /** What the policy checks of an element receive besides the actor: the record they guard and the inputs. */
@@ -639,7 +645,7 @@ function machineSteps(machine: GraphNode, context: MapContext): Step[] {
         const emits = body.some(l => l.includes('events.push('));
         const name = `${snake(last(machine.qn))}_on_${snake(last(eventQn))}`;
         steps.push(append(machine.module, context.render('behavior/machine.rs.njk', {
-            qn: machine.qn, event: last(eventQn), name, eventType: qualify(event, scope), record: scope.self, carrier: last(carrier.qn), emits, body
+            qn: machine.qn, about: about(machine), event: last(eventQn), name, eventType: qualify(event, scope), record: scope.self, carrier: last(carrier.qn), emits, body
         })), ...tasks);
     }
     return steps;

@@ -1,5 +1,10 @@
-{# A query: a read action in the `actions` section of its entity's resource with its inputs as arguments, filter, sort and pagination. -#}
+{# A query: a read action, described by its `describe` text and annotation, in the `actions` section of its entity's resource with its inputs as arguments, filter, sort and pagination. -#}
 read :{{ name }} do
+{% block description %}
+{% if description %}
+  description {{ description }}
+{% endif %}
+{% endblock %}
 {% block arguments %}
 {% for a in arguments %}
   argument :{{ a.name }}, {{ a.type }}, allow_nil?: {{ "true" if a.optional else "false" }}

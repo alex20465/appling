@@ -1,5 +1,7 @@
 {# An enum in its module's file: one variant per literal, serialized as the literal. #}
+{% import "rust/macros.njk" as rust %}
 /// The enum {{ qn }}.
+{{ rust.doc(about) -}}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum {{ name }} {
 {% for variant in variants %}

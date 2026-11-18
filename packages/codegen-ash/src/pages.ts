@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { ashExpr, lastOf } from './elixir.js';
+import { ashExpr, lastOf, moduledoc } from './elixir.js';
 import { app, calculation, children, pascal, patch, snake, task, typeModule, TYPES } from './naming.js';
 
 interface Column {
@@ -81,7 +81,7 @@ export function pageSteps(page: GraphNode, context: MapContext): Step[] {
         }
     });
     const code = context.render('pages/live.ex.njk', {
-        web: web(context), name, title: title(lastOf(page.qn)), params, byId, components, events: [...events.values()], nav: navigationLinks(page.module, context)
+        web: web(context), name, moduledoc: moduledoc(page), title: title(lastOf(page.qn)), params, byId, components, events: [...events.values()], nav: navigationLinks(page.module, context)
     });
     return [
         { kind: 'template', file: `lib/${app(context)}_web/live/${snake(lastOf(page.qn))}_live.ex`, write: () => `${code}\n`, phase: 2 },

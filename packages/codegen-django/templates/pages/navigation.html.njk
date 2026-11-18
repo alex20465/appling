@@ -1,4 +1,7 @@
 {# Navigation: the links of the menu in the app's base template, to pages that need no id. Inside <nav> of <app>/templates/<app>/base.html. #}
+{% for line in about %}
+      {% raw %}{#{% endraw %} {{ line }} {% raw %}#}{% endraw %}
+{% endfor %}
 {% for link in links %}
       <a href="{{ link.route }}">{{ link.label }}</a>
 {% endfor %}

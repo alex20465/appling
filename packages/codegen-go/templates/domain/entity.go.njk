@@ -2,6 +2,10 @@
    derived field, Validate for the invariants and, when it belongs to the tenant, TenantID. #}
 {% block struct %}
 // {{ name }} is the entity {{ qn }}.
+{% if about %}
+//
+{{ about }}
+{% endif %}
 type {{ name }} struct {
 	ID int64 `json:"id"`
 {% for field in fields %}

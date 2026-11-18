@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import type { Model } from '@appling/lang';
 import { plan } from '@appling/codegen';
 import { buildGraph } from '@appling/model';
-import { buildWorkspace, constructs, examples } from '../../lang/test/workspace.js';
+import { buildWorkspace, constructs, errors, examples } from '../../lang/test/workspace.js';
 import rust from '../src/index.js';
 
 test('examples generate a Rust crate for the domain and behavior layers', async () => {
@@ -498,4 +498,48 @@ test('policies on a whole entity get tests over can_<op>_<entity> with the actor
     expect(entries['p.Item.policy[create]'].missing.map(m => m.what)).toEqual(['write the test item_policy_create_denies_other_actors']);
     // actor.name is an actor field Actor::<actor>() leaves empty: the test stays ignored.
     expect(entries['p.Note.policy[]'].missing.map(m => m.what)).toContain('write the test note_policy');
+});
+
+const ABOUT = `module d {
+  enum Tier holds "Mirrors the ERP tiers" {
+    basic
+  }
+  value Place describe "Where a ticket is" {
+    city: String
+  }
+  entity Ticket describe """
+    A support request.
+        Indented in the model.
+
+    Kept apart.
+  """ holds "Matched by @Ticket.title" {
+    title: String
+    closed: Bool default false
+  }
+  event Closed does "Tells the ERP" {
+    ticket: Ticket
+  }
+  action Close on Ticket does "Notifies the owner" {
+    effect {
+      set closed = true
+    }
+  }
+  query Open from Ticket handles "Reads the replica" {
+    where { !closed }
+  }
+}`;
+
+test('describe texts and annotations become doc comments after the summary line', async () => {
+    const { documents, services } = await buildWorkspace({ 'd.appling': ABOUT });
+    expect(errors(documents)).toEqual([]);
+    const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), rust, 'app');
+    const files = new Map<string, string>();
+    for (const { step } of result.steps) if (step.kind === 'template') files.set(step.file, step.write(files.get(step.file)));
+    const code = files.get('src/d.rs')!;
+    expect(code).toContain('/// The enum d.Tier.\n///\n/// Mirrors the ERP tiers\n#[derive(');
+    expect(code).toContain('/// The value type d.Place.\n///\n/// Where a ticket is\n#[derive(');
+    expect(code).toContain('/// The entity d.Ticket.\n///\n/// A support request.\n/// Indented in the model.\n///\n/// Kept apart.\n///\n/// Matched by @Ticket.title\n#[derive(');
+    expect(code).toContain('/// The event d.Closed.\n///\n/// Tells the ERP\n#[derive(');
+    expect(code).toMatch(/\/\/\/ The action d\.Close\.[^\n]*\n\/\/\/\n\/\/\/ Notifies the owner\npub fn close\(/);
+    expect(code).toContain('/// Whether a record is among the results of the query d.Open.\n///\n/// Reads the replica\npub fn in_open(');
 });

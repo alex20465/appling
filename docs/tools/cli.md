@@ -230,7 +230,7 @@ appling generate --plan
 12 element(s): 11 generated, 1 partial, 0 todo
 ```
 
-After the steps, a Markdown table counts the registry entries per element kind by status, with the number of registry tasks they leave; the total row gives the generated share. Tasks are generator gaps. Work the model leaves to the code by design (an external system's client, a webhook's signature check, a cron entry, a [`does`](../language/descriptions.md) text) counts under `left to code`, and an element whose only open work is left to code counts as generated. The summary line below the table counts the registry statuses, which still list that work. `partial` means the element was generated with open tasks; here the invariant got a skipped test whose body is a registry task. See [Task registry](../codegen/registry.md).
+After the steps, a Markdown table counts the registry entries per element kind by status, with the number of registry tasks they leave; the total row gives the generated share. Tasks are generator gaps. Work the model leaves to the code by design (an external system's client, a webhook's signature check, a cron entry, an [annotation](../language/descriptions.md) such as a `does` text) counts under `left to code`, and an element whose only open work is left to code counts as generated. The summary line below the table counts the registry statuses, which still list that work. `partial` means the element was generated with open tasks; here the invariant got a skipped test whose body is a registry task. See [Task registry](../codegen/registry.md).
 
 ### Coverage
 

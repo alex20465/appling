@@ -142,7 +142,7 @@ export function buildGraph(models: Model[], services: ApplingServices): Graph {
             if (target) add({ from: qn, to: target, kind: ref.property === 'decl' ? 'type' : ref.property });
         }
     }
-    // `@Name` in a `does` text uses the element it names.
+    // `@Name` in a `describe` or annotation text uses the element it names.
     for (const [node, qn] of qns) {
         for (const { target } of doesTargets(node, services)) {
             const to = target && qns.get(target);

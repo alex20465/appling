@@ -490,6 +490,13 @@ function TreeItem({ placed, delay = 0, current, chosen, related, dim, icon, mark
                             <text className="kind" x={text} y={2}>{kindLabel(node.kind!)}</text>
                             {node.fact && <text className="fact" x={text} y={15}>{clip(node.fact, 25)}</text>}
                         </>}
+                    {node.note && (
+                        <g className="note-badge" transform={`translate(${w} ${-r})`}>
+                            <title>{`${node.note.keyword}: ${node.note.text}`}</title>
+                            <circle r={8} />
+                            <g transform="translate(-5 -5) scale(0.42)">{NOTE.map(([tag, attributes], i) => createElement(tag, { key: i, ...attributes }))}</g>
+                        </g>
+                    )}
                     {glyph && <g className="icon" transform={`translate(${cell - 9} -9) scale(0.75)`}>{glyph.map(([tag, attributes], i) => createElement(tag, { key: i, ...attributes }))}</g>}
                     {!leaving && (['up', 'down'] as const).filter(side => node[side]).map(side => (
                         <g key={side} className={`bud-button${open(side) ? ' open' : ''}`} transform={`translate(0 ${side === 'up' ? -r : r})${side === 'down' ? ' rotate(180)' : ''}`} role="button" tabIndex={0}
@@ -506,6 +513,8 @@ function TreeItem({ placed, delay = 0, current, chosen, related, dim, icon, mark
         </g>
     );
 }
+
+const NOTE = iconOf('sticky-note')!;
 
 /** What every mark on the canvas means. */
 function Legend() {
@@ -534,6 +543,7 @@ function Legend() {
                 <li><span className="legend-glyph">✥</span>drag to pan, scroll to zoom</li>
                 <li><span className="legend-glyph">┄</span>dashed outline: belongs to the selected one on its own level</li>
                 <li><svg width="18" height="18" viewBox="-9 -9 18 18"><circle className="legend-ring session" r={7} /></svg>ring in a session's colour: claimed by that agent session</li>
+                <li><svg width="18" height="18" viewBox="-9 -9 18 18"><g className="note-badge"><circle r={8} /><g transform="translate(-5 -5) scale(0.42)">{NOTE.map(([tag, attributes], i) => createElement(tag, { key: i, ...attributes }))}</g></g></svg>note: an annotation, work the code has to do that the model does not state</li>
                 <li><span className="legend-glyph">▭</span>bolder outline: more relevant; faded: peripheral</li>
             </ul>
         </div>

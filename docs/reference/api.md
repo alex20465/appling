@@ -43,12 +43,13 @@ const canonical = print(document.parseResult.value as Model);
 | `projectionSourceEntity(projection)` | The entity behind a projection, also when its source is a query |
 | `effectEntity(node)` | The entity of the action or machine an effect belongs to |
 | `ApplingScopeProvider` | The scope provider; `lookup(container, type, name)` resolves a dotted name as a reference would, `lookupElement(container, name)` an element of any kind |
-| `doesNames(node)`, `doesTargets(node, services)` | The `@Name` occurrences of a node's [`describe` and `does`](../language/descriptions.md) texts with the text they stand in (`property`) and their document offsets, and with the element each names |
+| `doesNames(node)`, `doesTargets(node, services)` | The `@Name` occurrences of a node's [`describe` and annotation](../language/descriptions.md) texts with the text they stand in (`property`) and their document offsets, and with the element each names |
 | `textBlockValue(raw)`, `printTextBlock(raw, indent, outer)` | The value of a `"""` text block, and its canonical spelling |
 | `ExpressionTyper` | Types expressions: `checkModel(model)` fills `types`, `targets` (the element each name stands for) and `problems` (`Problem[]`); `typeOf(expr)` types one expression in its position, `namesAt(effect)` lists the names an effect sees |
 | `show(type)`, `typeOfRef(ref)` | The display name of a `Type`, such as `Money?`, and the `Type` a `TypeRef` declares |
 | `LAYER_OF`, `Layer` | The layer of every top level declaration type |
 | `mayReference(from, to)` | Whether a declaration of kind `from` may reference one of kind `to` under the layer rules; also at the langium free subpath `@appling/lang/layers` |
+| `ANNOTATIONS`, `Annotation`, `annotationOf(node)` | The [annotation](../language/descriptions.md) keyword of each layer, and a graph node's annotation (`{ keyword, text }`) from its `layer` and `props`; also at `@appling/lang/layers` |
 | `scenarioTarget(scenario)`, `scenarioErrors(scenario)`, `scenarioActor(scenario, actors)` | What a scenario's `when` runs, the errors it may fail with and the actor it runs as |
 | AST types and guards | `Model`, `Module`, `Entity`, `isEntity` and the rest of the generated AST |
 
@@ -168,8 +169,8 @@ Planning and running:
 | Export | Purpose |
 |---|---|
 | `plan(graph, extension, name, options, root?)` | The ordered steps and one registry entry per node (`Plan`); `root` (default `.`) is the project folder that holds the template overrides |
-| `doesTask(node)` | The registry task of a node's [`does`](../language/descriptions.md) text, which `plan` adds to its entry |
-| `aboutOf(node)` | The documentation of a node in generated code: its `describe` text, then its `does` text |
+| `annotationTask(node)` | The registry task of a node's [annotation](../language/descriptions.md), which `plan` adds to its entry: `implement what <Name> <keyword>: <text>` |
+| `aboutOf(node)` | The documentation of a node in generated code: its `describe` text, then its annotation |
 | `describe(step)` | A one line description of a step, as `--plan` prints it |
 | `coverage(entries)` | The registry entries per node kind: generated, partial, todo, the number of tasks (generator gaps) and of tasks left to code, plus a total (`Coverage`); an entry whose only tasks are left to code counts as generated |
 | `coverageTable(coverage)` | That coverage as the Markdown table `--plan` prints, the total with the generated share |

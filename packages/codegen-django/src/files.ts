@@ -13,7 +13,13 @@ export function template(file: string, write: (existing: string | undefined) => 
     return { kind: 'template', file, write };
 }
 
-/** A Python docstring holding a node's `describe` and `does` texts at the given indentation, for a template; empty without a text. */
+/** A node's `describe` text and annotation as Python comment lines, for a template; empty without a text. */
+export function comment(node: GraphNode): string {
+    const text = aboutOf(node);
+    return text ? text.split('\n').map(line => line ? `# ${line}` : '#').join('\n') : '';
+}
+
+/** A Python docstring holding a node's `describe` text and annotation at the given indentation, for a template; empty without a text. */
 export function doc(node: GraphNode, indent = '    '): string {
     const text = aboutOf(node);
     if (!text) return '';

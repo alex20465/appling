@@ -194,13 +194,19 @@ export function elixirString(text: string): string {
     return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/#\{/g, '\\#{').replace(/\n/g, '\\n')}"`;
 }
 
-/** The `@moduledoc` lines of a node's `describe` and `does` texts, a heredoc when they span lines; none without a text. */
+/** The `@moduledoc` lines of a node's `describe` text and annotation, a heredoc when they span lines; none without a text. */
 export function moduledoc(node: GraphNode): string {
     const text = aboutOf(node);
     if (!text) return '';
     if (!text.includes('\n')) return `  @moduledoc ${elixirString(text)}`;
     const body = text.replace(/\\/g, '\\\\').replace(/#\{/g, '\\#{').replace(/"""/g, '\\"""').split('\n').map(l => l ? `  ${l}` : '').join('\n');
     return `  @moduledoc """\n${body}\n  """`;
+}
+
+/** A node's `describe` text and annotation as an Elixir string, for a `description` option; none without a text. */
+export function descriptionOf(node: GraphNode): string | undefined {
+    const text = aboutOf(node);
+    return text && elixirString(text);
 }
 
 /** Puts the node's `@moduledoc` first in the module. */

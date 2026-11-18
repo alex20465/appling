@@ -12,3 +12,12 @@
 #[ignore = {{ ("registry task: " + qn) | dump }}]
 fn {{ name }}() {}
 {% endmacro %}
+
+{% macro doc(lines) %}
+{% if lines.length %}
+///
+{% for line in lines %}
+///{{ " " + line if line else "" }}
+{% endfor %}
+{% endif %}
+{% endmacro %}

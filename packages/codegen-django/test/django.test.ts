@@ -447,6 +447,30 @@ test('describe and does texts become docstrings and help texts, and each does a 
     expect(entries['shop.Close'].missing.map(m => m.what)).toContain('implement what Close does: Closes the @Account');
 });
 
+test('the annotation of each level lands in the generated code and adds one registry task', async () => {
+    const { files, entries } = await generate({
+        'shop.appling': `module shop {
+            entity Order holds "Mirrors the ERP order" { note: String }
+            query Open from Order handles "Reads the ERP replica" { }
+            projection OrderView from Order { note }
+            interface rest Api serves "Also a CSV export" { GET "/orders" -> Open as OrderView }
+            page Orders route "/orders" shows "Highlights old orders" { list Open as OrderView }
+            navigation Main shows "Pinned to the top" { "Orders" -> Orders }
+            messages en shows "Reviewed by the shop team" { OrderView.note = "Note" }
+        }`
+    });
+    expect(files['shop/models.py']).toContain('class Order(models.Model):\n    """Mirrors the ERP order"""');
+    expect(files['shop/queries.py']).toContain('    """Reads the ERP replica"""');
+    expect(files['shop/api.py']).toContain('# Also a CSV export\nclass ApiOpen(');
+    expect(files['shop/pages.py']).toContain('def orders(request):\n    """Highlights old orders"""');
+    expect(files['shop/templates/shop/base.html']).toContain('{# Pinned to the top #}');
+    expect(files['shop/messages.py']).toContain('# Reviewed by the shop team\nLABELS["en"]');
+    for (const [qn, keyword, text] of [['shop.Order', 'holds', 'Mirrors the ERP order'], ['shop.Open', 'handles', 'Reads the ERP replica'],
+        ['shop.Api', 'serves', 'Also a CSV export'], ['shop.Orders', 'shows', 'Highlights old orders']]) {
+        expect(entries[qn].missing.filter(m => m.leftToCode).map(m => m.what)).toEqual([`implement what ${qn.split('.').pop()} ${keyword}: ${text}`]);
+    }
+});
+
 test('transition and precondition tests get bodies where the simulator proves the fixture, and stay tasks elsewhere', async () => {
     const { files, entries } = await generate({
         'shop.appling': `module shop {

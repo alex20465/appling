@@ -54,7 +54,7 @@ The allowed references are listed under [reference rules](overview.md#reference-
 
 | Rule | Message |
 |---|---|
-| `@Name` in a `describe` or `does` text names a visible element | `Unknown element "@<name>" in describe.` (or `in does.`) |
+| `@Name` in a `describe` text or an annotation names a visible element | `Unknown element "@<name>" in describe.` (or `in does.` and so on) |
 | `@Name` follows the layer order, except in a module's own description | `<layer> element <Kind> may not reference <layer> element <Kind> "@<name>".` |
 
 See [descriptions](descriptions.md#naming-elements).

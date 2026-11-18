@@ -137,6 +137,19 @@ fn scenario_empty_order_is_refused() {
 
 The test stays `#[ignore]`d, with the reason as the Scenario entry's registry task, when Rust cannot run the scenario the way the simulator does: the `when` runs a use case (use cases have no generated function), the simulator does not pass the scenario, the action has registry tasks of its own, a policy or role condition the call checks has no Rust translation, no declared actor fits a call without `as`, a given value, actor field or check has no Rust translation, a check compares two records (Rust holds them as clones), a check reads the called row through another record (that record holds a clone from before the call), or, for `then fails E`, the simulator cannot prove that `E` is the first error the action returns.
 
+## Descriptions
+
+A [`describe`](../language/descriptions.md) text and the annotation of the declaration's level (`holds`, `does`, `handles`) go into the generated code as documentation: each a paragraph of the `///` doc comment, after its first sentence.
+
+| Element | Becomes |
+|---|---|
+| Enum, value type, entity, event | The doc comment of the type |
+| Action | The doc comment of its function |
+| Machine | The doc comment of each `<machine>_on_<event>` function |
+| Query | The doc comment of `in_<query>` |
+
+Every line is trimmed, so an indented line does not turn into a code block that `cargo test` runs as a doctest. An annotation is also a [registry task](registry.md#status), on every element that has one; a `describe` text is not.
+
 ## What becomes a task
 
 Queries, projections, interfaces, pages, flows, messages, use cases, external systems and jobs (queries and use cases still get their `can_...` check, and a query whose filter translates gets `in_<query>(record, inputs...) -> bool`, which says whether a record belongs to its results), and derived fields, defaults, preconditions, guards, policies and effects without a Rust translation, such as `actor` outside a policy or a role, string matching with `matches`, a `create`, `update` or `delete` effect that runs in a transition on an event, a `create` effect that leaves a required field without default unset, an `update` or `delete` whose path goes through an optional record before its end, a loop that changes its records while calling a method of the action's record, and an `emit` effect that leaves a required field of its event unset. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.

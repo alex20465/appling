@@ -88,7 +88,7 @@ The generator sets the first status from the steps of each element:
 | Status | When |
 |---|---|
 | `generated` | The element has no tasks. This includes elements a parent covers, such as enum values written with their enum. |
-| `partial` | The element has template or command steps and tasks, or a parent covers it and only its [`does`](../language/descriptions.md) task is open. |
+| `partial` | The element has template or command steps and tasks, or a parent covers it and only its [annotation](../language/descriptions.md) task is open. |
 | `todo` | The element has only tasks, or the extension does not handle its kind. Then the task reads `<extension> does not generate <Kind> yet`. |
 | `done` | Set later, when the open work is finished. |
 
@@ -105,7 +105,7 @@ stateDiagram-v2
   done --> partial: generate --migrate adds a task
 ```
 
-Every event, action, machine and job with a [`does`](../language/descriptions.md) text gets one more task, the same in every extension: `implement what <Name> does: <text>`. A `describe` text adds no task.
+Every declaration with an [annotation](../language/descriptions.md) (`holds`, `does`, `handles`, `serves` or `shows`) gets one more task, left to the code and the same in every extension: `implement what <Name> <keyword>: <text>`, such as `implement what OpenOrders handles: ...`. A `describe` text adds no task.
 
 Recording `done` clears `missing`. [`appling generate --migrate`](migrations.md) adds a task to the entry of every element a migration step changed and sets it back to `partial`.
 

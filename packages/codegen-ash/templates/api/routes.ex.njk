@@ -1,7 +1,7 @@
-{# The endpoints of a REST interface on one resource, in `json_api` > `routes` of the domain: queries as index, actions as patch routes. -#}
+{# The endpoints of a REST interface on one resource, in `json_api` > `routes` of the domain: queries as index, actions as patch routes, each described by the interface's `describe` text and annotation. -#}
 base_route "/", {{ resource }} do
 {% for r in routes %}
-  {{ r.verb }} :{{ r.action }}, route: {{ r.path | dump }}{% if r.fields.length %}, default_fields: [{% for f in r.fields %}:{{ f }}{{ ", " if not loop.last }}{% endfor %}]{% endif %}
+  {{ r.verb }} :{{ r.action }}, route: {{ r.path | dump }}{% if r.fields.length %}, default_fields: [{% for f in r.fields %}:{{ f }}{{ ", " if not loop.last }}{% endfor %}]{% endif %}{% if description %}, description: {{ description }}{% endif %}
 
 {% endfor %}
 end

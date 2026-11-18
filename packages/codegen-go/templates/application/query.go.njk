@@ -1,5 +1,9 @@
 {# The filter of a query, in internal/<module>/queries.go: whether a record is among its results. #}
 // In{{ name }} reports whether a record is among the results of the query {{ qn }}{% if params.length > 1 %} for the inputs{% endif %}.
+{% if about %}
+//
+{{ about }}
+{% endif %}
 func In{{ name }}({{ params | join(", ") }}) bool {
 	return {{ condition }}
 }

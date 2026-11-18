@@ -68,6 +68,12 @@ test('the pyramid starts folded at the seed and unfolds modules, then the declar
     expect(growTree(index, DOMAIN, open).children!.find(m => m.label === 'sales')!.fact).toBe('1 entity · 1 value · 1 enum');
 });
 
+test('an element with an annotation carries it as its note', async () => {
+    const index = await indexOf({ 'm.appling': 'module m { entity A holds "Mirrors the ERP" { } entity B { } }' });
+    const elements = growTree(index, DOMAIN, new Set(['~', '~/m'])).children![0].children!;
+    expect(elements.map(e => [e.label, e.note])).toEqual([['A', { keyword: 'holds', text: 'Mirrors the ERP' }], ['B', undefined]]);
+});
+
 test('a level in between unfolds both ways, and away from it a branch keeps its direction', async () => {
     const index = await indexOf(examples());
     const open = new Set(['~', '~/sales', sideId('~/sales/sales.OpenOrders', 'up'), sideId('~/sales/sales.OpenOrders', 'down'), sideId('~/sales/sales.OpenOrders/sales.Orders', 'up')]);

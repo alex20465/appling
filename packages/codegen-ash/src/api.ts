@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { GraphNode } from '@appling/model';
-import { lastOf } from './elixir.js';
+import { descriptionOf, lastOf } from './elixir.js';
 import { app, children, fileOf, moduleName, pascal, patch, sectionLines, snake, task, typeModule } from './naming.js';
 import { hasPages } from './pages.js';
 import { addExtension, addToSection } from './resource.js';
@@ -44,7 +44,7 @@ export function interfaceSteps(api: GraphNode, context: MapContext): Step[] | un
         ];
     const resourceSteps: Step[] = [...routes].flatMap(([resource, list]) => [
         patch(fileOf(resource, context), existing => existing.includes('\n  json_api do\n') ? existing : addToSection(addExtension(existing, 'AshJsonApi.Resource'), 'json_api', [`type ${JSON.stringify(snake(lastOf(resource.qn)))}`])),
-        patch(domainFile(api, context), existing => addToSection(addExtension(existing, 'AshJsonApi.Domain'), 'json_api', sectionLines(context, 'api/routes.ex.njk', { resource: typeModule(resource, context), routes: list }), 'routes'))
+        patch(domainFile(api, context), existing => addToSection(addExtension(existing, 'AshJsonApi.Domain'), 'json_api', sectionLines(context, 'api/routes.ex.njk', { resource: typeModule(resource, context), routes: list, description: descriptionOf(api) }), 'routes'))
     ]);
     return [
         ...resourceSteps,

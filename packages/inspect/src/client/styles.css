@@ -114,6 +114,8 @@ button:focus-visible { outline: 2px solid var(--appling-leaf); outline-offset: 2
 .inspector-body > :nth-child(n + 5) { animation-delay: 200ms; }
 .inspector h3 { display: flex; align-items: center; gap: 8px; margin: 18px 0 8px; font: 600 11px var(--appling-font-sans); color: var(--appling-ink-muted); text-transform: uppercase; letter-spacing: 0.1em; }
 .inspector h3 .count { padding: 0 6px; border-radius: 999px; background: var(--appling-surface-hover); font: 500 10.5px/16px var(--appling-font-mono); letter-spacing: 0; color: var(--appling-ink-soft); }
+.inspector .note p { margin: 0; white-space: pre-wrap; line-height: 1.5; color: var(--appling-ink-soft); }
+.inspector .note h3 .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .inspector h4 { display: inline-block; margin: 8px 0 4px; padding: 1px 8px; border-radius: 999px; background: color-mix(in srgb, var(--layer, var(--appling-ink-muted)) 14%, transparent); font: 600 10.5px/16px var(--appling-font-mono); color: var(--layer, var(--appling-ink-muted)); }
 @keyframes inspector-in { from { opacity: 0; transform: translateX(24px); } }
 @keyframes inspector-rise { from { opacity: 0; transform: translateY(10px); } }

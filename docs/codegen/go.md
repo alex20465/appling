@@ -181,6 +181,19 @@ The scenario tests replace the guessed tests of what they cover: an action a sce
 
 A scenario stays a skipped test with a registry task on its entry when the simulator does not pass it, when it calls a use case (the extension generates none), when the action leaves a registry task (a precondition, guard or effect without Go translation), when a policy the actor goes through or a role condition has no Go translation, when a default of a given row's entity is not set by `New<Entity>()`, or when a value, an expectation or an event field has no Go translation (lists and value types do not compare with `==`).
 
+## Descriptions
+
+A [`describe`](../language/descriptions.md) text and the annotation of the declaration's level (`holds`, `does`, `handles`) go into the generated code as documentation: each a paragraph of the Go doc comment, after its first sentence.
+
+| Element | Becomes |
+|---|---|
+| Enum, value type, entity, event | The doc comment of the type |
+| Action | The doc comment of its function |
+| Machine | The doc comment of each `<Machine>On<Event>` function |
+| Query | The doc comment of `In<Query>` |
+
+Lines indented deeper than the rest of the text become a preformatted block, the way `gofmt` reads doc comments. An annotation is also a [registry task](registry.md#status), on every element that has one; a `describe` text is not.
+
 ## What becomes a task
 
 Queries, projections, interfaces, pages, flows, messages, use cases, external systems and jobs: they need storage, HTTP and scheduling decisions that the model leaves open. Queries and use cases still get their `Can...` check, and a query whose filter translates gets `In<Query>(record, inputs...) bool` in `queries.go`, which says whether a record belongs to its results, so the storage layer can apply it. Also derived fields, defaults, preconditions, guards, policies and effects that have no Go translation, such as `actor` outside a policy or a role, a `create`, `update` or `delete` effect that runs in a transition on an event, a `create` effect that leaves a required field without default unset, and an `emit` effect that leaves a required field of its event unset. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.

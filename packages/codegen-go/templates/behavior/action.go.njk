@@ -3,6 +3,10 @@
 {% import "go/macros.njk" as go %}
 {% block signature %}
 // {{ name }} is the action {{ qn }}. It returns the events it emits.{{ " The records it creates, updates or deletes go to the store functions, which write them." if stores }}
+{% if about %}
+//
+{{ about }}
+{% endif %}
 func {{ name }}({{ params | join(", ") }}) ([]any, error) {
 	var events []any
 {% endblock %}

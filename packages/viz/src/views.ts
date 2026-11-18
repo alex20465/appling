@@ -1,4 +1,5 @@
 import type { Access, Graph, GraphNode, TypeData } from '@appling/model';
+import { annotationOf } from '@appling/lang/layers';
 import { relevance } from '@appling/model/relevance';
 import { Simulator } from '@appling/model/simulator';
 import { rollupState, type ImplementationState } from '@appling/model/implementation';
@@ -61,6 +62,8 @@ export interface TreeNode {
     down?: number;
     /** From 0 to 1, how much it matters to the application (`relevance` in `@appling/model`). */
     relevance: number;
+    /** The annotation of an element, the work its code has to do that the model does not state: its keyword and text. */
+    note?: { keyword: string, text: string };
     /** The sides that are unfolded. */
     open?: Side[];
     /** What an unfolded side also leads to but is drawn elsewhere already: the canvas joins the two instead of drawing it again. */
@@ -150,7 +153,7 @@ export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Se
         const sides = SIDES.filter(s => !side || s === side).map(s => ({ side: s, nodes: order(linked(index, node.qn, s).filter(shown), s) }));
         const count = (s: Side) => sides.find(x => x.side === s)?.nodes.length ?? 0;
         const label = node.module === module ? localName(node.qn, index) : node.qn;
-        const tree: TreeNode = { id, type: 'element', qn: node.qn, kind: node.kind, layer: node.layer, level: levelOf(node.kind), side, label, fact: factOf(index, node), count: count('up') + count('down'), up: count('up'), down: count('down'), relevance: index.relevanceOf(node.qn) };
+        const tree: TreeNode = { id, type: 'element', qn: node.qn, kind: node.kind, layer: node.layer, level: levelOf(node.kind), side, label, fact: factOf(index, node), count: count('up') + count('down'), up: count('up'), down: count('down'), relevance: index.relevanceOf(node.qn), note: annotationOf(node) };
         const unfolding = sides.filter(s => s.nodes.length && open(sideId(id, s.side))).map(s => ({ side: s.side, nodes: kept(sideId(id, s.side), s.nodes, n => `${id}/${n.qn}`) }));
         const links = unfolding.flatMap(s => s.nodes.filter(n => drawn.has(n.qn)).map(n => n.qn));
         const children = unfolding.flatMap(s => elements(s.nodes, id, node.module, s.side));

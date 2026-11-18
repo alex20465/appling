@@ -127,6 +127,16 @@ test('describe and does: set inserts, replaces and removes it, rename follows it
     expect((await run(base, { op: 'rename', target: 'shop.Account.email', name: 'mail' }))[shop]).toContain('does "Closes the @Account by @Account.mail"');
 });
 
+test('an annotation of another level: set inserts it after describe, rename follows its @names', async () => {
+    const shop = uriOf('shop.appling');
+    const base = { [shop]: 'module shop {\n  entity Account describe "A buyer" {\n    email: String\n  }\n}\n' };
+    const result = await applyEdit(base, { op: 'set', target: 'shop.Account', property: 'holds', value: '"Keyed by @Account.email"' });
+    if (!result.ok) throw new Error(result.errors.join('\n'));
+    expect(result.sources[shop]).toContain('entity Account describe "A buyer" holds "Keyed by @Account.email" {');
+    const renamed = await applyEdit(result.sources, { op: 'rename', target: 'shop.Account.email', name: 'mail' });
+    expect(renamed.ok && renamed.sources[shop]).toContain('holds "Keyed by @Account.mail"');
+});
+
 test('rename an actor field follows actor.f even when another actor declares it with another type', async () => {
     const shop = uriOf('shop.appling');
     const source = { [shop]: 'module shop {\n  role Buyer\n  role Seller\n  entity Customer {\n    name: String\n  }\n  entity Vendor {\n    name: String\n  }\n  actor human Shopper roles Buyer {\n    account: Customer\n  }\n  actor human Merchant roles Seller {\n    account: Vendor\n  }\n  entity Offer {\n    vendor: Vendor\n    policy read { actor.is(Seller) && vendor == actor.account }\n  }\n}\n' };

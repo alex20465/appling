@@ -249,6 +249,9 @@ importers:
 
   packages/codegen:
     dependencies:
+      '@appling/lang':
+        specifier: workspace:*
+        version: link:../lang
       '@appling/model':
         specifier: workspace:*
         version: link:../model

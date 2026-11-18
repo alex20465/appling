@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
+import { aboutOf, type CodegenExtension, type MapContext, type Step } from '@appling/codegen';
 import { coveredByScenarios, scenarioCall, Simulator, throughPath, UNKNOWN, type ExprData, type Graph, type GraphNode, type Record as SimRecord, type TypeData, type Value } from '@appling/model';
 import { accessFile, accessOf, accessSteps, actorFields, actorFieldType, tenantOf, tenantPaths } from './access.js';
 import { camel, enumConstant, goExpr, goTerm, pascal, PRIMITIVES, qualify, type GoScope } from './golang.js';
@@ -76,14 +76,14 @@ export default extension;
 
 function enumSteps(node: GraphNode, context: MapContext): Step {
     const literals = context.children(node.qn).map(l => ({ constant: pascal(last(l.qn)), value: last(l.qn) }));
-    return goFile(node.module, 'types.go', context, new Set(), context.render('domain/enum.go.njk', { name: last(node.qn), qn: node.qn, literals }));
+    return goFile(node.module, 'types.go', context, new Set(), context.render('domain/enum.go.njk', { name: last(node.qn), qn: node.qn, about: about(node), literals }));
 }
 
 function structStep(node: GraphNode, context: MapContext, file: string): Step {
     const imports = new Set<string>();
     const scope = goScope(node, context, imports);
     const fields = structFields(fieldsOf(node, context).filter(f => !f.data.derived), scope);
-    return goFile(node.module, file, context, imports, context.render('domain/struct.go.njk', { name: last(node.qn), what: node.kind === 'Event' ? 'event' : 'value type', qn: node.qn, fields }));
+    return goFile(node.module, file, context, imports, context.render('domain/struct.go.njk', { name: last(node.qn), what: node.kind === 'Event' ? 'event' : 'value type', qn: node.qn, about: about(node), fields }));
 }
 
 function structFields(fields: GraphNode[], scope: GoScope): { name: string, type: string, json: string }[] {
@@ -119,7 +119,7 @@ function entityStep(entity: GraphNode, context: MapContext): Step {
         const hops = path.map((_, i) => [receiver, ...path.slice(0, i + 1).map(f => pascal(last(f.qn)))].join('.'));
         return { entity: tenantOf(context)!.data.entity, qn: tenantOf(context)!.qn, hops, record: hops.at(-1) ?? receiver };
     })();
-    const code = context.render('domain/entity.go.njk', { name, qn: entity.qn, receiver, fields: structFields(stored, scope), defaults, derived, checks, tenant });
+    const code = context.render('domain/entity.go.njk', { name, qn: entity.qn, about: about(entity), receiver, fields: structFields(stored, scope), defaults, derived, checks, tenant });
     return goFile(entity.module, 'types.go', context, imports, code);
 }
 
@@ -183,7 +183,7 @@ function actionCode(action: GraphNode, context: MapContext): { step: Step, tasks
         ...stores(creating).map(([name, e]) => `${name} func(${typeOf({ $type: 'TypeRef', decl: e.qn } as TypeData, scope)}) error`)
     ];
     const code = context.render('behavior/action.go.njk', {
-        name: last(action.qn), qn: action.qn, params, stores: stores(creating).length > 0, preconditions, body,
+        name: last(action.qn), qn: action.qn, about: about(action), params, stores: stores(creating).length > 0, preconditions, body,
         guard: guard && `${guard.name}(${['actor', ...guard.args].join(', ')})`,
         forbidden: guard && accessIn(scope, 'ErrForbidden')
     });
@@ -206,7 +206,7 @@ function queryFilterSteps(query: GraphNode, context: MapContext): Step[] {
         `${self} ${typeOf({ $type: 'TypeRef', decl: entity.qn } as TypeData, scope)}`,
         ...context.children(query.qn).filter(c => c.kind === 'Param').map(p => `${camel(last(p.qn))} ${typeOf(p.data.type as TypeData, scope)}`)
     ];
-    return [goFile(query.module, 'queries.go', context, imports, context.render('application/query.go.njk', { name: last(query.qn), qn: query.qn, params, condition }))];
+    return [goFile(query.module, 'queries.go', context, imports, context.render('application/query.go.njk', { name: last(query.qn), qn: query.qn, about: about(query), params, condition }))];
 }
 
 /** What the policy checks of an element receive besides the actor: the record they guard and the inputs. */
@@ -556,7 +556,7 @@ function machineSteps(machine: GraphNode, context: MapContext): Step[] {
         const scope = { ...goScope(machine, context, handlerImports), self: `event.${pascal(last(carrier.qn))}` };
         const tasks: Step[] = [];
         const lines = transitionSwitch(transitions, scope.self, last(eventQn), scope, context, tasks);
-        const code = context.render('behavior/machine.go.njk', { name: `${last(machine.qn)}On${last(eventQn)}`, machine: machine.qn, event: last(eventQn), type: qualify(event, scope), transitions: lines });
+        const code = context.render('behavior/machine.go.njk', { name: `${last(machine.qn)}On${last(eventQn)}`, machine: machine.qn, about: about(machine), event: last(eventQn), type: qualify(event, scope), transitions: lines });
         steps.push(goFile(machine.module, 'machines.go', context, handlerImports, code), ...tasks);
     }
     return steps;
@@ -965,6 +965,12 @@ function parentOf(qn: string): string {
 
 function last(qn: string): string {
     return qn.slice(qn.lastIndexOf('.') + 1);
+}
+
+/** A node's `describe` text and annotation as Go comment lines, for a template; empty without a text. */
+function about(node: GraphNode): string {
+    const text = aboutOf(node);
+    return text ? text.split('\n').map(line => line.trimEnd() ? `// ${line.trimEnd()}` : '//').join('\n') : '';
 }
 
 function task(what: string): Step {

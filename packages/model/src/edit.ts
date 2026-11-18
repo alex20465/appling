@@ -148,7 +148,7 @@ function insertionPoints(parent: AstNode): number[] {
     return [...new Set([...braces, ...children])].sort((a, b) => b - a);
 }
 
-/** Renames an element and everything that names it: references (exports included), names in expressions and `does` texts, transitions, message keys. */
+/** Renames an element and everything that names it: references (exports included), names in expressions, `describe` and annotation texts, transitions, message keys. */
 function renameSplices(workspace: Workspace, node: AstNode, name: string): Splice[] {
     const models = modelsOf(workspace);
     const typer = new ExpressionTyper(workspace.services);

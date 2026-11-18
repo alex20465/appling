@@ -1,7 +1,7 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { GraphNode } from '@appling/model';
 import { inputLines, pageSizeName, queryCall, queryCode } from './application.js';
-import { children, includeStep, pythonFile, routesStep, task, template } from './files.js';
+import { children, comment, includeStep, pythonFile, routesStep, task, template } from './files.js';
 import { appOf, lastOf, snake } from './python.js';
 import { vendorTasks } from './vendors.js';
 
@@ -34,8 +34,9 @@ export function interfaceSteps(api: GraphNode, context: MapContext): Step[] | un
     if (api.data.auth) tasks.push(task(`configure ${api.data.auth} authentication for ${name} in REST_FRAMEWORK settings`), ...vendorTasks(api, context));
     if ((api.data.origins as string[] | undefined)?.length) tasks.push(task(`allow the CORS origins ${(api.data.origins as string[]).join(', ')} for ${name}, for example with django-cors-headers`));
     if (!blocks.length) return tasks;
+    const about = comment(api);
     return [
-        template(`${app}/api.py`, existing => pythonFile(existing, imports, blocks.join('\n\n\n'))),
+        template(`${app}/api.py`, existing => pythonFile(existing, imports, `${about && `${about}\n`}${blocks.join('\n\n\n')}`)),
         routesStep(app, 'api_urls', 'api', routes, context),
         includeStep(app, 'api_urls', 'api/'),
         ...tasks

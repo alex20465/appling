@@ -61,7 +61,7 @@ export class ApplingValidator {
         }
     }
 
-    /** `@Name` in a `describe` or `does` text must name a visible element, within the layer rules of a reference. */
+    /** `@Name` in a `describe` or annotation text must name a visible element, within the layer rules of a reference. */
     checkDoesNames(model: Model, accept: ValidationAcceptor): void {
         for (const node of AstUtils.streamAst(model)) {
             for (const { name, target, property } of doesTargets(node, this.services)) {

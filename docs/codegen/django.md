@@ -405,7 +405,7 @@ Views pass `request.user`, and REST framework and Django answer `PermissionDenie
 
 ## Descriptions
 
-A [`describe`](../language/descriptions.md) text goes into the generated code as documentation, followed by the `does` text of an action:
+A [`describe`](../language/descriptions.md) text goes into the generated code as documentation, followed by the annotation of the declaration's level (`holds`, `does`, `handles`, `serves`, `shows`):
 
 | Element | Becomes |
 |---|---|
@@ -414,8 +414,12 @@ A [`describe`](../language/descriptions.md) text goes into the generated code as
 | Projection, external | The serializer or `Protocol` class docstring |
 | External operation | The docstring of its `Protocol` method |
 | Entity field | `help_text` of the model field |
+| REST interface | Comment lines above its views in `<app>/api.py` |
+| Page | The docstring of its view |
+| Navigation | A template comment in the menu of the base template |
+| Messages | Comment lines above its labels in `<app>/messages.py` |
 
-A `does` text is also a [registry task](registry.md#status); a `describe` text is not.
+An annotation is also a [registry task](registry.md#status); a `describe` text is not.
 
 ## What becomes a task
 

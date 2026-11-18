@@ -470,15 +470,19 @@ Ash field policies guard reads only: a field policy that also names `create`, `u
 
 ## Descriptions
 
-A [`describe`](../language/descriptions.md) text goes into the generated code as documentation:
+A [`describe`](../language/descriptions.md) text and the annotation of the declaration's level (`holds`, `does`, `handles`, `serves`, `shows`) go into the generated code as documentation, the annotation as a paragraph after the `describe` text:
 
 | Element | Becomes |
 |---|---|
+| Enum | `@moduledoc` of the enum module |
 | Entity | `@moduledoc` of the resource |
 | Value type | `@moduledoc` of the embedded resource |
-| Entity field | `description` of the attribute |
+| Entity field | `description` of the attribute (`describe` only) |
+| Query | `description` of the read action |
+| REST interface | `description` of each of its JSON:API routes, which overrides the read or update action's own in the OpenAPI document |
+| Page | `@moduledoc` of the LiveView |
 
-A `does` text of an event, action, machine or job is a [registry task](registry.md#status); a `describe` text is not.
+An annotation is also a [registry task](registry.md#status), on every element that has one; a `describe` text is not. The annotations of actions, machines, jobs, events, projections, external systems, use cases, webhook interfaces, navigations, flows and messages, which get no module or action of their own, are only that task.
 
 ## What becomes a task
 

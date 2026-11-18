@@ -379,3 +379,48 @@ test('policies on a whole entity get test bodies over Can<Op><Entity> with the a
     // actor.name is an actor field New<Actor> leaves nil: the test stays skipped.
     expect(entries['p.Note.policy[]'].missing.map(m => m.what)).toContain('write the test TestNotePolicy');
 });
+
+test('describe texts and annotations become the doc comments of the generated types and functions', async () => {
+    const source = `module d {
+  enum Status describe "Where a ticket stands" holds "Mirrors the tracker's states" {
+    open
+    closed
+  }
+  value Range holds """
+    A span of points.
+
+    Never empty.
+  """ {
+    low: Int
+  }
+  entity Ticket describe "A request for help" holds "Synced from the tracker" {
+    status: Status default open
+  }
+  event Closed does "Tells the tracker" {
+    ticket: Ticket
+  }
+  action Close on Ticket does "Closes the @Ticket in the tracker too" {
+    effect {
+      set status = closed
+    }
+  }
+  machine Flow on Ticket.status does "Follows the tracker" {
+    transition open -> closed on Closed
+  }
+  query Open from Ticket handles "Reads the tracker's replica" {
+    where { status == open }
+  }
+}`;
+    const { documents, services } = await buildWorkspace({ 'd.appling': source });
+    const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), go, 'app');
+    const files = new Map<string, string>();
+    for (const { step } of result.steps) if (step.kind === 'template') files.set(step.file, step.write(files.get(step.file)));
+    const types = files.get('internal/d/types.go')!;
+    expect(types).toContain('// Status is the enum d.Status.\n//\n// Where a ticket stands\n//\n// Mirrors the tracker\'s states\ntype Status string');
+    expect(types).toContain('// Range is the value type d.Range.\n//\n// A span of points.\n//\n// Never empty.\ntype Range struct');
+    expect(types).toContain('// Ticket is the entity d.Ticket.\n//\n// A request for help\n//\n// Synced from the tracker\ntype Ticket struct');
+    expect(files.get('internal/d/events.go')).toContain('//\n// Tells the tracker\ntype Closed struct');
+    expect(files.get('internal/d/actions.go')).toContain('//\n// Closes the @Ticket in the tracker too\nfunc Close(');
+    expect(files.get('internal/d/machines.go')).toContain('//\n// Follows the tracker\nfunc FlowOnClosed(');
+    expect(files.get('internal/d/queries.go')).toContain('//\n// Reads the tracker\'s replica\nfunc InOpen(');
+});

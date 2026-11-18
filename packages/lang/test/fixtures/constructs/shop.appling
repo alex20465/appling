@@ -44,7 +44,7 @@ module shop core {
     tags: String[]
   }
 
-  entity Order {
+  entity Order holds "Mirrors the ERP order, matched by @Order.reference" {
     reference: String unique
     buyer: party.Person
     status: Status state default draft
@@ -154,7 +154,10 @@ module shop core {
   job OnPayment on PaymentReceived run Cancel
 
   // L3 Application
-  query OpenOrders from Order core {
+  query OpenOrders from Order core handles """
+    Reads the open orders from the ERP replica
+    when the local table lags behind.
+  """ {
     input {
       of: party.Person?
       since: DateTime?
@@ -204,7 +207,7 @@ module shop core {
   }
 
   // L4 Interfaces
-  interface rest PublicApi core {
+  interface rest PublicApi core serves "A CSV export of @OpenOrders" {
     auth bearer from Payments
     limit 100 per minute
     cors "https://shop.example", "https://admin.example"
@@ -227,7 +230,7 @@ module shop core {
   }
 
   // L5 Experience
-  page Orders route "/orders" core {
+  page Orders route "/orders" core shows "Highlights orders older than a week" {
     list OpenOrders as OrderView { reference, status } actions Cancel, PlaceOrder
     list OpenOrders as OrderView
   }

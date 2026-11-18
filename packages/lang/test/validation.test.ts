@@ -122,6 +122,23 @@ test('does is only for L2 declarations', async () => {
     expect(await check(`module m { entity Note does "Mails the owner" { } }`)).not.toEqual([]);
 });
 
+test('each annotation is only for the declarations of its level', async () => {
+    const ok = `${ORDER} query Q from Order handles "h" { } interface rest Api serves "s" { } page P route "/p" shows "s" { }`;
+    expect(await check(`module m { entity Note holds "h" { } ${ok} }`)).toEqual([]);
+    for (const wrong of ['entity Note handles "h" { }', 'action Edit on Order holds "h" { }', 'query Q2 from Order serves "s" { }',
+        'interface rest Api2 shows "s" { }', 'page P2 route "/q" does "d" { }', 'entity Note serves "s" { }']) {
+        expect(await check(`module m { ${ORDER} ${wrong} }`), wrong).not.toEqual([]);
+    }
+});
+
+test('annotation names resolve and follow the layer rules', async () => {
+    expect(await check(`module m { ${ORDER} query Q from Order handles "Reads @Order.note, not @Missing" { } }`))
+        .toEqual(['Unknown element "@Missing" in handles.']);
+    expect(await check(`module m { ${ORDER} query Q from Order { } page P route "/p" shows "Lists @Q" { } }`)).toEqual([]);
+    expect(await check(`module m { ${ORDER} query Q from Order { } entity Note holds "Read by @Q" { } }`))
+        .toContain('domain element Entity may not reference application element Query "@Q".');
+});
+
 test('does names follow the layer rules', async () => {
     expect(await check(`module m { external Mail { op Send () } ${ORDER} action Edit on Order does "Calls @Mail.Send" { } }`))
         .toContain('behavior element Action may not reference application element External "@Mail.Send".');

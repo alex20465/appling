@@ -3,6 +3,12 @@
    outcome as a flash. In lib/<app>_web/live/<page>_live.ex. -#}
 {% macro buttons(actions, record) %}{% for a in actions %}<.button phx-click="{{ a.event }}" phx-value-id={{ "{" + record + ".id}" }}>{{ a.label }}</.button>{{ " " if not loop.last }}{% endfor %}{% endmacro %}
 defmodule {{ web }}.{{ name }} do
+{% block moduledoc %}
+{% if moduledoc %}
+{{ moduledoc }}
+
+{% endif %}
+{% endblock %}
   use {{ web }}, :live_view
 
 {% block mount %}

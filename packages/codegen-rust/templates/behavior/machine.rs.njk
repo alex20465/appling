@@ -1,5 +1,7 @@
 {# The transitions of a state machine that one event triggers, in the machine's module file: a function that applies them to the record the event carries. #}
+{% import "rust/macros.njk" as rust %}
 /// Applies the transitions of {{ qn }} that {{ event }} triggers.
+{{ rust.doc(about) -}}
 pub fn {{ name }}(event: &mut {{ eventType }}) -> Result<Vec<Event>, Error> {
     let {{ record }} = &mut event.{{ carrier }};
     let {{ "mut " if emits else "" }}events = Vec::new();

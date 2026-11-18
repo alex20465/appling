@@ -1,5 +1,9 @@
 {# An enum: a string type with one constant per literal, in internal/<module>/types.go. #}
 // {{ name }} is the enum {{ qn }}.
+{% if about %}
+//
+{{ about }}
+{% endif %}
 type {{ name }} string
 
 const (

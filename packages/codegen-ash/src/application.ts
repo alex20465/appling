@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { ashExpr, lastOf } from './elixir.js';
+import { ashExpr, descriptionOf, lastOf } from './elixir.js';
 import { attributeType, children, fileOf, patch, sectionLines, snake, task, TYPES } from './naming.js';
 import { addToSection } from './resource.js';
 
@@ -13,6 +13,7 @@ export function querySteps(query: GraphNode, context: MapContext): Step[] {
     const tasks = query.data.filter && !translated ? [task(`filter the read action ${snake(lastOf(query.qn))} by ${query.props.filter}; it reads nothing until then`)] : [];
     const lines = sectionLines(context, 'application/query.ex.njk', {
         name: snake(lastOf(query.qn)),
+        description: descriptionOf(query),
         arguments: children(query, context, 'Param').map(input => ({ name: lastOf(input.qn), type: argumentType(input.data.type as TypeData, context), optional: (input.data.type as TypeData).optional })),
         filter,
         sorts: ((query.data.sorts ?? []) as { field: string, direction?: string }[]).map(s => ({ field: lastOf(s.field), direction: s.direction ?? 'asc' })),

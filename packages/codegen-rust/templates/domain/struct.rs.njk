@@ -1,6 +1,7 @@
 {# A value type or an event in its module's file: a struct of its stored fields. #}
 {% import "rust/macros.njk" as rust %}
 /// The {{ what }} {{ qn }}.
+{{ rust.doc(about) -}}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct {{ name }} {
 {{ rust.fields(fields) -}}

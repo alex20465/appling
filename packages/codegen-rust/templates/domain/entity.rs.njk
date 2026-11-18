@@ -3,6 +3,7 @@
 {% import "rust/macros.njk" as rust %}
 {% block struct %}
 /// The entity {{ qn }}.
+{{ rust.doc(about) -}}
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct {{ name }} {
     pub id: i64,

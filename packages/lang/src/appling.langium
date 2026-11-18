@@ -35,10 +35,11 @@ Actor:
 Tenant:
     'tenant' name=Ident 'on' entity=[Entity:QualifiedName] relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))?;
 
-// `('describe' describe=(TEXT_BLOCK | STRING))?` says in plain text what a named element is and is for; the
-// L2 declarations (event, action, machine, job) also take `('does' does=(TEXT_BLOCK | STRING))?`, the work their
-// code has to do. `@Name` inside names an element (appling-does.ts). Both follow the head (name, signature,
-// relevance) and come before the body, at the end without one. Kept inline in every rule so `set` finds its keyword.
+// `('describe' describe=(TEXT_BLOCK | STRING))?` says in plain text what a named element is and is for; the top
+// level declarations also take the annotation of their level, the work their code has to do: `holds` (L1), `does`
+// (L2), `handles` (L3), `serves` (L4), `shows` (L5). `@Name` inside names an element (appling-does.ts). Both follow
+// the head (name, signature, relevance) and come before the body, at the end without one. Kept inline in every
+// rule so `set` finds its keyword.
 
 // How much a declaration matters to what the application does; a module's level applies to its members.
 Relevance returns string:
@@ -47,16 +48,16 @@ Relevance returns string:
 // L1 Domain
 
 Enum:
-    'enum' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{' literals+=EnumLiteral* '}';
+    'enum' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('holds' holds=(TEXT_BLOCK | STRING))? '{' literals+=EnumLiteral* '}';
 
 EnumLiteral:
     name=Ident ('describe' describe=(TEXT_BLOCK | STRING))?;
 
 ValueType:
-    'value' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{' fields+=Field* '}';
+    'value' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('holds' holds=(TEXT_BLOCK | STRING))? '{' fields+=Field* '}';
 
 Entity:
-    'entity' link?='link'? name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{'
+    'entity' link?='link'? name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('holds' holds=(TEXT_BLOCK | STRING))? '{'
         (fields+=Field | invariants+=Invariant | policies+=Policy)*
     '}';
 
@@ -154,7 +155,7 @@ Job:
 // L3 Application
 
 Query:
-    'query' name=Ident 'from' entity=[Entity:QualifiedName] relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{'
+    'query' name=Ident 'from' entity=[Entity:QualifiedName] relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('handles' handles=(TEXT_BLOCK | STRING))? '{'
         ('input' '{' inputs+=Param* '}')?
         ('where' '{' filter=Expr '}')?
         ('sort' sorts+=Sort (',' sorts+=Sort)*)?
@@ -166,7 +167,7 @@ Sort:
     field=[Field:Ident] direction=('asc' | 'desc')?;
 
 Projection:
-    'projection' name=Ident 'from' source=[ProjectionSource:QualifiedName] relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{'
+    'projection' name=Ident 'from' source=[ProjectionSource:QualifiedName] relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('handles' handles=(TEXT_BLOCK | STRING))? '{'
         fields+=ProjectionField*
     '}';
 
@@ -176,7 +177,7 @@ ProjectionField:
     name=Ident ('=' value=Expr)? ('describe' describe=(TEXT_BLOCK | STRING))?;
 
 External:
-    'external' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{' (operations+=ExternalOperation | keys+=ExternalKey)* '}';
+    'external' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('handles' handles=(TEXT_BLOCK | STRING))? '{' (operations+=ExternalOperation | keys+=ExternalKey)* '}';
 
 // What the vendor behind an external needs: a typed setting or secret, never its value.
 ExternalKey:
@@ -189,7 +190,7 @@ ExternalOperation:
     ('describe' describe=(TEXT_BLOCK | STRING))?;
 
 UseCase:
-    'usecase' name=Ident ('(' (params+=Param (',' params+=Param)*)? ')')? relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{'
+    'usecase' name=Ident ('(' (params+=Param (',' params+=Param)*)? ')')? relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('handles' handles=(TEXT_BLOCK | STRING))? '{'
         (steps+=Step | policies+=Policy)*
     '}';
 
@@ -213,7 +214,7 @@ type Callable = Action | Query | UseCase | ExternalOperation;
 // L4 Interfaces
 
 Interface:
-    'interface' protocol=Ident name=Ident ('from' source=[External:QualifiedName])? relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{'
+    'interface' protocol=Ident name=Ident ('from' source=[External:QualifiedName])? relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('serves' serves=(TEXT_BLOCK | STRING))? '{'
         ('auth' auth=Ident ('from' authBy=[External:QualifiedName])?)?
         ('limit' rateLimit=NUMBER 'per' rateUnit=('second' | 'minute' | 'hour'))?
         ('cors' origins+=STRING (',' origins+=STRING)*)?
@@ -229,7 +230,7 @@ type Exposable = Query | Action | UseCase;
 // L5 Experience
 
 Page:
-    'page' name=Ident 'route' route=STRING relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{' components+=Component* '}';
+    'page' name=Ident 'route' route=STRING relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('shows' shows=(TEXT_BLOCK | STRING))? '{' components+=Component* '}';
 
 Component:
     ListView | DetailView | FormView;
@@ -250,17 +251,17 @@ FormView:
 type Submittable = Action | UseCase;
 
 Navigation:
-    'navigation' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{' items+=NavItem* '}';
+    'navigation' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('shows' shows=(TEXT_BLOCK | STRING))? '{' items+=NavItem* '}';
 
 NavItem:
     label=STRING '->' page=[Page:QualifiedName] ('{' children+=NavItem* '}')?;
 
 Flow:
-    'flow' name=Ident 'for' usecase=[UseCase:QualifiedName] relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))?
+    'flow' name=Ident 'for' usecase=[UseCase:QualifiedName] relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('shows' shows=(TEXT_BLOCK | STRING))?
     '{' pages+=[Page:QualifiedName] ('->' pages+=[Page:QualifiedName])* '}';
 
 Messages:
-    'messages' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? '{' entries+=Message* '}';
+    'messages' name=Ident relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('shows' shows=(TEXT_BLOCK | STRING))? '{' entries+=Message* '}';
 
 Message:
     key=QualifiedName '=' text=STRING;
@@ -357,7 +358,7 @@ Ident returns string:
     | 'page' | 'timeout' | 'sort' | 'when' | 'create' | 'read' | 'update' | 'delete' | 'per'
     | 'flow' | 'actor' | 'tenant' | 'set' | 'op' | 'human' | 'system' | 'service' | 'asc'
     | 'desc' | 'remove' | 'rename' | 'retype' | 'roles' | 'second' | 'minute' | 'hour' | 'link'
-    | 'core' | 'supporting' | 'peripheral' | 'default' | 'limit' | 'messages' | 'migration' | 'is' | 'does' | 'describe'
+    | 'core' | 'supporting' | 'peripheral' | 'default' | 'limit' | 'messages' | 'migration' | 'is' | 'does' | 'describe' | 'holds' | 'handles' | 'serves' | 'shows'
     | 'setting' | 'secret' | 'scenario' | 'given' | 'then' | 'fails' | 'refused';
 
 hidden terminal WS: /\s+/;

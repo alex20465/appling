@@ -32,6 +32,8 @@ Requires Rust 1.85 or later. The crate name is the project name in snake case.
 | preconditions | `#[ignore]`d tests in the module's `tests`; writing their bodies is a registry task |
 | `scenario` | a test `scenario_<name>`: the given rows through `new` with their own ids, the actor, one call of the action, and the `then` as asserts on the rows, the returned events or the error. It replaces the guessed tests of the action it calls and of that action's transitions. `#[ignore]`d as a registry task with the reason when Rust cannot run it as the simulator does, such as a call to a use case |
 
+A `describe` text and the annotation of the level (`holds`, `does`, `handles`) become paragraphs of the `///` doc comment of the generated type or function; an annotation is also a registry task.
+
 Queries, projections, interfaces, pages, use cases, external systems and jobs become registry tasks (a query whose filter translates still gets `in_<query>(record, inputs...)`, which says whether a record belongs to its results), as do policies Rust cannot translate (their check returns `false` until written). `cargo test` is the registry's test command. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
 
 ## Templates

@@ -1,8 +1,8 @@
-import type { MapContext, Step } from '@appling/codegen';
+import { aboutOf, type MapContext, type Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
 import { inputLines, pageSizeName, queryCall, queryCode, sourcePath } from './application.js';
 import { canName, enforced, fieldGuards, policyImport } from './access.js';
-import { children, includeStep, pythonFile, routesStep, task, template } from './files.js';
+import { children, comment, doc, includeStep, pythonFile, routesStep, task, template } from './files.js';
 import { appOf, lastOf, snake } from './python.js';
 
 const CONVERT: { [primitive: string]: string } = { Int: 'int', Decimal: 'Decimal', Money: 'Decimal' };
@@ -76,7 +76,7 @@ export function pageSteps(page: GraphNode, context: MapContext): Step[] {
         }
     }
     const name = snake(lastOf(page.qn));
-    const view = context.render('pages/view.py.njk', { name, byId, body: lines, template: `${app}/page.html`, title: title(lastOf(page.qn)) });
+    const view = context.render('pages/view.py.njk', { name, byId, doc: doc(page), body: lines, template: `${app}/page.html`, title: title(lastOf(page.qn)) });
     const helpers = context.render('pages/helpers.py.njk', {});
     const base = `${context.render('pages/base.html.njk', {})}\n`;
     return [
@@ -140,13 +140,13 @@ export function navigationSteps(navigation: GraphNode, context: MapContext): Ste
         }
         return [{ route, label: item.label }];
     });
-    const nav = context.render('pages/navigation.html.njk', { links });
+    const nav = context.render('pages/navigation.html.njk', { links, about: aboutOf(navigation)?.split('\n') ?? [] });
     return [template(`${app}/templates/${app}/base.html`, existing => (existing ?? `${context.render('pages/base.html.njk', {})}\n`).replace('    <nav>\n', `    <nav>\n${nav}\n`)), ...tasks];
 }
 
 /** Message entries become labels for the columns and fields of pages, per language. */
 export function messagesSteps(messages: GraphNode, context: MapContext): Step[] {
-    const line = context.render('pages/messages.py.njk', { name: lastOf(messages.qn), entries: messages.data.entries ?? [] });
+    const line = context.render('pages/messages.py.njk', { name: lastOf(messages.qn), about: comment(messages), entries: messages.data.entries ?? [] });
     return [template(`${appOf(messages.module)}/messages.py`, existing => `${(existing ?? 'LABELS = {}\n').trimEnd()}\n${line}\n`)];
 }
 

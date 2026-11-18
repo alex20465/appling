@@ -53,7 +53,7 @@
     "partial": 0,
     "todo": 0,
     "tasks": 0,
-    "left": 0
+    "left": 1
   },
   {
     "kind": "Enum",
@@ -141,7 +141,7 @@
     "partial": 0,
     "todo": 4,
     "tasks": 4,
-    "left": 0
+    "left": 1
   },
   {
     "kind": "Invariant",
@@ -205,7 +205,7 @@
     "partial": 0,
     "todo": 2,
     "tasks": 2,
-    "left": 0
+    "left": 1
   },
   {
     "kind": "Param",
@@ -245,7 +245,7 @@
     "partial": 2,
     "todo": 0,
     "tasks": 2,
-    "left": 0
+    "left": 1
   },
   {
     "kind": "Role",
@@ -317,6 +317,6 @@
     "partial": 15,
     "todo": 18,
     "tasks": 34,
-    "left": 2
+    "left": 6
   }
 ]
