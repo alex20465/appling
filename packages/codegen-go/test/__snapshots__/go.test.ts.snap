@@ -233,6 +233,8 @@ func PlaceOrder(actor access.Actor, order *Order) ([]any, error) {
 }
 
 // Cancel is the action sales.Cancel. It returns the events it emits.
+//
+// Tells the customer by email why the order was cancelled
 func Cancel(actor access.Actor, order *Order, reason *string) ([]any, error) {
 	var events []any
 	if !actor.IsSystem() && !CanCancel(actor, order, reason) {
@@ -590,6 +592,8 @@ type Line struct {
 }
 
 // Order is the entity sales.Order.
+//
+// The reference is ORD, the year and a running number, assigned when the order is created
 type Order struct {
 	ID int64 \`json:"id"\`
 	Reference string \`json:"reference"\`

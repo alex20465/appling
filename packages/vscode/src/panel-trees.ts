@@ -1,3 +1,4 @@
+import { annotationOf } from '@appling/lang/layers';
 import { anchorOwner, isAnchorAddress } from '@appling/model/anchors';
 import type { ElementChange, GraphDiff } from '@appling/model/diff';
 import { Simulator, type Access, type Verdict } from '@appling/model/simulator';
@@ -170,6 +171,10 @@ function inspectorTree(state: PanelState, index: GraphIndex): PanelNode[] {
         id: 'head', label: qn, description: `${node.props.link ? 'link ' : ''}${kindLabel(node.kind)} · ${LAYER_LABELS[node.layer]}`, tooltip: 'Open the source',
         icon: iconOf(node.kind), run: { type: 'source', qn }
     }];
+    const note = annotationOf(node);
+    for (const [title, text] of [['describe', node.props.describe], [note?.keyword, note?.text]]) {
+        if (typeof title === 'string' && typeof text === 'string') nodes.push({ id: `note/${title}`, label: text.trim(), description: title, tooltip: text.trim(), icon: 'note' });
+    }
     if (anchor) {
         const state = snapshot.anchors[anchor];
         const refs = snapshot.code[anchor] ?? [];

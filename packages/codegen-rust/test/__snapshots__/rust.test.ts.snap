@@ -235,6 +235,8 @@ pub struct Line {
 }
 
 /// The entity sales.Order.
+///
+/// The reference is ORD, the year and a running number, assigned when the order is created
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Order {
     pub id: i64,
@@ -372,6 +374,8 @@ fn place_order_policy(actor: &crate::access::Actor, order: &Order) -> bool {
 }
 
 /// The action sales.Cancel. It returns the events it emits.
+///
+/// Tells the customer by email why the order was cancelled
 pub fn cancel(actor: &crate::access::Actor, order: &mut Order, reason: Option<String>) -> Result<Vec<Event>, Error> {
     let events = Vec::new();
     if !can_cancel(actor, order, reason.clone()) {

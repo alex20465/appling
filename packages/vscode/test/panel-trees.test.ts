@@ -98,3 +98,8 @@ test('the playbook lists the steps of each session, marks the one that plays and
     ]);
     expect(PANEL_TREES.playbook(base, index)).toEqual([]);
 });
+
+test("the inspector shows an element's annotation as a row of its own", () => {
+    const tree = PANEL_TREES.inspector({ ...base, selected: 'sales.Cancel' }, index);
+    expect(tree[1]).toMatchObject({ description: 'does', label: 'Tells the customer by email why the order was cancelled' });
+});

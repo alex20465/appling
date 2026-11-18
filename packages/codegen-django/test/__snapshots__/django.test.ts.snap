@@ -179,6 +179,7 @@ def place_order(order: Order, *, actor=None) -> None:
 
 @transaction.atomic
 def cancel(order: Order, *, reason: str | None = None, actor=None) -> None:
+    """Tells the customer by email why the order was cancelled"""
     if actor is not None and not (actor.is_authenticated and can_update_order(actor, order) and is_clerk(actor)):
         raise PermissionDenied("Cancel")
     if order.status in (OrderStatus.DRAFT, OrderStatus.PLACED) and (not (order.paid_at is not None)):
@@ -204,6 +205,7 @@ from sales.queries import OPEN_ORDERS_PAGE_SIZE, open_orders, orders_of
 from sales.serializers import OrderSummary, OrdersOfInput
 
 
+# Answers GET /orders as CSV as well when the client accepts text/csv
 class PublicApiThrottle(throttling.UserRateThrottle):
     rate = "100/minute"
 
@@ -307,6 +309,7 @@ from typing import Protocol
 
 
 class Payments(Protocol):
+    """Charges through the payment vendor and maps each of its decline codes to Declined"""
     def charge(self, amount: Decimal) -> str:
         ...
 ",
@@ -393,6 +396,7 @@ from sales.enums import OrderStatus
 
 
 class Order(models.Model):
+    """The reference is ORD, the year and a running number, assigned when the order is created"""
     reference = models.CharField(max_length=255, unique=True)
     customer = models.ForeignKey("crm.Account", on_delete=models.PROTECT)
     lines = models.JSONField(encoder=DjangoJSONEncoder, default=list)
@@ -435,6 +439,7 @@ def label(key, default):
 
 
 def orders(request):
+    """Marks orders placed more than two days ago as late"""
     components = []
     rows = open_orders(actor=request.user)
     rows = Paginator(rows, OPEN_ORDERS_PAGE_SIZE).get_page(request.GET.get("page"))

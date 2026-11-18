@@ -21,7 +21,7 @@ module sales {
     amount: Money
   }
 
-  entity Order {
+  entity Order holds "The reference is ORD, the year and a running number, assigned when the order is created" {
     reference: String unique
     customer: crm.Account
     lines: Line[] owned
@@ -56,7 +56,7 @@ module sales {
     policy { actor.is(Customer) && customer == actor.account }
   }
 
-  action Cancel on Order {
+  action Cancel on Order does "Tells the customer by email why the order was cancelled" {
     input {
       reason: String?
     }
@@ -94,7 +94,7 @@ module sales {
     customer_name = customer.name
   }
 
-  external Payments {
+  external Payments handles "Charges through the payment vendor and maps each of its decline codes to Declined" {
     op Charge (amount: Money) returns String errors Declined
   }
 
@@ -105,7 +105,7 @@ module sales {
   }
 
   // L4 Interfaces
-  interface rest PublicApi {
+  interface rest PublicApi serves "Answers GET /orders as CSV as well when the client accepts text/csv" {
     auth bearer
     limit 100 per minute
     GET "/orders" -> OpenOrders as OrderSummary { reference, status, total }
@@ -114,7 +114,7 @@ module sales {
   }
 
   // L5 Experience
-  page Orders route "/orders" {
+  page Orders route "/orders" shows "Marks orders placed more than two days ago as late" {
     list OpenOrders as OrderSummary { reference, status, total } actions Cancel
   }
 

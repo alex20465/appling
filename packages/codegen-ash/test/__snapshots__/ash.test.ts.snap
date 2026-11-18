@@ -79,9 +79,9 @@ end
   json_api do
     routes do
       base_route "/", Shop.Sales.Order do
-        index :open_orders, route: "/orders", default_fields: [:reference, :status, :total]
-        index :orders_of, route: "/accounts/:of/orders", default_fields: [:reference, :status, :total]
-        patch :place_order, route: "/orders/:id/place"
+        index :open_orders, route: "/orders", default_fields: [:reference, :status, :total], description: "Answers GET /orders as CSV as well when the client accepts text/csv"
+        index :orders_of, route: "/accounts/:of/orders", default_fields: [:reference, :status, :total], description: "Answers GET /orders as CSV as well when the client accepts text/csv"
+        patch :place_order, route: "/orders/:id/place", description: "Answers GET /orders as CSV as well when the client accepts text/csv"
       end
     end
   end
@@ -102,6 +102,8 @@ end
 end
 ",
   "lib/shop/sales/order.ex": "defmodule Shop.Sales.Order do
+  @moduledoc "The reference is ORD, the year and a running number, assigned when the order is created"
+
   use Ash.Resource, otp_app: :shop, domain: Shop.Sales, data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
     extensions: [AshJsonApi.Resource, AshOban, AshStateMachine]
@@ -319,6 +321,8 @@ end
 end
 ",
   "lib/shop_web/live/orders_live.ex": "defmodule ShopWeb.OrdersLive do
+  @moduledoc "Marks orders placed more than two days ago as late"
+
   use ShopWeb, :live_view
 
   @impl true
