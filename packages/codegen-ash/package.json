@@ -16,7 +16,8 @@
     }
   },
   "files": [
-    "out"
+    "out",
+    "templates"
   ],
   "scripts": {
     "build": "tsc"

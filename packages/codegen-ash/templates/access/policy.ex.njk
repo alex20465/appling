@@ -1,0 +1,19 @@
+{# A policy in the `policies` or `field_policies` section of a resource. A condition that does not translate forbids until
+   it is written. The first field policy of a resource comes with `field_policy :*`, which keeps every other field readable. -#}
+{% block policy %}
+{{ header }} do
+{% for check in checks %}
+  {{ check }}
+{% else %}
+  forbid_if always()
+{% endfor %}
+end
+{% endblock %}
+{% block other_fields %}
+{% if otherFields %}
+
+field_policy :* do
+  authorize_if always()
+end
+{% endif %}
+{% endblock %}

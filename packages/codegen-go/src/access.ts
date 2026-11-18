@@ -93,60 +93,18 @@ function accessCode(context: MapContext, access: GoAccess): string {
     const roles = context.graph.nodes.filter(n => n.kind === 'Role');
     const actors = context.graph.nodes.filter(n => n.kind === 'Actor');
     const tenant = tenantOf(context);
-    const tenantEntity = tenant && (tenant.data.entity as string);
-    const blocks: string[] = [
-        '// ErrForbidden is returned by an action when its policies do not grant it to the actor.\nvar ErrForbidden = errors.New("forbidden")',
-        `// Role is a role of the model, by qualified name.\ntype Role string${roles.length ? `\n\nconst (\n${roles.map(r => `\t// Role${access.name(r.qn)} is the role ${r.qn}.\n\tRole${access.name(r.qn)} Role = ${JSON.stringify(r.qn)}`).join('\n')}\n)` : ''}`,
-        `// ActorType is a declared actor of the model, by qualified name.\ntype ActorType string${actors.length ? `\n\nconst (\n${actors.map(a => `\t// Actor${access.name(a.qn)} is the ${a.data.kind} actor ${a.qn}.\n\tActor${access.name(a.qn)} ActorType = ${JSON.stringify(a.qn)}`).join('\n')}\n)` : ''}`
-    ];
     const fields = actorFields(context).flatMap(field => {
         const type = actorFieldType(field, context, imports);
-        if (!type) return [];
-        const owner = parentOf(field.qn);
-        const record = (field.data.type as TypeData).decl ? `, the ID of a ${(field.data.type as TypeData).decl}` : '';
-        return [`\t// ${pascal(last(field.qn))} is the field ${last(field.qn)} of ${owner}${record}.`, `\t${pascal(last(field.qn))} ${type} \`json:"${last(field.qn)}"\``];
+        return type ? [{ name: pascal(last(field.qn)), field: last(field.qn), owner: parentOf(field.qn), record: (field.data.type as TypeData).decl, type }] : [];
     });
-    blocks.push([
-        '// Actor is who acts: a declared actor with the roles it carries, the tenant it acts in, and the fields',
-        '// the actors declare. A field is nil for actors that do not declare it; fields that hold records hold their ID.',
-        'type Actor struct {',
-        '\tType  ActorType `json:"type"`',
-        '\tRoles []Role    `json:"roles"`',
-        '\t// ID is the record the actor is stored as, for actors declared with `is`.',
-        '\tID *int64 `json:"id"`',
-        ...(tenant ? [`\t// Tenant is the ID of the ${tenantEntity} the actor acts in (the tenant ${tenant.qn}); nil when it acts across tenants.`, '\tTenant *int64 `json:"tenant"`'] : []),
-        ...fields,
-        '\t// system marks a call the system makes; only System sets it.',
-        '\tsystem bool',
-        '}'
-    ].join('\n'));
-    blocks.push(
-        '// System returns the actor of a call the system makes, such as a job, an event handler or a scenario without\n// an actor: the actions check no policy and no tenant for it. The zero Actor is not the system.\nfunc System() Actor {\n\treturn Actor{system: true}\n}',
-        '// IsSystem reports whether the call is one the system makes, which the actions do not check.\nfunc (a Actor) IsSystem() bool {\n\treturn a.system\n}'
-    );
-    for (const actor of actors) {
-        const name = access.name(actor.qn);
-        const roleList = ((actor.data.roles ?? []) as string[]).map(r => `Role${access.name(r)}`).join(', ');
-        blocks.push(`// New${name} returns the actor ${actor.qn} with the roles it declares.\nfunc New${name}() Actor {\n\treturn Actor{Type: Actor${name}, Roles: []Role{${roleList}}}\n}`);
-    }
-    blocks.push('// Has reports whether the actor carries the role, without checking the role\'s condition.\nfunc (a Actor) Has(role Role) bool {\n\treturn slices.Contains(a.Roles, role)\n}');
-    for (const role of roles) {
-        const name = access.name(role.qn);
-        const condition = role.data.condition ? roleCondition(role, context, access, imports) : undefined;
-        const body = !role.data.condition ? `actor.Has(Role${name})` : condition ? `actor.Has(Role${name}) && (${condition})` : 'false';
-        blocks.push(`// Is${name} reports whether the actor is ${role.qn}: it carries the role${role.data.condition ? ' and the role\'s condition holds' : ''}.\nfunc Is${name}(actor Actor) bool {\n\treturn ${body}\n}`);
-    }
-    blocks.push(
-        '// Value returns what an optional actor field points to, or the zero value when the actor does not have it.\nfunc Value[T any](p *T) T {\n\tif p == nil {\n\t\tvar zero T\n\t\treturn zero\n\t}\n\treturn *p\n}',
-        '// Same reports whether a record ID of the actor refers to the record with the given ID.\nfunc Same(ref *int64, id int64) bool {\n\treturn ref != nil && *ref == id\n}',
-        '// SameRef reports whether two record IDs of the actor refer to the same record.\nfunc SameRef(a, b *int64) bool {\n\treturn a != nil && b != nil && *a == *b\n}'
-    );
-    if (tenant) blocks.push(
-        `// Tenanted is a record that belongs to a ${tenantEntity}, the entity of the tenant ${tenant.qn}.\ntype Tenanted interface {\n\t// TenantID returns the ID of the ${tenantEntity}, and false when the record does not reach one.\n\tTenantID() (int64, bool)\n}`,
-        '// InTenant reports whether the record belongs to the tenant the actor acts in. An actor without a tenant acts across tenants.\nfunc InTenant(actor Actor, record Tenanted) bool {\n\tif actor.Tenant == nil {\n\t\treturn true\n\t}\n\tid, ok := record.TenantID()\n\treturn ok && id == *actor.Tenant\n}'
-    );
-    const all = [...imports].sort((a, b) => Number(a.includes('.')) - Number(b.includes('.')) || a.localeCompare(b));
-    return `// Package ${access.pkg} holds the actors, roles and tenant of the model and the checks its policies call.\npackage ${access.pkg}\n\nimport (\n${all.map(i => `\t"${i}"`).join('\n')}\n)\n\n${blocks.join('\n\n')}\n`;
+    return context.render('access/access.go.njk', {
+        pkg: access.pkg,
+        tenant: tenant && { entity: tenant.data.entity, qn: tenant.qn },
+        fields,
+        actors: actors.map(a => ({ name: access.name(a.qn), qn: a.qn, kind: a.data.kind, roles: ((a.data.roles ?? []) as string[]).map(r => `Role${access.name(r)}`) })),
+        roles: roles.map(r => ({ name: access.name(r.qn), qn: r.qn, conditional: !!r.data.condition, condition: r.data.condition ? roleCondition(r, context, access, imports) : undefined })),
+        imports: [...imports].sort((a, b) => Number(a.includes('.')) - Number(b.includes('.')) || a.localeCompare(b))
+    }) + '\n';
 }
 
 function roleCondition(role: GraphNode, context: MapContext, access: GoAccess, imports: Set<string>): string | undefined {

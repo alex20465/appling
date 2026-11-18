@@ -1,0 +1,9 @@
+{# The schema migration of one Appling migration block in an app, after the app's latest migration; each carried step adds its operation. In <app>/migrations/NNNN_appling_<block>.py. #}
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+    dependencies = [{{ "(" + (app | dump) + ", " + (previous | dump) + ")" if previous }}]
+
+    operations = [
+    ]

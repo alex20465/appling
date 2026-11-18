@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import type { Model } from '@appling/lang';
 import { plan } from '@appling/codegen';
@@ -6,9 +9,9 @@ import { buildWorkspace, constructs, examples } from '../../lang/test/workspace.
 import django from '../src/index.js';
 
 /** Applies the template steps to the files `startproject` and `startapp` would create, without running commands. */
-async function generate(sources: Record<string, string>) {
+async function generate(sources: Record<string, string>, root?: string) {
     const { documents, services } = await buildWorkspace(sources);
-    const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), django, 'shop');
+    const result = plan(buildGraph(documents.map(d => d.parseResult.value as Model), services), django, 'shop', {}, root);
     const files = new Map<string, string>([
         ['config/settings.py', "INSTALLED_APPS = [\n    'django.contrib.admin',\n]\n\nMIDDLEWARE = [\n    'django.contrib.auth.middleware.AuthenticationMiddleware',\n]\n"],
         ['config/urls.py', "from django.contrib import admin\nfrom django.urls import path\n\nurlpatterns = [\n    path('admin/', admin.site.urls),\n]\n"]
@@ -677,4 +680,13 @@ test('a scenario the generated code cannot reproduce stays a skipped test with a
     });
     expect(files['docs/tests.py']).toContain('        self.skipTest("registry task: docs.ArchiveDoc")');
     expect(entries['docs.ArchiveDoc'].missing.map(m => m.what)).toEqual(['write the test bodies of ArchiveDocScenarioTest in docs/tests.py: there is no sample value for Doc.scan']);
+});
+
+test('a project template extends the original and replaces one block', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'appling-django-'));
+    mkdirSync(join(root, '.appling/templates/django/models'), { recursive: true });
+    writeFileSync(join(root, '.appling/templates/django/models/entity.py.njk'), '{% extends "original:models/entity.py.njk" %}\n{% block meta %}\n\n    class Meta:\n        ordering = ["pk"]\n{% endblock %}\n');
+    const { files } = await generate({ 'shop.appling': 'module shop {\n  enum Status { open done }\n  entity Item { code: String }\n}' }, root);
+    expect(files['shop/models.py']).toContain('class Item(models.Model):\n    code = models.CharField(max_length=255)\n\n    class Meta:\n        ordering = ["pk"]\n');
+    expect(files['shop/enums.py']).toContain('class Status(models.TextChoices):');
 });

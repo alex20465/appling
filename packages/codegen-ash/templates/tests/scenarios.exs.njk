@@ -1,0 +1,14 @@
+{# The scenario tests of a module, with its first scenario; each test checks out a database sandbox. In test/<app>/<module>/scenarios_test.exs. -#}
+defmodule {{ module }} do
+  use ExUnit.Case, async: false
+
+{% block setup %}
+  setup do
+    pid = Ecto.Adapters.SQL.Sandbox.start_owner!({{ repo }}, shared: true)
+    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+    :ok
+  end
+{% endblock %}
+
+{% include "tests/scenario.exs.njk" %}
+end

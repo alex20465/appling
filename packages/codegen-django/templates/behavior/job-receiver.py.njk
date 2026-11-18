@@ -1,0 +1,11 @@
+{# A job triggered by an event: a signal receiver that runs its action on the record the event carries, when the filter holds. In <app>/handlers.py, connected in AppConfig.ready. #}
+@receiver({{ event }})
+def {{ name }}(sender, {{ variable }}, **kwargs) -> None:
+{% block body %}
+{% if condition == "True" %}
+    {{ action }}({{ variable }})
+{% else %}
+    if {{ condition }}:
+        {{ action }}({{ variable }})
+{% endif %}
+{% endblock %}

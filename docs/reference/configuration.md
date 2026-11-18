@@ -38,11 +38,12 @@ A list of targets. `appling generate` produces one project per target, in order,
 | `out` | string, required | The output folder, relative to the current folder for the CLI and to the workspace folder for the MCP server. It must be missing or empty for `appling generate` |
 | `options` | object, optional | Passed to the extension as `context.options` |
 
-The built in extensions read one option:
+The built in extensions read two options:
 
 | Option | Extensions | Meaning |
 |---|---|---|
 | `name` | all (read by the code generation core) | The project name, available to the extension as `context.name`. Default: the name of the `out` folder |
+| `templates` | all (read by the code generation core) | The folder of [template overrides](../codegen/templates.md), relative to the folder of `appling.config.json`. Default: `.appling/templates/<target>`, such as `.appling/templates/django` |
 
 | Extension | Notes |
 |---|---|

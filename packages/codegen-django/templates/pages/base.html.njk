@@ -1,0 +1,19 @@
+{# The base Django template of an app's pages: the navigation menu and the messages around the page content. In <app>/templates/<app>/base.html; navigation adds its links to <nav>. #}
+{% raw %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}{{ title }}{% endblock %}</title>
+  </head>
+  <body>
+    <nav>
+    </nav>
+    {% for message in messages %}<p class="message {{ message.tags }}">{{ message }}</p>{% endfor %}
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>
+{% endraw %}

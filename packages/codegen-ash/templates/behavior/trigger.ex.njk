@@ -1,0 +1,10 @@
+{# A scheduled job: an AshOban trigger in `oban` > `triggers` that runs the action for every row the condition matches. -#}
+trigger :{{ name }} do
+  action :{{ action }}
+  read_action :{{ name }}_targets
+  queue :{{ queue }}
+  where expr({{ where }})
+  scheduler_cron {{ schedule | dump }}
+  worker_module_name {{ module }}.AshOban.Worker.{{ job }}
+  scheduler_module_name {{ module }}.AshOban.Scheduler.{{ job }}
+end

@@ -1,0 +1,7 @@
+{# The actor check shared by actions and their effects. `indent` is the tabs every line starts with. #}
+{% macro denied(indent, check, action, forbidden) %}
+{{ indent }}if !actor.IsSystem() && !{{ check }} {
+{{ indent }}	return nil, fmt.Errorf("%w: {{ action }}", {{ forbidden }})
+{{ indent }}}
+{% endmacro %}
+

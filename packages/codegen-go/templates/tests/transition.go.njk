@@ -1,0 +1,27 @@
+{# The test of a transition an action runs, in internal/<module>/<module>_test.go: a valid record goes from a
+   `from` state to the `to` state, and a state no transition leaves is refused with ErrInvalidTransition. #}
+func {{ name }}(t *testing.T) {
+{% block goes %}
+	t.Run("goes from {{ from.label }} to {{ to.label }}", func(t *testing.T) {
+		x := {{ valid }}()
+		x.{{ state }} = {{ from.go }}
+		if _, err := {{ call }}; err != nil {
+			t.Fatalf("{{ action }} from {{ from.label }}: %v", err)
+		}
+		if x.{{ state }} != {{ to.go }} {
+			t.Fatalf("{{ action }} from {{ from.label }}: want {{ to.label }}, got %v", x.{{ state }})
+		}
+	})
+{% endblock %}
+{% block refuses %}
+{% if invalid %}
+	t.Run("refuses {{ invalid.label }}", func(t *testing.T) {
+		x := {{ valid }}()
+		x.{{ state }} = {{ invalid.go }}
+		if _, err := {{ call }}; !errors.Is(err, ErrInvalidTransition) {
+			t.Fatalf("{{ action }} from {{ invalid.label }}: want ErrInvalidTransition, got %v", err)
+		}
+	})
+{% endif %}
+{% endblock %}
+}

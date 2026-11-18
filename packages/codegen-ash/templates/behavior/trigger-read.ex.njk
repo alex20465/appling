@@ -1,0 +1,4 @@
+{# The read action a job's trigger reads its rows with, in the `actions` section. -#}
+read :{{ name }}_targets do
+  pagination keyset?: true, required?: false
+end

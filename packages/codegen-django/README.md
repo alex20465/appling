@@ -55,6 +55,10 @@ Models with projections or interfaces also get Django REST framework. The projec
 
 What cannot be translated becomes a registry task: invariants over derived fields or other entities, derived fields and defaults that use `actor` or other context, policy and role conditions without a Python translation, field policies on writes, guards and effects that cannot be expressed in Python, the client of an external system, scheduling of jobs, use cases from their first `await` on, authentication and CORS of interfaces, webhook endpoints and the vendor side setup (registering webhooks, issuing tokens with a role claim).
 
+## Templates
+
+The generated code comes from the Nunjucks templates in `templates/` of this package, one per element kind. Override one with a file at the same path in `.appling/templates/django/` of your project; see [Templates](https://www.appling.tools/docs/codegen/templates/).
+
 ## License
 
 MIT

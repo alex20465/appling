@@ -1,0 +1,4 @@
+{# A machine's transitions in `state_machine` > `transitions`, each run by the update action of its action or event. -#}
+{% for t in transitions %}
+transition :{{ t.action }}, from: [{% for s in t.from %}:{{ s }}{{ ", " if not loop.last }}{% endfor %}], to: :{{ t.to }}
+{% endfor %}

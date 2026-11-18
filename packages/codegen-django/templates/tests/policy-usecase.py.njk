@@ -1,0 +1,5 @@
+{# The body of the test that a use case refuses a user its policy keeps out, before its first step. #}
+{% import "tests/macros.njk" as t %}
+{{ t.signIn(user, actor) -}}
+with self.assertRaises(PermissionDenied):
+    {{ call }}

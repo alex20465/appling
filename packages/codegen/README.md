@@ -51,6 +51,10 @@ An extension may also implement `migrate(change, context, files)`, which turns o
 
 Returning `undefined` marks the node kind as not supported (a `todo` entry); an empty list means a parent's steps already cover the node. Nodes are planned in dependency order: modules, then domain, cross cutting, behavior, application, interfaces, experience.
 
+## Templates
+
+An extension writes its code through Nunjucks templates in its package (`templates`, rendered with `context.render(path, data)`). A project overrides one by a file at the same path in `.appling/templates/<target>/` (or the folder of the target option `templates`); `original:<path>` names the extension's own template, so an override can extend it and replace single blocks. See [Templates](https://www.appling.tools/docs/codegen/templates/).
+
 Third party extensions are named `appling-codegen-*` or `@scope/appling-codegen-*`, have a peer dependency on `@appling/codegen` and export the extension as default.
 
 ## Sync
@@ -77,7 +81,8 @@ Every graph node has an entry, so the registry is also the coverage report and t
 
 | Export | Purpose |
 |---|---|
-| `plan(graph, extension, name, options)` | The ordered steps and registry entries |
+| `plan(graph, extension, name, options, root?)` | The ordered steps and registry entries; `root` holds the template overrides |
+| `templateRenderer(root, extension, options)`, `overrideFolder(...)`, `ORIGINAL` | The Nunjucks renderer behind `context.render`, the project's override folder, and the `original:` prefix |
 | `runPlan(plan, out, log)` | Runs the steps, marks the written code, writes the registry and the baseline (async) |
 | `checkPrerequisites(prerequisites)` | Messages for missing tools |
 | `readConfig(root)`, `loadExtension(name, root)` | Configuration and extension loading |

@@ -112,14 +112,8 @@ export function actorFieldSteps(field: GraphNode, context: MapContext): Step[] {
 function struct(actor: GraphNode, home: ActorHome, context: MapContext): string {
     const keys = fieldsOf(actor, context).filter(f => !f.data.derived).map(f => {
         const value = f.data.default ? constant(f.data.default as ExprData, context.node) : undefined;
-        return `${lastOf(f.qn)}${relationTarget(f, context) ? '_id' : ''}: ${value ?? 'nil'}`;
+        return { name: `${lastOf(f.qn)}${relationTarget(f, context) ? '_id' : ''}`, value: value ?? 'nil' };
     });
-    const roles = rolesOf(home).map(r => `:${snake(lastOf(r))}`).join(', ');
-    return [
-        `defmodule ${home.module} do`,
-        `  @moduledoc ${JSON.stringify(`The ${actor.data.kind} actor ${lastOf(actor.qn)}. Pass %${home.module}{} as the actor.`)}`,
-        `  defstruct [${[...keys, `roles: [${roles}]`].join(', ')}]`,
-        'end',
-        ''
-    ].join('\n');
+    const roles = rolesOf(home).map(r => `:${snake(lastOf(r))}`);
+    return `${context.render('access/actor-struct.ex.njk', { module: home.module, kind: actor.data.kind, name: lastOf(actor.qn), keys, roles })}\n`;
 }

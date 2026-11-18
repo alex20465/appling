@@ -26,10 +26,12 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@appling/model": "workspace:*"
+    "@appling/model": "workspace:*",
+    "nunjucks": "^3.2.4"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
+    "@types/nunjucks": "^3.2.6",
     "typescript": "7.0.2"
   },
   "license": "MIT",

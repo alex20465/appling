@@ -99,13 +99,12 @@ export function factory(entity: GraphNode, context: MapContext, seen: Set<string
     }
     if (children(entity, context, 'Invariant').some(i => !holds(i.data.condition as ExprData, context, record))) return undefined;
     if (sequence) imports.add('from itertools import count');
-    const code = [
-        `def ${name}(**fields):`,
-        `    """${/^[AEIOU]/.test(lastOf(entity.qn)) ? 'An' : 'A'} ${lastOf(entity.qn)} with a value for every required field; the fields given replace them."""`,
-        `    values = {${values.map(([n, v]) => `${JSON.stringify(n)}: ${v}`).join(', ')}}`,
-        '    values.update(fields)',
-        `    return ${lastOf(entity.qn)}.objects.create(**values)`
-    ].join('\n');
+    const code = context.render('tests/factory.py.njk', {
+        name,
+        article: /^[AEIOU]/.test(lastOf(entity.qn)) ? 'An' : 'A',
+        model: lastOf(entity.qn),
+        values: values.map(([n, v]) => ({ name: n, code: v }))
+    });
     steps.push(template(`${app}/factories.py`, existing => {
         if (existing?.includes(`\ndef ${name}(`) || existing?.startsWith(`def ${name}(`)) return existing;
         const counter = sequence && !existing?.includes('_sequence = count(1)') ? '_sequence = count(1)\n\n\n' : '';

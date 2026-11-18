@@ -7,7 +7,7 @@ import { children } from './files.js';
 import { factory, holds, simulator, type Factory } from './fixtures.js';
 import { userModel } from './models.js';
 import { appOf, lastOf, parentOf, snake } from './python.js';
-import { testSteps, type TestCase } from './tests.js';
+import { bodyOf, testSteps, type TestCase } from './tests.js';
 
 const OPERATIONS = ['read', 'create', 'update', 'delete'];
 const CASES = ['allows_permitted_actors', 'denies_other_actors'];
@@ -43,11 +43,9 @@ export function policyTests(policy: GraphNode, context: MapContext): Step[] {
     const denied = actors.find(actor => verdict(policy, actor, made.record, context) === false);
     const imports = new Set([made.import, ...user.imports, GROUP]);
     const record = snake(lastOf(entity.qn));
-    const body = (actor: GraphNode, assertion: 'assertTrue' | 'assertFalse', checked: string[]) => [
-        ...signIn(user, actor),
-        `${record} = ${made.name}()`,
-        ...checked.map(o => `self.${assertion}(${policyImport(entity, canName(entity, o as 'read'), imports)}(${user.variable}, ${record}))`)
-    ];
+    const body = (actor: GraphNode, assertion: 'assertTrue' | 'assertFalse', checked: string[]) => bodyOf(context, 'tests/policy-entity.py.njk', {
+        user, actor: lastOf(actor.qn), record, factory: made.name, assertion, checks: checked.map(o => policyImport(entity, canName(entity, o as 'read'), imports))
+    });
     const tests: TestCase[] = [
         { name: CASES[0], body: allowed && body(allowed.actor, 'assertTrue', allowed.operations) },
         { name: CASES[1], body: denied && body(denied, 'assertFalse', operations) }
@@ -82,10 +80,10 @@ function actionPolicyTests(policy: GraphNode, action: GraphNode, context: MapCon
     const imports = new Set([...run.imports, ...user.imports, GROUP]);
     if (denied) imports.add('from django.core.exceptions import PermissionDenied');
     const fire = call(action, run, [`actor=${user.variable}`]);
-    const body = (actor: GraphNode, lines: string[]) => [...signIn(user, actor), ...(run.instance ? [`${run.instance} = make_${run.instance}()`] : []), ...lines];
+    const body = (actor: GraphNode, denies: boolean) => bodyOf(context, 'tests/policy-action.py.njk', { user, actor: lastOf(actor.qn), instance: run.instance ?? '', denied: denies, call: fire });
     const tests: TestCase[] = [
-        { name: CASES[0], body: allowed && body(allowed, [fire]) },
-        { name: CASES[1], body: denied && body(denied, ['with self.assertRaises(PermissionDenied):', `    ${fire}`]) }
+        { name: CASES[0], body: allowed && body(allowed, false) },
+        { name: CASES[1], body: denied && body(denied, true) }
     ];
     if (tests.every(t => !t.body)) return fallback();
     return testSteps(policy, rule, tests, context, imports, [...run.steps, ...user.steps]);
@@ -114,11 +112,7 @@ function queryPolicyTests(policy: GraphNode, query: GraphNode, context: MapConte
     const name = snake(lastOf(query.qn));
     const imports = new Set([made.import, ...user.imports, GROUP, `from ${appOf(query.module)}.queries import ${name}`]);
     const record = snake(lastOf(entity.qn));
-    const body = (actor: GraphNode, assertion: 'assertIn' | 'assertNotIn') => [
-        ...signIn(user, actor),
-        `${record} = ${made.name}()`,
-        `self.${assertion}(${record}, list(${name}(actor=${user.variable})))`
-    ];
+    const body = (actor: GraphNode, assertion: 'assertIn' | 'assertNotIn') => bodyOf(context, 'tests/policy-query.py.njk', { user, actor: lastOf(actor.qn), record, factory: made.name, assertion, query: name });
     const tests: TestCase[] = [
         { name: CASES[0], body: allowed && body(allowed, 'assertIn') },
         { name: CASES[1], body: denied && body(denied, 'assertNotIn') }
@@ -146,7 +140,7 @@ function useCasePolicyTests(policy: GraphNode, useCase: GraphNode, context: MapC
     const fire = call(useCase, run, [`actor=${user.variable}`, ...externals]);
     const tests: TestCase[] = [
         { name: CASES[0] },
-        { name: CASES[1], body: [...signIn(user, denied), 'with self.assertRaises(PermissionDenied):', `    ${fire}`] }
+        { name: CASES[1], body: bodyOf(context, 'tests/policy-usecase.py.njk', { user, actor: lastOf(denied.qn), call: fire }) }
     ];
     return testSteps(policy, rule, tests, context, imports, [...run.steps, ...user.steps]);
 }
@@ -167,13 +161,6 @@ function actorsOf(context: MapContext): GraphNode[] {
 
 function verdict(policy: GraphNode, actor: GraphNode, record: SimRecord, context: MapContext) {
     return simulator(context).evaluate(policy.data.condition as ExprData, { self: record, actor: { actor: actor.qn, fields: {} } });
-}
-
-function signIn(user: UserFactory, actor: GraphNode): string[] {
-    return [
-        `${user.variable} = ${user.create}`,
-        `${user.variable}.groups.add(Group.objects.get_or_create(name=${JSON.stringify(lastOf(actor.qn))})[0])`
-    ];
 }
 
 function covered(policy: GraphNode): string[] {

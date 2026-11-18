@@ -1,0 +1,58 @@
+{# An entity, in internal/<module>/types.go: a struct with an ID, a constructor with the defaults, a method per
+   derived field, Validate for the invariants and, when it belongs to the tenant, TenantID. #}
+{% block struct %}
+// {{ name }} is the entity {{ qn }}.
+type {{ name }} struct {
+	ID int64 `json:"id"`
+{% for field in fields %}
+	{{ field.name }} {{ field.type }} `json:"{{ field.json }}"`
+{% endfor %}
+}
+{% endblock %}
+{% block new %}
+
+// New{{ name }} returns a new {{ name }} with the defaults of the model.
+func New{{ name }}() *{{ name }} {
+	return &{{ name }}{
+{% for field in defaults %}
+		{{ field.name }}: {{ field.value }},
+{% endfor %}
+	}
+}
+{% endblock %}
+{% block derived %}
+{% for field in derived %}
+
+// {{ field.name }} is the derived field {{ field.qn }}.
+func ({{ receiver }} *{{ name }}) {{ field.name }}() {{ field.type }} {
+	return {{ field.code }}
+}
+{% endfor %}
+{% endblock %}
+{% block validate %}
+
+// Validate checks the invariants of {{ name }}.
+func ({{ receiver }} *{{ name }}) Validate() error {
+	var errs []error
+{% for check in checks %}
+	if !({{ check.condition }}) {
+		errs = append(errs, errors.New({{ check.label | dump }}))
+	}
+{% endfor %}
+	return errors.Join(errs...)
+}
+{% endblock %}
+{% block tenant %}
+{% if tenant %}
+
+// TenantID returns the ID of the {{ tenant.entity }} this {{ name }} belongs to, for the tenant {{ tenant.qn }}.
+func ({{ receiver }} *{{ name }}) TenantID() (int64, bool) {
+{% if tenant.hops.length %}
+	if {{ tenant.hops | join(" == nil || ") }} == nil {
+		return 0, false
+	}
+{% endif %}
+	return {{ tenant.record }}.ID, true
+}
+{% endif %}
+{% endblock %}

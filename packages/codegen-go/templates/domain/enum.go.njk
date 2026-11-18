@@ -1,0 +1,9 @@
+{# An enum: a string type with one constant per literal, in internal/<module>/types.go. #}
+// {{ name }} is the enum {{ qn }}.
+type {{ name }} string
+
+const (
+{% for literal in literals %}
+	{{ name }}{{ literal.constant }} {{ name }} = {{ literal.value | dump }}
+{% endfor %}
+)

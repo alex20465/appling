@@ -1,0 +1,19 @@
+{# The runner of an action that pages offer: a view that runs the action as the signed in user and reports the outcome as a message. In <app>/pages.py, routed at /_actions/<app>/<action>/. #}
+@require_POST
+def run_{{ name }}(request{{ ", id" if instance }}):
+{% block body %}
+{% if instance %}
+    {{ instance }} = get_object_or_404({{ model }}, pk=id)
+{% endif %}
+{% if errors.length %}
+    try:
+        {{ call }}
+        messages.success(request, {{ (label + " done.") | dump }})
+    except ({{ errors | join(", ") }}{{ "," if errors.length == 1 }}) as error:
+        messages.error(request, {{ (label + " failed: ") | dump }} + type(error).__name__)
+{% else %}
+    {{ call }}
+    messages.success(request, {{ (label + " done.") | dump }})
+{% endif %}
+    return redirect(request.POST.get("next") or "/")
+{% endblock %}

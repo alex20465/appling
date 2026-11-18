@@ -1,0 +1,16 @@
+{# The ExUnit tests of one rule: a case with a body runs; one without is skipped with a pointer to its registry entry. -#}
+{% for case in cases %}
+{% if case.body %}
+  test {{ (title + " " + case.name) | dump }} do
+{% for line in case.body %}
+    {{ line }}
+{% endfor %}
+  end
+{% else %}
+  @tag skip: {{ ("registry task: " + qn) | dump }}
+  test {{ (title + " " + case.name) | dump }}
+{% endif %}
+{% if not loop.last %}
+
+{% endif %}
+{% endfor %}

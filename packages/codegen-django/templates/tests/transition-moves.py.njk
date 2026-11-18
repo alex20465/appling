@@ -1,0 +1,8 @@
+{# The body of the test that a transition moves the record from each allowed state to its target state. #}
+{% import "tests/macros.njk" as t %}
+for state in {{ t.tuple(states) }}:
+    with self.subTest(state=state):
+        {{ instance }} = make_{{ instance }}({{ field }}=state)
+        {{ fire }}
+        {{ instance }}.refresh_from_db()
+        self.assertEqual({{ instance }}.{{ field }}, {{ to }})

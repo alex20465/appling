@@ -1,0 +1,4 @@
+{# A skipped test whose body is a registry task, in internal/<module>/<module>_test.go or scenarios_test.go. #}
+func {{ name }}(t *testing.T) {
+	t.Skip({{ ("registry task: " + qn) | dump }})
+}

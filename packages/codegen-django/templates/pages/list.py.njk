@@ -1,0 +1,18 @@
+{# A list component of a page: the query's rows (its inputs read from the query string, paged when the query pages) with the projection's columns and the row actions. Inside the page view. #}
+{% import "pages/macros.njk" as pg %}
+{% for line in inputs %}
+{{ line }}
+{% endfor %}
+rows = {{ query }}
+{% if pageSize %}
+rows = Paginator(rows, {{ pageSize }}).get_page(request.GET.get("page"))
+{% endif %}
+components.append({
+    "kind": "list",
+    "columns": [{{ pg.labels(columns) }}],
+    "items": [{"id": row.pk, "values": [{% for c in columns %}{{ c.value }}{{ ", " if not loop.last }}{% endfor %}]} for row in rows],
+{% if pageSize %}
+    "page": rows,
+{% endif %}
+    "actions": {{ pg.actions(app, actions) }},
+})

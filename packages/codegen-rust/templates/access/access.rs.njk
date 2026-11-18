@@ -1,0 +1,99 @@
+{# The access module, src/access.rs: who acts, the roles and actors of the model, one check per role and the tenant helpers.
+   Fields that hold records hold their id. #}
+//! The actors, roles and tenant of the model and the checks its policies call.
+
+{% block roles %}
+/// A role of the model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Role {
+{% for role in roles %}
+    /// The role {{ role.qn }}.
+    #[serde(rename = {{ role.qn | dump }})]
+    {{ role.name }},
+{% endfor %}
+}
+{% endblock %}
+
+{% block actor_types %}
+/// A declared actor of the model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ActorType {
+{% for actor in actors %}
+    /// The {{ actor.kind }} actor {{ actor.qn }}.
+    #[serde(rename = {{ actor.qn | dump }})]
+    {{ actor.name }},
+{% endfor %}
+}
+{% endblock %}
+
+{% block actor %}
+/// Who acts: a declared actor with the roles it carries, the tenant it acts in, and the fields the actors
+/// declare. A field is `None` for actors that do not declare it; fields that hold records hold their id.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Actor {
+    #[serde(rename = "type")]
+    pub actor_type: ActorType,
+    pub roles: Vec<Role>,
+    /// The record the actor is stored as, for actors declared with `is`.
+    pub id: Option<i64>,
+{% if tenant %}
+    /// The id of the {{ tenant.entity }} the actor acts in (the tenant {{ tenant.qn }}); `None` when it acts across tenants.
+    pub tenant: Option<i64>,
+{% endif %}
+{% for field in fields %}
+    /// The field {{ field.name }} of {{ field.owner }}{{ ", the id of a " + field.decl if field.decl else "" }}.
+{% if field.attribute %}
+    {{ field.attribute }}
+{% endif %}
+    pub {{ field.name }}: {{ field.type }},
+{% endfor %}
+}
+
+impl Actor {
+{% for actor in actors %}
+    /// The actor {{ actor.qn }} with the roles it declares.
+    pub fn {{ actor.fn }}() -> Self {
+        Self {
+            actor_type: ActorType::{{ actor.name }},
+            roles: vec![{{ actor.roles | join(", ") }}],
+            id: None,
+{% if tenant %}
+            tenant: None,
+{% endif %}
+{% for field in fields %}
+            {{ field.name }}: {{ field.empty }},
+{% endfor %}
+        }
+    }
+
+{% endfor %}
+    /// Whether the actor carries the role, without checking the role's condition.
+    pub fn has(&self, role: Role) -> bool {
+        self.roles.contains(&role)
+    }
+}
+{% endblock %}
+{% block role_checks %}
+{% for role in roles %}
+
+/// Whether the actor is {{ role.qn }}: it carries the role{{ " and the role's condition holds" if role.conditional else "" }}.
+pub fn is_{{ role.fn }}({{ "_" if role.unused else "" }}actor: &Actor) -> bool {
+    {{ role.body }}
+}
+{% endfor %}
+{% endblock %}
+{% block tenant %}
+{% if tenant %}
+
+/// A record that belongs to a {{ tenant.entity }}, the entity of the tenant {{ tenant.qn }}.
+pub trait Tenanted {
+    /// The id of the {{ tenant.entity }}, `None` when the record does not reach one.
+    fn tenant_id(&self) -> Option<i64>;
+}
+
+/// Whether the record belongs to the tenant the actor acts in. An actor without a tenant acts across tenants.
+pub fn in_tenant(actor: &Actor, record: &impl Tenanted) -> bool {
+    actor.tenant.is_none() || record.tenant_id() == actor.tenant
+}
+{% endif %}
+{% endblock %}

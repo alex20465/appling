@@ -52,7 +52,7 @@ Targets live in `appling.config.json` in the folder where you run the CLI, under
 |---|---|
 | `extension` | The extension package, resolved from the folder of `appling.config.json`. Install it there with your package manager. The VS Code extension comes with the four stacks' packages and use theirs when the project has none. |
 | `out` | The output folder, relative to that folder. It must be empty or missing. |
-| `options` | Options for the extension. `name` sets the project name; without it, the project is named after the output folder. |
+| `options` | Options for the extension. `name` sets the project name; without it, the project is named after the output folder. `templates` names the folder of [template overrides](templates.md). |
 
 You can list several targets; they run in order, and the first one that fails stops the run. See [configuration](../reference/configuration.md) for the whole file.
 

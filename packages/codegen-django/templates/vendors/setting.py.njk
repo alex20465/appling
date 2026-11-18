@@ -1,0 +1,18 @@
+{# A setting or secret of an external system, read from the environment: a missing setting is None (False for a Bool), a missing secret stops the app at startup. A line in config/settings.py. #}
+{% set quoted = name | dump %}
+{% if secret %}
+{% set read = "required_env(" + quoted + ")" %}
+{% if primitive == "Int" %}
+{{ name }} = int({{ read }})
+{% elif primitive == "Bool" %}
+{{ name }} = {{ read }}.lower() in ("1", "true", "yes")
+{% else %}
+{{ name }} = {{ read }}
+{% endif %}
+{% elif primitive == "Int" %}
+{{ name }} = int(os.environ[{{ quoted }}]) if {{ quoted }} in os.environ else None
+{% elif primitive == "Bool" %}
+{{ name }} = os.environ.get({{ quoted }}, "").lower() in ("1", "true", "yes")
+{% else %}
+{{ name }} = os.environ.get({{ quoted }})
+{% endif %}

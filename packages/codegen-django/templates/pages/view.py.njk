@@ -1,0 +1,9 @@
+{# A page: a Django view that collects its components for the shared page.html template. In <app>/pages.py, routed in <app>/urls.py at the site root. #}
+def {{ name }}(request{{ ", id" if byId }}):
+    components = []
+{% block components %}
+{% for line in body %}
+    {{ line }}
+{% endfor %}
+{% endblock %}
+    return render(request, {{ template | dump }}, {"title": {{ title | dump }}, "components": components})

@@ -21,7 +21,7 @@ export function migrationSteps(change: MigrationChange, context: MapContext, fil
         const models = `${app}/models.py`;
         if (change.kind === 'rename') {
             return [
-                operation(app, change.block, files, `migrations.RenameField(model_name=${JSON.stringify(model.toLowerCase())}, old_name=${JSON.stringify(old)}, new_name=${JSON.stringify(change.newName)})`, imports),
+                operation(app, change.block, files, `migrations.RenameField(model_name=${JSON.stringify(model.toLowerCase())}, old_name=${JSON.stringify(old)}, new_name=${JSON.stringify(change.newName)})`, imports, context),
                 template(models, text => inClass(text!, model, body => body.replace(new RegExp(`\\n    ${old} = `), `\n    ${change.newName} = `))),
                 follow
             ];
@@ -29,13 +29,13 @@ export function migrationSteps(change: MigrationChange, context: MapContext, fil
         if (change.kind === 'retype') {
             const field = djangoField(element!, context, imports);
             return [
-                operation(app, change.block, files, `migrations.AlterField(model_name=${JSON.stringify(model.toLowerCase())}, name=${JSON.stringify(old)}, field=${frozen(field, context)})`, frozenImports(imports)),
+                operation(app, change.block, files, `migrations.AlterField(model_name=${JSON.stringify(model.toLowerCase())}, name=${JSON.stringify(old)}, field=${frozen(field, context)})`, frozenImports(imports), context),
                 template(models, text => withImports(inClass(text!, model, body => body.replace(new RegExp(`\\n    ${old} = [^\\n]*`), `\n    ${old} = ${field}`)), imports)),
                 follow
             ];
         }
         return [
-            operation(app, change.block, files, `migrations.RemoveField(model_name=${JSON.stringify(model.toLowerCase())}, name=${JSON.stringify(old)})`, imports),
+            operation(app, change.block, files, `migrations.RemoveField(model_name=${JSON.stringify(model.toLowerCase())}, name=${JSON.stringify(old)})`, imports, context),
             template(models, text => inClass(text!, model, body => body.replace(new RegExp(`\\n    ${old} = [^\\n]*`), ''))),
             follow
         ];
@@ -43,7 +43,7 @@ export function migrationSteps(change: MigrationChange, context: MapContext, fil
     if (element?.kind === 'Entity' && change.kind === 'rename') {
         const app = appOf(element.module);
         return [
-            operation(app, change.block, files, `migrations.RenameModel(old_name=${JSON.stringify(old)}, new_name=${JSON.stringify(change.newName)})`, new Set()),
+            operation(app, change.block, files, `migrations.RenameModel(old_name=${JSON.stringify(old)}, new_name=${JSON.stringify(change.newName)})`, new Set(), context),
             template(`${app}/models.py`, text => text!.replace(new RegExp(`\\nclass ${old}\\(models\\.Model\\):`), `\nclass ${change.newName}(models.Model):`)),
             follow
         ];
@@ -51,7 +51,7 @@ export function migrationSteps(change: MigrationChange, context: MapContext, fil
     if (change.kind === 'remove' && !element && parent?.kind === 'Module') {
         const app = appOf(parent.qn);
         return [
-            operation(app, change.block, files, `migrations.DeleteModel(name=${JSON.stringify(old)})`, new Set()),
+            operation(app, change.block, files, `migrations.DeleteModel(name=${JSON.stringify(old)})`, new Set(), context),
             template(`${app}/models.py`, text => text!.replace(new RegExp(`\\n\\n\\nclass ${old}\\(models\\.Model\\):[\\s\\S]*?(?=\\n\\n\\n|\\n?$)`), '')),
             follow
         ];
@@ -72,13 +72,10 @@ function enumRename(change: MigrationChange, literal: GraphNode, context: MapCon
         const code = frozen(djangoField(field, context, imports), context);
         const name = lastOf(field.qn);
         const fn = `rename_${snake(lastOf(entity.qn))}_${name}_${old}`;
-        const body = [
-            `def ${fn}(apps, schema_editor):`,
-            `    apps.get_model(${JSON.stringify(app)}, ${JSON.stringify(lastOf(entity.qn))}).objects.filter(${name}=${JSON.stringify(old)}).update(${name}=${JSON.stringify(change.newName)})`
-        ].join('\n');
+        const body = context.render('migrations/rename-value.py.njk', { name: fn, app, model: lastOf(entity.qn), field: name, old, new: change.newName });
         return [
-            operation(app, change.block, files, `migrations.AlterField(model_name=${JSON.stringify(lastOf(entity.qn).toLowerCase())}, name=${JSON.stringify(name)}, field=${code})`, frozenImports(imports)),
-            dataOperation(app, change.block, files, fn, body)
+            operation(app, change.block, files, `migrations.AlterField(model_name=${JSON.stringify(lastOf(entity.qn).toLowerCase())}, name=${JSON.stringify(name)}, field=${code})`, frozenImports(imports), context),
+            dataOperation(app, change.block, files, fn, body, context)
         ];
     });
     const [from, to] = [`${lastOf(enumNode.qn)}.${constantOf(old)}`, `${lastOf(enumNode.qn)}.${constantOf(change.newName!)}`];
@@ -104,20 +101,10 @@ function migrationFiles(app: string, block: string, files: ProjectFiles): { sche
 }
 
 /** Adds a data migration function to the block's data migration, which runs after its schema migration. */
-function dataOperation(app: string, block: string, files: ProjectFiles, fn: string, body: string): Step {
+function dataOperation(app: string, block: string, files: ProjectFiles, fn: string, body: string, context: MapContext): Step {
     const { schema, data } = migrationFiles(app, block, files);
     return template(`${app}/migrations/${data}`, text => {
-        const start = text ?? [
-            'from django.db import migrations',
-            '',
-            '',
-            'class Migration(migrations.Migration):',
-            `    dependencies = [(${JSON.stringify(app)}, ${JSON.stringify(schema.replace(/\.py$/, ''))})]`,
-            '',
-            '    operations = [',
-            '    ]',
-            ''
-        ].join('\n');
+        const start = text ?? `${context.render('migrations/data.py.njk', { app, schema: schema.replace(/\.py$/, '') })}\n`;
         return start
             .replace('\n\n\nclass Migration', `\n\n\n${body}\n\n\nclass Migration`)
             .replace(/\n    \]\n$/, `\n        migrations.RunPython(${fn}, migrations.RunPython.noop),\n    ]\n`);
@@ -125,20 +112,10 @@ function dataOperation(app: string, block: string, files: ProjectFiles, fn: stri
 }
 
 /** Adds an operation to the app's schema migration for this block, creating it after the app's latest migration. */
-function operation(app: string, block: string, files: ProjectFiles, code: string, imports: Set<string>): Step {
+function operation(app: string, block: string, files: ProjectFiles, code: string, imports: Set<string>, context: MapContext): Step {
     const { schema: file, previous } = migrationFiles(app, block, files);
     return template(`${app}/migrations/${file}`, text => {
-        const start = text ?? [
-            'from django.db import migrations, models',
-            '',
-            '',
-            'class Migration(migrations.Migration):',
-            `    dependencies = [${previous ? `(${JSON.stringify(app)}, ${JSON.stringify(previous.replace(/\.py$/, ''))})` : ''}]`,
-            '',
-            '    operations = [',
-            '    ]',
-            ''
-        ].join('\n');
+        const start = text ?? `${context.render('migrations/schema.py.njk', { app, previous: previous?.replace(/\.py$/, '') ?? '' })}\n`;
         return withImports(start.replace(/\n    \]\n$/, `\n        ${code},\n    ]\n`), imports);
     });
 }

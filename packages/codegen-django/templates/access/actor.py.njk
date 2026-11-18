@@ -1,0 +1,4 @@
+{# An actor: a django-rules predicate that holds when the user is in the actor's group, for `actor.is(Actor)`. In <app>/actors.py. #}
+@rules.predicate
+def {{ name }}(user):
+    return user is not None and user.groups.filter(name={{ group | dump }}).exists()

@@ -1,0 +1,3 @@
+{# A renamed enum value: the data migration function that rewrites the stored values of one field. In the block's data migration. #}
+def {{ name }}(apps, schema_editor):
+    apps.get_model({{ app | dump }}, {{ model | dump }}).objects.filter({{ field }}={{ old | dump }}).update({{ field }}={{ new | dump }})

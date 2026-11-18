@@ -7,13 +7,14 @@ import { children } from './files.js';
 import { factory, sample, simulator } from './fixtures.js';
 import { actorFields, defaultValue, scope, userEntity, userModel } from './models.js';
 import { appOf, lastOf, python, snake, type PythonScope } from './python.js';
-import { testSteps } from './tests.js';
+import { bodyOf, testSteps } from './tests.js';
 
 interface Assignment { name: string, value: ExprData }
 interface Fixture { name?: string, entity: string, assignments?: Assignment[] }
 interface Check { $type: string, condition?: ExprData, event?: string, assignments?: Assignment[] }
 interface CallData { target: string, args?: ExprData[] }
 interface UseCaseStep { $type: string, call?: CallData, handlers?: { error: string, call: CallData }[] }
+interface Row { variable?: string, model: string, values: string[], lists: { field: string, code: string }[] }
 
 const TEXT = ['String', 'Text'];
 /** Names a binding must not take, as the test uses them itself: Python keywords, builtins and the test's own locals. */
@@ -81,15 +82,16 @@ class ScenarioTest {
         const missing = gaps(target, context, new Set());
         if (missing) gap(missing);
 
-        const lines: string[] = [];
+        const rows: Row[] = [];
         const fixtures = (data.fixtures ?? []) as Fixture[];
         fixtures.forEach((fixture, i) => {
             if (fixture.name && TAKEN.has(fixture.name)) gap(`the binding ${fixture.name} is a name the test uses itself`);
-            lines.push(...this.row(this.context.node(fixture.entity)!, fixture.assignments ?? [], fixture.name, fixture.name ?? `row-${i + 1}`, i + 1));
+            rows.push(this.row(this.context.node(fixture.entity)!, fixture.assignments ?? [], fixture.name, fixture.name ?? `row-${i + 1}`, i + 1));
             if (fixture.name) this.bindings.add(fixture.name);
         });
         const persona = data.actor as { persona: string, assignments?: Assignment[] } | undefined;
-        if (persona) lines.push(...this.actor(persona, fixtures.length + 1));
+        const actor = persona ? this.actor(persona, fixtures.length + 1, rows) : undefined;
+        const given = { rows, actor };
 
         const callScope: PythonScope = { ...scope(context, this.imports), vars: this.bindings, actor: persona ? 'actor' : undefined };
         const params = children(target, context, 'Param');
@@ -100,33 +102,34 @@ class ScenarioTest {
         });
         const direct = () => this.direct(target, args, Boolean(persona));
         const error = data.error as string | undefined;
+        const body = (outcome: object) => bodyOf(context, 'tests/scenario.py.njk', { ...given, ...outcome });
 
         if (data.refused) {
             this.imports.add('from django.core.exceptions import PermissionDenied');
-            return [...lines, 'with self.assertRaises(PermissionDenied):', `    ${direct()}`];
+            return body({ outcome: 'refused', call: direct() });
         }
         if (data.fails) {
             if (error) {
                 const declared = lastOf(error);
                 this.imports.add(`from ${appOf(context.node(error)!.module)}.errors import ${declared}`);
-                return [...lines, `with self.assertRaises(${declared}):`, `    ${direct()}`];
+                return body({ outcome: 'error', error: declared, call: direct() });
             }
-            const refusable = persona && enforced(context);
+            const refusable = Boolean(persona && enforced(context));
             if (refusable) this.imports.add('from django.core.exceptions import PermissionDenied');
-            return [...lines, `with self.assertRaises(Exception)${refusable ? ' as raised' : ''}:`, `    ${direct()}`, ...(refusable ? ['self.assertNotIsInstance(raised.exception, PermissionDenied)'] : [])];
+            return body({ outcome: 'fails', refusable, call: direct() });
         }
-        return [...lines, ...this.then([direct()], callScope)];
+        return body({ outcome: 'passes', call: direct(), ...this.then(callScope) });
     }
 
     /** Creates a row: the values given, samples for required fields without a default, related rows from their factories. */
-    private row(entity: GraphNode, assignments: Assignment[], variable: string | undefined, label: string, number: number): string[] {
+    private row(entity: GraphNode, assignments: Assignment[], variable: string | undefined, label: string, number: number): Row {
         const { context, imports } = this;
         const model = lastOf(entity.qn);
         imports.add(`from ${appOf(entity.module)}.models import ${model}`);
         const given = new Map(assignments.map(a => [a.name, a.value]));
         const pyScope: PythonScope = { ...scope(context, imports), vars: this.bindings };
         const values: string[] = [];
-        const lists: [string, string][] = [];
+        const lists: { field: string, code: string }[] = [];
         for (const field of children(entity, context, 'Field')) {
             if (field.data.derived) continue;
             const type = field.data.type as TypeData;
@@ -136,7 +139,7 @@ class ScenarioTest {
             given.delete(name);
             if (value) {
                 const code = this.value(value, type, pyScope) ?? gap(`the value of ${model}.${name} is not translated to Python`);
-                if (type.many && decl?.kind === 'Entity') lists.push([name, code]);
+                if (type.many && decl?.kind === 'Entity') lists.push({ field: name, code });
                 else values.push(`${name}=${code}`);
                 continue;
             }
@@ -163,37 +166,31 @@ class ScenarioTest {
             values.push(`${name}=${this.value(value, type, pyScope) ?? gap(`the value of ${name} is not translated to Python`)}`);
         }
         if (userEntity(context) === entity.qn && !values.some(v => v.startsWith('username='))) values.unshift(`username=${JSON.stringify(label)}`);
-        const name = variable ?? (lists.length ? `row_${number}` : undefined);
-        return [
-            `${name ? `${name} = ` : ''}${model}.objects.create(${values.join(', ')})`,
-            ...lists.map(([field, code]) => `${name}.${field}.set(${code})`)
-        ];
+        return { variable: variable ?? (lists.length ? `row_${number}` : ''), model, values, lists };
     }
 
     /** The user the call runs as, in the group of the declared actor (for a role, the first actor holding it). */
-    private actor(persona: { persona: string, assignments?: Assignment[] }, number: number): string[] {
+    private actor(persona: { persona: string, assignments?: Assignment[] }, number: number, rows: Row[]): { values?: string[], group: string } {
         const { context, imports } = this;
         const named = context.node(persona.persona)!;
         const actor = named.kind === 'Role' ? context.graph.nodes.find(n => n.kind === 'Actor' && ((n.data.roles ?? []) as string[]).includes(named.qn)) ?? named : named;
         const assignments = persona.assignments ?? [];
         const user = userModel(context);
-        const lines: string[] = [];
+        let values: string[] | undefined;
         if (user?.entity) {
-            lines.push(...this.row(user.entity, assignments, 'actor', 'actor', number));
+            rows.push(this.row(user.entity, assignments, 'actor', 'actor', number));
         } else {
             if (!user && (assignments.length || context.graph.nodes.some(n => n.kind === 'Actor' && n.data.entity))) gap('the actor fields are not stored on a user model');
             const pyScope: PythonScope = { ...scope(context, imports), vars: this.bindings };
             const stored = actorFields(context);
-            const values = assignments.map(a => {
+            values = ['username="actor"', ...assignments.map(a => {
                 const type = stored.find(f => lastOf(f.qn) === a.name)?.data.type as TypeData | undefined;
                 return `${a.name}=${this.value(a.value, type, pyScope) ?? gap(`the value of ${a.name} is not translated to Python`)}`;
-            });
+            })];
             imports.add('from django.contrib.auth import get_user_model');
-            lines.push(`actor = get_user_model().objects.create(${['username="actor"', ...values].join(', ')})`);
         }
         imports.add('from django.contrib.auth.models import Group');
-        lines.push(`actor.groups.add(Group.objects.get_or_create(name=${JSON.stringify(lastOf(actor.qn))})[0])`);
-        return lines;
+        return { values, group: lastOf(actor.qn) };
     }
 
     /** The call of the action or use case function; a use case gets a mock for each external system it calls. */
@@ -217,11 +214,11 @@ class ScenarioTest {
         return `${fn}(${[...args, ...actor, ...externals].join(', ')})`;
     }
 
-    /** The call that is expected to run, then the checks: the given rows reloaded, each expectation, each emitted event. */
-    private then(call: string[], callScope: PythonScope): string[] {
+    /** What follows the call that is expected to run: the signals to record, the given rows to reload, each expectation and emitted event. */
+    private then(callScope: PythonScope): { signals: string[], reloads: string[], assertions: string[] } {
         const { context, imports } = this;
         const checks = (this.data.checks ?? []) as Check[];
-        const setup: string[] = [];
+        const signals: string[] = [];
         const sent = new Map<string, string>();
         for (const check of checks.filter(c => c.$type === 'Emitted')) {
             if (sent.has(check.event!)) continue;
@@ -229,17 +226,8 @@ class ScenarioTest {
             const signal = snake(lastOf(event.qn));
             imports.add(`from ${appOf(event.module)}.events import ${signal}`);
             sent.set(event.qn, `${signal}_sent`);
-            setup.push(
-                `${signal}_sent = []`,
-                '',
-                `def record_${signal}(sender, **fields):`,
-                `    ${signal}_sent.append(fields)`,
-                '',
-                `${signal}.connect(record_${signal}, weak=False)`,
-                `self.addCleanup(${signal}.disconnect, record_${signal})`
-            );
+            signals.push(signal);
         }
-        const run = sent.size ? ['with self.captureOnCommitCallbacks(execute=True):', ...call.map(l => `    ${l}`)] : call;
         const read = new Set<string>();
         const shown = (this.scenario.props.checks ?? []) as string[];
         const assertions = checks.map((check, i) => {
@@ -258,13 +246,7 @@ class ScenarioTest {
                 ? `self.assertTrue(any(${expected.join(' and ')} for fields in ${list}), ${message})`
                 : `self.assertTrue(${list}, ${message})`;
         });
-        return [
-            ...setup,
-            ...(setup.length ? [''] : []),
-            ...run,
-            ...[...read].map(b => `${b}.refresh_from_db()`),
-            ...assertions
-        ];
+        return { signals, reloads: [...read], assertions };
     }
 
     /** A value for a field or input of the given type; numbers become `Decimal` for decimal and money fields. */

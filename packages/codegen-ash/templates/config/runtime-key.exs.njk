@@ -1,0 +1,7 @@
+{# A setting or secret of an external, read from the environment in config/runtime.exs. A missing setting is nil (false for
+   a Bool); a missing secret stops the app at startup. -#}
+config :{{ app }}, {{ module }}, {{ key }}: {{ "System.fetch_env!" if secret else "System.get_env" }}({{ env | dump }})
+{%- if type == "Int" and secret %} |> String.to_integer()
+{%- elif type == "Int" %} |> then(&(&1 && String.to_integer(&1)))
+{%- elif type == "Bool" %} in ~w(1 true yes)
+{%- endif %}

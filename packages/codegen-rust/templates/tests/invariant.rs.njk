@@ -1,0 +1,11 @@
+{# The test of an invariant that `validate` checks, in its module's test module: a valid record passes, and a field value the simulator proves to break the invariant fails with its label. #}
+#[test]
+fn {{ name }}() {
+    assert_eq!({{ valid }}().validate(), Ok(()), {{ validMessage }});
+{% if violation %}
+    let mut x = {{ valid }}();
+    {{ violation }}
+    let errors = x.validate().unwrap_err();
+    assert!(errors.contains(&{{ label | dump }}), {{ violationMessage }});
+{% endif %}
+}

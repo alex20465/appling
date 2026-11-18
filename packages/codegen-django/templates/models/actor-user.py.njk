@@ -1,0 +1,10 @@
+{# The user model of actors that are bound to no entity: it stores the fields the actors declare. In <app>/models.py. #}
+{% import "python/macros.njk" as py %}
+class {{ name }}(AbstractUser):
+{% for field in fields %}
+    {{ field.name }} = {{ field.field }}
+{% endfor %}
+{{ py.properties(properties) -}}
+{% if not (fields.length or properties.length) %}
+    pass
+{% endif %}

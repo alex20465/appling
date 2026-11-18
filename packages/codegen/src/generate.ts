@@ -164,7 +164,7 @@ async function generateTarget(root: string, graph: Graph, target: Target, select
     const out = resolve(root, target.out);
     const options = target.options ?? {};
     const name = String(options.name ?? basename(out));
-    const planned = plan(graph, extension, name, options);
+    const planned = plan(graph, extension, name, options, root);
     const log = (line: string) => emit({ type: 'log', target: target.out, line });
     const exists = !!readRegistry(out);
     const record = readGenerations(root)[target.out];
@@ -204,7 +204,7 @@ async function generateTarget(root: string, graph: Graph, target: Target, select
         emit({ type: 'planned', target: target.out, mode: 'sync', elements: [...elements], steps });
         if (extension.migrate) {
             const changes = pendingChanges(graph, readApplied(out), new Date().toISOString().replace(/\D/g, '').slice(0, 14));
-            if (changes.length) runMigrations(out, planMigrations(graph, extension, name, options, out, changes), changes, log);
+            if (changes.length) runMigrations(out, planMigrations(graph, extension, name, options, out, changes, root), changes, log);
         }
         const temp = mkdtempSync(join(tmpdir(), 'appling-generate-'));
         try {

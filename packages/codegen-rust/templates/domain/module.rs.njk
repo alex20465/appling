@@ -1,0 +1,34 @@
+{# The file of a module, src/<module>.rs: the errors and events of its actions and its test module, which its elements fill. #}
+//! The module {{ qn }} of the model.
+
+{% block errors %}
+/// The errors of this module's actions.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Error {
+    InvalidTransition { action: &'static str, from: String },
+    Forbidden { action: &'static str },
+    /// A precondition without a declared error does not hold.
+    Precondition { action: &'static str, condition: &'static str },
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl std::error::Error for Error {}
+{% endblock %}
+
+{% block events %}
+/// The events this module's actions emit.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Event {
+}
+{% endblock %}
+
+{% block tests %}
+#[cfg(test)]
+mod tests {
+}
+{% endblock %}

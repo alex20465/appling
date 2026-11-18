@@ -1,0 +1,6 @@
+{# A for effect: runs the effects below it for every item of a list of the record. #}
+for {% if used %}_, {{ variable }} := {% endif %}range {{ collection }} {
+{% for line in body %}
+	{{ line }}
+{% endfor %}
+}

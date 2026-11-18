@@ -1,0 +1,10 @@
+{# The public checks of an element in its module's file: its policies, and its entity's check or the tenant, combined with &&. #}
+{% for check in checks %}
+{% if not loop.first %}
+
+{% endif %}
+/// {{ check.doc }}
+pub fn {{ check.name }}({{ check.params }}) -> bool {
+    {{ check.body }}
+}
+{% endfor %}

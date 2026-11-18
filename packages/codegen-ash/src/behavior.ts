@@ -5,7 +5,7 @@ import { addAuthorizer, addExtension, addToSection, prependToSection } from './r
 import { enforced } from './roles.js';
 import { coveredByScenario } from './scenario-tests.js';
 import { preconditionTests } from './model-tests.js';
-import { attributeType, children, fileOf, patch, snake, storedAttributes, task, typeModule } from './naming.js';
+import { attributeType, children, fileOf, patch, sectionLines, snake, storedAttributes, task, typeModule } from './naming.js';
 
 /**
  * An action on an entity becomes an update action of its resource: arguments, precondition validations, changes and
@@ -17,34 +17,36 @@ export function actionSteps(action: GraphNode, context: MapContext): Step[] {
     const tasks: Step[] = [];
     const transitions = context.graph.nodes.filter(n => n.kind === 'Transition' && n.data.action === action.qn);
     const destroy = !transitions.length && children(action, context).find(c => c.kind === 'DeleteEffect' && c.data.self);
-    const lines: string[] = [`${destroy ? 'destroy' : 'update'} :${snake(lastOf(action.qn))} do`, '  require_atomic? false'];
-    for (const input of children(action, context, 'Param')) {
+    const args = children(action, context, 'Param').map(input => {
         const type = input.data.type as TypeData;
-        lines.push(`  argument :${lastOf(input.qn)}, ${type.many ? `{:array, ${attributeType(type, context, true)}}` : attributeType(type, context, true)}, allow_nil?: ${type.optional ? 'true' : 'false'}`);
-    }
+        return { name: lastOf(input.qn), type: type.many ? `{:array, ${attributeType(type, context, true)}}` : attributeType(type, context, true), optional: type.optional };
+    });
+    const validations: { rule: string, message: string }[] = [];
     const stored = storedAttributes(entity, context);
     const preconditions = (action.data.preconditions ?? []) as { condition: ExprData, error?: string }[];
     preconditions.forEach((precondition, i) => {
         const rule = validation(precondition.condition, stored, context.node);
         const message = precondition.error ? lastOf(precondition.error) : (action.props.preconditions as string[])[i];
-        if (rule) lines.push(`  validate ${rule}, message: ${JSON.stringify(message)}`);
+        if (rule) validations.push({ rule, message });
         else tasks.push(task(`check the precondition ${(action.props.preconditions as string[])[i]} in ${lastOf(action.qn)}`));
     });
     for (const transition of transitions.filter(t => t.data.guard)) {
         const rule = validation(transition.data.guard as ExprData, stored, context.node);
-        if (rule && transitions.length === 1) lines.push(`  validate ${rule}, message: "invalid transition"`);
+        if (rule && transitions.length === 1) validations.push({ rule, message: 'invalid transition' });
         else tasks.push(task(`check the guard ${transition.props.guard} of ${lastOf(transition.qn)}`));
     }
+    const changes: string[] = [];
     const effects = [...children(action, context), ...transitions.flatMap(t => children(t, context))].filter(c => c.kind.endsWith('Effect') && c !== destroy);
     for (const effect of effects) {
         const change = effectChange(effect, context);
-        if (change) lines.push(`  change ${change}`);
+        if (change) changes.push(change);
         else tasks.push(task(`apply the effect ${lastOf(effect.qn)} in ${lastOf(action.qn)}, for example with ${effect.kind === 'EmitEffect' || effect.kind === 'SetEffect' ? 'an Ash notifier or a change' : 'an after_action change that writes the related records'}`));
     }
     const targets = [...new Set(transitions.map(t => t.data.to as string))];
-    if (targets.length === 1) lines.push(`  change transition_state(:${targets[0]})`);
-    else if (targets.length > 1) tasks.push(task(`pick the target state of ${lastOf(action.qn)} among ${targets.join(', ')}`));
-    lines.push('end');
+    if (targets.length > 1) tasks.push(task(`pick the target state of ${lastOf(action.qn)} among ${targets.join(', ')}`));
+    const lines = sectionLines(context, 'behavior/action.ex.njk', {
+        type: destroy ? 'destroy' : 'update', name: snake(lastOf(action.qn)), arguments: args, validations, changes, state: targets.length === 1 ? targets[0] : undefined
+    });
     if (action.data.consistency === 'eventual') tasks.push(task(`run ${lastOf(action.qn)} with eventual consistency, for example through AshOban`));
     // A scenario that runs the action replaces its guessed precondition tests.
     const tests = preconditions.length && !coveredByScenario(action.qn, context) ? preconditionTests(action, entity, context) : [];
@@ -73,14 +75,13 @@ export function machineSteps(machine: GraphNode, context: MapContext): Step[] {
     const initial = (field.data.default as ExprData | undefined)?.name ?? literals[0];
     const transitions = children(machine, context, 'Transition');
     const byEvent = Map.groupBy(transitions.filter(t => t.data.event), t => t.data.event as string);
-    const settings = [`initial_states [:${initial}]`, `default_initial_state :${initial}`, `state_attribute :${lastOf(field.qn)}`];
-    const lines = transitions.map(t => {
-        const action = snake(lastOf((t.data.action ?? t.data.event) as string));
-        return `transition :${action}, from: [${(t.data.from as string[]).map(s => `:${s}`).join(', ')}], to: :${t.data.to}`;
+    const settings = sectionLines(context, 'behavior/state-machine.ex.njk', { initial, field: lastOf(field.qn) });
+    const lines = sectionLines(context, 'behavior/transitions.ex.njk', {
+        transitions: transitions.map(t => ({ action: snake(lastOf((t.data.action ?? t.data.event) as string)), from: t.data.from, to: t.data.to }))
     });
     const eventActions = [...byEvent].flatMap(([event, list]) => {
         const targets = [...new Set(list.map(t => t.data.to as string))];
-        return targets.length === 1 ? [[`update :${snake(lastOf(event))} do`, '  require_atomic? false', `  change transition_state(:${targets[0]})`, 'end']] : [];
+        return targets.length === 1 ? [sectionLines(context, 'behavior/action.ex.njk', { type: 'update', name: snake(lastOf(event)), arguments: [], validations: [], changes: [], state: targets[0] })] : [];
     });
     return [
         patch(fileOf(entity, context), existing => {
@@ -103,20 +104,11 @@ export function jobSteps(job: GraphNode, context: MapContext): Step[] {
     const module = typeModule(entity, context);
     const pascal = lastOf(job.qn);
     const queue = `${snake(lastOf(entity.qn))}_${name}`;
-    const lines = [
-        `trigger :${name} do`,
-        `  action :${snake(lastOf(action.qn))}`,
-        `  read_action :${name}_targets`,
-        `  queue :${queue}`,
-        `  where expr(${where})`,
-        `  scheduler_cron ${JSON.stringify(job.data.schedule)}`,
-        `  worker_module_name ${module}.AshOban.Worker.${pascal}`,
-        `  scheduler_module_name ${module}.AshOban.Scheduler.${pascal}`,
-        'end'
-    ];
-    const read = [`read :${name}_targets do`, '  pagination keyset?: true, required?: false', 'end'];
-    // Jobs run as the system, as in the model: AshOban's scheduler and worker pass the policies of the resource.
-    const bypass = ['bypass AshOban.Checks.AshObanInteraction do', '  authorize_if always()', 'end'];
+    const lines = sectionLines(context, 'behavior/trigger.ex.njk', {
+        name, action: snake(lastOf(action.qn)), queue, where, schedule: job.data.schedule, module, job: pascal
+    });
+    const read = sectionLines(context, 'behavior/trigger-read.ex.njk', { name });
+    const bypass = sectionLines(context, 'access/oban-bypass.ex.njk', {});
     const authorize = (text: string) => !enforced(context) || text.includes(bypass[0]) ? text : addAuthorizer(prependToSection(text, 'policies', bypass));
     return [
         patch(fileOf(entity, context), existing => authorize(addToSection(addToSection(addExtension(existing, 'AshOban'), 'actions', read), 'oban', lines, 'triggers'))),

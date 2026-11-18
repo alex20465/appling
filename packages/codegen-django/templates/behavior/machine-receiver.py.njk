@@ -1,0 +1,8 @@
+{# The transitions of a state machine an event triggers: a signal receiver that moves the record the event carries. In <app>/handlers.py, connected in AppConfig.ready. #}
+@receiver({{ event }})
+def {{ name }}(sender, {{ instance }}, **kwargs) -> None:
+{% block body %}
+{% for line in body %}
+    {{ line }}
+{% endfor %}
+{% endblock %}

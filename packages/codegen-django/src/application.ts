@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { annotation, children, docstring, hasKind, leftToCode, pythonFile, task, template } from './files.js';
+import { annotation, children, doc, hasKind, leftToCode, pythonFile, task, template } from './files.js';
 import { enforced, fieldGuards, policyImport, queryGuard, useCaseGuard } from './access.js';
 import { scope, storedFields } from './models.js';
 import { appOf, lastOf, parentOf, python, q, snake, type PythonScope } from './python.js';
@@ -19,12 +19,14 @@ export function queryCode(query: GraphNode, context: MapContext, imports: Set<st
     // Required inputs first, so optional ones can default to None; callers pass every input by name.
     const inputs = children(query, context, 'Param').sort((a, b) => Number(optional(a)) - Number(optional(b)))
         .map(p => `${lastOf(p.qn)}: ${annotation(p.data.type as TypeData, context, imports)}${optional(p) ? ' = None' : ''}`);
-    return [
-        ...(query.data.pageSize ? [`${pageSizeName(query)} = ${query.data.pageSize}`, '', ''] : []),
-        `def ${snake(lastOf(query.qn))}(${[...inputs, ...(guard.length ? ['actor=None'] : [])].join(', ')}):`,
-        ...docstring(query, '    '),
-        ...body.map(l => `    ${l}`)
-    ].join('\n');
+    return context.render('application/query.py.njk', {
+        name: snake(lastOf(query.qn)),
+        params: [...inputs, ...(guard.length ? ['actor=None'] : [])],
+        doc: doc(query),
+        pageSize: query.data.pageSize ?? '',
+        pageSizeName: pageSizeName(query),
+        body
+    });
 }
 
 /** A call of a query function with its inputs (`name=value` or `**inputs`), passing the actor when the query checks policies. */
@@ -49,7 +51,7 @@ export function inputSerializerName(query: GraphNode): string {
  * URL cannot carry, a value type or a File.
  */
 export function inputSerializer(query: GraphNode, context: MapContext, imports: Set<string>): string | undefined {
-    const lines: string[] = [];
+    const fields: { name: string, field: string }[] = [];
     for (const input of children(query, context, 'Param')) {
         const type = input.data.type as TypeData;
         const decl = type.decl ? context.node(type.decl) : undefined;
@@ -65,10 +67,10 @@ export function inputSerializer(query: GraphNode, context: MapContext, imports: 
         if (!field) return undefined;
         const call = ([name, ...args]: string[]) => `serializers.${name}(${args.join(', ')})`;
         const options = type.optional ? ['required=False', 'allow_null=True'] : [];
-        lines.push(`    ${lastOf(input.qn)} = ${call(type.many ? ['ListField', `child=${call(field)}`, ...options] : [...field, ...options])}`);
+        fields.push({ name: lastOf(input.qn), field: call(type.many ? ['ListField', `child=${call(field)}`, ...options] : [...field, ...options]) });
     }
     imports.add('from rest_framework import serializers');
-    return [`class ${inputSerializerName(query)}(serializers.Serializer):`, `    """The inputs of ${lastOf(query.qn)}, read from URL parameters."""`, ...lines].join('\n');
+    return context.render('application/input-serializer.py.njk', { name: inputSerializerName(query), query: lastOf(query.qn), fields });
 }
 
 /**
@@ -113,44 +115,25 @@ export function projectionSteps(projection: GraphNode, context: MapContext): Ste
     const entity = source.kind === 'Query' ? context.node(source.data.entity as string)! : source;
     const derived = new Set(children(entity, context, 'Field').filter(f => f.data.derived).map(f => lastOf(f.qn)));
     const imports = new Set(['from rest_framework import serializers', `from ${appOf(entity.module)}.models import ${lastOf(entity.qn)}`]);
-    const declared: string[] = [];
+    const declared: { name: string, source?: string }[] = [];
     const fields: string[] = [];
-    const hidden: string[] = [];
+    const hidden: { name: string, check: string }[] = [];
     const guards = fieldGuards(entity, context);
     for (const field of children(projection, context, 'ProjectionField')) {
         const name = lastOf(field.qn);
         if (field.data.value) {
             const path = sourcePath(field.data.value as ExprData, context);
             if (!path) continue;
-            declared.push(`    ${name} = serializers.ReadOnlyField(source=${JSON.stringify(path)})`);
+            declared.push({ name, source: path });
         } else if (derived.has(name)) {
-            declared.push(`    ${name} = serializers.ReadOnlyField()`);
+            declared.push({ name });
         }
-        fields.push(JSON.stringify(name));
+        fields.push(name);
         const path = field.data.value ? sourcePath(field.data.value as ExprData, context) : name;
         const guard = path && guards.get(path.split('.')[0]);
-        if (guard) hidden.push(`        if ${JSON.stringify(name)} in data and not ${policyImport(entity, guard, imports)}(actor, instance):`, `            data[${JSON.stringify(name)}] = None`);
+        if (guard) hidden.push({ name, check: policyImport(entity, guard, imports) });
     }
-    const code = [
-        `class ${lastOf(projection.qn)}(serializers.ModelSerializer):`,
-        ...docstring(projection, '    '),
-        ...declared,
-        ...(declared.length ? [''] : []),
-        '    class Meta:',
-        `        model = ${lastOf(entity.qn)}`,
-        `        fields = [${fields.join(', ')}]`,
-        ...(hidden.length ? [
-            '',
-            '    def to_representation(self, instance):',
-            '        """Hides the fields the requesting actor may not read; without a request nothing is hidden."""',
-            '        data = super().to_representation(instance)',
-            '        actor = getattr(self.context.get("request"), "user", None)',
-            '        if actor is None:',
-            '            return data',
-            ...hidden,
-            '        return data'
-        ] : [])
-    ].join('\n');
+    const code = context.render('application/serializer.py.njk', { name: lastOf(projection.qn), doc: doc(projection), declared, model: lastOf(entity.qn), fields, hidden });
     return [template(`${appOf(projection.module)}/serializers.py`, existing => pythonFile(existing, imports, code))];
 }
 
@@ -172,12 +155,13 @@ export function sourcePath(expr: ExprData, context: MapContext): string | undefi
 /** An external system becomes a typing Protocol the application depends on; the client itself is a task. */
 export function externalSteps(external: GraphNode, context: MapContext): Step[] {
     const imports = new Set(['from typing import Protocol']);
-    const methods = children(external, context, 'ExternalOperation').flatMap(op => {
-        const params = children(op, context, 'Param').map(p => `${lastOf(p.qn)}: ${annotation(p.data.type as TypeData, context, imports)}`);
-        const returns = op.data.returns ? annotation(op.data.returns as TypeData, context, imports) : 'None';
-        return ['', `    def ${snake(lastOf(op.qn))}(self, ${params.join(', ')}) -> ${returns}:`, ...docstring(op, '        '), '        ...'];
-    });
-    const code = [`class ${lastOf(external.qn)}(Protocol):`, ...docstring(external, '    '), ...(methods.length ? methods.slice(1) : ['    pass'])].join('\n');
+    const operations = children(external, context, 'ExternalOperation').map(op => ({
+        name: snake(lastOf(op.qn)),
+        params: children(op, context, 'Param').map(p => `${lastOf(p.qn)}: ${annotation(p.data.type as TypeData, context, imports)}`),
+        returns: op.data.returns ? annotation(op.data.returns as TypeData, context, imports) : 'None',
+        doc: doc(op, '        ')
+    }));
+    const code = context.render('application/external.py.njk', { name: lastOf(external.qn), doc: doc(external), operations });
     return [
         template(`${appOf(external.module)}/externals.py`, existing => pythonFile(existing, imports, code)),
         leftToCode(`implement a client for ${lastOf(external.qn)} and pass it to the use cases that call it`)
@@ -245,7 +229,7 @@ export function useCaseCode(useCase: GraphNode, context: MapContext): { code: st
         })
     ];
     lines.unshift(...useCaseGuard(useCase, context, pyScope));
-    const code = [`def ${snake(lastOf(useCase.qn))}(${signature.join(', ')}) -> None:`, ...docstring(useCase, '    '), ...(lines.length ? lines : ['pass']).map(l => `    ${l}`)].join('\n');
+    const code = context.render('application/usecase.py.njk', { name: snake(lastOf(useCase.qn)), params: signature, doc: doc(useCase), body: lines });
     return { code, imports, tasks, externals: [...externals] };
 }
 

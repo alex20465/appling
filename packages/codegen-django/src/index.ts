@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import type { CodegenExtension, MapContext, Step } from '@appling/codegen';
 import { interfaceSteps } from './api.js';
 import { migrationSteps } from './migrations.js';
@@ -16,6 +17,7 @@ const RULES = 'rules~=3.5';
 
 const extension: CodegenExtension = {
     name: '@appling/codegen-django',
+    templates: fileURLToPath(new URL('../templates', import.meta.url)),
     test: ['uv', 'run', 'python', 'manage.py', 'test'],
     syncExclude: ['*/migrations/**', '.venv/**', '**/__pycache__/**', 'db.sqlite3', 'uv.lock'],
     prerequisites: [{ name: 'uv', command: ['uv', '--version'], expect: /^uv \d+\.\d+/, hint: 'install uv (https://docs.astral.sh/uv/) to manage the Python project' }],
@@ -31,9 +33,9 @@ const extension: CodegenExtension = {
             case 'Field': return fieldSteps(node, context);
             case 'Invariant': return invariantSteps(node, context);
             case 'Policy': return policySteps(node, context);
-            case 'Event': return eventSteps(node);
+            case 'Event': return eventSteps(node, context);
             case 'Action': return actionSteps(node, context);
-            case 'ErrorDecl': return errorSteps(node);
+            case 'ErrorDecl': return errorSteps(node, context);
             case 'Machine': return machineSteps(node, context);
             case 'Transition': return transitionSteps(node, context);
             case 'Job': return jobSteps(node, context);
@@ -41,12 +43,12 @@ const extension: CodegenExtension = {
             case 'Projection': return projectionSteps(node, context);
             case 'ProjectionField': return projectionFieldSteps(node, context);
             case 'External': return externalSteps(node, context);
-            case 'ExternalKey': return externalKeySteps(node);
+            case 'ExternalKey': return externalKeySteps(node, context);
             case 'UseCase': return useCaseSteps(node, context);
             case 'Interface': return interfaceSteps(node, context);
             case 'Page': return pageSteps(node, context);
             case 'Navigation': return navigationSteps(node, context);
-            case 'Messages': return messagesSteps(node);
+            case 'Messages': return messagesSteps(node, context);
             case 'Flow': return [task(`guide people through ${((node.data.pages ?? []) as string[]).map(p => p.split('.').pop()).join(', ')} for the use case ${String(node.data.usecase).split('.').pop()}, for example with links between the pages`)];
             case 'EnumLiteral':
             case 'Param':

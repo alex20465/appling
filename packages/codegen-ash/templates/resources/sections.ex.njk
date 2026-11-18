@@ -1,0 +1,31 @@
+{# The sections an entity's resource gets after `mix ash.gen.resource`: unique fields as identities, derived fields and role
+   conditions as calculations, invariants as validations. Appended to lib/<app>/<module>/<entity>.ex. -#}
+{% block identities %}
+{% if identities.length %}
+  identities do
+{% for name in identities %}
+    identity :unique_{{ name }}, [:{{ name }}]
+{% endfor %}
+  end
+
+{% endif %}
+{% endblock %}
+{% block calculations %}
+{% if calculations.length %}
+  calculations do
+{% for line in calculations %}
+    {{ line }}
+{% endfor %}
+  end
+
+{% endif %}
+{% endblock %}
+{% block validations %}
+{% if validations.length %}
+  validations do
+{% for v in validations %}
+    validate {{ v.rule }}, message: {{ v.message | dump }}
+{% endfor %}
+  end
+{% endif %}
+{% endblock %}

@@ -1,0 +1,9 @@
+{# The data migration of one Appling migration block in an app, run after its schema migration; each data change adds its function. In <app>/migrations/NNNN_appling_<block>_data.py. #}
+from django.db import migrations
+
+
+class Migration(migrations.Migration):
+    dependencies = [({{ app | dump }}, {{ schema | dump }})]
+
+    operations = [
+    ]

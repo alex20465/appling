@@ -1,0 +1,23 @@
+{# Shared Python pieces: a docstring, derived fields as properties, indented lines and a list of string literals. #}
+{% macro docstring(text) %}
+{% if text %}
+{{ text }}
+{% endif %}
+{% endmacro %}
+
+{% macro properties(list) %}
+{% for p in list %}
+
+    @property
+    def {{ p.name }}(self):
+        return {{ p.code }}
+{% endfor %}
+{% endmacro %}
+
+{% macro lines(list, indent) %}
+{% for line in list %}
+{{ indent + line if line else "" }}
+{% endfor %}
+{% endmacro %}
+
+{% macro strings(list) %}{% for item in list %}{{ item | dump }}{{ ", " if not loop.last }}{% endfor %}{% endmacro %}

@@ -1,0 +1,18 @@
+{# The checks of an entity, in internal/<module>/policies.go: one per operation, false where no policy grants it,
+   and one per operation and field that a field policy narrows. #}
+{% for op in operations %}
+{% if not loop.first %}
+
+{% endif %}
+// Can{{ op.name }}{{ entity }} reports whether the policies of {{ qn }} let the actor {{ op.verb }} the record{% if not op.granted %}; no policy grants {{ op.verb }}{% endif %}.
+func Can{{ op.name }}{{ entity }}({{ signature }}) bool {
+	return {{ op.parts | join(" && ") }}
+}
+{% for field in op.fields %}
+
+// Can{{ op.name }}{{ entity }}{{ field.name }} reports whether the actor may {{ op.verb }} the field {{ field.field }} of the record.
+func Can{{ op.name }}{{ entity }}{{ field.name }}({{ signature }}) bool {
+	return {{ field.parts | join(" && ") }}
+}
+{% endfor %}
+{% endfor %}

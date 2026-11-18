@@ -1,0 +1,12 @@
+{# The body of a test of an action policy: a user in an actor's group calls the action, which runs through or raises PermissionDenied. #}
+{% import "tests/macros.njk" as t %}
+{{ t.signIn(user, actor) -}}
+{% if instance %}
+{{ instance }} = make_{{ instance }}()
+{% endif %}
+{% if denied %}
+with self.assertRaises(PermissionDenied):
+    {{ call }}
+{% else %}
+{{ call }}
+{% endif %}

@@ -5,16 +5,6 @@ import { canName, enforced, fieldGuards, policyImport } from './access.js';
 import { children, includeStep, pythonFile, routesStep, task, template } from './files.js';
 import { appOf, lastOf, snake } from './python.js';
 
-const HELPERS = `def value(obj, path):
-    """Follows a dotted path such as "customer.name"; None when a step is missing."""
-    for part in path.split("."):
-        obj = getattr(obj, part, None) if obj is not None else None
-    return obj
-
-
-def label(key, default):
-    return LABELS.get(get_language()[:2], {}).get(key, default)`;
-
 const CONVERT: { [primitive: string]: string } = { Int: 'int', Decimal: 'Decimal', Money: 'Decimal' };
 
 /**
@@ -37,7 +27,7 @@ export function pageSteps(page: GraphNode, context: MapContext): Step[] {
             return ok;
         });
         runners.push(...actions);
-        const buttons = `[${actions.map(a => `{"label": ${JSON.stringify(lastOf(a.qn))}, "url": "/_actions/${app}/${snake(lastOf(a.qn))}/"}`).join(', ')}]`;
+        const buttons = actions.map(a => ({ label: lastOf(a.qn), name: snake(lastOf(a.qn)) }));
         if (component.$type === 'ListView') {
             const query = context.node(component.query!)!;
             // The query's inputs come from the query string of the page.
@@ -50,18 +40,14 @@ export function pageSteps(page: GraphNode, context: MapContext): Step[] {
             const columns = fields(component.projection!, component.picks, context, tasks, 'row', imports);
             imports.add(`from ${appOf(query.module)}.queries import ${snake(lastOf(query.qn))}${query.data.pageSize ? `, ${pageSizeName(query)}` : ''}`);
             if (query.data.pageSize) imports.add('from django.core.paginator import Paginator');
-            lines.push(
-                ...inputs,
-                `rows = ${queryCall(query, 'request.user', context, inputs.length ? ['**inputs.validated_data'] : [])}`,
-                ...(query.data.pageSize ? [`rows = Paginator(rows, ${pageSizeName(query)}).get_page(request.GET.get("page"))`] : []),
-                'components.append({',
-                '    "kind": "list",',
-                `    "columns": [${columns.map(c => `label(${JSON.stringify(c.key)}, ${JSON.stringify(c.title)})`).join(', ')}],`,
-                `    "items": [{"id": row.pk, "values": [${columns.map(c => c.value).join(', ')}]} for row in rows],`,
-                ...(query.data.pageSize ? ['    "page": rows,'] : []),
-                `    "actions": ${buttons},`,
-                '})'
-            );
+            lines.push(...context.render('pages/list.py.njk', {
+                app,
+                inputs,
+                query: queryCall(query, 'request.user', context, inputs.length ? ['**inputs.validated_data'] : []),
+                pageSize: query.data.pageSize ? pageSizeName(query) : '',
+                columns,
+                actions: buttons
+            }).split('\n'));
         } else if (component.$type === 'DetailView') {
             if (!byId) {
                 tasks.push(task(`show ${lastOf(component.projection!)} on ${lastOf(page.qn)}; the route has no {id}`));
@@ -71,16 +57,13 @@ export function pageSteps(page: GraphNode, context: MapContext): Step[] {
             imports.add(`from ${appOf(entity.module)}.models import ${lastOf(entity.qn)}`);
             const columns = fields(component.projection!, component.picks, context, tasks, 'record', imports);
             if (enforced(context)) imports.add('from django.core.exceptions import PermissionDenied');
-            lines.push(
-                `record = get_object_or_404(${lastOf(entity.qn)}, pk=id)`,
-                ...(enforced(context) ? [`if not ${policyImport(entity, canName(entity, 'read'), imports)}(request.user, record):`, '    raise PermissionDenied()'] : []),
-                'components.append({',
-                '    "kind": "detail",',
-                '    "id": record.pk,',
-                `    "fields": [${columns.map(c => `(label(${JSON.stringify(c.key)}, ${JSON.stringify(c.title)}), ${c.value})`).join(', ')}],`,
-                `    "actions": ${buttons},`,
-                '})'
-            );
+            lines.push(...context.render('pages/detail.py.njk', {
+                app,
+                model: lastOf(entity.qn),
+                readCheck: enforced(context) ? policyImport(entity, canName(entity, 'read'), imports) : '',
+                columns,
+                actions: buttons
+            }).split('\n'));
         } else if (component.$type === 'FormView') {
             const action = context.node(component.submits!)!;
             if (action.kind !== 'Action' || (action.data.entity && !byId)) {
@@ -88,30 +71,20 @@ export function pageSteps(page: GraphNode, context: MapContext): Step[] {
                 continue;
             }
             runners.push(action);
-            const inputs = children(action, context, 'Param').map(p => `(${JSON.stringify(lastOf(p.qn))}, ${JSON.stringify(title(lastOf(p.qn)))})`);
-            lines.push(
-                'components.append({',
-                '    "kind": "form",',
-                `    "label": ${JSON.stringify(lastOf(action.qn))},`,
-                `    "url": "/_actions/${app}/${snake(lastOf(action.qn))}/"${action.data.entity ? ' + str(id) + "/"' : ''},`,
-                `    "inputs": [${inputs.join(', ')}],`,
-                '})'
-            );
+            const inputs = children(action, context, 'Param').map(p => ({ name: lastOf(p.qn), title: title(lastOf(p.qn)) }));
+            lines.push(...context.render('pages/form.py.njk', { app, label: lastOf(action.qn), action: snake(lastOf(action.qn)), byEntity: !!action.data.entity, inputs }).split('\n'));
         }
     }
     const name = snake(lastOf(page.qn));
-    const view = [
-        `def ${name}(request${byId ? ', id' : ''}):`,
-        '    components = []',
-        ...lines.map(l => `    ${l}`),
-        `    return render(request, ${JSON.stringify(`${app}/page.html`)}, {"title": ${JSON.stringify(title(lastOf(page.qn)))}, "components": components})`
-    ].join('\n');
+    const view = context.render('pages/view.py.njk', { name, byId, body: lines, template: `${app}/page.html`, title: title(lastOf(page.qn)) });
+    const helpers = context.render('pages/helpers.py.njk', {});
+    const base = `${context.render('pages/base.html.njk', {})}\n`;
     return [
         template(`${app}/messages.py`, existing => existing ?? 'LABELS = {}\n'),
-        template(`${app}/pages.py`, existing => pythonFile(existing ?? HELPERS, imports, view)),
-        template(`${app}/templates/${app}/base.html`, existing => existing ?? BASE),
-        template(`${app}/templates/${app}/page.html`, () => PAGE.replaceAll('{app}', app)),
-        routesStep(app, 'urls', 'pages', [`    path(${JSON.stringify(djangoRoute(route))}, pages.${name}),`]),
+        template(`${app}/pages.py`, existing => pythonFile(existing ?? helpers, imports, view)),
+        template(`${app}/templates/${app}/base.html`, existing => existing ?? base),
+        template(`${app}/templates/${app}/page.html`, () => `${context.render('pages/page.html.njk', { app })}\n`),
+        routesStep(app, 'urls', 'pages', [`    path(${JSON.stringify(djangoRoute(route))}, pages.${name}),`], context),
         includeStep(app, 'urls', ''),
         ...[...new Set(runners)].flatMap(action => runnerSteps(action, context)),
         ...tasks
@@ -136,18 +109,17 @@ function runnerSteps(action: GraphNode, context: MapContext): Step[] {
         return `${lastOf(p.qn)}=${convert ? `(lambda v: ${convert}(v) if v else None)(${raw})` : raw}`;
     });
     const instance = entity ? snake(lastOf(entity.qn)) : undefined;
-    const call = `${name}(${[...(instance ? [instance] : []), ...inputs, 'actor=request.user'].join(', ')})`;
-    const view = [
-        '@require_POST',
-        `def run_${name}(request${entity ? ', id' : ''}):`,
-        ...(entity ? [`    ${instance} = get_object_or_404(${lastOf(entity.qn)}, pk=id)`] : []),
-        ...(errors.length
-            ? ['    try:', `        ${call}`, `        messages.success(request, ${JSON.stringify(`${lastOf(action.qn)} done.`)})`, `    except (${errors.join(', ')}${errors.length === 1 ? ',' : ''}) as error:`, `        messages.error(request, ${JSON.stringify(`${lastOf(action.qn)} failed: `)} + type(error).__name__)`]
-            : [`    ${call}`, `    messages.success(request, ${JSON.stringify(`${lastOf(action.qn)} done.`)})`]),
-        '    return redirect(request.POST.get("next") or "/")'
-    ].join('\n');
+    const view = context.render('pages/runner.py.njk', {
+        name,
+        instance: instance ?? '',
+        model: entity ? lastOf(entity.qn) : '',
+        errors,
+        label: lastOf(action.qn),
+        call: `${name}(${[...(instance ? [instance] : []), ...inputs, 'actor=request.user'].join(', ')})`
+    });
+    const helpers = context.render('pages/helpers.py.njk', {});
     return [
-        template(`${app}/pages.py`, existing => existing?.includes(`def run_${name}(`) ? existing : pythonFile(existing ?? HELPERS, imports, view)),
+        template(`${app}/pages.py`, existing => existing?.includes(`def run_${name}(`) ? existing : pythonFile(existing ?? helpers, imports, view)),
         template(`${app}/urls.py`, existing => {
             const line = `    path("_actions/${app}/${name}/${entity ? '<int:id>/' : ''}", pages.run_${name}),`;
             return existing!.includes(line) ? existing! : existing!.replace(/\n\]\n$/, `\n${line}\n]\n`);
@@ -166,16 +138,16 @@ export function navigationSteps(navigation: GraphNode, context: MapContext): Ste
             tasks.push(task(`link ${item.label} in ${lastOf(navigation.qn)}; its page needs an id`));
             return [];
         }
-        return [`      <a href="${route}">${item.label}</a>`];
+        return [{ route, label: item.label }];
     });
-    return [template(`${app}/templates/${app}/base.html`, existing => (existing ?? BASE).replace('    <nav>\n', `    <nav>\n${links.join('\n')}\n`)), ...tasks];
+    const nav = context.render('pages/navigation.html.njk', { links });
+    return [template(`${app}/templates/${app}/base.html`, existing => (existing ?? `${context.render('pages/base.html.njk', {})}\n`).replace('    <nav>\n', `    <nav>\n${nav}\n`)), ...tasks];
 }
 
 /** Message entries become labels for the columns and fields of pages, per language. */
-export function messagesSteps(messages: GraphNode): Step[] {
-    const entries = (messages.data.entries ?? []) as { key: string, text: string }[];
-    const dict = `{${entries.map(e => `${JSON.stringify(e.key)}: ${JSON.stringify(e.text)}`).join(', ')}}`;
-    return [template(`${appOf(messages.module)}/messages.py`, existing => `${(existing ?? 'LABELS = {}\n').trimEnd()}\nLABELS[${JSON.stringify(lastOf(messages.qn))}] = ${dict}\n`)];
+export function messagesSteps(messages: GraphNode, context: MapContext): Step[] {
+    const line = context.render('pages/messages.py.njk', { name: lastOf(messages.qn), entries: messages.data.entries ?? [] });
+    return [template(`${appOf(messages.module)}/messages.py`, existing => `${(existing ?? 'LABELS = {}\n').trimEnd()}\n${line}\n`)];
 }
 
 /** The shown fields of a projection; a field that a read policy guards shows None to actors that may not read it. */
@@ -210,60 +182,3 @@ function title(name: string): string {
     const words = name.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/_/g, ' ').toLowerCase();
     return words.charAt(0).toUpperCase() + words.slice(1);
 }
-
-const BASE = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}{{ title }}{% endblock %}</title>
-  </head>
-  <body>
-    <nav>
-    </nav>
-    {% for message in messages %}<p class="message {{ message.tags }}">{{ message }}</p>{% endfor %}
-    <main>
-      {% block content %}{% endblock %}
-    </main>
-  </body>
-</html>
-`;
-
-const PAGE = `{% extends "{app}/base.html" %}
-{% block content %}
-<h1>{{ title }}</h1>
-{% for component in components %}
-  {% if component.kind == "list" %}
-    <table>
-      <thead><tr>{% for column in component.columns %}<th>{{ column }}</th>{% endfor %}<th></th></tr></thead>
-      <tbody>
-        {% for item in component.items %}
-          <tr>
-            {% for value in item.values %}<td>{{ value|default_if_none:"" }}</td>{% endfor %}
-            <td>{% for action in component.actions %}<form method="post" action="{{ action.url }}{{ item.id }}/">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button>{{ action.label }}</button></form>{% endfor %}</td>
-          </tr>
-        {% empty %}
-          <tr><td>Nothing here yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% if component.page.has_other_pages %}
-      <p>
-        {% if component.page.has_previous %}<a href="?page={{ component.page.previous_page_number }}">Previous</a>{% endif %}
-        {% if component.page.has_next %}<a href="?page={{ component.page.next_page_number }}">Next</a>{% endif %}
-      </p>
-    {% endif %}
-  {% elif component.kind == "detail" %}
-    <dl>{% for name, value in component.fields %}<dt>{{ name }}</dt><dd>{{ value|default_if_none:"" }}</dd>{% endfor %}</dl>
-    {% for action in component.actions %}<form method="post" action="{{ action.url }}{{ component.id }}/">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button>{{ action.label }}</button></form>{% endfor %}
-  {% elif component.kind == "form" %}
-    <form method="post" action="{{ component.url }}">
-      {% csrf_token %}
-      <input type="hidden" name="next" value="{{ request.path }}">
-      {% for name, field_label in component.inputs %}<label>{{ field_label }} <input name="{{ name }}"></label>{% endfor %}
-      <button>{{ component.label }}</button>
-    </form>
-  {% endif %}
-{% endfor %}
-{% endblock %}
-`;

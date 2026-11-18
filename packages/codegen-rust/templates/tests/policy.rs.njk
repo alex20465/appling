@@ -1,0 +1,20 @@
+{# The tests of a policy on a whole entity, in its module's test module: an actor the simulator proves it lets through
+   passes the entity's checks, one it keeps out fails them. A case without such an actor stays ignored. #}
+{% import "rust/macros.njk" as rust %}
+{% for case in cases %}
+{% if not loop.first %}
+
+{% endif %}
+{% if case.actor %}
+#[test]
+fn {{ case.name }}() {
+    let actor = {{ case.actor }};
+    let {{ record }} = {{ valid }}();
+{% for assert in case.asserts %}
+    assert!({{ "" if case.want else "!" }}{{ assert.check }}(&actor, &{{ record }}), {{ assert.message }});
+{% endfor %}
+}
+{% else %}
+{{ rust.ignored(qn, case.name) -}}
+{% endif %}
+{% endfor %}

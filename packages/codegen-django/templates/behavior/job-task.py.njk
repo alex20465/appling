@@ -1,0 +1,7 @@
+{# A scheduled job: a Django task that runs its action on every row its filter selects. In <app>/jobs.py; a management command enqueues it. #}
+@task
+def {{ name }}() -> None:
+{% block body %}
+    for {{ instance }} in {{ model }}.objects.filter({{ filter }}):
+        {{ action }}({{ instance }})
+{% endblock %}

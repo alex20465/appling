@@ -1,6 +1,6 @@
 import type { MapContext, Step } from '@appling/codegen';
 import type { ExprData, GraphNode, TypeData } from '@appling/model';
-import { children, documented, importOnReady, leftToCode, pythonFile, task, template } from './files.js';
+import { children, doc, importOnReady, leftToCode, pythonFile, task, template } from './files.js';
 import { actorFields, actorUserSteps, scope, storedFields, userModel } from './models.js';
 import { policyTests } from './policy-tests.js';
 import { appOf, lastOf, parentOf, python, rolePredicate, snake, tenantGetter, wrap, type PythonScope } from './python.js';
@@ -21,26 +21,16 @@ export function enforced(context: MapContext): boolean {
 }
 
 /** The Django groups of a module's roles and actors, created after `migrate` by a `post_migrate` receiver in `<app>/groups.py`. */
-function groupStep(node: GraphNode): Step[] {
+function groupStep(node: GraphNode, context: MapContext): Step[] {
     const app = appOf(node.module);
-    const name = JSON.stringify(lastOf(node.qn));
+    const name = lastOf(node.qn);
     return [
         template(`${app}/groups.py`, existing => existing
-            ? existing.replace(/GROUPS = \[\n([\s\S]*?)\]/, (_, names) => `GROUPS = [\n${names}    ${name},\n]`)
-            : pythonFile(undefined, ['from django.contrib.auth.models import Group', 'from django.db.models.signals import post_migrate', 'from django.dispatch import receiver'], GROUPS.replace('{names}', `    ${name},\n`))),
+            ? existing.replace(/GROUPS = \[\n([\s\S]*?)\]/, (_, names) => `GROUPS = [\n${names}    ${JSON.stringify(name)},\n]`)
+            : pythonFile(undefined, ['from django.contrib.auth.models import Group', 'from django.db.models.signals import post_migrate', 'from django.dispatch import receiver'], context.render('access/groups.py.njk', { groups: [name] }))),
         importOnReady(node.module, 'groups')
     ];
 }
-
-const GROUPS = `GROUPS = [
-{names}]
-
-
-@receiver(post_migrate)
-def create_groups(sender, **kwargs) -> None:
-    """Creates the Django groups of the module's roles and actors."""
-    for name in GROUPS:
-        Group.objects.get_or_create(name=name)`;
 
 /**
  * One django-rules predicate per role: the user is in the role's group or in the group of an actor that carries
@@ -50,13 +40,11 @@ export function roleSteps(role: GraphNode, context: MapContext): Step[] {
     const name = lastOf(role.qn);
     const imports = new Set(['import rules']);
     const carriers = context.graph.nodes.filter(n => n.kind === 'Actor' && ((n.data.roles ?? []) as string[]).includes(role.qn)).map(n => lastOf(n.qn));
-    const names = [name, ...carriers].map(n => JSON.stringify(n));
-    const group = `user is not None and user.groups.filter(${names.length === 1 ? `name=${names[0]}` : `name__in=[${names.join(', ')}]`}).exists()`;
     const condition = role.data.condition ? python(role.data.condition as ExprData, { ...scope(context, imports), actor: 'user' }) : undefined;
-    const code = documented(['@rules.predicate', `def ${rolePredicate(role)}(user):`, `    return ${condition ? `${group} and ${wrap(condition)}` : group}`].join('\n'), role);
+    const code = context.render('access/role.py.njk', { name: rolePredicate(role), doc: doc(role), groups: [name, ...carriers], condition: condition ? wrap(condition) : '' });
     return [
         template(`${appOf(role.module)}/roles.py`, existing => pythonFile(existing, imports, code)),
-        ...groupStep(role),
+        ...groupStep(role, context),
         ...(role.data.condition && !condition ? [task(`check the condition of ${name} in ${rolePredicate(role)}: ${role.props.condition}`)] : [])
     ];
 }
@@ -66,11 +54,11 @@ export function roleSteps(role: GraphNode, context: MapContext): Step[] {
  * Its fields live on the user model; without a bound entity the first actor with fields declares that model.
  */
 export function actorSteps(actor: GraphNode, context: MapContext): Step[] {
-    const code = ['@rules.predicate', `def ${rolePredicate(actor)}(user):`, `    return user is not None and user.groups.filter(name=${JSON.stringify(lastOf(actor.qn))}).exists()`].join('\n');
+    const code = context.render('access/actor.py.njk', { name: rolePredicate(actor), group: lastOf(actor.qn) });
     const user = userModel(context);
     return [
         template(`${appOf(actor.module)}/actors.py`, existing => pythonFile(existing, ['import rules'], code)),
-        ...groupStep(actor),
+        ...groupStep(actor, context),
         ...(user?.owner === actor ? actorUserSteps(user, context) : [])
     ];
 }
@@ -86,35 +74,18 @@ export function tenantSteps(tenant: GraphNode, context: MapContext): Step[] {
     const entity = context.node(tenant.data.entity as string)!;
     const resolve = tenantOfUser(entity, context);
     const middleware = `${name}Middleware`;
-    const code = [
-        'from contextvars import ContextVar',
-        '',
-        '',
-        `${variable}: ContextVar = ContextVar(${JSON.stringify(snake(name))}, default=None)`,
-        '',
-        '',
-        `def ${tenantGetter(tenant)}():`,
-        `    """The ${lastOf(entity.qn)} that is the current tenant, or None outside a request."""`,
-        `    return ${variable}.get()`,
-        '',
-        '',
-        `class ${middleware}:`,
-        `    """Sets the current tenant for each request${resolve ? `: ${resolve.description}` : ''}."""`,
-        '',
-        '    def __init__(self, get_response):',
-        '        self.get_response = get_response',
-        '',
-        '    def __call__(self, request):',
-        `        token = ${variable}.set(${resolve?.code ?? 'None'})`,
-        '        try:',
-        '            return self.get_response(request)',
-        '        finally:',
-        `            ${variable}.reset(token)`,
-        ''
-    ].join('\n');
+    const code = context.render('access/tenant.py.njk', {
+        variable,
+        key: snake(name),
+        getter: tenantGetter(tenant),
+        entity: lastOf(entity.qn),
+        middleware,
+        description: resolve?.description ?? '',
+        resolve: resolve?.code ?? 'None'
+    });
     const line = `${JSON.stringify(`${app}.tenants.${middleware}`)},`;
     return [
-        template(`${app}/tenants.py`, () => code),
+        template(`${app}/tenants.py`, () => `${code}\n`),
         template('config/settings.py', existing => existing!.includes(line) ? existing! : /MIDDLEWARE = \[\n[\s\S]*?\]/.test(existing!)
             ? existing!.replace(/MIDDLEWARE = \[\n([\s\S]*?)\]/, (_, items) => `MIDDLEWARE = [\n${items}    ${line}\n]`)
             : `${existing!.trimEnd()}\n\nMIDDLEWARE = [\n    ${line}\n]\n`),
@@ -202,25 +173,22 @@ export function entityPolicySteps(entity: GraphNode, context: MapContext): Step[
     const imports = new Set<string>();
     const record = recordOf(entity, context)!;
     const policies = policiesOf(entity, context);
-    const blocks: string[] = [];
     const whole = (operation: Operation) => policies.filter(p => !guardedFields(p).length && covers(p, operation));
-    for (const operation of OPERATIONS) {
+    const checks = OPERATIONS.map(operation => {
         const covering = whole(operation);
         const conditions = covering.map(p => policyCondition(p, context, imports));
-        const head = `def ${canName(entity, operation)}(actor, ${record}) -> bool:`;
-        if (!covering.length) blocks.push([head, `    return False  # no policy grants ${operation}`].join('\n'));
-        else if (conditions.some(c => !c)) blocks.push([head, `    return False  # see the registry task of ${covering[conditions.findIndex(c => !c)].qn}`].join('\n'));
-        else blocks.push([head, '    if not getattr(actor, "is_authenticated", False):', '        return False', `    return ${conjunction(conditions as string[])}`].join('\n'));
-    }
+        const untranslated = covering[conditions.findIndex(c => !c)]?.qn;
+        return { name: canName(entity, operation), operation, untranslated: untranslated ?? '', condition: covering.length && !untranslated ? conjunction(conditions as string[]) : '' };
+    });
     const fields = new Map<string, GraphNode[]>();
     for (const policy of policies.filter(p => guardedFields(p).length && covers(p, 'read'))) {
         for (const field of guardedFields(policy)) fields.set(field, [...(fields.get(field) ?? []), policy]);
     }
-    for (const [qn, guards] of fields) {
+    const fieldReads = [...fields].map(([qn, guards]) => {
         const conditions = guards.map(p => policyCondition(p, context, imports));
-        const body = conditions.some(c => !c) ? 'False' : conjunction([`${canName(entity, 'read')}(actor, ${record})`, ...conditions as string[]]);
-        blocks.push([`def ${canReadField(context.node(qn)!)}(actor, ${record}) -> bool:`, `    return ${body}`].join('\n'));
-    }
+        const condition = conditions.some(c => !c) ? 'False' : conjunction([`${canName(entity, 'read')}(actor, ${record})`, ...conditions as string[]]);
+        return { name: canReadField(context.node(qn)!), condition };
+    });
     const reads = whole('read');
     const filters = reads.map(p => policyQ(p.data.condition as ExprData, entity, context, imports));
     const narrowed = !reads.length || reads.some((p, i) => !policyCondition(p, context, new Set()) && !filters[i])
@@ -229,14 +197,8 @@ export function entityPolicySteps(entity: GraphNode, context: MapContext): Step[
             ? `rows.filter(${filters.length === 1 ? filters[0] : filters.map(f => `(${f})`).join(' & ')})`
             : `rows.filter(pk__in=[${record}.pk for ${record} in rows if ${canName(entity, 'read')}(actor, ${record})])`;
     if (narrowed.includes('models.')) imports.add('from django.db import models');
-    blocks.push([
-        `def ${readableName(entity)}(actor, rows):`,
-        `    """Narrows a queryset of ${lastOf(entity.qn)} to the rows the actor may read."""`,
-        '    if not getattr(actor, "is_authenticated", False):',
-        '        return rows.none()',
-        `    return ${narrowed}`
-    ].join('\n'));
-    return [template(`${appOf(entity.module)}/policies.py`, existing => pythonFile(existing, imports, blocks.join('\n\n\n')))];
+    const code = context.render('access/policies.py.njk', { record, checks, fieldReads, readable: readableName(entity), entity: lastOf(entity.qn), narrowed });
+    return [template(`${appOf(entity.module)}/policies.py`, existing => pythonFile(existing, imports, code))];
 }
 
 function conjunction(conditions: string[]): string {

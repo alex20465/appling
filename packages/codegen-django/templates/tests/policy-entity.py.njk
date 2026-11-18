@@ -1,0 +1,7 @@
+{# The body of a test of an entity policy: a user in an actor's group, the factory row, and the can_<operation>_<entity> checks the policy decides. #}
+{% import "tests/macros.njk" as t %}
+{{ t.signIn(user, actor) -}}
+{{ record }} = {{ factory }}()
+{% for check in checks %}
+self.{{ assertion }}({{ check }}({{ user.variable }}, {{ record }}))
+{% endfor %}

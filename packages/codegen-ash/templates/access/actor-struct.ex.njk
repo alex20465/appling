@@ -1,0 +1,9 @@
+{# A system or service actor without `is`: a struct whose roles default to the roles it declares. In lib/<app>/<module>/<actor>.ex. -#}
+defmodule {{ module }} do
+{% block moduledoc %}
+  @moduledoc "The {{ kind }} actor {{ name }}. Pass %{{ module }}{} as the actor."
+{% endblock %}
+{% block struct %}
+  defstruct [{% for key in keys %}{{ key.name }}: {{ key.value }}, {% endfor %}roles: [{{ roles | join(", ") }}]]
+{% endblock %}
+end

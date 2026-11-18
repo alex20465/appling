@@ -1,0 +1,13 @@
+{# A use case: a function that checks its policies, then calls its steps in order and handles the declared errors. In <app>/usecases.py. #}
+{% import "python/macros.njk" as py %}
+def {{ name }}({{ params | join(", ") }}) -> None:
+{% block docstring %}
+{{ py.docstring(doc) -}}
+{% endblock %}
+{% block body %}
+{% for line in body %}
+    {{ line }}
+{% else %}
+    pass
+{% endfor %}
+{% endblock %}

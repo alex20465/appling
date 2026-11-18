@@ -1,0 +1,6 @@
+{# The test module of a resource, with the tests of its first rule. In test/<app>/<module>/<entity>_test.exs. -#}
+defmodule {{ module }} do
+  use ExUnit.Case, async: true
+
+{% include "tests/cases.exs.njk" %}
+end

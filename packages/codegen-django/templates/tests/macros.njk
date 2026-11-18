@@ -1,0 +1,7 @@
+{# Shared pieces of test bodies: signing in a user in an actor group and a Python tuple. #}
+{% macro signIn(user, actor) %}
+{{ user.variable }} = {{ user.create }}
+{{ user.variable }}.groups.add(Group.objects.get_or_create(name={{ actor | dump }})[0])
+{% endmacro %}
+
+{% macro tuple(items) %}({{ items | join(", ") }}{{ "," if items.length == 1 }}){% endmacro %}

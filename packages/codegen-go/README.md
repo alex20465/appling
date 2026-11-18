@@ -34,6 +34,10 @@ Requires Go 1.22 or later. Money and decimals use [shopspring/decimal](https://g
 
 Queries, projections, interfaces, pages, use cases, external systems and jobs become registry tasks (a query whose filter translates still gets `In<Query>(record, inputs...)`, which says whether a record belongs to its results), as do policies Go cannot translate (their check returns false until written): they need storage, HTTP and scheduling choices the model does not make. The project ends with `gofmt -w .`, and `go test ./...` is the registry's test command. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
 
+## Templates
+
+The generated code comes from the Nunjucks templates in `templates/` of this package, one per element kind. Override one with a file at the same path in `.appling/templates/go/` of your project; see [Templates](https://www.appling.tools/docs/codegen/templates/).
+
 ## License
 
 MIT

@@ -3,7 +3,7 @@ import { UNKNOWN, type ExprData, type GraphNode, type Record as SimRecord, type 
 import { children } from './files.js';
 import { factory, holds, sample, simulator } from './fixtures.js';
 import { appOf, constantOf, lastOf, parentOf, python, snake } from './python.js';
-import { testSteps, type TestCase } from './tests.js';
+import { bodyOf, testSteps, type TestCase } from './tests.js';
 
 /** The rows and inputs a test runs an action with, as Python and as the simulator sees them. */
 export interface Setup {
@@ -96,10 +96,6 @@ function translated(expr: ExprData, context: MapContext): boolean {
     return python(expr, { node: context.node, imports: new Set(), self: 'row', actor: 'actor' }) !== undefined;
 }
 
-function tuple(items: string[]): string {
-    return `(${items.join(', ')}${items.length === 1 ? ',' : ''})`;
-}
-
 /**
  * The tests of a transition: the entity is created in each allowed state, the action runs (or the event is
  * sent) and the state must be `to`; in a state no transition of that trigger leaves, it must raise
@@ -140,7 +136,6 @@ export function transitionTests(transition: GraphNode, rule: string, context: Ma
     }
     if (!run || !fire) return testSteps(transition, rule, cases, context);
     for (const line of run.imports) imports.add(line);
-    const make = `${run.instance} = make_${run.instance}(${stateField}=state)`;
     const before = (state: string): SimRecord => ({ ...run!.record, [stateField]: state });
     const ready = (state: string) => valid(run!.entity, before(state), context) && (!trigger || preconditionsHold(trigger, before(state), run!.inputs, context));
 
@@ -156,19 +151,12 @@ export function transitionTests(transition: GraphNode, rule: string, context: Ma
     const left = new Set(siblings.flatMap(s => s.data.from as string[]));
     const others = literals.filter(state => !left.has(state));
     const refusing = others.filter(ready);
-    const loop = (states: string[], body: string[]) => [
-        `for state in ${tuple(states.map(constant))}:`,
-        '    with self.subTest(state=state):',
-        `        ${make}`,
-        ...body.map(l => `        ${l}`)
-    ];
+    const body = (template: string, states: string[]) => bodyOf(context, template, {
+        states: states.map(constant), instance: run!.instance, field: stateField, fire: fire!(run!.instance!), to: constant(transition.data.to as string)
+    });
     const tests: TestCase[] = [
-        moving.length
-            ? { name: cases[0], body: loop(moving, [fire(run.instance!), `${run.instance}.refresh_from_db()`, `self.assertEqual(${run.instance}.${stateField}, ${constant(transition.data.to as string)})`]) }
-            : { name: cases[0] },
-        ...(others.length ? [refusing.length === others.length
-            ? { name: cases[1], body: loop(refusing, ['with self.assertRaises(InvalidTransition):', `    ${fire(run.instance!)}`]) }
-            : { name: cases[1] }] : [])
+        moving.length ? { name: cases[0], body: body('tests/transition-moves.py.njk', moving) } : { name: cases[0] },
+        ...(others.length ? [refusing.length === others.length ? { name: cases[1], body: body('tests/transition-refuses.py.njk', refusing) } : { name: cases[1] }] : [])
     ];
     if (tests.every(t => !t.body)) return testSteps(transition, rule, tests, context);
     return testSteps(transition, rule, tests, context, imports, run.steps);
@@ -196,11 +184,7 @@ export function preconditionTests(action: GraphNode, context: MapContext): Step[
         }
         return {
             name: names[i],
-            body: [
-                ...(run.instance ? [`${run.instance} = make_${run.instance}()`] : []),
-                `with self.assertRaises(${error}):`,
-                `    ${call(action, run)}`
-            ]
+            body: bodyOf(context, 'tests/precondition.py.njk', { instance: run.instance ?? '', error, call: call(action, run) })
         };
     });
     if (tests.every(t => !t.body)) return testSteps(action, rule, tests, context);

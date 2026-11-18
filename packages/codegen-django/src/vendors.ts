@@ -11,18 +11,11 @@ export function envName(key: GraphNode): string {
 
 const IMPROPERLY_CONFIGURED = 'from django.core.exceptions import ImproperlyConfigured';
 
-/** Defined once in `config/settings.py` before the first secret: reads a variable or stops the app naming it. */
-const REQUIRED_ENV = `def required_env(name):
-    try:
-        return os.environ[name]
-    except KeyError:
-        raise ImproperlyConfigured(f"Set the environment variable {name} (see .env.example)") from None`;
-
 /**
  * A setting or secret is read from the environment in `config/settings.py` and listed in `.env.example`.
  * A missing setting is `None` (`False` for a `Bool`); a missing secret stops the app at startup.
  */
-export function externalKeySteps(key: GraphNode): Step[] {
+export function externalKeySteps(key: GraphNode, context: MapContext): Step[] {
     const name = envName(key);
     const secret = key.data.kind === 'secret';
     return [
@@ -33,40 +26,23 @@ export function externalKeySteps(key: GraphNode): Step[] {
             if (secret && !text.includes('\ndef required_env(')) {
                 if (!text.includes(IMPROPERLY_CONFIGURED)) text = text.replace(/^from pathlib import Path\n/m, `from pathlib import Path\n\n${IMPROPERLY_CONFIGURED}\n`);
                 if (!text.includes(IMPROPERLY_CONFIGURED)) text = `${IMPROPERLY_CONFIGURED}\n${text}`;
-                text = `${text.trimEnd()}\n\n\n${REQUIRED_ENV}\n`;
+                text = `${text.trimEnd()}\n\n\n${context.render('vendors/required-env.py.njk', {})}\n`;
             }
-            const read = secret ? requiredRead(name, key.data.type as TypeData) : pythonRead(name, key.data.type as TypeData);
-            return `${text.trimEnd()}\n\n${name} = ${read}\n`;
+            const line = context.render('vendors/setting.py.njk', { name, secret, primitive: (key.data.type as TypeData).primitive ?? '' });
+            return `${text.trimEnd()}\n\n${line}\n`;
         }),
-        envExample(key, name)
+        envExample(key, name, context)
     ];
 }
 
-export function envExample(key: GraphNode, name: string): Step {
+export function envExample(key: GraphNode, name: string, context: MapContext): Step {
     return template('.env.example', existing => {
         if (existing?.split('\n').includes(`${name}=`)) return existing;
-        const head = existing ?? '# The settings and secrets of the vendors this app needs. Copy to .env and fill in; never commit values.\n';
-        const about = `# ${key.data.kind} of ${lastOf(key.qn.slice(0, key.qn.lastIndexOf('.')))}${key.data.describe ? `: ${String(key.data.describe).replace(/\s+/g, ' ').trim()}` : ''}`;
-        return `${head.trimEnd()}\n\n${about}\n${name}=\n`;
+        const head = existing ?? context.render('vendors/env-example.njk', {});
+        const describe = key.data.describe ? String(key.data.describe).replace(/\s+/g, ' ').trim() : '';
+        const entry = context.render('vendors/env-entry.njk', { kind: key.data.kind, external: lastOf(key.qn.slice(0, key.qn.lastIndexOf('.'))), describe, name });
+        return `${head.trimEnd()}\n\n${entry}\n`;
     });
-}
-
-function requiredRead(name: string, type: TypeData): string {
-    const read = `required_env(${JSON.stringify(name)})`;
-    switch (type.primitive) {
-        case 'Int': return `int(${read})`;
-        case 'Bool': return `${read}.lower() in ("1", "true", "yes")`;
-        default: return read;
-    }
-}
-
-function pythonRead(name: string, type: TypeData): string {
-    const quoted = JSON.stringify(name);
-    switch (type.primitive) {
-        case 'Int': return `int(os.environ[${quoted}]) if ${quoted} in os.environ else None`;
-        case 'Bool': return `os.environ.get(${quoted}, "").lower() in ("1", "true", "yes")`;
-        default: return `os.environ.get(${quoted})`;
-    }
 }
 
 /**

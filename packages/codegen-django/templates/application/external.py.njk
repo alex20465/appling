@@ -1,0 +1,20 @@
+{# An external system: a typing Protocol the use cases depend on, one method per operation; the client itself is a registry task. In <app>/externals.py. #}
+{% import "python/macros.njk" as py %}
+class {{ name }}(Protocol):
+{% block docstring %}
+{{ py.docstring(doc) -}}
+{% endblock %}
+{% block operations %}
+{% for op in operations %}
+{% if not loop.first %}
+
+{% endif %}
+    def {{ op.name }}(self, {{ op.params | join(", ") }}) -> {{ op.returns }}:
+{% if op.doc %}
+{{ op.doc }}
+{% endif %}
+        ...
+{% else %}
+    pass
+{% endfor %}
+{% endblock %}

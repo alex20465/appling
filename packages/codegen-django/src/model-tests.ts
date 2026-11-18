@@ -3,7 +3,7 @@ import type { ExprData, GraphNode, Record as SimRecord, TypeData, Value } from '
 import { children } from './files.js';
 import { factory, holds, simulator } from './fixtures.js';
 import { appOf, constantOf, lastOf, parentOf, snake } from './python.js';
-import { testSteps, type TestCase } from './tests.js';
+import { bodyOf, testSteps, type TestCase } from './tests.js';
 
 /** A value a test may set on a field, as Python and as the simulator sees it. */
 interface Candidate {
@@ -28,8 +28,8 @@ export function invariantTests(invariant: GraphNode, enforced: boolean, context:
     const violation = violating(invariant, entity, made.record, context, imports);
     if (violation) imports.add('from django.db import IntegrityError, transaction');
     const tests: TestCase[] = [
-        { name: cases[0], body: [`${instance} = ${made.name}()`, `self.assertTrue(${model}.objects.filter(pk=${instance}.pk).exists())`] },
-        { name: cases[1], body: violation === undefined ? undefined : ['with self.assertRaises(IntegrityError), transaction.atomic():', `    ${made.name}(${violation})`] }
+        { name: cases[0], body: bodyOf(context, 'tests/invariant-holds.py.njk', { instance, factory: made.name, model }) },
+        { name: cases[1], body: violation === undefined ? undefined : bodyOf(context, 'tests/invariant-rejects.py.njk', { factory: made.name, violation }) }
     ];
     return testSteps(invariant, rule, tests, context, imports, made.steps);
 }

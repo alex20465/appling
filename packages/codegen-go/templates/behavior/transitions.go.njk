@@ -1,0 +1,13 @@
+{# The transitions an action or an event runs: a switch over the state with one case per transition, in the
+   function of the action (behavior/action.go.njk) or of the machine (behavior/machine.go.njk). #}
+switch {
+{% for branch in cases %}
+case {{ branch.condition }}:
+{% for line in branch.effects %}
+	{{ line }}
+{% endfor %}
+	{{ state }} = {{ branch.to }}
+{% endfor %}
+default:
+	return nil, fmt.Errorf("%w: {{ label }} from %s", {{ invalid }}, {{ state }})
+}

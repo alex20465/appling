@@ -52,6 +52,10 @@ Machines, scheduled jobs and REST interfaces add `ash_state_machine`, `ash_oban`
 
 What cannot be translated becomes a registry task: many to many relationships, calculations over embedded lists, invariants and preconditions over calculations or other resources, policies with more than one `&&` branch and field policies that follow relationships (both deny until written), writes of field policies, policies of use cases and of actions without an entity, resources that reach the tenant only through relationships, events (Ash notifiers), externals and use cases (generic actions or Reactor), effects that create rows, emit events, loop or change related records (an action that only deletes its own record becomes a destroy action), jobs on events, authentication, rate limits and CORS, webhook endpoints and the vendor side setup (registering webhooks, issuing tokens with a role claim). Settings and secrets of externals are read from the environment in `config/runtime.exs` (a missing secret stops the app through `System.fetch_env!`) and listed in `.env.example`.
 
+## Templates
+
+The generated code comes from the Nunjucks templates in `templates/` of this package, one per element kind. Override one with a file at the same path in `.appling/templates/ash/` of your project; see [Templates](https://www.appling.tools/docs/codegen/templates/).
+
 ## License
 
 MIT

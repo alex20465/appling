@@ -1,0 +1,4 @@
+{# Navigation: the links of the menu in the app's base template, to pages that need no id. Inside <nav> of <app>/templates/<app>/base.html. #}
+{% for link in links %}
+      <a href="{{ link.route }}">{{ link.label }}</a>
+{% endfor %}

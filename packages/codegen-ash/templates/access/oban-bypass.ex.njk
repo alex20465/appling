@@ -1,0 +1,4 @@
+{# Jobs run as the system, as in the model: AshOban's scheduler and worker pass the policies of the resource. First in its `policies`. -#}
+bypass AshOban.Checks.AshObanInteraction do
+  authorize_if always()
+end
