@@ -1,5 +1,14 @@
 # @appling/model
 
+## 0.1.6
+
+### Patch Changes
+
+- Annotation texts appear in graph props and data and can be set through applyEdit.
+
+- Updated dependencies:
+  - @appling/lang@0.4.2
+
 ## 0.1.5
 
 ### Patch Changes

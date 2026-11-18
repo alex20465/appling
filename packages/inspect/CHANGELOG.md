@@ -1,5 +1,20 @@
 # @appling/ide
 
+## 0.1.6
+
+### Patch Changes
+
+- The Inspector sidebar shows the describe and annotation texts, and annotated chips carry a note badge.
+
+- Adds a Techthos.net sponsor link to the header.
+
+- Updated dependencies:
+  - @appling/ai@0.2.3
+  - @appling/codegen@0.2.2
+  - @appling/lang@0.4.2
+  - @appling/model@0.1.6
+  - @appling/viz@0.3.2
+
 ## 0.1.5
 
 ### Patch Changes

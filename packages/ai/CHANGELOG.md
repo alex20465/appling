@@ -1,5 +1,15 @@
 # @appling/ai
 
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies:
+  - @appling/codegen@0.2.2
+  - @appling/lang@0.4.2
+  - @appling/model@0.1.6
+  - @appling/viz@0.3.2
+
 ## 0.2.2
 
 ### Patch Changes

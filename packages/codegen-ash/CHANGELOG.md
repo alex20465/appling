@@ -1,5 +1,17 @@
 # @appling/codegen-ash
 
+## 0.1.6
+
+### Patch Changes
+
+- Describe and annotation texts are written into the generated code.
+
+- Generated code is rendered from Nunjucks templates that a project can override or extend block by block.
+
+- Updated dependencies:
+  - @appling/codegen@0.2.2
+  - @appling/model@0.1.6
+
 ## 0.1.5
 
 ### Patch Changes

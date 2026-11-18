@@ -49,6 +49,11 @@
   dir: packages/codegen-ash
   intents:
     - giant-horses-chew
+"@appling/codegen-ash@0.1.6":
+  dir: packages/codegen-ash
+  intents:
+    - cool-spoons-wave
+    - great-mangos-think
 "@appling/codegen-django@0.1.2":
   dir: packages/codegen-django
   intents:
@@ -65,6 +70,11 @@
   dir: packages/codegen-django
   intents:
     - giant-horses-chew
+"@appling/codegen-django@0.1.6":
+  dir: packages/codegen-django
+  intents:
+    - cool-spoons-wave
+    - great-mangos-think
 "@appling/codegen-go@0.1.3":
   dir: packages/codegen-go
   intents:
@@ -76,6 +86,11 @@
   dir: packages/codegen-go
   intents:
     - giant-horses-chew
+"@appling/codegen-go@0.1.6":
+  dir: packages/codegen-go
+  intents:
+    - cool-spoons-wave
+    - great-mangos-think
 "@appling/codegen-rust@0.1.3":
   dir: packages/codegen-rust
   intents:
@@ -87,6 +102,11 @@
   dir: packages/codegen-rust
   intents:
     - giant-horses-chew
+"@appling/codegen-rust@0.1.6":
+  dir: packages/codegen-rust
+  intents:
+    - cool-spoons-wave
+    - great-mangos-think
 "@appling/codegen@0.1.3":
   dir: packages/codegen
   intents:
@@ -96,6 +116,11 @@
   dir: packages/codegen
   intents:
     - slow-shirts-perform
+"@appling/codegen@0.2.2":
+  dir: packages/codegen
+  intents:
+    - great-mangos-think
+    - thin-cups-stand
 "@appling/ide@0.1.2":
   dir: packages/ide
   intents:
@@ -110,6 +135,11 @@
   dir: packages/inspect
   intents:
     - soft-fireants-shine
+"@appling/inspect@0.1.6":
+  dir: packages/inspect
+  intents:
+    - breezy-pears-rush
+    - warm-lizards-perform
 "@appling/lang@0.2.0":
   dir: packages/lang
   intents:
@@ -147,6 +177,10 @@
   dir: packages/lang
   intents:
     - olive-maps-invent
+"@appling/lang@0.4.2":
+  dir: packages/lang
+  intents:
+    - sweet-rice-buy
 "@appling/model@0.1.1":
   dir: packages/model
   intents:
@@ -167,6 +201,10 @@
     - smart-waves-taste
     - tame-rivers-study
     - tiny-tables-add
+"@appling/model@0.1.6":
+  dir: packages/model
+  intents:
+    - slow-rice-unite
 "@appling/viz@0.1.1":
   dir: packages/viz
   intents:
@@ -180,3 +218,7 @@
   dir: packages/viz
   intents:
     - loud-peaches-kneel
+"@appling/viz@0.3.2":
+  dir: packages/viz
+  intents:
+    - clean-clouds-beg

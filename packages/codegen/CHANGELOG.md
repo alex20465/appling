@@ -1,5 +1,17 @@
 # @appling/codegen
 
+## 0.2.2
+
+### Patch Changes
+
+- Generated code is rendered from Nunjucks templates that a project can override or extend block by block.
+
+- plan adds one left to code registry task per annotation.
+
+- Updated dependencies:
+  - @appling/lang@0.4.2
+  - @appling/model@0.1.6
+
 ## 0.2.1
 
 ### Patch Changes

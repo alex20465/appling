@@ -1,6 +1,6 @@
 {
   "name": "@appling/viz",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Appling visualization: the model views and SVG canvases of the Appling inspector, and the messages of the visual tools",
   "homepage": "https://www.appling.tools/docs/",
   "repository": {

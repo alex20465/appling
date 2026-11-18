@@ -1,5 +1,14 @@
 # @appling/viz
 
+## 0.3.2
+
+### Patch Changes
+
+- Annotated chips on the model canvas carry a note badge.
+
+- Updated dependencies:
+  - @appling/model@0.1.6
+
 ## 0.3.1
 
 ### Patch Changes

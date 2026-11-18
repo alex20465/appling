@@ -1,5 +1,15 @@
 # @appling/cli
 
+## 0.3.3
+
+### Patch Changes
+
+- Updated dependencies:
+  - @appling/codegen@0.2.2
+  - @appling/inspect@0.1.6
+  - @appling/lang@0.4.2
+  - @appling/model@0.1.6
+
 ## 0.3.2
 
 ### Patch Changes
