@@ -14,7 +14,7 @@ const source = `<span class="kw">module</span> sales <span class="pu">{</span>
     status<span class="pu">:</span> <span class="ty">OrderStatus</span> <span class="kw">state</span> <span class="kw">default</span> <span class="va">draft</span>
   <span class="pu">}</span>
 
-  <span class="kw">action</span> <span class="ty">PlaceOrder</span> <span class="kw">on</span> <span class="ty">Order</span> <span class="pu">{</span>
+  <span class="kw">action</span> <span class="ty">PlaceOrder</span> <span class="kw">on</span> <span class="ty">Order</span> <span class="kw">does</span> <span class="st">"Emails the order confirmation"</span> <span class="pu">{</span>
     <span class="kw">requires</span> <span class="pu">{</span> reference <span class="pu">!=</span> <span class="st">""</span> <span class="pu">}</span>
   <span class="pu">}</span>
 
@@ -29,7 +29,7 @@ const source = `<span class="kw">module</span> sales <span class="pu">{</span>
     <div class="flex max-w-[640px] flex-col gap-3">
       <span class="eyebrow">Example</span>
       <h2 class="text-h1">The canvas</h2>
-      <p class="text-ink-soft">A sales module as text, and the same model on the canvas the inspector draws from it.</p>
+      <p class="text-ink-soft">A sales module as text, and the model on the canvas of the inspector. Unfold a bud and select a node to see what it does, who may run it and where it is used.</p>
     </div>
     <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,440px),1fr))] gap-px border border-line bg-line">
       <div class="min-w-0 bg-surface-raised">
@@ -39,10 +39,17 @@ const source = `<span class="kw">module</span> sales <span class="pu">{</span>
         </div>
         <pre class="overflow-x-auto p-6 text-code" set:html={source}></pre>
       </div>
-      <div class="flex min-w-0 flex-col gap-4 bg-surface-raised p-6">
-        <span class="eyebrow">Inspector canvas</span>
-        <div class="grid flex-1 place-items-center">
-          <img src="/inspect-canvas.webp" width="960" height="480" loading="lazy" alt="The inspector canvas with the Order entity on the domain level and what rests on it unfolded above: actions, events and a machine, then queries and a use case, then roles and an actor" class="block h-auto w-full border border-line" />
+      <div id="inspect-window" class="flex min-h-[520px] min-w-0 flex-col bg-surface-raised">
+        <div class="flex items-center justify-between gap-4 border-b border-line px-4 py-2 font-mono text-xs leading-5 text-ink-muted">
+          <span class="truncate">Appling Inspect · examples</span>
+          <button type="button" data-fullscreen class="cursor-pointer font-semibold whitespace-nowrap text-leaf hover:text-leaf-hover">Full screen</button>
+        </div>
+        <div id="inspect-stage" class="relative flex-1 bg-surface">
+          <img src="/inspect-canvas.webp" width="960" height="480" loading="lazy" alt="" class="absolute inset-0 size-full object-cover opacity-40" />
+          <div class="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
+            <button type="button" data-start class="inline-flex min-h-11 cursor-pointer items-center rounded-md bg-leaf px-6 font-mono text-[13px] leading-4 font-semibold text-on-leaf hover:bg-leaf-hover">Open the inspector</button>
+            <p class="max-w-[420px] text-sm leading-[22px] text-ink">The real inspector on the sample sales and CRM model, running in your browser. Read only: nothing leaves this page.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -50,3 +57,24 @@ const source = `<span class="kw">module</span> sales <span class="pu">{</span>
     <a href={`${GITHUB_URL}/tree/main/examples`} class="font-mono text-[13px] leading-5 font-semibold">Browse full models on GitHub →</a>
   </div>
 </section>
+
+<script>
+  const win = document.querySelector<HTMLElement>("#inspect-window")!;
+  const stage = win.querySelector("#inspect-stage")!;
+  const start = () => {
+    if (stage.querySelector("iframe")) return;
+    const frame = document.createElement("iframe");
+    frame.src = "/inspect/";
+    frame.title = "The Appling inspector on the sample model";
+    frame.allow = "fullscreen";
+    frame.className = "absolute inset-0 size-full border-0";
+    stage.replaceChildren(frame);
+    frame.focus();
+  };
+  win.querySelector("[data-start]")!.addEventListener("click", start);
+  win.querySelector("[data-fullscreen]")!.addEventListener("click", () => {
+    start();
+    if (document.fullscreenElement) document.exitFullscreen();
+    else win.requestFullscreen();
+  });
+</script>
