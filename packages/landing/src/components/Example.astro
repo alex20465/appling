@@ -42,7 +42,10 @@ const source = `<span class="kw">module</span> sales <span class="pu">{</span>
       <div id="inspect-window" class="flex min-h-[520px] min-w-0 flex-col bg-surface-raised">
         <div class="flex items-center justify-between gap-4 border-b border-line px-4 py-2 font-mono text-xs leading-5 text-ink-muted">
           <span class="truncate">Appling Inspect · examples</span>
-          <button type="button" data-fullscreen class="cursor-pointer font-semibold whitespace-nowrap text-leaf hover:text-leaf-hover">Full screen</button>
+          <span class="flex items-center gap-4">
+            <a href="/inspect/" target="_blank" class="font-semibold whitespace-nowrap">Open in a new tab →</a>
+            <button type="button" data-fullscreen class="cursor-pointer font-semibold whitespace-nowrap text-leaf hover:text-leaf-hover">Full screen</button>
+          </span>
         </div>
         <div id="inspect-stage" class="relative flex-1 bg-surface">
           <img src="/inspect-canvas.webp" width="960" height="480" loading="lazy" alt="" class="absolute inset-0 size-full object-cover opacity-40" />
