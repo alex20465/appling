@@ -87,8 +87,8 @@ function outline(node: Pick<TreeNode, 'type'>): string {
 }
 
 /** The tab that swells out of a node's edge to unfold one side of it, drawn on the top edge, and the arrow in it; the arrow turns around once that side is open. */
-const TAB = 'M -22 0 C -13 0, -14 -12, -5 -12 L 5 -12 C 14 -12, 13 0, 22 0';
-const ARROW = 'M -4 -4 L 0 -7.5 L 4 -4';
+const TAB = 'M -30 0 C -18 0, -19 -16, -7 -16 L 7 -16 C 19 -16, 18 0, 30 0';
+const ARROW = 'M -5.5 -5.5 L 0 -10.5 L 5.5 -5.5';
 
 /**
  * The nodes placed now plus those placed before and no more, moved onto the nearest of their ancestors that stays.
@@ -370,7 +370,6 @@ export function ModelCanvas({ index, name, focus, folded, selected, settings, bu
                 <g transform={`translate(${camera.x} ${camera.y}) scale(${camera.k})`}>
                     {LEVELS.map(({ lens, level }) => <rect key={lens} className={`band${level === entry ? ' entry' : ''}`} x={-20000} width={40000} y={bands.get(level)!.top} height={bands.get(level)!.bottom - bands.get(level)!.top} />)}
                     {joined.map(join => <path key={join.id} className={`branch join layer-${byId.get(join.from)?.node.layer} ${picked ? shade(touches(join.from, join.to)) : join.from === current || join.to === current ? 'lit' : ''}`} style={{ d: `path("${pathOf(join.points)}")`, strokeWidth: picked && touches(join.from, join.to) ? 2.4 : 1.4 } as React.CSSProperties} />)}
-                    {placed.flatMap(p => (p.dots ?? []).map(([x, y], i) => <circle key={`dot ${p.node.id} ${i}`} className={`junction layer-${p.node.layer} ${shade(p === picked)}`} cx={x} cy={y} r={2.6} />))}
                     {stems.map(({ p, curve, state }) => (
                         <path key={`branch ${p.node.id}`} className={`branch layer-${p.parent!.node.layer} ${state}`} style={{ d: `path("${pathOf(curve)}")`, '--seedling': `path("${pathOf(curve.map(() => curve[0]))}")`, strokeWidth: state === 'lit' ? 2.4 : 1.4, animationDelay: `${delays.get(p.node.id) ?? 0}ms` } as React.CSSProperties} />
                     ))}

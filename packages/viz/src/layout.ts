@@ -14,8 +14,6 @@ export interface Placed {
     route?: Point[];
     /** The traces to what its unfolded sides also lead to and is drawn elsewhere already (`TreeNode.links`), by the id of that node. */
     joins?: { to: string, points: Point[] }[];
-    /** Where the traces that start from it branch. */
-    dots?: Point[];
     /** On the seed: the five bands. */
     bands?: Band[];
 }
@@ -198,7 +196,7 @@ function route(chips: Placed[], rowIn: (chip: Placed) => number, entry: number):
     for (const [chip, row] of at) chip.y = ys[row] - zero;
     for (const s of channels.flat()) s.y -= zero;
 
-    for (const chip of chips) [chip.route, chip.joins, chip.dots] = [undefined, undefined, undefined];
+    for (const chip of chips) [chip.route, chip.joins] = [undefined, undefined];
     for (const { net, d, stretches } of nets) {
         for (const e of net) {
             const points: Point[] = [[e.from.x, e.from.y + d * HALF]];
@@ -210,9 +208,6 @@ function route(chips: Placed[], rowIn: (chip: Placed) => number, entry: number):
             points.push([pins.get(e)!, e.to.y - d * HALF]);
             if (e.join) (e.from.joins ??= []).push({ to: e.to.node.id, points });
             else e.to.route = points;
-        }
-        for (const s of stretches) for (const x of new Set([s.near, ...s.tops, ...s.bottoms])) {
-            if (+(x > s.lo) + +(x < s.hi) + +s.tops.includes(x) + +s.bottoms.includes(x) > 2) (net[0].from.dots ??= []).push([x, s.y]);
         }
     }
 
