@@ -68,9 +68,18 @@ corepack pnpm test
 
 On a failing build or test, stop and report; do not publish.
 
+### VS Code screenshots
+
+Retake the two screenshots of the landing site's VS Code section (`packages/landing/src/components/VSCode.astro`) from this build with the `ui-sandbox` skill: ask the user to run `pnpm sandbox vscode`, set the window to 1440x900 in the dark theme, and recreate each shot as its `alt` text describes:
+
+- `packages/landing/public/vscode-canvas.webp`: the canvas in a tab, the sales module unfolded up to `sales.Order`, the Inspector panel listing its actions, fields and what uses it.
+- `packages/landing/public/vscode-editor.webp`: the canvas on the left, `sales.appling` on the right at `entity Order`, the gutter marks visible.
+
+Take them as PNG under `.sandbox/output`, convert to WebP at the same names, look at both, and update the `alt` and `text` in `VSCode.astro` when what they show changed.
+
 ## 5. Commit, push, publish
 
-1. Commit `package.json`, `CHANGELOG.md`, `.changeset/` with the `commit` skill, subject `chore(release): <name>@<version>, ...`.
+1. Commit `package.json`, `CHANGELOG.md`, `.changeset/` and the screenshots with the `commit` skill, subject `chore(release): <name>@<version>, ...`.
 2. Ask with AskUserQuestion to confirm push and publish, listing every `name@version`.
 3. `git push`, then `corepack pnpm publish -r --access public --report-summary`. pnpm publishes only the versions not yet on the registry and replaces `workspace:*` with the real versions.
 4. On an OTP request, ask the user for the code and rerun with `--otp <code>`. Already published packages are skipped on the rerun.
