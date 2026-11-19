@@ -3,7 +3,7 @@ title: Simulator
 description: "Ask the model how it behaves: reachable states, who may trigger an action, what one actor may do, which invariants an action puts at risk, and what running an action does."
 ---
 
-The simulator evaluates the behavior a model describes against sample data and actors, without generating code. It answers five questions:
+The simulator evaluates the behavior a model describes against sample data and actors, without generating code. It answers six questions:
 
 | Question | Answer |
 |---|---|

@@ -3,7 +3,7 @@ title: API
 description: The public TypeScript API of the Appling packages, export by export, with one usage example per package.
 ---
 
-Every tool in Appling is built on six public packages. Use them to build your own checks, reports, editors, generators or agents. All packages are ES modules for Node 24.
+Every tool in Appling is built on these public packages. Use them to build your own checks, reports, editors, generators or agents. All packages are ES modules for Node 24.
 
 | Package | Purpose |
 |---|---|
@@ -13,6 +13,8 @@ Every tool in Appling is built on six public packages. Use them to build your ow
 | `@appling/codegen` | Code generation core: plans, registry, migrations |
 | `@appling/ai` | Workspace access for AI, MCP server, agent sessions |
 | `@appling/viz` | Model views, the canvases of the inspector and the types of the visual tools |
+| `@appling/inspect` | The inspector server as a child process of an app, and the messages between the client and a host |
+| `@appling/codegen-django`, `@appling/codegen-ash`, `@appling/codegen-go`, `@appling/codegen-rust` | Code generation extensions; each exports its `CodegenExtension` as default, see [Writing extensions](../codegen/extensions.md) |
 
 ## Language: @appling/lang
 
@@ -70,6 +72,7 @@ startLanguageServer(createApplingLspServices({ connection, ...NodeFileSystem }).
 | `ApplingDocumentUpdateHandler` | Replaces a copy read from disk with the path the editor opened, when both are the same file |
 | `ApplingFormatter` | Formats a whole document into canonical form |
 | `ApplingHoverProvider` | Hover with kind, qualified name, layer and doc comment |
+| `ApplingWorkspaceSymbolProvider` | Every named element by qualified name, a shared service (`shared.lsp.WorkspaceSymbolProvider`) |
 
 `@appling/lang/monarch` exports the Monarch grammar as default. Both are described in [Editors](../tools/editors.md).
 
@@ -129,12 +132,12 @@ console.log(result.ok ? result.edits : result.errors);
 | `withRemoved(before, after, diff)` | The graph after with the removed elements of a diff put back under their parents, with their edges, so a canvas can draw them where they were |
 | `migrationRenames(before, after)` | The function that maps a qualified name of the graph before to its name after through the new migration steps; undefined for a removed one |
 | `GraphDiff`, `ElementChange`, `ChangeStatus` | The diff types |
-| `Simulator`, `UNKNOWN` | The [simulator](../tools/simulator.md): `reach`, `actors`, `access`, `risks`, `run`, `evaluate`, and `scenario(qn)`, which runs one [scenario](../language/scenarios.md) and returns a `ScenarioResult` (`passed`, `failures`, `outcome`, `errors`, `reasons`, `events`, `rows`) |
+| `Simulator`, `UNKNOWN` | The [simulator](../tools/simulator.md): `reach`, `actors`, `access`, `risks`, `run`, `matches(query, record, actor, inputs?)` (whether a record belongs to a query's results: `true`, `false` or `UNKNOWN`), `evaluate`, and `scenario(qn)`, which runs one [scenario](../language/scenarios.md) and returns a `ScenarioResult` (`passed`, `failures`, `outcome`, `errors`, `reasons`, `events`, `rows`) |
 | `runScenarios(graph)`, `checkScenarios(models, services)` | Every scenario's result, and the failures as `ScenarioProblem`s (`scenario`, `uri`, `range` of its name, `message`), as `appling check` reports them |
 | `scenarioCall(node)`, `coveredByScenarios(graph)` | What a scenario's `when` runs (`target`, `args`), and the actions, use cases and transitions the scenarios cover |
 | `findApplingFiles(path)` | The `.appling` files at a path, searching folders recursively and skipping hidden folders and `node_modules` |
 
-`@appling/model/graph`, `@appling/model/edit`, `@appling/model/simulator`, `@appling/model/relevance`, `@appling/model/diff` and `@appling/model/implementation` export the graph, the edit operations, the simulator, the relevance functions, the model diff and the implementation states without the file system functions of the rest of the package, so a browser bundle can import them.
+`@appling/model/graph`, `@appling/model/edit`, `@appling/model/simulator`, `@appling/model/relevance`, `@appling/model/diff`, `@appling/model/anchors` and `@appling/model/implementation` export the graph, the edit operations, the simulator, the relevance functions, the model diff, the sub-anchors and the implementation states without the file system functions of the rest of the package, so a browser bundle can import them.
 
 ## Code generation: @appling/codegen
 
@@ -159,9 +162,9 @@ Configuration and extensions:
 | `STACKS`, `STACK_LABELS`, `Stack` | The stacks by extension package (`django: '@appling/codegen-django'`, `ash`, `go`, `rust`) and their names; also from the browser safe `@appling/codegen/stacks` |
 | `addTarget(root, stack, name)` | Adds the stack's target (`build/<name>`) to `appling.config.json` unless it has one, and its `STACK_LOCAL` files to `.gitignore` |
 | `STACK_LOCAL`, `ignore(root, lines)` | Each stack's local files in a generated project; appends the lines `.gitignore` lacks |
-| `CodegenExtension` | The extension contract: `name`, `prerequisites`, `test`, `setup`, `steps`, `migrate` |
+| `CodegenExtension` | The extension contract: `name`, `templates` (the folder of its Nunjucks templates), `prerequisites`, `test`, `syncExclude` (paths `--sync` never reads or writes, `**` and `*` globs), `setup`, `steps`, `migrate` |
 | `Step`, `CommandStep`, `TemplateStep`, `TaskStep` | The three step kinds |
-| `MapContext`, `Prerequisite` | What an extension gets per node, and a tool it needs |
+| `MapContext`, `Prerequisite` | What an extension gets per node, and a tool it needs: `name`, `command`, `expect`, `hint` and `needed(graph)`, whether a model needs it (default: every model does) |
 | `templateRenderer(root, extension, options)`, `Render`, `overrideFolder(root, extension, options)`, `ORIGINAL` | The Nunjucks renderer behind `context.render`: the project's [override folder](../codegen/templates.md) first, then the extension's `templates`; `original:` names the extension's own template |
 
 Planning and running:
@@ -180,10 +183,11 @@ Planning and running:
 | `formatChange(now, before, options?)` | The change of one figure: `▲ +1.5 pp` for a gain, `▼ -2` for a drop, empty without change, `new` without a value before; `share` prints percentage points, `lowerIsBetter` makes a drop the gain (tasks) |
 | `coverageBadge(report)` | A shields.io endpoint badge with the overall completion |
 | `COVERAGE_MARKER` | The HTML comment that marks the sticky coverage comment of a pull request |
-| `mapContext(graph, name, options)` | The `MapContext` passed to extensions |
-| `checkPrerequisites(prerequisites)` | One message per missing tool |
-| `runPlan(plan, out, log, written?)` | Runs the steps into `out` and writes the registry; with `written`, collects what each step wrote |
-| `runSteps(steps, out, log, written?)` | Runs steps without writing a registry |
+| `extensionLabel(name)` | The short name of an extension package: `@appling/codegen-django` gives `django` |
+| `mapContext(graph, name, options, render)` | The `MapContext` passed to extensions, with `render` from `templateRenderer` |
+| `checkPrerequisites(prerequisites, graph?)` | One message per missing tool; with a graph, only for the tools that model needs |
+| `runPlan(plan, out, log)` | Runs the steps into `out`, marks the code each element got with its `@appling` marker, writes the registry and the baseline (async); stops at the first failing command |
+| `runSteps(steps, out, log, written?)` | Runs steps without writing a registry; with `written`, collects what each step wrote |
 | `locateWritten(out, written, only?)` | Where the collected code is in the final files, by node (`WrittenRange[]`) |
 | `addedRuns(before, after)`, `mainRun(runs)`, `Written`, `WrittenRange` | The runs of lines a template step added, and the one that holds its code |
 | `PROJECT` | The node name of setup steps, `(project)` |
@@ -202,7 +206,7 @@ Migrations:
 | Export | Purpose |
 |---|---|
 | `pendingChanges(graph, applied, stamp)` | The model's migration steps not in `applied`, with each element's qualified name before and now (`MigrationChange[]`) |
-| `planMigrations(graph, extension, name, options, out, changes)` | Asks the extension's `migrate` for the steps of every change |
+| `planMigrations(graph, extension, name, options, out, changes, root?)` | Asks the extension's `migrate` for the steps of every change; `root` (default `.`) holds the template overrides |
 | `runMigrations(out, plan, changes, log)` | Runs them, adds the tasks to the registry and records the changes as applied |
 | `readApplied(out)` | The ids in `<out>/.appling/migrations.json` |
 | `MigrationChange`, `ProjectFiles`, `APPLIED` | The change type, read access to the project for extensions, and the applied file path |
@@ -212,11 +216,18 @@ Generation with code references and the implementation state, as `appling genera
 | Export | Purpose |
 |---|---|
 | `generateElements({ root, graph, selection, targets?, load?, onEvent? })` | Generates the selection (`{ mode: 'outstanding' }`, `{ mode: 'all' }` or `{ mode: 'elements', elements }`) into every target: creates a target without a registry, merges the selected elements' files into an existing one, marks the code and records fingerprints, and calls back with every `GenerationEvent` |
-| `runPlan(plan, out, log)` | Runs the steps into `out`, marks the code each element got with its `@appling` marker, writes the registry and the baseline (async) |
 | `workspaceReferences(root, graph?)` | The code references of a workspace: the markers in its git work tree and every configured target |
 | `readGenerations(root)`, `recordGeneration(root, out, graph, elements)`, `GENERATIONS` | `<root>/.appling/generation.json`: the fingerprints of each target's last generation |
-| `workspaceImplementation(root, graph, references?)` | The implementation state (async) of every element of a workspace, its targets (`TargetState`) and the tasks of their registries, open and done (`TargetTask`) |
-| `GenerationSelection`, `GenerationEvent`, `GenerationOptions`, `MergeScope` | The generation types; `mergeGeneration(out, next, exclude, scope?)` merges only a scope's files and registry entries |
+| `workspaceImplementation(root, graph, references?)` | The implementation state (async) of a workspace as `WorkspaceImplementation`: `states` of every element, `anchors` (the states of the sub-anchors), its `targets` (`TargetState`) and the tasks of their registries, open and done (`TargetTask`) |
+| `GenerationSelection`, `GenerationEvent`, `GenerationOptions` | The generation types |
+
+Sync, as `appling generate --sync` does it:
+
+| Export | Purpose |
+|---|---|
+| `BASELINE`, `saveBaseline(out, exclude)` | `.appling/baseline`, and storing what generation produced there (its files, without the excluded paths, and its registry) as the base of the next sync |
+| `mergeGeneration(out, next, exclude, scope?)` | Merges a fresh generation in `next` into the project three ways (baseline, project, new generation) and makes it the new baseline; with a `MergeScope` (`files`, `entries`) only those files and registry entries. Returns a `SyncReport`: `updated`, `added`, `removed`, `merged`, `conflicts` (files left with conflict markers) and `kept` (files the model no longer produces that you changed) |
+| `projectFiles(root, exclude)` | The files of a project relative to its root, without `.appling`, `.git`, `node_modules` and the excluded paths |
 
 How to write an extension is described in [Writing extensions](../codegen/extensions.md).
 
@@ -239,8 +250,9 @@ Workspace:
 
 | Export | Purpose |
 |---|---|
-| `Project` | A workspace folder: `sources()`, `check()`, `graph()`, `source(qn)`, `edit(operation)` with the latest release, `write(sources)`, and the registry methods `targets()`, `nextTask(target)`, `updateTask(qn, status, note, target)`, `runTests(target)`, and `references(qn?)`, `recordReferences(qn, ranges)` for the code references |
+| `Project` | A workspace folder: `sources()`, `check()`, `graph()`, `source(qn)`, `edit(operation)` with the latest release, `write(sources)`, `writeModelFile(path, source)` (creates or replaces one `.appling` file when the workspace still validates with it), `setIcons(icons)` (the canvas icons in `.appling/view.json`), the registry methods `targets()`, `nextTask(target?, skip?)`, `updateTask(qn, status, note?, target?)`, `runTests(target?)`, `references(qn?)` and `recordReferences(qn, places)` for the code references, and `implementation(module?)`, the counts per implementation state and the elements that are not implemented or outstanding |
 | `queryGraph(graph, query)` | What the `graph_query` tool returns |
+| `languageReference(page?)` | What the `language_reference` tool returns: every page of the language documentation with its title and description, or one page as Markdown |
 | `MAX_ATTEMPTS` | Attempts after which a registry entry stops coming back, `3` |
 | `Sources` | `{ [uri]: text }` |
 
@@ -249,6 +261,7 @@ Tools and MCP:
 | Export | Purpose |
 |---|---|
 | `MODEL_TOOLS`, `AUTHORING_TOOLS`, `REGISTRY_TOOLS`, `REFERENCE_TOOLS`, `VIEW_TOOLS`, `Tools` | The tool definitions: description, zod input shape and `run(context, input)` |
+| `define(definition)` | Types one tool definition by its input shape |
 | `operationSchema` | The zod schema of an edit operation |
 | `ToolContext`, `diskContext(project)` | Where tools read and write: the files on disk |
 | `createMcpServer(root, { visualizer?, onToolCall? })`, `McpServerOptions` | An MCP server with all tools, the `implement_next_task` and `derive_model` prompts and `MCP_INSTRUCTIONS`; with a visualizer also the visual tools; `onToolCall(tool, input, result)` sees every call, such as to attribute the files it wrote |
@@ -256,11 +269,12 @@ Tools and MCP:
 | `createMcpServer(root, { session })`, `SessionScope`, `sessionTools(scope)`, `SESSION_INSTRUCTIONS` | With a session (`{ id, store, host? }`): the session tools, every call attributed to the session, conflict warnings on edits, and the instructions for coordinating with other sessions |
 | `SessionStore`, `MemorySessionStore`, `AgentSession`, `SessionMessage`, `ClaimConflict`, `SESSION_STATUSES`, `SESSION_COLORS` | The [agent sessions](../tools/ai.md#agent-sessions): open (with its bearer token), authenticate, end, update label and status, claim, release, touch, send, post (a message from the user or the app), inbox, onChange |
 | `serveSessionStore(store, channel)`, `RemoteSessionStore`, `ipcChannel(process)`, `Channel` | A store served to another process, such as an inspector server child of the VS Code extension, and reached from there |
-| `IdeHost`, `IdeContext`, `IdeAction`, `AppHost`, `serveAppHost`, `remoteAppHost` | What `ide_context` and `ide_act` go through, and the part the app around the inspector server adds, also over IPC |
+| `IdeHost`, `IdeContext`, `IdeAction`, `IDE_ACTIONS`, `AppHost`, `serveAppHost`, `remoteAppHost` | What `ide_context` and `ide_act` go through (the actions `focus`, `open`, `highlight` and `reveal`), and the part the app around the inspector server adds, also over IPC |
 | `findConflicts(sessions, self, touched)`, `overlaps(a, b)`, `peers(sessions, self)`, `sessionTitle(session)` | The claim rules and a session's display name |
+| `touchedBy(tool, input, result)`, `conflictWarning(conflicts)` | The elements and files a tool call touches, for the claim check, and the warning an edit that touches other sessions' claims comes back with |
 | `handleMcpRequest(server, request, response, hosts?)` | Answers one Streamable HTTP request with a fresh server, as `serveHttp` and the inspector server do |
 | `serveHttp(root, port)` | The MCP server over Streamable HTTP on `127.0.0.1`; returns `{ url, close() }` |
-| `REGISTRY_PROMPT`, `MCP_INSTRUCTIONS` | The registry skill text and the MCP server instructions that make the model the source of truth for business logic |
+| `REGISTRY_PROMPT`, `REVERSE_PROMPT`, `MCP_INSTRUCTIONS` | The registry skill text (the `implement_next_task` prompt), the reverse engineering skill text (the `derive_model` prompt) and the MCP server instructions that make the model the source of truth for business logic |
 
 Agent sessions in an app's terminals, `@appling/ai/agents` (what the VS Code extension starts):
 
@@ -292,9 +306,11 @@ The root export (also `@appling/viz/protocol`) has the types the [visual tools](
 | `growTree(index, settings, unfolded, name?, trail?)` | The pyramid from the entry level `settings.lens` as a `TreeNode`: the seed holds the modules, a module its declarations of the entry level, a declaration the declarations of higher levels that rest on it (`side: 'up'`) and those of lower levels it rests on (`side: 'down'`), each with its `level`; the seed and a module unfold with their id in `unfolded`, a side of a declaration with its `sideId`; away from the entry level a branch keeps its side; a declaration is drawn once, and a node whose unfolded side also leads to one drawn before lists it in `links` (`open` lists the unfolded sides); a node id in `trail` shows only its children in `unfolded` or `trail` |
 | `sideId(id, side)`, `Side` | The id in `unfolded` that opens one side of a declaration: `<id>^up` or `<id>^down` |
 | `linked(index, qn, side)`, `peers(index, qn)`, `levelOf(kind)` | The declarations one step up or down from a declaration, a role, actor or tenant leading through the pages and interfaces that expose what its policies name; the declarations of its own level it belongs together with; the level of a kind, 1 to 5, none for scenarios and migrations |
-| `trailOf(index, settings, focus)`, `lensOf(kind)` | The `unfolded` and `trail` sets that draw the focused elements one after another, each unfolded in place, with the node id of each; the level whose band holds a kind |
+| `trailOf(index, settings, focus, folded?)`, `lensOf(kind)` | The `unfolded` and `trail` sets that draw the focused elements one after another, each unfolded in place (with `folded`, each stays folded in its module), with the node id of each; the level whose band holds a kind |
+| `modelPulse(before, after, qns)` | Which of these elements a new model added (`added`) or changed in itself or in something it holds (`changed`) |
 | `changeMarks(index, changes, modules?)`, `MarkedChanges`, `ChangeMark` | The declarations that added, changed and removed elements belong to, each `added` or `removed` when the declaration itself is new or gone, else `changed`; removed elements count only when the index has them (see `withRemoved`); with `modules`, the modules that hold a marked declaration are `changed` too |
 | `sessionMarks(index, marks)`, `SessionMark` | The declarations that the elements claimed or highlighted by agent sessions belong to, each with the first session's mark |
+| `implementationMarks(index, states)`, `IMPLEMENTATION_LABELS` | The implementation state the canvas draws per declaration (its own and its members' rolled up) and per module (that of its declarations); the words for each state |
 | `revealPath(index, settings, qn)` | The node ids to unfold so that an element's declaration shows in its module |
 | `factOf(index, node)` | The short fact a tree node shows under its name, such as `on Order · draft, placed → cancelled` |
 | `LENSES`, `Lens` | The levels L1 to L5 (`domain`, `behavior`, `application`, `interfaces`, `access`) with their label, their question and their kinds |
@@ -302,6 +318,20 @@ The root export (also `@appling/viz/protocol`) has the types the [visual tools](
 | `flowView(index, view, focus)` | The `machine` or `usecase` view as a `Flow`: nodes for the states or steps, edges for the transitions or the step order |
 | `viewFor(kind)`, `VIEW_KINDS`, `ViewKind`, `anchorOf(index, qn, drawn)` | The view that draws an element kind; the innermost of an element and its ancestors that a view draws |
 | `relations`, `entityActions`, `actionSummary`, `memberText`, `kindLabel`, `elementAt` | The relations and summaries the inspector shows |
+| `abilities(index, access)`, `policyText(index, qn)` | What an actor may do (from `Simulator.access`), grouped as actions, pages with the actions they offer, use cases, queries and entity data; a policy as one line, such as `Order policy[read]: actor.is(crm.Clerk)` |
+| `plural(kind)`, `LAYERS`, `LAYER_LABELS` | A kind in the plural (`Entities`, `Use cases`); the six layers and their names |
 | `ViewSettings`, `DEFAULT_VIEW` | The canvas options, the entry level (`lens`) included |
 
-`@appling/viz/canvas` exports the SVG pyramid `ModelCanvas` (five level bands from one entry level, unfolded side by side of each declaration, only trails when given a `focus`), the SVG flowchart `FlowCanvas` and the card grid `CardCanvas`, each with optional `bubbles`; `ModelCanvas` also marks the declarations and modules of optional `changes` (any `MarkedChanges`, such as a `GraphDiff`), draws removed ones ghosted and rings those of optional `sessions` (`SessionMark[]`) in the session's colour; import `@appling/viz/canvas.css` with them; it takes its colours from the `--appling-*` theme tokens. They need `react` as a peer dependency.
+`@appling/viz/icons` exports `iconOf(name)`, the shapes (`Icon`) of a [Lucide](https://lucide.dev/icons) icon by its name, such as `shopping-cart`, undefined when there is none; `ViewSettings.icons` maps nodes to icon names.
+
+`@appling/viz/canvas` exports the SVG pyramid `ModelCanvas` (five level bands from one entry level, unfolded side by side of each declaration, only trails when given a `focus`), the SVG flowchart `FlowCanvas` and the card grid `CardCanvas`, each with optional `bubbles`, and `Glyph` (`name`, `size`), a Lucide icon in the colour of the text around it; `ModelCanvas` also marks the declarations and modules of optional `changes` (any `MarkedChanges`, such as a `GraphDiff`), draws removed ones ghosted and rings those of optional `sessions` (`SessionMark[]`) in the session's colour; import `@appling/viz/canvas.css` with them; it takes its colours from the `--appling-*` theme tokens. They need `react` as a peer dependency.
+
+## Inspector: @appling/inspect
+
+The package has no root export. An app such as the VS Code extension uses three subpaths:
+
+| Export | Purpose |
+|---|---|
+| `startInspectProcess(root, options?)` (`@appling/inspect/process`) | Starts the inspector server of a folder as a child process with an IPC channel on a free port and resolves with `{ url, mcp, child, close() }` once it reports its address. Options: `node`, `env`, `main` (the server's entry), `timeout`, `onExit(code, stderr)`, `onStatus(status)` (the model errors), `onImplementation(marks)` (the implementation marks and the code links), `sessions` (a shared `SessionStore`) and `host` (an `AppHost`) |
+| `PANELS`, `PanelState`, `PanelAction` (`@appling/inspect/panels`) | The side panels a host draws itself (`inspector`, `playbook`, `changes`, `review`, `code`, `tasks`), the state the client sends for them, and the read only actions it takes: `select`, `textDiff`, `review` and `step` (plays a step of a session's playbook) |
+| `diffMessage(repo, request)`, `openMessage(repo, request)` (`@appling/inspect/host-requests`) | Check a client's request for a text diff or to open a file against the repo: undefined unless the paths stay inside the repo (a file to open may also lie next to it, such as a generated project) and the revision or lines are plain |

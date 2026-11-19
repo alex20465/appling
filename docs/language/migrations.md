@@ -42,12 +42,7 @@ The validator checks every step against the model as it is now. It takes all mig
 
 1. Works out where the step leaves the element: the new path for a `rename`, the same path for `retype` and `remove`.
 2. Replays the later steps of the module on that path. A later `rename` of the element or of one of its parents moves the path; a later `remove` of it ends the check for this step.
-3. Requires the resulting path to exist for `rename` and `retype`, and not to exist for `remove`.
-
-| Problem | Message |
-|---|---|
-| A renamed or retyped element is not in the model | `Module sales has no element Order.other.` |
-| A removed element is still in the model | `Removed element Order.note still exists.` |
+3. Requires the resulting path to exist for `rename` and `retype`, and not to exist for `remove`. The messages are listed under [validation](validation.md#migrations).
 
 This lets steps chain across blocks. The first rename below points at `Order.ref`, which the later block renames to `Order.reference`, which exists:
 

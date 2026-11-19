@@ -77,7 +77,7 @@ Dependencies, build output and caches are skipped: hidden folders and `node_modu
 
 ## Who writes them
 
-- [Generation](implementation.md#generation-records) writes a marker above the code each element got, with `appling generate` and when the inspector generates. Generating again renews the fingerprints.
+- [Generation](implementation.md#generation-records) writes a marker above the code each element got, with `appling generate` and `appling generate --sync`. Generating again renews the fingerprints.
 - AI agents mark the code they implement through the [MCP server](ai.md#reference-tools): the [registry skill](ai.md#registry-skill) marks the code of every element it finishes, the [reverse engineering skill](ai.md#reverse-engineering-skill) the code each element describes.
 - You write one by hand like any comment.
 

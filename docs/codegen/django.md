@@ -11,7 +11,7 @@ description: What @appling/codegen-django generates from a model, how the genera
 |---|---|
 | `uv` | Must be on the `PATH`. `appling generate` checks it with `uv --version` before it runs. |
 | Python 3.12 or later | Required by Django 6. uv installs Python into the project, but this is not checked: if uv picks an older interpreter, `uv add django` fails. |
-| Network | uv downloads Django and REST framework. |
+| Network | uv downloads Django, REST framework and the `rules` package. |
 
 ## Configuration
 
@@ -112,6 +112,7 @@ For the `Order` entity of the [example](../../examples/sales.appling), this give
 
 ```python
 class Order(models.Model):
+    """The reference is ORD, the year and a running number, assigned when the order is created"""
     reference = models.CharField(max_length=255, unique=True)
     customer = models.ForeignKey("crm.Account", on_delete=models.PROTECT)
     lines = models.JSONField(encoder=DjangoJSONEncoder, default=list)
@@ -129,14 +130,17 @@ class Order(models.Model):
 
 An action becomes a function that takes the entity instance first, its inputs as keyword arguments and an optional `actor`. It runs in one transaction (`@transaction.atomic`) unless the action has `consistency eventual`. In order, it:
 
-1. Checks each precondition and raises the declared error, or `ValueError` without one.
-2. Applies the transition of the state machine: the current state and the guard pick the branch, and any other state raises `InvalidTransition`.
-3. Applies the effects: `set` assigns a field, `create` calls `objects.create` (`line = Line.objects.create(...)` with `as line`), `emit` sends the event's signal after the transaction commits, `for item in items` loops over `order.items.all()`, `update item.product { ... }` assigns the fields of `item.product` and saves it (inside `if ... is not None:` for an optional path), `delete item` calls `item.delete()`, and `delete self` deletes the instance last instead of saving it.
-4. Saves the instance when it changed.
+1. Once the model has a policy, checks the actor (see [access](#access)) and raises `PermissionDenied` when the check fails; a call with `actor=None` is not checked.
+2. Checks each precondition and raises the declared error, or `ValueError` without one.
+3. Applies the transition of the state machine: the current state and the guard pick the branch, and any other state raises `InvalidTransition`.
+4. Applies the effects: `set` assigns a field, `create` calls `objects.create` (`line = Line.objects.create(...)` with `as line`), `emit` sends the event's signal after the transaction commits, `for item in items` loops over `order.items.all()`, `update item.product { ... }` assigns the fields of `item.product` and saves it (inside `if ... is not None:` for an optional path), `delete item` calls `item.delete()`, and `delete self` deletes the instance last instead of saving it.
+5. Saves the instance when it changed.
 
 ```python
 @transaction.atomic
 def place_order(order: Order, *, actor=None) -> None:
+    if actor is not None and not (actor.is_authenticated and can_update_order(actor, order) and (is_customer(actor) and (order.customer == actor.account))):
+        raise PermissionDenied("PlaceOrder")
     if not (len(order.lines) > 0):
         raise EmptyOrder()
     if order.status in (OrderStatus.DRAFT,):
@@ -260,8 +264,8 @@ A page is rendered on the server. Its view collects the page's components for th
 | Component | Renders |
 |---|---|
 | `list <query> as <projection> { picks }` | a table of the query's rows with the picked projection fields, paginated by the query's `paginate`, and a button per row for each action; the query's inputs come from the page's query string, and parameters that do not parse answer `400` |
-| `detail <projection>` | the record with the route's `{id}`, its fields, and a button for each action |
-| `form <action>` | a field for each input of the action and a submit button |
+| `detail <projection> { picks }` | the record with the route's `{id}`, its picked projection fields (all fields without `picks`), and a button for each action |
+| `form <action>` | a field for each input of the action and a submit button; a `form` that submits a use case is a task |
 
 Buttons and forms post to `/_actions/<app>/<action>/<id>/`, a runner view that calls the action as the signed in user, shows `<Action> done.` or `<Action> failed: <error>` through Django's messages, and returns to the page. Projection fields that follow references, such as `customer_name = customer.name`, are shown by following the path. Column and field labels come from the module's `messages` (`OrderSummary.total = "Total"`), in the active language, and default to the field name. A navigation item becomes a link in the menu of `base.html`.
 
@@ -434,7 +438,7 @@ Whatever cannot be translated is listed in the [registry](registry.md):
 - use cases from their first `await` on, or from the first call that cannot be translated
 - authentication and CORS of interfaces, and endpoints that do not fit the view patterns
 - computed projection fields that are not a path over entity fields
-- row actions that need inputs, details and forms on pages without `{id}` in the route, navigation items to such pages, and flows
+- row actions that need inputs, details and forms on pages without `{id}` in the route, forms that submit a use case, navigation items to such pages, and flows
 - scenarios that call incomplete code or give values without a Python translation or a sample (see [scenarios](#scenarios))
 - the tenant of a request when the user model has no field of the tenant's entity, actor fields when actors are bound to several entities, and interfaces with a protocol other than `rest`
 

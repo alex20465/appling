@@ -79,6 +79,7 @@ node scripts/ci/codegen-coverage.mjs                      # Markdown on stdout
 node scripts/ci/codegen-coverage.mjs --json coverage.json --markdown coverage.md --badge badge.json
 node scripts/ci/codegen-coverage.mjs --root ../appling-main --json base.json --markdown /dev/null
 node scripts/ci/codegen-coverage.mjs --base base.json     # with the change against base.json
+node scripts/ci/codegen-coverage.mjs --note "At main."   # a line at the end of the Markdown
 ```
 
 The script plans every extension in `packages/codegen-*` over two inputs: the fixture that uses every construct (`packages/lang/test/fixtures/constructs`, the one the `coverage.test.ts` files use) and `examples/`. Per extension it reports the share of elements that are `generated`, `partial` and `todo`, the completion and the registry tasks, then each figure per element kind. `--root` plans another checkout (its language, fixture, examples and extensions) with this script; CI measures the base branch that way.

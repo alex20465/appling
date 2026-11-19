@@ -18,7 +18,7 @@ enum OrderStatus {
 }
 ```
 
-Each value is an element with its own qualified name, such as `sales.OrderStatus.draft`. In expressions, you write a value without the enum name, as a [bare enum value](expressions.md#bare-enum-values): `status == draft`.
+Each value is an element with its own qualified name, such as `sales.OrderStatus.draft`. In expressions, you write a value without the enum name, as a [bare enum value](expressions.md#enum-values): `status == draft`.
 
 ## Value types
 
@@ -138,14 +138,14 @@ Two suffixes change the type:
 
 Both can combine, list first: `notes: Text[]?`. A field without `?` is required.
 
-For typing, `Int`, `Decimal` and `Money` are the numeric types (an `Int` fits where a `Decimal` or `Money` is expected, not the other way round), `String` and `Text` compare with each other, and `Date` and `DateTime` are the temporal types. See [expressions](expressions.md#types).
+For typing, `Int`, `Decimal` and `Money` are the numeric types (an `Int` fits where a `Decimal` or `Money` is expected and a `Decimal` where a `Money` is expected, not the other way round), `String` and `Text` compare with each other, and `Date` and `DateTime` are the temporal types. See [expressions](expressions.md#types).
 
 ### Modifiers
 
 | Modifier | Meaning |
 |---|---|
 | `unique` | No two records share the value |
-| `state` | The field is the state of the entity. It must have an enum type, and only a [machine](behavior.md#machines) changes it; a `create` effect may set the state a record starts in. |
+| `state` | The field is the state of the entity. Only a [machine](behavior.md#machines) changes it, and a machine governs only a `state` field with an enum type; a `create` effect may set the state a record starts in. |
 | `owned` | The referenced records belong to this entity and go away with it, for example the lines of an order |
 
 ### Defaults

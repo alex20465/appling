@@ -7,7 +7,7 @@ The `@appling/codegen-go` extension writes one Go package per module, without a 
 
 ## Requirements
 
-Go 1.22 or later on the `PATH`. Decimal and money values use [shopspring/decimal](https://github.com/shopspring/decimal), which setup adds with `go get`.
+Go 1.22 or later on the `PATH`. Setup runs `go mod init <name>` and adds [shopspring/decimal](https://github.com/shopspring/decimal) v1.6.0, which decimal and money values use, with `go get`. The last step runs `gofmt -w .` over the project, after every file is written; `gofmt` ships with Go but is not checked before the run.
 
 ## Configuration
 
@@ -196,7 +196,9 @@ Lines indented deeper than the rest of the text become a preformatted block, the
 
 ## What becomes a task
 
-Queries, projections, interfaces, pages, flows, messages, use cases, external systems and jobs: they need storage, HTTP and scheduling decisions that the model leaves open. Queries and use cases still get their `Can...` check, and a query whose filter translates gets `In<Query>(record, inputs...) bool` in `queries.go`, which says whether a record belongs to its results, so the storage layer can apply it. Also derived fields, defaults, preconditions, guards, policies and effects that have no Go translation, such as `actor` outside a policy or a role, a `create`, `update` or `delete` effect that runs in a transition on an event, a `create` effect that leaves a required field without default unset, and an `emit` effect that leaves a required field of its event unset. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
+Queries, projections, interfaces, pages, navigations, flows, messages, use cases, external systems and jobs: they need storage, HTTP and scheduling decisions that the model leaves open. Queries and use cases still get their `Can...` check, and a query whose filter translates gets `In<Query>(record, inputs...) bool` in `queries.go`, which says whether a record belongs to its results, so the storage layer can apply it. Also derived fields, defaults, preconditions, guards, policies and effects that have no Go translation, such as `actor` outside a policy or a role, a `create`, `update` or `delete` effect that runs in a transition on an event, a `create` effect that leaves a required field without default unset, and an `emit` effect that leaves a required field of its event unset. The settings and secrets of an external system are not generated: each is a `todo` entry with the task `@appling/codegen-go does not generate ExternalKey yet`. The extension stays at the domain and behavior layers on purpose: generating the layers above means picking a storage, HTTP and scheduling stack, and that choice is deferred while Django and Ash catch up.
+
+The extension maps no [migration steps](migrations.md): with pending steps, `appling generate --migrate` fails with `@appling/codegen-go does not generate migrations.`, and [`--sync`](sync.md) merges the new generation without migrating.
 
 ## Run the generated project
 

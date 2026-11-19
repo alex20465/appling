@@ -50,11 +50,13 @@ Targets live in `appling.config.json` in the folder where you run the CLI, under
 
 | Key | Meaning |
 |---|---|
-| `extension` | The extension package, resolved from the folder of `appling.config.json`. Install it there with your package manager. The VS Code extension comes with the four stacks' packages and use theirs when the project has none. |
+| `extension` | The extension package, resolved from the folder of `appling.config.json`. Install it there with your package manager. |
 | `out` | The output folder, relative to that folder. It must be empty or missing. |
 | `options` | Options for the extension. `name` sets the project name; without it, the project is named after the output folder. `templates` names the folder of [template overrides](templates.md). |
 
 You can list several targets; they run in order, and the first one that fails stops the run. See [configuration](../reference/configuration.md) for the whole file.
+
+`appling init --stack <django|ash|go|rust>` writes the target for you: it adds the stack's extension with the output folder `build/<name>` to `appling.config.json`, unless a target of that extension exists, adds the target's local files (such as `.venv/` or `_build/`) to `.gitignore` and installs the extension package. See [start a new project](../getting-started/new-project.md).
 
 ## Preview the plan
 
@@ -64,7 +66,7 @@ You can list several targets; they run in order, and the first one that fails st
 $ appling generate --plan examples
 @appling/codegen-django -> build/shop
   (project): command: uv init --bare --name shop
-  (project): command: uv add django~=6.1.0 djangorestframework~=3.16
+  (project): command: uv add django~=6.1.0 djangorestframework~=3.16 rules~=3.5
   (project): command: uv run django-admin startproject config .
   (project): template: config/settings.py
   crm: command: uv run python manage.py startapp crm
@@ -80,26 +82,39 @@ $ appling generate --plan examples
   sales.Order: template: sales/policies.py
   ...
   crm.Clerk: template: crm/roles.py
+  crm.Clerk: template: crm/groups.py
+  crm.Clerk: template: crm/apps.py
   crm.Employee: template: crm/actors.py
+  ...
+  crm.Company: template: crm/tenants.py
+  crm.Company: template: config/settings.py
   ...
   sales.PublicApi: template: sales/api.py
   sales.PublicApi: template: sales/api_urls.py
   sales.PublicApi: template: config/urls.py
+  sales.Orders: template: sales/messages.py
+  sales.Orders: template: sales/pages.py
+  ...
+  sales.OnlyOwnOrders: template: sales/tests.py
   (project): command: uv run python manage.py makemigrations
 
 | kind | generated | partial | todo | tasks | left to code |
 |---|---|---|---|---|---|
-| Action | 2 | 0 | 0 | 0 | 0 |
+| Action | 2 | 0 | 0 | 0 | 1 |
 | Actor | 2 | 0 | 0 | 0 | 0 |
 ...
+| Flow | 0 | 0 | 1 | 1 | 0 |
+...
 | Job | 1 | 0 | 0 | 0 | 1 |
+...
+| Page | 2 | 0 | 0 | 0 | 1 |
 | Policy | 0 | 7 | 0 | 7 | 0 |
 ...
 | Tenant | 1 | 0 | 0 | 0 | 0 |
 ...
-| **total** | 60 (83%) | 11 | 1 | 13 | 2 |
+| **total** | 68 (86%) | 10 | 1 | 12 | 7 |
 
-72 element(s): 58 generated, 13 partial, 1 todo
+79 element(s): 63 generated, 15 partial, 1 todo
 ```
 
 Each line names the node that produced the step; `(project)` marks setup steps that run once. The table counts the registry entries per element kind by status and the registry tasks they leave, so you see where the extension still leaves work. The last line counts the registry entries by status.
@@ -157,7 +172,7 @@ The registry has one entry per graph node, with a status:
 | `partial` | The element was generated, with open tasks. |
 | `todo` | Nothing was generated; the entry holds only tasks. |
 
-An extension returns no steps at all for a kind it does not handle. That node becomes a `todo` entry with the task `<extension> does not generate <Kind> yet`: the registry carries it as open work with its model context.
+An extension returns no steps at all for a kind it does not handle. That node becomes a `todo` entry with the task `<extension> does not generate <Kind> yet`: the registry carries it as open work with its model context. Every extension does this for `migration` blocks, whose steps [`--migrate`](migrations.md) carries into a generated project, and the Go and Rust extensions for the settings and secrets of external systems.
 
 ## Access
 

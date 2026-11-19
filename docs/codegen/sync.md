@@ -32,7 +32,7 @@ Afterwards the fresh generation becomes the new baseline. Sync needs `git` on th
 
 ## Before the merge: migrations
 
-Sync first applies the model's pending migration steps, exactly as [`--migrate`](migrations.md) does, so renames reach the database as renames. The files a framework owns as history are never merged; every extension lists them:
+For an extension that maps migrations (Django and Ash), sync first applies the model's pending migration steps, exactly as [`--migrate`](migrations.md) does, so renames reach the database as renames. Go and Rust map no migrations, so their sync goes straight to the merge. The files a framework owns as history are never merged; every extension lists them:
 
 | Extension | Not synced |
 |---|---|

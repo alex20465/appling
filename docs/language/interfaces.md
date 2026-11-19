@@ -78,7 +78,7 @@ An interface can name the [external](application.md#settings-and-secrets) a vend
 | `auth <scheme> from <External>` | The vendor signs the users in, such as an identity provider | `auth bearer from Clerk` |
 | `interface <protocol> <Name> from <External>` | The vendor calls these endpoints, such as webhooks | `interface webhook ClerkEvents from Clerk` |
 
-A `webhook` interface must name its vendor: `A webhook interface names its vendor: "interface webhook ClerkEvents from <External>".` A webhook interface without endpoints gets a warning: `Webhook interface ClerkEvents has no endpoints.` For other protocols `from` is optional.
+A `webhook` interface must name its vendor, and one without endpoints gets a warning ([messages](validation.md#externals-and-vendors)). For other protocols `from` is optional.
 
 ```appling check
 module accounts {

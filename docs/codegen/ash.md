@@ -118,11 +118,14 @@ A machine becomes an `AshStateMachine` section on the resource of its state fiel
 
 A scheduled job becomes an `AshOban` trigger on the resource of its action: the action, a read action `<job>_targets` with keyset pagination that the scheduler pages through, the filter as `where`, the cron as `scheduler_cron`, a queue `<resource>_<job>` that is added to the Oban `queues` in `config/config.exs`, and explicit worker and scheduler module names. `now - duration("720h")` becomes `ago(720, :hour)`. When the model has policies, the resource's policies start with a bypass for AshOban, so the job runs as the system (see [policies](#policies)).
 
-This is the `Order` resource of the [example](../../examples/sales.appling) after the patches (attributes, relationships and policies omitted):
+This is the `Order` resource of the [example](../../examples/sales.appling) after the patches (attributes, identities, policies, multitenancy and calculations omitted):
 
 ```elixir
 defmodule Shop.Sales.Order do
+  @moduledoc "The reference is ORD, the year and a running number, assigned when the order is created"
+
   use Ash.Resource, otp_app: :shop, domain: Shop.Sales, data_layer: AshPostgres.DataLayer,
+    authorizers: [Ash.Policy.Authorizer],
     extensions: [AshJsonApi.Resource, AshOban, AshStateMachine]
 
   actions do
@@ -154,6 +157,13 @@ defmodule Shop.Sales.Order do
       filter expr(status in [:placed, :paid])
       prepare build(sort: [placed_at: :desc])
       pagination offset?: true, default_limit: 50, required?: false
+    end
+
+    read :orders_of do
+      argument :of, :uuid, allow_nil?: false
+      argument :since, :utc_datetime_usec, allow_nil?: true
+      filter expr((customer_id == ^arg(:of)) and (is_nil(^arg(:since)) or (placed_at >= ^arg(:since))))
+      prepare build(sort: [placed_at: :desc])
     end
   end
 

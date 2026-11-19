@@ -108,7 +108,7 @@ external Clerk {
 | `secret name: Type` | A credential; the graph marks it with `kind: "secret"` |
 | `describe "..."` | Where to find or how to choose the value, optional |
 
-The type is a primitive (`String`, `Int`, `Bool`, `Duration`, ...), optional with `?`; anything else is an error: `A secret has a primitive type, not String[].` Expressions do not read keys. An external that declares keys but that no step calls and no interface names gets a warning: `External Clerk declares settings or secrets, but nothing calls or names it.` Interfaces name an external with [`auth <scheme> from <External>`](interfaces.md#vendors) or `interface webhook <Name> from <External>`.
+The type is a primitive (`String`, `Int`, `Bool`, `Duration`, ...), optional with `?`; anything else is an error. Expressions do not read keys. An external that declares keys but that nothing calls or names gets a warning ([messages](validation.md#externals-and-vendors)). Interfaces name an external with [`auth <scheme> from <External>`](interfaces.md#vendors) or `interface webhook <Name> from <External>`.
 
 Code generation reads every key from the environment variable `<EXTERNAL>_<KEY>` in upper snake case (`CLERK_SECRET_KEY`) and lists them with their `describe` text in `.env.example` (see [Django](../codegen/django.md#settings-and-secrets) and [Ash](../codegen/ash.md#settings-and-secrets)).
 

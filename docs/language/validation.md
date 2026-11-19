@@ -200,4 +200,5 @@ Some things are left to you or to the tools:
 - `create` and `emit` do not have to assign every field of the entity or event.
 - The old type in a `retype` step is not compared with the model.
 - Message keys are plain names, not references.
-- The protocol of an interface, the verb of an endpoint, the `auth` scheme and the `every` schedule of a job are free text.
+- The protocol of an interface is free text, except that a `webhook` interface follows the [vendor rules](#externals-and-vendors).
+- The verb of an endpoint, the `auth` scheme, the `every` schedule of a job and the `timeout` of an `await` step are free text.

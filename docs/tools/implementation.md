@@ -37,7 +37,7 @@ The inspector does not generate. [`appling generate`](cli.md#generate) creates a
 Generation, with `appling generate` and `appling generate --sync`, records:
 
 - **Markers** in the code it wrote: an `@appling <qn> <fingerprint>` comment (see [Code references](references.md)) above the largest declaration among the lines each template step added, located again once every step ran (later steps may move them, such as imports added above); for a command step, above the first code of the files it declares it creates. A marker that would not mark that code, such as one inside a string, and code in files without comments (JSON) get none. Markers the element has elsewhere, such as code an agent marked, stay.
-- **Fingerprints** of the generated elements per target, in `.appling/generation.json` of the model folder: a hash of each element's kind and properties. An element whose fingerprint differs from the recorded one is outstanding.
+- **Fingerprints** of the generated elements per target, in `.appling/generation.json` of the current folder, the one `appling generate` runs in: a hash of each element's kind and properties. An element whose fingerprint differs from the recorded one is outstanding.
 
 ```json
 {

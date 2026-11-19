@@ -31,16 +31,26 @@ module sales {
 }
 ```
 
+## Start a project
+
+One command sets up a project and connects your coding agent to the model:
+
+```sh
+npx @appling/cli init todo
+```
+
+`init` asks for the project name, the coding agents to connect (Claude Code, Codex, OpenCode, Gemini CLI or Antigravity CLI) and the stack, writes a starter module and wires every agent to the Appling MCP server. Then describe what you want to your agent: it writes the model first and the code from it. See [Start a new project](getting-started/new-project.md).
+
 ## How it fits together
 
 ```mermaid
 flowchart LR
   text[".appling files"] --> lang["Parse, link, validate"]
   lang --> semantic["Semantic graph"]
-  semantic --> cli["CLI: check, fmt, graph, release"]
+  semantic --> cli["CLI: check, fmt, graph, generate"]
   semantic --> inspect["Inspect: canvas, inspector, task board"]
   semantic --> ai["AI: MCP server and agent sessions"]
-  semantic --> gen["Code generation: Django, Ash"]
+  semantic --> gen["Code generation: Django, Ash, Go, Rust"]
   ai -- "edit operations" --> text
   text -- "live marks" --> inspect
 ```
@@ -72,7 +82,8 @@ Each concept is defined once, in the layer that owns it. References only point d
 
 | If you want to | Read |
 |---|---|
-| Install the tools | [Installation](getting-started/installation.md) |
+| Start a project with your coding agent | [Start a new project](getting-started/new-project.md) |
+| Install the tools by hand | [Installation](getting-started/installation.md) |
 | Write and check a first model in ten minutes | [Your first model](getting-started/first-model.md) |
 | Derive a model from an application you already have | [Start from an existing project](getting-started/existing-project.md) |
 | Learn the language | [Language overview](language/overview.md) |

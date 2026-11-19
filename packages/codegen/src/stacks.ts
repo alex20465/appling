@@ -1,4 +1,4 @@
-// Browser safe: the IDE client offers the stacks from here.
+// Browser safe: `appling init` and other clients offer the stacks from here.
 
 /** The stacks Appling generates, by the extension package of each. */
 export const STACKS = {

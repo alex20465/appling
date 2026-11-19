@@ -100,7 +100,7 @@ Once the model has no other errors, `appling check` reports every failing scenar
 
 ```
 $ appling check examples
-examples/sales.appling:127:12 error Scenario ClerkCancelsDraft fails: order.status == placed is false.
+examples/sales.appling:137:12 error Scenario ClerkCancelsDraft fails: order.status == placed is false.
 2 file(s), 1 error(s)
 ```
 

@@ -3,11 +3,11 @@ title: Your first model
 description: Write a small shop model step by step, check it, format it, look at its graph and open it in the inspector.
 ---
 
-This tutorial builds a small shop: products, orders, a way to place an order and an API that lists placed orders. It touches four of the five layers and every CLI command you need day to day. You need [the CLI](installation.md#the-cli).
+This tutorial builds a small shop: products, orders, a way to place an order and an API that lists placed orders. It touches four of the five layers and every CLI command you need day to day. You need the CLI: a project set up with [`appling init`](new-project.md) has it, otherwise [install it](installation.md#the-cli).
 
 ## 1. Start with the domain
 
-Create a folder `models` and a file `models/shop.appling`:
+Create a folder `models` and a file `models/shop.appling` (in a project set up with `appling init`, use the starter module it wrote in `models/`):
 
 ```appling check
 module shop {
@@ -145,10 +145,10 @@ Open the project folder in the [inspector](../tools/inspect.md), in your browser
 npx appling inspect
 ```
 
-The model canvas opens. Click a module to unfold its declarations and select `PlaceOrder`: the inspector shows what it does, who may trigger it and where it is used. In VS Code the [Appling extension](../tools/vscode.md) opens the same canvas in a tab, and the cursor in a `.appling` file selects the element there. To try it without installing anything, open the [demo](https://appling.tools/inspect/).
+The model canvas opens on the domain level, L1, with the `shop` module open and its entities and enum inside. Click the tab on the top edge of `Order` to unfold what rests on it, its actions among them, and click `PlaceOrder`: the inspector shows what it does, who may trigger it and where it is used. Clicking the **L2** label at the left edge starts the pyramid from the actions instead. In VS Code the [Appling extension](../tools/vscode.md) opens the same canvas in a tab, and **Appling: Show in the inspector** selects the element at the cursor of a `.appling` editor. To try it without installing anything, open the [demo](https://appling.tools/inspect/).
 
 ## Next steps
 
 - Learn every construct in the [language overview](../language/overview.md), starting with the [domain layer](../language/domain.md).
 - Split the model into modules that reference each other: [modules and exports](../language/modules.md).
-- Generate a draft [Django](../codegen/django.md) or [Ash](../codegen/ash.md) project from it.
+- Generate a draft [Django](../codegen/django.md) or [Ash](../codegen/ash.md) project from it, or the domain and behavior layers as [Go](../codegen/go.md) packages or a [Rust](../codegen/rust.md) crate.

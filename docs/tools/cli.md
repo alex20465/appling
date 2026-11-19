@@ -46,7 +46,7 @@ Folder searches skip hidden folders (names starting with `.`, such as `.appling`
 
 ### Diagnostics
 
-`check`, `graph`, `release` and `generate` print one line per problem in the form `file:line:column severity message`, with the file relative to the current folder:
+`check`, `graph`, `release`, `generate`, `simulate` and `refs` print one line per problem in the form `file:line:column severity message`, with the file relative to the current folder:
 
 ```
 models/sales.appling:13:23 error A machine must govern an entity field marked "state" with an enum type.
@@ -69,7 +69,7 @@ appling init [folder] [--name <name>] [--agents <agents>] [--stack <stack>]
 | `--agents` | asked | A comma separated list of `claude`, `codex`, `opencode`, `gemini` and `antigravity` |
 | `--stack` | asked | `django`, `ash`, `go`, `rust`, or `none` to decide later |
 
-`init` asks for what the flags leave open. Without a terminal it asks nothing and exits with 2 unless all three flags are given. The package manager is the one of the project's lockfile, else the one that ran `init` (`pnpm dlx`, `yarn dlx`, `bunx`), else npm. Running `init` again keeps existing settings and changes nothing. Besides the agents' files it writes `appling.config.json` (empty with `--stack none`) and adds the missing lines to `.gitignore`: `node_modules/`, `.appling/view.json` and the stack's local files in its output folder (see [What it writes](../getting-started/new-project.md#what-it-writes)).
+`init` asks for what the flags leave open. Without a terminal it asks nothing and exits with 2 unless all three flags are given. The package manager is the one of the project's lockfile, else the one that ran `init` (`pnpm dlx`, `yarn dlx`, `bunx`), else npm. Running `init` again keeps existing settings and adds nothing twice; it does run the package installation again. Besides the agents' files it writes `appling.config.json` (empty with `--stack none`) and adds the missing lines to `.gitignore`: `node_modules/`, `.appling/view.json` and the stack's local files in its output folder (see [What it writes](../getting-started/new-project.md#what-it-writes)).
 
 ```sh
 npx @appling/cli init todo --name todo --agents claude,codex --stack none
@@ -355,10 +355,10 @@ A marker whose name a migration step renamed since reports `stale, the marker na
 | Code | Meaning |
 |---|---|
 | 0 | No errors |
-| 1 | `init` was cancelled or the installation failed; `inspect` got a folder that does not exist or its server failed; `check`, `graph`, `release`, `generate` or `refs` found errors in the model; `refs --check` found a reference that is not current; `release` got an invalid or existing version; `generate` has no targets, a missing prerequisite, a non empty output folder, a failing step, or (with `--migrate`) a target that was not generated; `fmt` skipped a file with syntax errors |
+| 1 | `init` was cancelled or the installation failed; `inspect` got a folder that does not exist or its server failed; `check`, `graph`, `release`, `generate`, `simulate` or `refs` found errors in the model; `simulate` got an element the model does not have; `refs --check` found a reference that is not current; `release` got an invalid or existing version; `generate` has no targets, a missing prerequisite, a non empty output folder, a failing step, (with `--migrate`) a target that was not generated, or (with `--sync`) a target without a generation baseline; `fmt` skipped a file with syntax errors |
 | 2 | Unknown command, `init` with an unknown flag or an invalid `--name`, `--agents` or `--stack`, or without a terminal and not every flag given, `release` without a version, `refs` without a qualified name or `--check`, or `simulate` without a known question and its arguments |
 
-Exit code 2 also prints the usage.
+Exit code 2 also prints the usage, except for `init`, which prints only what is wrong with its flags.
 
 ## Examples
 

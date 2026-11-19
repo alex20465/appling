@@ -268,7 +268,8 @@ The reference kinds, with the element the edge starts from:
 | `actions` | A page (its `list` and `detail` components) | The actions offered |
 | `target` | A use case (its calls); an endpoint; a scenario (its `when` call) | The action, query, use case or external operation |
 | `persona` | A scenario (its `as`) | The actor or role |
-| `source` | A projection | Its entity or query |
+| `source` | A projection; an interface (its `from`, such as the vendor of a webhook) | Its entity or query; the external system |
+| `authBy` | An interface (`auth <scheme> from`) | The external system its authentication comes from |
 | `projection` | An endpoint; a page (its components) | The projection |
 | `picks` | An endpoint; a page (its components) | The picked projection fields |
 | `query` | A page (its `list` components) | The query |

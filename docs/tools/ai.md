@@ -39,7 +39,7 @@ The server reads the files on every tool call, so it always sees the current tex
 
 ### Claude Code
 
-Add the server to the project (stdio):
+[`appling init`](../getting-started/new-project.md) adds the server to the project's `.mcp.json` and approves it in `.claude/settings.json`. To add it by hand (stdio):
 
 ```sh
 claude mcp add appling -- npx appling-mcp .
@@ -71,7 +71,7 @@ Use an absolute folder here, since the client decides the working directory.
 
 ## Tools
 
-The server registers thirteen tools, and five more [visual tools](#visual-tools) for agent sessions over the inspector server's `/mcp`. Each returns its result as JSON text.
+The server registers fourteen tools: five model tools, two authoring tools, one view tool, three registry tools and three reference tools. Over the inspector server's `/mcp`, an agent session also gets six [visual tools](#visual-tools) and nine [session tools](#session-tools). Each returns its result as JSON text.
 
 ### Model tools
 
@@ -182,7 +182,7 @@ The registry skill lives in the package at `skills/appling-registry/SKILL.md`. I
 
 Entries that need a decision only a person can make (credentials, an external system's real behavior, product choices) end as `partial` with the question in the note. Effort follows the [relevance](../language/relevance.md) of the element: `core` declarations are implemented completely with tests for their rules, `peripheral` ones get the simplest correct implementation.
 
-To install it for Claude Code, copy the folder into your project's skills folder, next to the MCP server:
+[`appling init`](../getting-started/new-project.md) links it into the skills folder of every agent it connects, together with the other skills of the package. Without `init`, copy the folder into your project's skills folder for Claude Code, next to the MCP server:
 
 ```sh
 mkdir -p .claude/skills
@@ -195,7 +195,7 @@ Then ask Claude Code to finish the generated project; the skill's description ma
 
 An agent in an [agent session](#agent-sessions) shows you the model on the [inspector](inspect.md)'s canvas while you talk to it in the terminal. Ask for it in words, such as "show me the order lifecycle" or "draw what PlaceOrder does", or ask how a part of the application works, such as "how does observability work": the agent finds the elements with the model tools, calls `visualize` and explains them with `visual_bubble`. The stdio and HTTP servers of `appling-mcp` have no visual tools; they exist only over the inspector server's `/mcp`, where the canvas is.
 
-The canvas never moves on its own: a session's view waits as a chip at the top right of the canvas, under the session's name and colour, until you open it. Then it follows each new view and bubble of that session; **Back to the model** returns to your own tree. See [Agent views](inspect.md#agent-views).
+The canvas never moves on its own: a session's view waits as a chip at the top right of the canvas, under the session's name and colour, until you open it. Then it follows each new view and bubble of that session; **Back to the model** returns to your own pyramid. See [Agent views](inspect.md#agent-views).
 
 ### Views
 
@@ -217,7 +217,7 @@ The `node` view lets the agent walk you through the model. Each `visualize` with
 
 The agent explains what happens at an element with `visual_bubble`. A bubble points at the element, or at one of its members such as a field; when the view draws only the element, the bubble names the member. A code bubble carries a few lines of code that hint how the element is implemented, with the file and line they come from, such as a [code reference](references.md). A bubble whose element the view does not draw shows in the bottom left corner.
 
-The canvas shows one bubble at a time, so none covers another. It grows as large as its text and code need and shows the code in full. Its pointer leads to the element it is about, and that element is selected: highlighted in the view and shown in the inspector. On the tree the camera glides to the element only when it or the room for the bubble below it is out of view; in a flowchart or on cards the view scrolls smoothly to it. Back and Next at the bottom of the bubble step through the explanation in the agent's order, with the step number between them. A row of numbered steps above the canvas lists every bubble of the view, named after its title or the element or member it points at, so you can also jump to one. On the tree, a bubble whose element belongs to another lens switches the tree to the lens of its kind. The first bubble of the session is shown; later ones join the tabs and the step count without moving you away from the bubble you are reading, and Next reaches them. Bubbles stay while the view stays, and through every `node` view that adds to the tree; another view clears them.
+The canvas shows one bubble at a time, so none covers another. It grows as large as its text and code need and shows the code in full. Its pointer leads to the element it is about, and that element is selected: highlighted in the view and shown in the inspector. In the pyramid the camera glides to the element only when it or the room for the bubble below it is out of view; in a flowchart or on cards the view scrolls smoothly to it. Back and Next at the bottom of the bubble step through the explanation in the agent's order, with the step number between them. A row of numbered steps above the canvas lists every bubble of the view, named after its title or the element or member it points at, so you can also jump to one. In the pyramid, a bubble whose element belongs to another level switches the entry level to the level of its kind. The first bubble of the session is shown; later ones join the tabs and the step count without moving you away from the bubble you are reading, and Next reaches them. Bubbles stay while the view stays, and through every `node` view that adds to the pyramid; another view clears them.
 
 ### Playbooks
 

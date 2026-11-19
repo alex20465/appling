@@ -126,7 +126,7 @@ Renaming the enum value `sales.OrderStatus.draft` to `open` changes both the val
 
 | Field | Meaning |
 |---|---|
-| `target` | A field or parameter |
+| `target` | A field, a parameter or an external system's `setting` or `secret` key |
 | `type` | The new type in Appling syntax, such as `Money`, `crm.Account`, `Line[]` or `DateTime?` |
 
 Retype replaces the type and prints the element canonically: `total: Money` becomes `total: Decimal`. It is rejected when the new type breaks something, for example an expression that no longer type checks.

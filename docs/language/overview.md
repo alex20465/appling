@@ -119,7 +119,7 @@ flowchart TD
 | From | May reference |
 |---|---|
 | Any layer | Its own layer and cross cutting declarations |
-| Cross cutting | L1 (an actor field of an entity type, a tenant on an entity) |
+| Cross cutting | L1 (an actor bound to an entity with `is`, an actor field of an entity type, a tenant on an entity) |
 | L1 Domain | Nothing above it |
 | L2 Behavior | L1 |
 | L3 Application | L1, L2 |
@@ -129,7 +129,7 @@ flowchart TD
 
 L4 and L5 never reference an entity directly. They reach entity data only through L3 projections. Names inside expressions are not references in this sense; they resolve by position, as described in [expressions](expressions.md).
 
-A rejected reference is reported as `<layer> element <Kind> may not reference <layer> element <Kind> "<name>".`, with the layers spelled `cross`, `domain`, `behavior`, `application`, `interface` and `experience`. Most reference positions accept only certain kinds of declarations anyway (an endpoint targets a query, an action or a use case), so the grammar already rules out many edges before this check runs.
+The validator reports a rejected reference as listed under [validation](validation.md#layers). Most reference positions accept only certain kinds of declarations anyway (an endpoint targets a query, an action or a use case), so the grammar already rules out many edges before this check runs.
 
 ## Qualified names
 
@@ -150,7 +150,7 @@ There are no separate ids. Tools such as the [graph](../reference/graph.md), the
 
 ### Content keys of unnamed elements
 
-Some elements have no name. Most examples below come from [sales.appling](../../examples/sales.appling). Unnamed elements get a key derived from their content, written in brackets after their kind.
+Some elements have no name. Most examples below come from [sales.appling](../../examples/sales.appling), `shop.Checkout` from [behavior](behavior.md#loops-related-records-and-deletes). Unnamed elements get a key derived from their content, written in brackets after their kind.
 
 | Element | Key | Example |
 |---|---|---|
@@ -161,6 +161,7 @@ Some elements have no name. Most examples below come from [sales.appling](../../
 | Set effect | `effect[set <field>]` | `sales.PlaceOrder.effect[set placed_at]` |
 | Create effect | `effect[create <entity>]` | `sales.Reorder.effect[create Order]` |
 | Emit effect | `effect[emit <event>]` | `sales.OrderFlow.transition[draft->placed].effect[emit OrderPlaced]` |
+| For, update, delete effect | `effect[for <variable>]`, `effect[update <last path name>]`, `effect[delete self]` | `shop.Checkout.effect[for item].effect[update product]` |
 
 When two siblings share a key, an ordinal is appended to the second and later ones: `policy[read]#2`.
 

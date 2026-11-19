@@ -84,7 +84,7 @@ Every graph node has an entry, so the registry is also the coverage report and t
 | `plan(graph, extension, name, options, root?)` | The ordered steps and registry entries; `root` holds the template overrides |
 | `templateRenderer(root, extension, options)`, `overrideFolder(...)`, `ORIGINAL` | The Nunjucks renderer behind `context.render`, the project's override folder, and the `original:` prefix |
 | `runPlan(plan, out, log)` | Runs the steps, marks the written code, writes the registry and the baseline (async) |
-| `checkPrerequisites(prerequisites)` | Messages for missing tools |
+| `checkPrerequisites(prerequisites, graph?)` | Messages for missing tools; with a graph, only for the tools that model needs |
 | `readConfig(root)`, `loadExtension(name, root)` | Configuration and extension loading |
 | `STACKS`, `STACK_LABELS`, `STACK_LOCAL`, `addTarget(root, stack, name)`, `ignore(root, lines)` | The stacks and their packages (also `@appling/codegen/stacks`, browser safe), and adding a stack's target to `appling.config.json` |
 | `describe(step)` | A one line description of a step |

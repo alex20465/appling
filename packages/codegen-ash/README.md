@@ -12,7 +12,7 @@ Appling code generation extension for [Ash](https://ash-hq.org) on Elixir. It tu
 
 The project is created next to the output folder with `mix igniter.new <name>`, so the project name (the `name` option, or by default the output folder's name) must be the output folder's name.
 
-Requires Elixir 1.17 or later and the `igniter_new` archive (`mix archive.install hex igniter_new`).
+Requires Elixir 1.17 or later and the `igniter_new` archive (`mix archive.install hex igniter_new`). Models with pages also need the `phx_new` archive (`mix archive.install hex phx_new`).
 
 ## What it generates
 

@@ -121,10 +121,11 @@ Some positions look up names locally instead of through the module scope:
 |---|---|
 | `picks` of an endpoint, `list` or `detail` (`{ reference, status }`) | The fields of the projection after `as` (or of the `detail` projection) |
 | `sort` in a query | The fields of the query's entity |
-| `set` in an effect | The fields of the action's entity, or of the machine's entity inside a transition |
+| `set`, `for x in` in an effect | The fields of the action's entity, or of the machine's entity in a transition; a `set` inside `update path { }`, of the record the path leads to |
 | `on <Error> do` in a use case step | The errors declared by the called action or external operation |
 | `else <Error>` after `requires` | The errors declared by the same action |
 | `policy ... fields` | The fields of the entity that holds the policy |
+| `then fails <Error>` | The errors of the scenario's called action, or of what its use case calls |
 
 Names inside expressions are not references. They resolve by their position, as described in [expressions](expressions.md). Two of them reach across modules:
 

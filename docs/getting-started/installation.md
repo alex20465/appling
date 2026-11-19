@@ -5,10 +5,13 @@ description: Install the Appling CLI, connect an AI assistant and prepare the to
 
 Appling is a set of npm packages. You only install what you use: the CLI is enough to write and check models; the VS Code extension, the MCP server and the code generators come on top.
 
+> [!TIP]
+> The quickest start is `npx @appling/cli init`. It installs the CLI, the AI package and the stack's generator into the project and connects your coding agents in one step. See [Start a new project](new-project.md). This page installs each part by hand.
+
 ## Requirements
 
 - Node.js 24 or later.
-- For code generation only: [uv](https://docs.astral.sh/uv/) for the Django target, Elixir 1.17 or later with the `igniter_new` archive for the Ash target. See the [Django](../codegen/django.md) and [Ash](../codegen/ash.md) pages for the exact requirements.
+- For code generation only, the toolchain of your target: [uv](https://docs.astral.sh/uv/) for Django, Elixir 1.17 or later with the `igniter_new` archive for Ash, Go 1.22 or later for Go, Rust 1.85 or later with Cargo for Rust. See the [Django](../codegen/django.md), [Ash](../codegen/ash.md), [Go](../codegen/go.md) and [Rust](../codegen/rust.md) pages for the exact requirements.
 
 ## The CLI
 
@@ -38,9 +41,7 @@ Without a path it checks every `.appling` file below the current folder. See [th
 
 ## AI assistants
 
-To set up a new project with Claude Code, Codex, OpenCode, Gemini CLI or Antigravity CLI in one step, run `npx @appling/cli init`. See [Start a new project](new-project.md).
-
-The MCP server works with Claude Code, Claude Desktop and any other MCP client. For Claude Code, install it in the project and register it:
+[`appling init`](new-project.md) connects Claude Code, Codex, OpenCode, Gemini CLI and Antigravity CLI: the MCP server, the rules and the skills. The MCP server also works with Claude Desktop and any other MCP client. To connect an agent by hand, install the server in the project and register it, here for Claude Code:
 
 ```sh
 npm install --save-dev @appling/ai
@@ -51,7 +52,7 @@ In [VS Code](../tools/vscode.md#agent-sessions), agents started from the extensi
 
 ## Code generators
 
-Install the extension for your target next to the CLI, then list it in `appling.config.json`:
+`appling init --stack <stack>` installs the extension of your target and writes its entry in `appling.config.json`. By hand, install the extension next to the CLI, then list it in `appling.config.json`:
 
 ```sh
 npm install --save-dev @appling/codegen-django

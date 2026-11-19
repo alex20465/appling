@@ -70,6 +70,10 @@ build/shop: no pending migration steps
 
 `--migrate` needs a project that `appling generate` created: it stops with `<out> was not generated yet` when the output folder has no registry. It does not check prerequisites, so the framework tools must be installed when a step runs a command.
 
+Only the Django and Ash extensions map migration steps. For a Go or Rust target with pending steps, `--migrate` fails with `@appling/codegen-go does not generate migrations.` (or `@appling/codegen-rust`); without pending steps it reports `no pending migration steps`.
+
+The `migration` blocks themselves are no code: every extension gives each block a `todo` registry entry with the task `<extension> does not generate Migration yet`.
+
 > [!WARNING]
 > `appling generate` does not record the steps that already exist in the model as applied. If the model had migration blocks when you generated the project, the first `--migrate` treats all of them as pending, although the generated code already reflects them. Write the ids of those steps into `.appling/migrations.json` of the new project before you run `--migrate`.
 
@@ -108,7 +112,7 @@ class Migration(migrations.Migration):
     ]
 ```
 
-Every `--migrate` run writes new migration files after the app's latest one, so a migration that is already applied never changes. Enum choices are written out as values in migrations, as Django does itself, so the history does not change when the enum changes later. Each mapped step also adds the task `update the code that uses <target> after the <kind>; models and migrations are done`. Any other step, such as a change to a value type, becomes the task `carry the <kind> of <target> into the database and the code`.
+Every `--migrate` run writes new migration files after the app's latest one, so a migration that is already applied never changes. Enum choices are written out as values in migrations, as Django does itself, so the history does not change when the enum changes later. Each mapped step also adds the task `update the code that uses <target> after the <kind>; models and migrations are done`, which names the new name for a rename (`after the rename to number`). Any other step, such as a change to a value type, becomes the task `carry the <kind> of <target> into the database and the code`.
 
 Apply the migration with `uv run python manage.py migrate`.
 
@@ -122,7 +126,7 @@ The Ash extension handles the fields of entities. For each step it patches the r
 | retype a field | `modify :field, <column type>` in `alter table` | the attribute's type |
 | remove a field | `remove :field` in `alter table` | the attribute and every mention of `:field` removed |
 
-The table name comes from the `table "..."` line of the resource; without one, the step becomes a task. Each mapped step adds the task `update the code that uses <target> after the <kind>; resources and migrations are done`. Renamed or removed entities, renamed enum values and anything else become the task `carry the <kind> of <target> into the resources and the database`.
+The table name comes from the `table "..."` line of the resource; without one, the step becomes a task. Each mapped step adds the task `update the code that uses <target> after the <kind>; resources and migrations are done`, which names the new name for a rename (`after the rename to number`). Renamed or removed entities, renamed enum values and anything else become the task `carry the <kind> of <target> into the resources and the database`.
 
 Apply the migration with `mix ash.migrate`.
 

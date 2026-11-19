@@ -1,6 +1,6 @@
 ---
 title: Start from an existing project
-description: Derive an Appling model from an application you already have with an AI agent connected to the Appling MCP server, then review it and generate from it.
+description: Derive an Appling model from an application you already have with appling init and an AI agent connected to the Appling MCP server, then review it and generate from it.
 ---
 
 You do not have to write a model from scratch. An AI agent reads the code of your existing application and writes the Appling model for it, one module at a time. It works with any codebase that has a data model: Django, Ash, Rails, Spring, Express, Prisma and others.
@@ -12,27 +12,21 @@ No AI model knows Appling from its training, so the [MCP server](../tools/ai.md#
 - Node.js 24 or later.
 - An AI agent that supports MCP. This guide uses [Claude Code](https://claude.com/claude-code); any MCP client works.
 
-## 1. Install the tools
+## 1. Set up the project
 
-In the root folder of your existing project, install the CLI and the AI package, and create an empty folder for the model:
+In the root folder of your existing project, run [`appling init`](new-project.md):
 
 ```sh
-npm install --save-dev @appling/cli @appling/ai
-mkdir models
+npx @appling/cli init
 ```
 
-> [!NOTE]
-> Create the folder before you connect the agent. The MCP server reads it on every tool call and fails when it does not exist.
+It asks for the project name, the coding agents to connect and the stack to generate later (pick none to decide later). It installs `@appling/cli` and `@appling/ai` as development dependencies, keeps the `package.json` you have, writes an empty starter module in `models/<name>.appling`, the configuration and the `.gitignore` entries, and connects each agent to the Appling MCP server with its rules and skills. See [What it writes](new-project.md#what-it-writes).
 
 ## 2. Connect the agent
 
-Register the MCP server with Claude Code and point it at the model folder:
+There is nothing left to do for the agents `init` connected: the MCP server serves the project root, so the agent writes the model into `models/` and sees your code, your releases and your generate targets in the same folder. Claude Code asks once whether to use the servers of `.mcp.json`.
 
-```sh
-claude mcp add appling -- npx appling-mcp models
-```
-
-The agent runs in your project root and reads your code with its own tools. The MCP server only sees `models`, the folder the model is written into. For other clients, see [Other MCP clients](../tools/ai.md#other-mcp-clients).
+For another MCP client, install the package and register `npx appling-mcp .` from the project root; see [Other MCP clients](../tools/ai.md#other-mcp-clients).
 
 ## 3. Derive the model
 
@@ -42,12 +36,7 @@ Start Claude Code in the project root and run the prompt the server provides:
 /mcp__appling__derive_model
 ```
 
-In other clients, pick the `derive_model` prompt from the server's prompts. You can also install the same instructions as a skill, so the agent loads them when you ask in your own words, such as "reverse engineer this application into an Appling model":
-
-```sh
-mkdir -p .claude/skills
-cp -r node_modules/@appling/ai/skills/appling-reverse .claude/skills/
-```
+In other clients, pick the `derive_model` prompt from the server's prompts. The same instructions are the `appling-reverse` skill, which `init` links into the agent's skills folder, so the agent also loads them when you ask in your own words, such as "reverse engineer this application into an Appling model".
 
 The agent then works through these steps:
 
@@ -79,17 +68,18 @@ The agent then works through these steps:
 
 ## 4. Review the result
 
-Check the model, then open the project in the [inspector](../tools/inspect.md) (`npx appling inspect`) to explore it on the canvas:
+Check the model, then open the project in the [inspector](../tools/inspect.md) to explore it on the canvas:
 
 ```sh
 npx appling check models
+npx appling inspect
 ```
 
 `check` reports the number of files and `0 error(s)`; the agent never leaves the model invalid. Read the comments the agent left and its summary of what it could not model exactly. The model now describes what your application does; correct it where the code does something by accident rather than by intent.
 
 ## 5. Keep going
 
-- Cut a [release](../language/migrations.md) with `npx appling release 1.0.0 models`, so later renames and type changes become migration steps.
-- Check which code was written against an older version of its element, from the model folder: `cd models && npx appling refs --check`. See [Code references](../tools/references.md).
+- Cut a [release](../language/migrations.md) with `npx appling release 1.0.0 models` from the project root, so later renames and type changes, also the agent's, become migration steps.
+- Check which code was written against an older version of its element: `npx appling refs --check`. See [Code references](../tools/references.md).
 - [Generate](../codegen/overview.md) a project for Django, Ash, Go or Rust from the model.
 - Keep working on the model with the agent: the same MCP server [edits](../tools/ai.md#tools) it through validated operations.

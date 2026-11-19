@@ -14,6 +14,8 @@ The full language documentation lives at [appling.tools/docs](https://www.applin
 module sales {
   export Order, OrderSummary
 
+  role Clerk
+
   enum OrderStatus {
     draft
     placed

@@ -16,7 +16,7 @@ $ ls node_modules/@appling/codegen-django/templates/models
 actor-user.py.njk  entity.py.njk  enum.py.njk  value.py.njk
 ```
 
-Every template starts with a comment that says what it renders and which file the code lands in. Shared pieces, such as the docstring of a Python class, are macros in a folder named after the language (`python/`, `elixir/`, `go/`, `rust/`).
+Every template starts with a comment that says what it renders and which file the code lands in. Shared pieces, such as the docstring of a Python class, are macros in a folder named after the language: `python/` in Django, `go/` in Go and `rust/` in Rust. The Ash templates have no shared macros.
 
 ## Override a template
 
@@ -63,7 +63,7 @@ A template with several sections names each one as a block. An override can exte
 {% endblock %}
 ```
 
-A block of an override sees the template's data and the macros the original imports.
+A block of an override sees the template's data and the macros the original imports. A replaced block drops what the original block wrote: the original `meta` block holds the `CheckConstraint`s of the entity's invariants, so this override leaves them out. To keep them, copy the original block's content into yours.
 
 ## What a template gets
 

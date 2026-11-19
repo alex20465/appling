@@ -28,9 +28,9 @@ The extension starts when the workspace contains a `.appling` file or an `applin
 
 ## The Appling view
 
-The Appling icon in the activity bar opens the Appling sidebar: **Projects** and **Agent Sessions**, and while an inspector tab is open the [panels](#the-panels) of the project shown, each a section you fold and unfold.
+The Appling icon in the activity bar opens the Appling sidebar: **Projects**, **Agent Sessions** once the workspace has a project, and while an inspector tab is open the [panels](#the-panels) of the project shown, each a section you fold and unfold.
 
-**Projects** lists every Appling project of the workspace, each with its modules. A project is a folder with an `appling.config.json`, or a workspace folder with `.appling` files outside such a folder. The description shows the project's folder, the number of errors in its model, `starting` while its inspector server starts, or `not running` when it failed (the reason is in its tooltip). Click a project, or run **Appling: Open the inspector** from the command palette, to open its inspector tab. Click a module to open the tab with that module selected on the canvas. The view follows new and removed model files; the refresh button in its title finds the projects again.
+**Projects** lists every Appling project of the workspace, each with its modules. A project is a folder with an `appling.config.json`, or a workspace folder with `.appling` files outside such a folder. The description shows the project's folder, the number of errors in its model, `starting` while its inspector server starts, or `not running` when it failed (the reason is in its tooltip). Click a project, or run **Appling: Open the inspector** from the command palette, to open its inspector tab. Click a module to open the tab with that module selected on the canvas. The view follows new and removed model files; the refresh button in its title, or **Appling: Find the projects again** from the command palette, finds the projects again.
 
 **Agent Sessions** lists the agent sessions with their status and project. See [Agent sessions](#agent-sessions).
 

@@ -52,7 +52,7 @@ module accounts {
 }
 ```
 
-Every named element takes `describe`: `module`, `role`, `actor`, `tenant`, `enum` and its values, `value`, `entity`, fields, `event`, `action`, its inputs and errors, `machine`, `job`, `query`, `projection` and its fields, `external` and its operations, `usecase` and its parameters, `interface`, `page`, `navigation`, `flow`, `messages` and `migration`. Fields, parameters, errors, enum values, operations, `role`, `tenant` and `job` put it at the end.
+Every named element takes `describe`: `module`, `role`, `actor`, `tenant`, `enum` and its values, `value`, `entity`, fields, `event`, `action`, its inputs and errors, `machine`, `job`, `query`, `projection` and its fields, `external` with its operations and its `setting` and `secret` keys, `usecase` and its parameters, `interface`, `page`, `navigation`, `flow`, `messages`, `migration` and `scenario`. Fields, parameters, errors, enum values, operations, keys, `tenant`, `job` and a `role` or `actor` without braces put it at the end.
 
 An annotation on a declaration of another level is a syntax error. All six words stay valid as names, so a field may be called `does`.
 

@@ -3,7 +3,7 @@ title: Configuration
 description: The appling.config.json file and every file Appling writes into .appling folders, with their exact shapes.
 ---
 
-Appling keeps the model in `.appling` files and everything else out of them. Project settings live in `appling.config.json`. Tools write their own state into hidden `.appling` folders: one in your workspace (view settings and releases) and one in each generated project (task registry and applied migrations). Hidden folders are never searched for model files.
+Appling keeps the model in `.appling` files and everything else out of them. Project settings live in `appling.config.json`. Tools write their own state into hidden `.appling` folders: one in your workspace (view settings and releases) and one in each generated project (task registry, applied migrations and the sync baseline). Hidden folders are never searched for model files.
 
 ## appling.config.json
 
@@ -48,9 +48,11 @@ The built in extensions read two options:
 | Extension | Notes |
 |---|---|
 | `@appling/codegen-django` | The name becomes the uv project name (`uv init --bare --name <name>`). Needs `uv` |
-| `@appling/codegen-ash` | The project is created with `mix igniter.new <name>` next to the output folder, so the name must equal the `out` folder's name; leave `name` out. Needs Elixir 1.17 or later and the `igniter_new` archive |
+| `@appling/codegen-ash` | The project is created with `mix igniter.new <name>` next to the output folder, so the name must equal the `out` folder's name; leave `name` out. Needs Elixir 1.17 or later and the `igniter_new` archive, plus the `phx_new` archive when the model has pages |
+| `@appling/codegen-go` | The name becomes the Go module path (`go mod init <name>`). Needs Go 1.22 or later |
+| `@appling/codegen-rust` | The name, lowercased and with every character other than a letter, a digit or `_` replaced by `_`, becomes the crate name (`cargo init --lib`). Needs Rust 1.85 or later |
 
-What each extension generates is described in [Django](../codegen/django.md) and [Ash](../codegen/ash.md). Third party extensions may read more options; see [Writing extensions](../codegen/extensions.md).
+What each extension generates is described in [Django](../codegen/django.md), [Ash](../codegen/ash.md), [Go](../codegen/go.md) and [Rust](../codegen/rust.md). Third party extensions may read more options; see [Writing extensions](../codegen/extensions.md).
 
 ## The workspace .appling folder
 
@@ -113,13 +115,15 @@ Commit the releases folder: it is the record of what your generated projects and
 
 ## The generated project's .appling folder
 
-`appling generate` creates an `.appling` folder inside each output folder:
+`appling generate` creates an `.appling` folder inside each output folder. `appling generate --migrate` and `--sync` read and update it:
 
 ```
 build/shop/
   .appling/
     tasks.json
     migrations.json
+    baseline/
+    baseline-tasks.json
 ```
 
 ### tasks.json
@@ -189,3 +193,7 @@ The migration steps already carried into the project by `appling generate --migr
 ```
 
 An id is the qualified name of the migration block, `#`, and the step's position in it, counting from 0. Steps listed here are never applied again, so do not reorder or remove steps in a block after you migrated a project from it. See [Migrations in generated projects](../codegen/migrations.md).
+
+### baseline
+
+`.appling/baseline/` holds a copy of the project as generation left it, and `.appling/baseline-tasks.json` the registry it wrote. They are the base of the three way merge of [`appling generate --sync`](../codegen/sync.md): the baseline, the project as it is, and a fresh generation of the changed model. Every generation and every sync replaces them. The copy leaves out `.appling`, `.git`, `node_modules` and the paths the extension excludes from sync, such as migration history, dependencies and build output. Do not edit these files.

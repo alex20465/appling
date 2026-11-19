@@ -14,15 +14,21 @@ flowchart BT
   codegen["@appling/codegen<br/>plan, steps, registry, migrations"]
   django["@appling/codegen-django"]
   ash["@appling/codegen-ash"]
+  go["@appling/codegen-go"]
+  rust["@appling/codegen-rust"]
   ai["@appling/ai<br/>MCP server, agent sessions, registry skill"]
   cli["@appling/cli<br/>the appling command"]
   viz["@appling/viz<br/>views and canvases"]
   inspect["@appling/inspect<br/>the read only inspector"]
   landing["@appling/landing<br/>site and docs"]
+  pty["@appling/pty-host<br/>terminals that outlive the app"]
+  vscode["appling-vscode<br/>the VS Code extension"]
   model --> lang
   codegen --> model
   django --> codegen
   ash --> codegen
+  go --> codegen
+  rust --> codegen
   ai --> model
   ai --> codegen
   cli --> model
@@ -30,10 +36,17 @@ flowchart BT
   ai --> viz
   viz --> model
   inspect --> model
+  inspect --> codegen
   inspect --> ai
   inspect --> viz
   cli --> inspect
+  landing --> lang
   landing --> model
+  vscode --> lang
+  vscode --> inspect
+  vscode --> ai
+  vscode --> cli
+  vscode --> pty
 ```
 
 | Package | Role |
@@ -41,12 +54,14 @@ flowchart BT
 | `@appling/lang` | The grammar (`src/appling.langium`, built with [Langium](https://langium.org)), the scope provider, the validator with the layer rules, the expression typer, the canonical printer and the language server |
 | `@appling/model` | Turns resolved models into the serializable [semantic graph](../reference/graph.md); applies [edit operations](../reference/edit-operations.md) as minimal text edits; writes release snapshots and migration steps |
 | `@appling/codegen` | The extension contract, planning in layer order, the step runner, the task registry and migration planning |
-| `@appling/codegen-django`, `@appling/codegen-ash` | Extensions: a map from graph node kinds to commands, templates and tasks |
+| `@appling/codegen-django`, `@appling/codegen-ash`, `@appling/codegen-go`, `@appling/codegen-rust` | Extensions: a map from graph node kinds to commands, templates and tasks |
 | `@appling/ai` | The workspace `Project`, the tool definitions of the MCP server, agent sessions and the registry skill |
-| `@appling/cli` | `check`, `fmt`, `graph`, `release`, `generate`, `inspect` |
+| `@appling/cli` | `init`, `inspect`, `check`, `fmt`, `graph`, `release`, `generate`, `simulate`, `refs` |
 | `@appling/viz` | The pure view logic (tree, search, flowcharts, cards) and the SVG canvases |
 | `@appling/inspect` | The read only inspector next to an AI coding tool: a server per repo (snapshot, live changes, review, sessions, `/mcp`) and a React client with the canvases of `@appling/viz`, the inspector sidebar and the task board; run by the VS Code extension and `appling inspect`, also built as the browser demo of the landing site |
 | `@appling/landing` | The Astro site, which also renders `docs/` |
+| `@appling/pty-host` | Private. A per user process that owns an app's terminals, so they keep running when the app closes and come back with their scrollback; the VS Code extension uses only its status tracking (`@appling/pty-host/status`) |
+| `appling-vscode` | Private. The VS Code extension: the language server, one inspector server per project in a tab, the inspector's panels as native trees, implementation marks and agent sessions in terminals |
 
 Extensions read only `GraphNode.data`, never the Langium AST. That keeps third party extensions independent of the grammar's internals.
 
@@ -77,7 +92,7 @@ sequenceDiagram
 
 **Expressions.** A CEL subset parsed into plain AST nodes. Names inside expressions are strings, not cross references: the `ExpressionTyper` resolves them per position, types them and records the element each name stands for. The validator reports its problems, the graph turns the targets into `uses` edges, and rename follows them.
 
-**Edit operations.** `applyEdit` finds the target by qualified name and splices text. Rename and retype touch only tokens; add, remove and set reprint the touched element canonically with `printRange`. The result is rebuilt and rejected if it adds an error. Rename must find every place that names an element, including names that are not references (export lists, message keys, transition states, `@Name` in `describe` texts and annotations).
+**Edit operations.** `applyEdit` finds the target by qualified name and splices text. Rename touches only name tokens; add, remove, set and retype (a `set` of the type) reprint the touched element canonically with `printRange`. The result is rebuilt and rejected if it adds an error. Rename must find every place that names an element, including names that are not references (export lists, message keys, transition states, `@Name` in `describe` texts and annotations).
 
 **Releases.** `appling release` writes the graph to `.appling/releases/<version>.json`. Later edits to released domain elements append `rename`, `retype` or `remove` steps to the module's `since_v<version>` block, which code generation carries into generated projects.
 

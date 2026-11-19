@@ -9,12 +9,13 @@ An Appling project is a folder of `.appling` files plus a few files the tools wr
 
 ```
 my-app/
-  appling.config.json        code generation targets and the AI model
+  appling.config.json        code generation targets
   models/
     sales.appling            one or more modules per file
     crm.appling
   .appling/
-    view.json                canvas lens, option and icons from the inspector
+    view.json                canvas entry level, option and icons
+    generation.json          fingerprints of each target's last generation
     releases/
       1.0.0.json             graph snapshot written by appling release
   build/
@@ -22,18 +23,22 @@ my-app/
       .appling/
         tasks.json           the task registry of that project
         migrations.json      migration steps already applied to it
+        baseline/            what the last generation wrote, the base of --sync
+        baseline-tasks.json  the registry of the last generation
 ```
 
 | Path | Written by | Commit it |
 |---|---|---|
 | `*.appling` | you, your editor, the AI | yes, it is the source of truth |
-| `appling.config.json` | you | yes |
-| `.appling/view.json` | the inspector | yes, if your team should share the view |
+| `appling.config.json` | `appling init`, you | yes |
+| `.appling/view.json` | the inspector, the `set_icons` tool | no by default: `appling init` ignores it as your own view. Commit it if your team should share the view and the icons |
+| `.appling/generation.json` | `appling generate` | yes, it decides which elements are outstanding |
 | `.appling/releases/*.json` | `appling release` | yes, edits compare against the latest release |
 | `<out>/.appling/tasks.json` | `appling generate`, the registry tools | yes, with the generated project |
 | `<out>/.appling/migrations.json` | `appling generate --migrate` | yes, with the generated project |
+| `<out>/.appling/baseline/`, `<out>/.appling/baseline-tasks.json` | `appling generate`, `--sync` | yes, with the generated project, so a later `--sync` can merge |
 
-The tree assumes you run the tools from `my-app`: `appling release` writes into the current folder, and the inspector keeps `.appling/view.json` in the folder it serves. See [configuration and files](../reference/configuration.md) for the format of each.
+The tree assumes you run the tools from `my-app`: `appling release` and `appling generate` write into the current folder, and the inspector keeps `.appling/view.json` in the folder it serves. See [configuration and files](../reference/configuration.md) for the format of each.
 
 ## One workspace
 

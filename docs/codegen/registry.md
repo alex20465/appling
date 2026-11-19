@@ -92,6 +92,8 @@ The generator sets the first status from the steps of each element:
 | `todo` | The element has only tasks, or the extension does not handle its kind. Then the task reads `<extension> does not generate <Kind> yet`. |
 | `done` | Set later, when the open work is finished. |
 
+No extension generates code for a `migration` block, so each block is a `todo` entry with the task `<extension> does not generate Migration yet`. Its steps reach a generated project through [`appling generate --migrate`](migrations.md) instead.
+
 ```mermaid
 stateDiagram-v2
   [*] --> generated: no tasks

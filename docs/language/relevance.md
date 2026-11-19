@@ -3,7 +3,7 @@ title: Relevance
 description: How much a declaration matters to what the application does, declared as a level and refined by the graph.
 ---
 
-Not every declaration matters equally. In a quoting application the `Quote` entity and its `Accept` action are what the business runs on, while an audit log or an enum used by one field are details. Relevance records that difference, so tools can show the important parts first: the [inspector](../tools/inspect.md#the-model-canvas) draws relevant declarations as larger circles in the middle of their row and keeps the peripheral ones small at the edges.
+Not every declaration matters equally. In a quoting application the `Quote` entity and its `Accept` action are what the business runs on, while an audit log or an enum used by one field are details. Relevance records that difference, so tools can show the important parts first: the [inspector](../tools/inspect.md#the-model-canvas) orders each level by relevance, outlines `core` declarations stronger and fades `peripheral` ones.
 
 Every module and every top level declaration has a relevance score from 0 to 1. The graph computes it; a declared level puts it into a range.
 
@@ -52,14 +52,14 @@ module observability peripheral {
 }
 ```
 
-`module`, `role`, `actor`, `tenant`, `enum`, `value`, `entity`, `event`, `action`, `machine`, `job`, `query`, `projection`, `external`, `usecase`, `interface`, `page`, `navigation`, `flow` and `messages` take a level. A module's level applies to its declarations and its nested modules, unless they declare their own: `observability.Event` above is `peripheral`.
+`module`, `role`, `actor`, `tenant`, `enum`, `value`, `entity`, `event`, `action`, `machine`, `job`, `query`, `projection`, `external`, `usecase`, `interface`, `page`, `navigation`, `flow`, `messages` and `scenario` take a level. A module's level applies to its declarations and its nested modules, unless they declare their own: `observability.Event` above is `peripheral`.
 
 `core`, `supporting` and `peripheral` stay valid as names.
 
 ## The computed score
 
-Without a level, the score comes from the graph alone. Each declaration counts the other declarations that use it and the ones it uses, both lifted to their top level declaration, on a log scale against the busiest declaration of the workspace. An entity that many actions, queries and pages use scores high; an enum one field uses, or a value type nobody else reads, scores low.
+Without a level, the score comes from the graph alone. Each declaration counts the other declarations that use it and the ones it uses, both lifted to their top level declaration, on a log scale against the busiest declaration of the workspace. Scenarios do not count. An entity that many actions, queries and pages use scores high; an enum one field uses, or a value type nobody else reads, scores low.
 
 A declared level maps that score into its range, so two `core` declarations still differ by how connected they are, and a `peripheral` declaration never outranks a `supporting` one. A module scores as its most relevant declaration.
 
-Declare a level where the graph is wrong about the business: an action few things call but that is the reason the application exists, or a module of busy infrastructure that is not the point of it. `relevance(graph)` in [`@appling/model`](../reference/api.md#appling-model) returns the scores.
+Declare a level where the graph is wrong about the business: an action few things call but that is the reason the application exists, or a module of busy infrastructure that is not the point of it. `relevance(graph)` in [`@appling/model`](../reference/api.md#graph-and-edits-applingmodel) returns the scores.

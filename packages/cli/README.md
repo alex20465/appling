@@ -6,6 +6,14 @@ Appling is a declarative language that describes a business or web application i
 
 ## Install
 
+Set up a project and connect your coding agents in one step:
+
+```sh
+npx @appling/cli init
+```
+
+Or add the CLI by hand:
+
 ```sh
 npm install --save-dev @appling/cli
 ```
@@ -46,7 +54,7 @@ npx @appling/cli init todo --name todo --agents claude,codex --stack django
 
 ### inspect
 
-Opens the read only inspector of a folder (the current folder by default) in your browser: the model canvas and the floating inspector of the selected element, to debug and inspect the model. It starts the server of `@appling/inspect` on a free port of `127.0.0.1`, prints its address, opens it in the default browser and runs until Ctrl+C.
+Opens the read only inspector of a folder (the current folder by default) in your browser: the model canvas and the inspector sidebar of the selected element, to debug and inspect the model. It starts the server of `@appling/inspect` on a free port of `127.0.0.1`, prints its address, opens it in the default browser and runs until Ctrl+C.
 
 ```sh
 npx appling inspect models

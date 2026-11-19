@@ -97,7 +97,7 @@ A rule that must always be true belongs to the entity as an [invariant](domain.m
 
 Each value is an expression typed against the field it is assigned to. In `create` and `emit`, every assigned name must be a field of the entity or event: `Closed has no field "nope".`
 
-A `set` effect cannot change a `state` field. Only a machine transition changes it: `A state field changes only through a machine transition.` A `create` effect may assign a `state` field: it sets the state the new record starts in, such as a quote created as `draft` or `waiting`.
+A `set` effect cannot change a `state` field; only a machine transition changes it. A `create` effect may assign a `state` field: it sets the state the new record starts in, such as a quote created as `draft` or `waiting`.
 
 All effects of one action run in order, in one transaction, so a failing effect undoes the others.
 
@@ -151,7 +151,7 @@ module shop {
 }
 ```
 
-- `for x in items` iterates a collection relationship of the action's entity, a field whose type is a list of records (`Item[]`): `"for" iterates a collection relationship of Cart, and tags is no list of records.` The loop variable is visible inside the loop only. Loops nest, but each one iterates a field of the entity.
+- `for x in items` iterates a collection relationship of the action's entity, a field whose type is a list of records (`Item[]`). The loop variable is visible inside the loop only. Loops nest, but each one iterates a field of the entity.
 - `create ... as name` makes the new record visible by name to the effects after it in the same block, and to the loops and updates inside them.
 - `update path { ... }` and `delete path` take a relationship path to one record: a field of the entity, a loop variable or an `as` name, followed by fields, such as `owner`, `item.product` or `line.order`. A list, `this`, an input or a call is no such path: `"update" takes a relationship path to one record, such as item.product.` For every record of a collection, loop with `for`.
 - Inside `update`, `set` names a field of the updated record, and a bare name stands for a field of that record first (`stock` above is the product's stock); the fields of the action's entity and the loop variables stay visible. An optional path that is empty changes nothing.
@@ -201,11 +201,7 @@ stateDiagram-v2
 
 Every transition has exactly one trigger, `via` or `on`.
 
-The rules a machine must follow:
-
-- The field must be an entity field marked `state` with an enum type: `A machine must govern an entity field marked "state" with an enum type.`
-- Each state field has at most one machine: `State field status is already owned by another machine.`
-- Every state in a transition must be a value of the enum: `"closed" is not a value of Status.`
+A machine governs an entity field marked `state` with an enum type, each state field has at most one machine, and every state in a transition is a value of the enum; see [validation](validation.md#state-machines) for the messages.
 
 ### Initial states
 

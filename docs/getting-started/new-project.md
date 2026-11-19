@@ -3,7 +3,9 @@ title: Start a new project
 description: Set up a project with appling init so your coding agent designs, builds and changes the application through its Appling model.
 ---
 
-`appling init` sets up a project for Appling and connects the coding agents you work with: Claude Code, Codex, OpenCode, Gemini CLI or Antigravity CLI. Afterwards the agent has the Appling MCP server, the `appling` skill and a short set of rules that send every request through the model first.
+`appling init` sets up a project for Appling and connects the coding agents you work with: Claude Code, Codex, OpenCode, Gemini CLI or Antigravity CLI. Afterwards the agent has the Appling MCP server, the Appling skills (`appling`, `appling-registry` and `appling-reverse`) and a short set of rules that send every request through the model first.
+
+You need Node.js 24 or later. Everything else, the CLI included, `init` installs into the project. For an application you already have, run it in the project's folder and continue with [Start from an existing project](existing-project.md).
 
 ## Run it
 
@@ -51,7 +53,7 @@ Then, per agent:
 
 The rules and the skills are not copied. The configuration points into `node_modules/@appling/ai`: the rules file is `rules/appling.md`, and every skill folder of the package is linked into the agent's skills folder. When you update `@appling/ai`, every agent reads the new version.
 
-Existing settings stay: init adds the `appling` server to a configuration that already has others, appends the rules line to an existing `CLAUDE.md`, `AGENTS.md` or `GEMINI.md`, and leaves links that already exist. Running it again changes nothing.
+Existing settings stay: init adds the `appling` server to a configuration that already has others, appends the rules line to an existing `CLAUDE.md`, `AGENTS.md` or `GEMINI.md`, and leaves links that already exist. Running it again keeps every setting; only the package installation runs again.
 
 > [!NOTE]
 > Codex and Gemini CLI start project MCP servers only in trusted folders. Trust the folder when the agent asks, or with `gemini trust` for Gemini CLI. Claude Code asks once whether to use the servers of `.mcp.json`.
@@ -67,3 +69,14 @@ Start the agent in the project folder and describe what you want, such as "I wan
 - Once the code exists, model and code change together in both directions: the agent carries a model change into the code with `appling generate --migrate` or `--sync` where generation covers it, changes the code by hand otherwise, and brings changes made in the code back into the model.
 
 The `appling` skill holds the details: how to find out where the project stands, how to learn the language with `language_reference`, the layer order for a new model, generating and releasing, and how to carry a change through model and code. See [AI tools](../tools/ai.md#appling-skill-and-rules).
+
+## Follow the model
+
+While the agent works, validate the model and watch it grow on the canvas, from the project folder:
+
+```sh
+npx appling check
+npx appling inspect
+```
+
+`check` validates every `.appling` file below the folder; [`inspect`](../tools/inspect.md) opens the inspector in your browser, where every change the agent makes is marked live. In VS Code the [Appling extension](../tools/vscode.md) shows the inspector in a tab. To learn the language yourself, write [your first model](first-model.md).

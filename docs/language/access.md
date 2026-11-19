@@ -87,7 +87,7 @@ A policy is a condition in braces, introduced by `policy`. Policies sit on the e
 |---|---|---|
 | `entity` | `policy [operations] [fields f, g] { condition }` | The entity's fields, `this` |
 | `action` | `policy { condition }` | The fields of the action's entity, `this`, the action's inputs |
-| `query` | `policy { condition }` | The fields of the query's entity, `this` |
+| `query` | `policy { condition }` | The fields of the query's entity, `this`, the query's inputs |
 | `usecase` | `policy { condition }` | The use case's parameters |
 
 `actor`, `now` and `tenant` are available in all of them. An element can have any number of policies.
@@ -190,7 +190,9 @@ module m {
   }
 
   action Touch on Order {
-    effect { set note = "seen" }
+    effect {
+      set note = "seen"
+    }
     policy { actor.is(Clerk) }
   }
 

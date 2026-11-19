@@ -22,14 +22,14 @@ Name the package `appling-codegen-<target>` or `@scope/appling-codegen-<target>`
   },
   "files": ["out"],
   "dependencies": {
-    "@appling/model": "^0.1.0"
+    "@appling/model": "^0.1.6"
   },
   "peerDependencies": {
-    "@appling/codegen": "^0.1.0"
+    "@appling/codegen": "^0.2.2"
   },
   "devDependencies": {
-    "@appling/codegen": "^0.1.0",
-    "@appling/lang": "^0.1.0",
+    "@appling/codegen": "^0.2.2",
+    "@appling/lang": "^0.4.2",
     "vitest": "^5.0.0"
   }
 }
@@ -40,6 +40,8 @@ Name the package `appling-codegen-<target>` or `@scope/appling-codegen-<target>`
 | `@appling/codegen` as a peer | The contract types, and the same core instance as the CLI that loads you |
 | `@appling/model` | The graph types (`GraphNode`, `TypeData`, `ExprData`) |
 | `@appling/lang` for development | Building models in memory in your tests |
+
+Use the versions of the Appling release you build against. A caret range on a `0.x` version only matches that minor version, so `^0.2.2` accepts `0.2.9` but not `0.3.0`.
 
 The CLI resolves the `extension` of a target from the folder of `appling.config.json`, the way `require.resolve` does, and then imports it. Keep a `default` condition in `exports`: a map with only an `import` condition does not resolve. While you develop, a relative path works too:
 
