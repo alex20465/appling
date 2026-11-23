@@ -396,9 +396,6 @@ export function ModelCanvas({ index, name, focus, folded, selected, settings, bu
                     {stems.map(({ p, curve, state }) => (
                         <path key={`branch ${p.node.id}`} className={`branch layer-${p.parent!.node.layer} ${state}`} style={{ d: `path("${pathOf(curve)}")`, '--seedling': `path("${pathOf(curve.map(() => curve[0]))}")`, strokeWidth: state === 'lit' ? 2.4 : 1.4, animationDelay: `${delays.get(p.node.id) ?? 0}ms` } as React.CSSProperties} />
                     ))}
-                    {stems.filter(s => s.state === 'lit').map(({ p, curve }) => (
-                        <path key={`sap ${p.node.id}`} className="sap" pathLength={1} style={{ d: `path("${pathOf(curve)}")` } as React.CSSProperties} />
-                    ))}
                     {ripples.map(ripple => {
                         const at = byId.get(ripple.id);
                         return at && (
