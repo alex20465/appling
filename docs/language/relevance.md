@@ -3,7 +3,7 @@ title: Relevance
 description: How much a declaration matters to what the application does, declared as a level and refined by the graph.
 ---
 
-Not every declaration matters equally. In a quoting application the `Quote` entity and its `Accept` action are what the business runs on, while an audit log or an enum used by one field are details. Relevance records that difference, so tools can show the important parts first: the [inspector](../tools/inspect.md#the-model-canvas) orders each level by relevance, outlines `core` declarations stronger and fades `peripheral` ones.
+Not every declaration matters equally. In a quoting application the `Quote` entity and its `Accept` action are what the business runs on, while an audit log or an enum used by one field only support it. Relevance records that difference, so tools can show the important parts first: the [inspector](../tools/inspect.md#the-model-canvas) orders each level by relevance, outlines `core` declarations stronger and fades `peripheral` ones.
 
 Every module and every top level declaration has a relevance score from 0 to 1. The graph computes it; a declared level puts it into a range.
 
@@ -12,8 +12,8 @@ Every module and every top level declaration has a relevance score from 0 to 1. 
 | Level | Score range | For |
 |---|---|---|
 | `core` | 0.7 to 1 | What the business runs on: its main records, the actions and use cases that carry its process |
-| `supporting` | 0.35 to 0.7 | What the core needs: settings, lookups, integrations |
-| `peripheral` | 0 to 0.35 | Housekeeping: logs, imports, internal tokens, tools around the application |
+| `supporting` | 0.35 to 0.7 | What the core needs: settings, lookups, integrations, logs and history |
+| `peripheral` | 0 to 0.35 | Housekeeping: imports, internal tokens, tools around the application |
 
 ## Declaring a level
 
@@ -45,14 +45,14 @@ module quotes {
   job Reminder every "0 9 * * *" run Send peripheral
 }
 
-module observability peripheral {
+module observability supporting {
   entity Event {
     name: String
   }
 }
 ```
 
-`module`, `role`, `actor`, `tenant`, `enum`, `value`, `entity`, `event`, `action`, `machine`, `job`, `query`, `projection`, `external`, `usecase`, `interface`, `page`, `navigation`, `flow`, `messages` and `scenario` take a level. A module's level applies to its declarations and its nested modules, unless they declare their own: `observability.Event` above is `peripheral`.
+`module`, `role`, `actor`, `tenant`, `enum`, `value`, `entity`, `event`, `action`, `machine`, `job`, `query`, `projection`, `external`, `usecase`, `interface`, `page`, `navigation`, `flow`, `messages` and `scenario` take a level. A module's level applies to its declarations and its nested modules, unless they declare their own: `observability.Event` above is `supporting`.
 
 `core`, `supporting` and `peripheral` stay valid as names.
 
