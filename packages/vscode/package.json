@@ -3,7 +3,7 @@
   "displayName": "Appling",
   "description": "Appling for VS Code: language support, the read only model inspector in a tab per project, implementation marks and agent sessions",
   "version": "0.1.0",
-  "publisher": "techthos",
+  "publisher": "Appling",
   "private": true,
   "license": "MIT",
   "icon": "icon.png",

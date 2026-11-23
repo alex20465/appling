@@ -1,6 +1,6 @@
 ---
 name: publish
-description: Release the public @appling/* npm packages with pnpm 12's built in release management. Collects the changes per package since its last release from the git log, records change intents in .changeset/, bumps versions with `pnpm version -r` (independent versions, dependents follow), writes the committed CHANGELOG.md files, commits, pushes and publishes with `pnpm publish -r`. Use when the user asks to release, publish, bump versions, cut a version, ship to npm or update the changelogs.
+description: Release the public @appling/* npm packages and the VS Code extension (appling-vscode) with pnpm 12's built in release management. Collects the changes per package since its last release from the git log, records change intents in .changeset/, bumps versions with `pnpm version -r` (independent versions, dependents follow), writes the committed CHANGELOG.md files, commits, pushes and publishes with `pnpm publish -r`; the push lets CI publish the extension to the Marketplace and tag it. Use when the user asks to release, publish, bump versions, cut a version, ship to npm or the Marketplace or update the changelogs.
 metadata:
   anchors:
     - name: pnpm
@@ -25,11 +25,11 @@ Stop and report when one fails:
 
 ## 2. Collect changes
 
-For every package in `packages/*` without `"private": true`:
+For every package in `packages/*` without `"private": true`, plus the private `appling-vscode`:
 
-1. Published version: `npm view <name> version` (`E404` means first release).
+1. Published version: `npm view <name> version` (`E404` means first release). For `appling-vscode` the newest tag of `git tag -l 'appling-vscode@*' --sort=-v:refname` (none means first release).
 2. Baseline: `git log -1 --format=%H -G'"version"' -- packages/<dir>/package.json`.
-3. Changes: `git log --format='%h %s' <baseline>..HEAD -- packages/<dir>/src packages/<dir>/README.md packages/<dir>/package.json`, plus every other path in its `files` that is not `out` or `dist` (`packages/ai/skills`).
+3. Changes: `git log --format='%h %s' <baseline>..HEAD -- packages/<dir>/src packages/<dir>/README.md packages/<dir>/package.json`, plus every other path in its `files` that is not `out` or `dist` (`packages/ai/skills`). For `appling-vscode`: `-- packages ':!packages/landing'`, since the vsix bundles every package it depends on and pnpm does not bump it for their releases.
 
 A package on its first release debuts at its manifest version exactly; intents for it apply from the next release, so it needs none. A package whose manifest version is already ahead of the registry gets published as is.
 
@@ -83,9 +83,9 @@ A user with VSCodium starts the target with `CODE=codium pnpm sandbox vscode`. R
 
 1. Commit `package.json`, `CHANGELOG.md`, `.changeset/` and the screenshots with the `commit` skill, subject `chore(release): <name>@<version>, ...`.
 2. Ask with AskUserQuestion to confirm push and publish, listing every `name@version`.
-3. `git push`, then `corepack pnpm publish -r --access public --report-summary`. pnpm publishes only the versions not yet on the registry and replaces `workspace:*` with the real versions.
+3. `git push`, then `corepack pnpm publish -r --access public --report-summary`. pnpm publishes only the versions not yet on the registry and replaces `workspace:*` with the real versions. It skips the private `appling-vscode`: the push runs the `publish` job of `.github/workflows/vscode.yml`, which publishes a new version to the Marketplace (trusted publishing, environment `marketplace`) and pushes the tag `appling-vscode@<version>`.
 4. On an OTP request, ask the user for the code and rerun with `--otp <code>`. Already published packages are skipped on the rerun.
 
 ## 6. Verify
 
-Read `pnpm-publish-summary.json`, check each entry with `npm view <name>@<version> version`, then delete the summary file. Report the published versions.
+Read `pnpm-publish-summary.json`, check each entry with `npm view <name>@<version> version`, then delete the summary file. For a released `appling-vscode`, follow the run with `gh run watch $(gh run list --workflow vscode.yml --branch main --limit 1 --json databaseId --jq '.[0].databaseId') --exit-status` and check `git ls-remote --tags origin 'appling-vscode@<version>'`. Report the published versions.

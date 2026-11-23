@@ -69,7 +69,7 @@ source ~/Dev/appling/scripts/make-completion.bash
 | Coverage comment | Posts the report as one comment on the pull request and updates it on every push. Pull requests from forks get no write token, so they only get the job summary |
 | Coverage badge | On `main` only: pushes the badge JSON to the `badges` branch, which the README shows through shields.io |
 
-The `VS Code extension` workflow (`.github/workflows/vscode.yml`) runs `pnpm --filter appling-vscode... build` on pull requests and pushes to `main` that touch `packages/` (except `landing`) or the lockfile, and on demand. It uploads `packages/vscode/out/appling.vsix` as an artifact, which installs on every platform.
+The `VS Code extension` workflow (`.github/workflows/vscode.yml`) runs `pnpm --filter appling-vscode... build` on pull requests and pushes to `main` that touch `packages/` (except `landing`) or the lockfile, and on demand. It uploads `packages/vscode/out/appling.vsix` as an artifact, which installs on every platform. On a push to `main` its `publish` job publishes that vsix to the Visual Studio Marketplace under the `Appling` publisher with `vsce publish --oidc --skip-duplicate`, so a new `version` in `packages/vscode/package.json` ships and an already published one is skipped; after publishing it pushes the tag `appling-vscode@<version>`. The version and `packages/vscode/CHANGELOG.md` come from the regular release (`pnpm change`, `pnpm version -r`), like the npm packages. It uses trusted publishing: the publisher's policy accepts this workflow file in the GitHub environment `marketplace`, so no token secret is stored.
 
 ### Codegen coverage report
 

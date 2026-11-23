@@ -55,3 +55,35 @@ jobs:
           name: appling-vscode-${{ github.sha }}
           path: packages/vscode/out/appling.vsix
           if-no-files-found: error
+
+  # Publishes the built vsix to the Marketplace on every push to main; a version already published is skipped, so a
+  # release of the publish skill (a new `version` in packages/vscode/package.json) ships it and gets the tag
+  # appling-vscode@<version>. Trusted publishing: the publisher's policy accepts the OIDC token of this workflow file
+  # in the `marketplace` environment, no token secret is needed.
+  publish:
+    name: Publish to the Marketplace
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: marketplace
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Cloning
+        uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: appling-vscode-${{ github.sha }}
+          path: vsix
+
+      - run: npx --yes @vscode/vsce@4.0.0 publish --oidc --skip-duplicate --packagePath vsix/appling.vsix
+
+      - name: Tag the version
+        run: |
+          tag="appling-vscode@$(node -p "require('./packages/vscode/package.json').version")"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then exit 0; fi
+          git tag "$tag"
+          git push origin "$tag"
