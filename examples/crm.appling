@@ -11,4 +11,70 @@ module crm {
   }
 
   tenant Company on Account
+
+  enum LeadStatus {
+    prospect
+    contacted
+    won
+    lost
+  }
+
+  entity Lead {
+    name: String
+    account: Account?
+    status: LeadStatus state default prospect
+    policy read, create, update { actor.is(Clerk) }
+  }
+
+  action Contact on Lead {
+    policy { actor.is(Clerk) }
+  }
+
+  action Win on Lead {
+    policy { actor.is(Clerk) }
+  }
+
+  action Lose on Lead {
+    policy { actor.is(Clerk) }
+  }
+
+  machine LeadFlow on Lead.status {
+    transition prospect -> contacted via Contact
+    transition contacted -> won via Win
+    transition prospect, contacted -> lost via Lose
+  }
+
+  query OpenLeads from Lead {
+    where { status in [prospect, contacted] }
+  }
+
+  projection LeadRow from Lead {
+    name
+    status
+  }
+
+  usecase FollowUp (lead: Lead) {
+    step Contact(lead)
+    policy { actor.is(Clerk) }
+  }
+
+  usecase Convert (lead: Lead) {
+    step FollowUp(lead)
+    step Win(lead)
+    policy { actor.is(Clerk) }
+  }
+
+  page Leads route "/leads" {
+    list OpenLeads as LeadRow { name, status } actions Contact, Lose
+  }
+
+  page LeadDetail route "/leads/{id}" {
+    detail LeadRow actions Win, Lose
+  }
+
+  navigation Office {
+    "Leads" -> Leads
+  }
+
+  flow ConvertFlow for Convert { Leads -> LeadDetail }
 }

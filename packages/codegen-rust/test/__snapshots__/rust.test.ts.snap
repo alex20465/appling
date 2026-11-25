@@ -172,11 +172,269 @@ fn account_policy_read(actor: &crate::access::Actor, account: &Account) -> bool 
     crate::access::is_clerk(actor) || (crate::access::is_customer(actor) && (actor.account == Some(account.id)))
 }
 
+/// The enum crm.LeadStatus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum LeadStatus {
+    #[serde(rename = "prospect")]
+    Prospect,
+    #[serde(rename = "contacted")]
+    Contacted,
+    #[serde(rename = "won")]
+    Won,
+    #[serde(rename = "lost")]
+    Lost,
+}
+
+/// The entity crm.Lead.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Lead {
+    pub id: i64,
+    pub name: String,
+    pub account: Option<Box<Account>>,
+    pub status: LeadStatus,
+}
+
+impl Lead {
+    /// A new Lead with the defaults of the model; the arguments are the fields without one.
+    pub fn new(name: String) -> Self {
+        Self {
+            id: 0,
+            name,
+            account: None,
+            status: LeadStatus::Prospect,
+        }
+    }
+
+    /// Checks the invariants of Lead and returns the labels of those that do not hold.
+    pub fn validate(&self) -> Result<(), Vec<&'static str>> {
+        let errors = Vec::new();
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
+    }
+}
+
+impl crate::access::Tenanted for Lead {
+    /// The id of the crm.Account this Lead belongs to, for the tenant crm.Company.
+    fn tenant_id(&self) -> Option<i64> {
+        Some(self.account.as_ref()?.id)
+    }
+}
+
+/// Whether the policies of crm.Lead let the actor read the record.
+pub fn can_read_lead(actor: &crate::access::Actor, lead: &Lead) -> bool {
+    crate::access::in_tenant(actor, lead) && lead_policy_read_create_update(actor, lead)
+}
+
+/// Whether the policies of crm.Lead let the actor create the record.
+pub fn can_create_lead(actor: &crate::access::Actor, lead: &Lead) -> bool {
+    crate::access::in_tenant(actor, lead) && lead_policy_read_create_update(actor, lead)
+}
+
+/// Whether the policies of crm.Lead let the actor update the record.
+pub fn can_update_lead(actor: &crate::access::Actor, lead: &Lead) -> bool {
+    crate::access::in_tenant(actor, lead) && lead_policy_read_create_update(actor, lead)
+}
+
+/// Whether the policies of crm.Lead let the actor delete the record; no policy grants delete.
+pub fn can_delete_lead(_actor: &crate::access::Actor, _lead: &Lead) -> bool {
+    false
+}
+
+/// The policy crm.Lead.policy[read,create,update]: actor.is(Clerk)
+fn lead_policy_read_create_update(actor: &crate::access::Actor, _lead: &Lead) -> bool {
+    crate::access::is_clerk(actor)
+}
+
+/// The action crm.Contact. It returns the events it emits.
+pub fn contact(actor: &crate::access::Actor, lead: &mut Lead) -> Result<Vec<Event>, Error> {
+    let events = Vec::new();
+    if !can_contact(actor, lead) {
+        return Err(Error::Forbidden { action: "Contact" });
+    }
+    match lead.status {
+        LeadStatus::Prospect => {
+            lead.status = LeadStatus::Contacted;
+        }
+        _ => return Err(Error::InvalidTransition { action: "Contact", from: format!("{:?}", lead.status) }),
+    }
+    Ok(events)
+}
+
+/// Whether the actor may run crm.Contact, including the update check of crm.Lead.
+pub fn can_contact(actor: &crate::access::Actor, lead: &Lead) -> bool {
+    can_update_lead(actor, lead) && contact_policy(actor, lead)
+}
+
+/// The policy crm.Contact.policy[]: actor.is(Clerk)
+fn contact_policy(actor: &crate::access::Actor, _lead: &Lead) -> bool {
+    crate::access::is_clerk(actor)
+}
+
+/// The action crm.Win. It returns the events it emits.
+pub fn win(actor: &crate::access::Actor, lead: &mut Lead) -> Result<Vec<Event>, Error> {
+    let events = Vec::new();
+    if !can_win(actor, lead) {
+        return Err(Error::Forbidden { action: "Win" });
+    }
+    match lead.status {
+        LeadStatus::Contacted => {
+            lead.status = LeadStatus::Won;
+        }
+        _ => return Err(Error::InvalidTransition { action: "Win", from: format!("{:?}", lead.status) }),
+    }
+    Ok(events)
+}
+
+/// Whether the actor may run crm.Win, including the update check of crm.Lead.
+pub fn can_win(actor: &crate::access::Actor, lead: &Lead) -> bool {
+    can_update_lead(actor, lead) && win_policy(actor, lead)
+}
+
+/// The policy crm.Win.policy[]: actor.is(Clerk)
+fn win_policy(actor: &crate::access::Actor, _lead: &Lead) -> bool {
+    crate::access::is_clerk(actor)
+}
+
+/// The action crm.Lose. It returns the events it emits.
+pub fn lose(actor: &crate::access::Actor, lead: &mut Lead) -> Result<Vec<Event>, Error> {
+    let events = Vec::new();
+    if !can_lose(actor, lead) {
+        return Err(Error::Forbidden { action: "Lose" });
+    }
+    match lead.status {
+        LeadStatus::Prospect | LeadStatus::Contacted => {
+            lead.status = LeadStatus::Lost;
+        }
+        _ => return Err(Error::InvalidTransition { action: "Lose", from: format!("{:?}", lead.status) }),
+    }
+    Ok(events)
+}
+
+/// Whether the actor may run crm.Lose, including the update check of crm.Lead.
+pub fn can_lose(actor: &crate::access::Actor, lead: &Lead) -> bool {
+    can_update_lead(actor, lead) && lose_policy(actor, lead)
+}
+
+/// The policy crm.Lose.policy[]: actor.is(Clerk)
+fn lose_policy(actor: &crate::access::Actor, _lead: &Lead) -> bool {
+    crate::access::is_clerk(actor)
+}
+
+/// Whether the actor may read a record through crm.OpenLeads, including the read check of crm.Lead.
+pub fn can_open_leads(actor: &crate::access::Actor, lead: &Lead) -> bool {
+    can_read_lead(actor, lead)
+}
+
+/// Whether a record is among the results of the query crm.OpenLeads.
+pub fn in_open_leads(lead: &Lead) -> bool {
+    [LeadStatus::Prospect, LeadStatus::Contacted].contains(&lead.status)
+}
+
+/// Whether the actor may run crm.FollowUp.
+pub fn can_follow_up(actor: &crate::access::Actor, lead: &Lead) -> bool {
+    follow_up_policy(actor, lead)
+}
+
+/// The policy crm.FollowUp.policy[]: actor.is(Clerk)
+fn follow_up_policy(actor: &crate::access::Actor, _lead: &Lead) -> bool {
+    crate::access::is_clerk(actor)
+}
+
+/// Whether the actor may run crm.Convert.
+pub fn can_convert(actor: &crate::access::Actor, lead: &Lead) -> bool {
+    convert_policy(actor, lead)
+}
+
+/// The policy crm.Convert.policy[]: actor.is(Clerk)
+fn convert_policy(actor: &crate::access::Actor, _lead: &Lead) -> bool {
+    crate::access::is_clerk(actor)
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     #[ignore = "registry task: crm.Account.policy[read]"]
     fn account_policy_read() {}
+    /// A Lead with the defaults of the model and a sample for every other required field.
+    fn valid_lead() -> Lead {
+        Lead::new("name-1".to_string())
+    }
+
+    #[test]
+    fn lead_policy_read_create_update_allows_permitted_actors() {
+        let actor = crate::access::Actor::employee();
+        let lead = valid_lead();
+        assert!(can_read_lead(&actor, &lead), "can_read_lead: want true for crm.Employee");
+        assert!(can_create_lead(&actor, &lead), "can_create_lead: want true for crm.Employee");
+        assert!(can_update_lead(&actor, &lead), "can_update_lead: want true for crm.Employee");
+    }
+
+    #[test]
+    fn lead_policy_read_create_update_denies_other_actors() {
+        let actor = crate::access::Actor::shopper();
+        let lead = valid_lead();
+        assert!(!can_read_lead(&actor, &lead), "can_read_lead: want false for sales.Shopper");
+        assert!(!can_create_lead(&actor, &lead), "can_create_lead: want false for sales.Shopper");
+        assert!(!can_update_lead(&actor, &lead), "can_update_lead: want false for sales.Shopper");
+    }
+    #[test]
+    #[ignore = "registry task: crm.Contact"]
+    fn crm_contact() {}
+    #[test]
+    #[ignore = "registry task: crm.Contact.policy[]"]
+    fn contact_policy() {}
+    #[test]
+    #[ignore = "registry task: crm.Win"]
+    fn crm_win() {}
+    #[test]
+    #[ignore = "registry task: crm.Win.policy[]"]
+    fn win_policy() {}
+    #[test]
+    #[ignore = "registry task: crm.Lose"]
+    fn crm_lose() {}
+    #[test]
+    #[ignore = "registry task: crm.Lose.policy[]"]
+    fn lose_policy() {}
+    #[test]
+    fn lead_flow_transition_prospect_contacted() {
+        let actor = crate::access::Actor::employee();
+        let mut x = valid_lead();
+        x.status = LeadStatus::Prospect;
+        contact(&actor, &mut x).expect("contact from prospect");
+        assert_eq!(x.status, LeadStatus::Contacted, "contact from prospect goes to contacted");
+        let mut x = valid_lead();
+        x.status = LeadStatus::Contacted;
+        assert!(matches!(contact(&actor, &mut x), Err(Error::InvalidTransition { .. })), "contact refuses contacted");
+    }
+    #[test]
+    fn lead_flow_transition_contacted_won() {
+        let actor = crate::access::Actor::employee();
+        let mut x = valid_lead();
+        x.status = LeadStatus::Contacted;
+        win(&actor, &mut x).expect("win from contacted");
+        assert_eq!(x.status, LeadStatus::Won, "win from contacted goes to won");
+        let mut x = valid_lead();
+        x.status = LeadStatus::Prospect;
+        assert!(matches!(win(&actor, &mut x), Err(Error::InvalidTransition { .. })), "win refuses prospect");
+    }
+    #[test]
+    fn lead_flow_transition_prospect_contacted_lost() {
+        let actor = crate::access::Actor::employee();
+        let mut x = valid_lead();
+        x.status = LeadStatus::Prospect;
+        lose(&actor, &mut x).expect("lose from prospect");
+        assert_eq!(x.status, LeadStatus::Lost, "lose from prospect goes to lost");
+        let mut x = valid_lead();
+        x.status = LeadStatus::Won;
+        assert!(matches!(lose(&actor, &mut x), Err(Error::InvalidTransition { .. })), "lose refuses won");
+    }
+    #[test]
+    #[ignore = "registry task: crm.FollowUp.policy[]"]
+    fn follow_up_policy() {}
+    #[test]
+    #[ignore = "registry task: crm.Convert.policy[]"]
+    fn convert_policy() {}
 }
 ",
   "src/lib.rs": "//! The shop model, generated by Appling.
@@ -433,6 +691,26 @@ pub fn in_orders_of(order: &Order, of: &crate::crm::Account, since: Option<chron
     (order.customer.id == of.id) && (since.is_none() || (order.placed_at.unwrap() >= since.unwrap()))
 }
 
+/// Whether the actor may run sales.Checkout.
+pub fn can_checkout(actor: &crate::access::Actor, order: &Order) -> bool {
+    checkout_policy(actor, order)
+}
+
+/// The policy sales.Checkout.policy[]: actor.is(Customer)
+fn checkout_policy(actor: &crate::access::Actor, _order: &Order) -> bool {
+    crate::access::is_customer(actor)
+}
+
+/// Whether the actor may run sales.CancelOrder.
+pub fn can_cancel_order(actor: &crate::access::Actor, order: &Order, reason: Option<String>) -> bool {
+    cancel_order_policy(actor, order, reason.clone())
+}
+
+/// The policy sales.CancelOrder.policy[]: actor.is(crm.Clerk)
+fn cancel_order_policy(actor: &crate::access::Actor, _order: &Order, _reason: Option<String>) -> bool {
+    crate::access::is_clerk(actor)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -479,6 +757,12 @@ mod tests {
     #[test]
     #[ignore = "registry task: sales.OrderFlow.transition[placed->paid]"]
     fn order_flow_transition_placed_paid() {}
+    #[test]
+    #[ignore = "registry task: sales.Checkout.policy[]"]
+    fn checkout_policy() {}
+    #[test]
+    #[ignore = "registry task: sales.CancelOrder.policy[]"]
+    fn cancel_order_policy() {}
     /// A clerk cancels a draft order
     #[test]
     fn scenario_clerk_cancels_draft() {

@@ -11,8 +11,9 @@ import { loadRelease, loadReview, loadRevisions, loadSnapshot, loadView, onEvent
 import { TaskBoard } from './TaskBoard.js';
 import { AgentCanvas, AgentStrip } from './AgentView.js';
 import { Glyph, ModelCanvas } from '@appling/viz/canvas';
-import { elementAt, GraphIndex, type SessionMark } from '@appling/viz/views';
+import { elementAt, GraphIndex, type ModelView, type SessionMark } from '@appling/viz/views';
 import { Inspector } from './Inspector.js';
+import { Diagram, MODEL_VIEWS } from './Diagrams.js';
 
 /** The hooks of the page that embeds the inspector (`hooks.ts`), such as VS Code's; absent in a plain browser. */
 const host = window.applingHost;
@@ -121,6 +122,27 @@ export function App() {
 
     const select = useCallback((qn: string) => setSelected(qn), []);
 
+    /** The view of the model on screen, kept with the view settings. */
+    const modelView = MODEL_VIEWS.find(v => v.id === view.view)?.id ?? 'levels';
+    const showView = (next: ModelView) => {
+        const settings = { ...view, view: next };
+        setView(settings);
+        saveView(settings);
+    };
+    const showRef = useRef(showView);
+    showRef.current = showView;
+    // the keys 1 to 4 switch the view, except while typing or choosing in a field
+    useEffect(() => {
+        const onKey = (event: KeyboardEvent) => {
+            const target = event.target as HTMLElement;
+            const next = MODEL_VIEWS[Number(event.key) - 1];
+            if (!next || event.ctrlKey || event.metaKey || event.altKey || target.closest('input, select, textarea, [contenteditable]')) return;
+            showRef.current(next.id);
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
+
     /** Opens an element's source in the host's editor (on the user's request; the canvas selection stays here). */
     const openSource = host?.openSource && ((qn: string) => {
         const location = snapshot?.locations[qn];
@@ -186,12 +208,12 @@ export function App() {
     const steps = pending.reduce((count, m) => count + ((m.props.steps as string[] | undefined)?.length ?? 0), 0);
     const watched = watching ? agentViews[watching] : undefined;
     const openTasks = snapshot.tasks.filter(t => t.status !== 'done').length;
+    const name = decodeURIComponent(snapshot.root).split('/').pop() ?? 'model';
     return (
         <div className="app">
             <header className="bar">
                 <img src="/appling-icon.svg" alt="" width={20} height={20} />
                 <strong>Appling</strong>
-                <span className="sponsor">sponsored by <a href="https://www.techthos.net/" target="_blank" rel="noopener">Techthos.net</a></span>
                 <span className="muted">{decodeURIComponent(snapshot.root.replace('file://', ''))}</span>
                 {release && (
                     <button className="release" onClick={() => pending[0] && select(pending[0].qn)} disabled={!pending.length}>
@@ -203,16 +225,30 @@ export function App() {
                     <span role="tooltip">{snapshot.errors.length ? <><b>{snapshot.errors.length} error(s)</b>{snapshot.errors.slice(0, 5).map((error, i) => <span key={i}>{error}</span>)}</> : <b>The model is valid</b>}</span>
                 </span>
             </header>
+            <div className="workbench">
+            <nav className="view-rail" aria-label="Views">
+                {MODEL_VIEWS.map((v, i) => (
+                    <button key={v.id} aria-pressed={v.id === modelView} aria-label={`${v.label}: ${v.question}`} aria-keyshortcuts={String(i + 1)} onClick={() => showView(v.id)}>
+                        <Glyph name={v.icon} size={20} />
+                        <span className="view-tip" aria-hidden="true"><b>{v.label}</b>{v.question}<kbd>{i + 1}</kbd></span>
+                    </button>
+                ))}
+            </nav>
             <main className="canvas-area">
                 {watched?.show
                     ? <AgentCanvas key={watched.session} index={canvasIndex} view={watched} session={sessions.find(s => s.id === watched.session)} settings={view} selected={element} changes={canvasChanges} at={step} list={!host?.panels} onStep={setStep} onSelect={select} onClose={() => watch()} onOpenFile={openFile} />
-                    : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={decodeURIComponent(snapshot.root).split('/').pop()} selected={element} settings={view} sessions={sessionMarks} onSession={host?.focusSession} implementation={snapshot.implementation} buttons={[{ label: openTasks ? `Tasks ${openTasks}` : 'Tasks', icon: 'list-checks', pressed: board, run: () => setBoard(!board) }]} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
-                {board && !watched?.show && <TaskBoard tasks={snapshot.tasks} sessions={sessions} selected={element} onSelect={select} onClose={() => setBoard(false)} />}
+                    : modelView !== 'levels' ? <Diagram key={modelView} view={modelView} index={index} name={name} icons={view.icons} selected={element} onSelect={select} />
+                    : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={name} selected={element} settings={view} sessions={sessionMarks} onSession={host?.focusSession} implementation={snapshot.implementation} buttons={[{ label: openTasks ? `Tasks ${openTasks}` : 'Tasks', icon: 'list-checks', pressed: board, run: () => setBoard(!board) }]} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
+                {board && !watched?.show && modelView === 'levels' && <TaskBoard tasks={snapshot.tasks} sessions={sessions} selected={element} onSelect={select} onClose={() => setBoard(false)} />}
                 <AgentStrip views={Object.values(agentViews)} sessions={sessions} watching={watching} onWatch={watch} />
                 {element && !host?.panels && (
                     <Inspector index={index} qn={element} anchor={anchor} change={selectedChange} onSelect={select} onOpenSource={openSource} onClose={() => setSelected(undefined)} />
                 )}
             </main>
+            </div>
+            <footer className="foot">
+                <span className="sponsor">sponsored by <a href="https://www.techthos.net/" target="_blank" rel="noopener">Techthos.net</a></span>
+            </footer>
         </div>
     );
 }

@@ -209,3 +209,136 @@ button.card-row:hover { background: var(--appling-surface-hover); }
 
 /* fingers need larger targets than a pointer */
 @media (pointer: coarse) { .tool-group button { min-width: 38px; height: 38px; } }
+
+/* The use case diagram: UML notation, actors left of one system boundary. */
+.usecases svg { margin: 24px auto; }
+.uc-boundary { fill: color-mix(in srgb, var(--appling-rust) 4%, transparent); stroke: var(--appling-rust); stroke-width: 1; stroke-dasharray: 6 4; }
+.usecases .uc-system { fill: var(--appling-rust); font: 600 12px var(--appling-font-mono); }
+.uc-association { fill: none; stroke: color-mix(in srgb, var(--appling-layer-experience) 62%, var(--appling-surface)); stroke-width: 1.5; transition: stroke 200ms, stroke-width 200ms; }
+.uc-association.lit { stroke: var(--appling-layer-experience); stroke-width: 2.5; }
+.uc-include path { fill: none; stroke: color-mix(in srgb, var(--appling-layer-behavior) 55%, var(--appling-surface)); stroke-width: 1.5; stroke-dasharray: 5 4; transition: stroke 200ms; }
+.usecases marker path { fill: color-mix(in srgb, var(--appling-layer-behavior) 55%, var(--appling-surface)); }
+.uc-include rect { fill: var(--appling-surface-raised); stroke: color-mix(in srgb, var(--appling-layer-behavior) 40%, var(--appling-surface)); }
+.usecases .uc-include text { fill: var(--appling-ink-muted); font: 600 9px var(--appling-font-mono); text-anchor: middle; text-transform: uppercase; letter-spacing: 0.1em; }
+.uc-include.lit path { stroke: var(--appling-layer-behavior); stroke-width: 2; }
+.uc-include.lit rect { stroke: var(--appling-layer-behavior); }
+.uc-chip { cursor: pointer; outline: none; }
+.uc-chip .ring { fill: color-mix(in srgb, var(--layer) 14%, var(--appling-surface-elevated)); stroke: var(--layer); stroke-width: 1.5; transition: stroke-width 120ms; }
+.uc-chip .cell { fill: color-mix(in srgb, var(--layer) 38%, transparent); }
+.uc-chip .icon { fill: none; stroke: var(--appling-ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.usecases .uc-chip text { text-anchor: start; }
+.uc-chip .name { fill: var(--appling-ink); font: 600 13px var(--appling-font-sans); }
+.uc-chip .kind { fill: var(--layer); font: 600 9px var(--appling-font-mono); text-transform: uppercase; letter-spacing: 0.1em; }
+.uc-chip:hover .ring, .uc-chip:focus-visible .ring { stroke-width: 3; }
+.uc-chip.selected .ring { stroke: var(--appling-ink); stroke-width: 3; }
+
+/* The state diagram: UML states with room around them. */
+.flow.states .flow-board { margin: 24px auto; }
+.flow.states text { font-size: 14px; }
+.flow.states .flow-label { font-weight: 600; }
+.flow.states .flow-edge-label text { font-size: 13px; font-weight: 600; stroke-width: 6px; }
+.flow.states .flow-edge-label .flow-note { font-size: 11.5px; font-weight: 400; }
+.flow.states .flow-node rect { stroke-width: 2; }
+.flow-initial circle { fill: var(--appling-ink); }
+.flow-edge-label.start text { text-anchor: start; }
+.flow-edge-label.end text { text-anchor: end; }
+
+/* The screen flow: a mockup of the application in a browser window, as the actor sees it. */
+.mock { height: 100%; overflow: auto; padding: 24px; background: var(--appling-surface); }
+.mock-window { display: flex; flex-direction: column; max-width: 1100px; min-height: 560px; margin: 0 auto; overflow: hidden; border-radius: 16px; background: var(--appling-surface-raised); box-shadow: 0 0 0 1px color-mix(in srgb, var(--appling-ink) 7%, transparent), 0 2px 6px var(--appling-shadow), 0 24px 60px -12px var(--appling-shadow); font: 13px/1.4 var(--appling-font-sans); color: var(--appling-ink); }
+.mock-chrome { display: flex; justify-content: center; padding: 10px 16px 0; }
+.mock-url { width: min(100%, 360px); padding: 4px 14px; border-radius: 999px; background: color-mix(in srgb, var(--appling-ink) 5%, transparent); color: var(--appling-ink-muted); font: 11px var(--appling-font-mono); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mock-appbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 12px 20px; border-bottom: 1px solid color-mix(in srgb, var(--appling-ink) 6%, transparent); }
+.mock-brand { font-size: 15px; }
+.mock-nav, .mock-subnav { display: flex; flex-wrap: wrap; gap: 4px; }
+.mock-nav { flex: 1; }
+.mock-nav button, .mock-subnav button { padding: 6px 12px; border-radius: 999px; color: var(--appling-ink-muted); transition: background 140ms, color 140ms; }
+.mock-nav button:hover, .mock-subnav button:hover { background: var(--appling-surface-hover); color: var(--appling-ink); }
+.mock-nav button[aria-current], .mock-subnav button[aria-current] { background: var(--appling-leaf-soft); color: var(--appling-ink); font-weight: 600; }
+.mock-subnav { padding: 8px 20px; border-bottom: 1px solid color-mix(in srgb, var(--appling-ink) 6%, transparent); }
+.mock-account { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.mock-avatar { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--appling-layer-experience); color: var(--appling-surface); font-size: 11px; font-weight: 700; }
+
+.mock-page { display: grid; gap: 16px; align-content: start; padding: 24px; }
+.mock-heading h1 { margin: 0; font-size: 22px; }
+.mock-heading h1 button { padding: 0; font: inherit; }
+.mock-heading h1 button:hover, .mock-heading h1 .selected { color: var(--appling-leaf); }
+.mock-heading p { margin: 4px 0 0; color: var(--appling-ink-muted); }
+.mock-stepper { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: var(--appling-leaf-soft); }
+.mock-stepper span:first-of-type { color: var(--appling-ink-muted); }
+.mock-steps { display: flex; gap: 4px; margin-left: auto; }
+.mock-steps i { width: 28px; height: 4px; border-radius: 2px; background: var(--appling-line-strong); }
+.mock-steps i.done { background: var(--appling-leaf); }
+.mock-card { border-radius: 12px; background: var(--appling-surface-elevated); box-shadow: 0 0 0 1px color-mix(in srgb, var(--appling-ink) 6%, transparent); overflow: hidden; }
+.mock-card > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; }
+.mock-card-title { padding: 0; font-weight: 600; font-size: 14px; }
+.mock-card-title:hover, .mock-card-title.selected { color: var(--appling-leaf); }
+.mock-search { min-width: 180px; padding: 5px 12px; border-radius: 999px; background: color-mix(in srgb, var(--appling-ink) 5%, transparent); color: var(--appling-ink-muted); font-size: 12px; }
+.mock-table { width: 100%; border-collapse: collapse; }
+.mock-table th { padding: 8px 16px; text-align: left; font-size: 11px; font-weight: 600; color: var(--appling-ink-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.mock-table td { padding: 12px 16px; border-top: 1px solid color-mix(in srgb, var(--appling-ink) 6%, transparent); }
+.mock-table tr.opens { cursor: pointer; }
+.mock-table tr.opens:hover td { background: var(--appling-surface-hover); }
+.mock-bar { display: block; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--appling-ink) 14%, transparent); }
+.mock-row-actions { width: 1%; white-space: nowrap; text-align: right; }
+.mock-chevron { width: 1%; color: var(--appling-ink-muted); font-size: 18px; }
+.mock-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px 24px; margin: 0; padding: 14px; }
+.mock-fields dt { font-size: 11.5px; color: var(--appling-ink-muted); margin-bottom: 6px; }
+.mock-fields dd { margin: 0; }
+.mock-form { display: grid; gap: 12px; max-width: 420px; padding: 14px; }
+.mock-form label { display: grid; gap: 6px; font-size: 12px; color: var(--appling-ink-muted); }
+.mock-input { display: block; height: 34px; border-radius: 8px; background: var(--appling-surface); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--appling-ink) 10%, transparent); }
+.mock-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.mock-button { padding: 5px 14px; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--appling-ink) 7%, transparent); font-size: 12px; transition: background 140ms; }
+.mock-row-actions .mock-button { padding: 3px 10px; }
+.mock-row-actions .mock-button + .mock-button { margin-left: 6px; }
+.mock-button:hover { background: color-mix(in srgb, var(--appling-ink) 12%, transparent); }
+.mock-button.primary { padding: 8px 18px; background: var(--appling-leaf); color: var(--appling-surface); font-weight: 600; }
+.mock-button.primary:hover { background: color-mix(in srgb, var(--appling-leaf) 85%, var(--appling-ink)); }
+.mock-button.selected { box-shadow: 0 0 0 3px var(--appling-leaf-soft); }
+.mock-footer { display: flex; justify-content: flex-end; }
+@media (max-width: 640px) {
+    .mock { padding: 8px; }
+    .mock-page { padding: 14px; }
+    .mock-table th, .mock-table td { padding: 8px; }
+}
+
+/* The intro of the diagrams and the screens: it plays once when a view or what it draws appears, in the spring of the
+   level canvas, and never again on its own. */
+.flow, .mock { --spring: cubic-bezier(0.3, 1.4, 0.5, 1); }
+.flow .pop { transform-box: fill-box; transform-origin: center; animation: pop 560ms var(--spring) var(--delay, 0ms) both; }
+.flow .draw { stroke-dasharray: 1; animation: draw 640ms cubic-bezier(0.4, 0, 0.2, 1) var(--delay, 0ms) both; }
+.flow .head { stroke: none; animation: fade 220ms ease-out calc(var(--delay, 0ms) + 560ms) both; }
+.flow .fade { animation: fade 380ms ease-out var(--delay, 0ms) both; }
+.flow .step-in { animation: step-in 600ms var(--spring) var(--delay, 0ms) both; }
+.mock-window { animation: rise 640ms var(--spring) both; }
+.mock-nav button { animation: fade-up 420ms ease-out calc(240ms + var(--i, 0) * 70ms) both; }
+.mock-page > * { animation: fade-up 480ms var(--spring) calc(var(--start, 0ms) + var(--i, 0) * 110ms) both; }
+.mock-table tbody tr { animation: fade 320ms ease-out calc(var(--start, 0ms) + var(--i, 0) * 110ms + 200ms + var(--r, 0) * 70ms) both; }
+@keyframes pop { from { opacity: 0; transform: scale(0.6); } }
+@keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes fade { from { opacity: 0; } }
+@keyframes step-in { from { opacity: 0; transform: translateX(-28px); } }
+@keyframes rise { from { opacity: 0; transform: translateY(28px) scale(0.97); } }
+@keyframes fade-up { from { opacity: 0; transform: translateY(12px); } }
+@media (prefers-reduced-motion: reduce) {
+    .flow .pop, .flow .draw, .flow .head, .flow .fade, .flow .step-in, .mock-window, .mock-nav button, .mock-page > *, .mock-table tbody tr { animation: none; }
+}
+
+/* The dropdown of the canvases: the trigger shows the picked value, the list floats under it. */
+.select { position: relative; display: inline-flex; }
+.select-trigger { display: inline-flex; align-items: center; gap: 8px; padding: 4px 8px 4px 10px; border-radius: 999px; color: var(--appling-ink); font: 500 12.5px var(--appling-font-sans); transition: background 140ms; }
+.select-trigger:hover, .select.open .select-trigger { background: color-mix(in srgb, var(--appling-ink) 8%, transparent); }
+.select-trigger .glyph { color: var(--appling-ink-muted); transition: rotate 160ms; }
+.select.open .select-trigger .glyph { rotate: 180deg; }
+.select-label { color: var(--appling-ink-muted); font: 11px var(--appling-font-mono); }
+.select-list { position: absolute; z-index: 30; top: calc(100% + 6px); min-width: max(100%, 200px); max-height: 320px; overflow: auto; margin: 0; padding: 4px; list-style: none; border-radius: 12px; background: var(--appling-surface-raised); box-shadow: 0 0 0 1px color-mix(in srgb, var(--appling-ink) 9%, transparent), 0 16px 40px -8px var(--appling-shadow); outline: none; transform-origin: top; animation: select-in 140ms ease-out; }
+.select-list.start { left: 0; }
+.select-list.end { right: 0; transform-origin: top right; }
+.select-list li { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; color: var(--appling-ink-soft); font: 13px var(--appling-font-sans); white-space: nowrap; cursor: pointer; }
+.select-list li.active { background: color-mix(in srgb, var(--appling-ink) 8%, transparent); color: var(--appling-ink); }
+.select-list li[aria-selected=true] { color: var(--appling-ink); font-weight: 600; }
+.select-list li .glyph { margin-left: auto; color: var(--appling-leaf); }
+.select-hint { color: var(--appling-ink-muted); font: 400 11px var(--appling-font-mono); }
+@keyframes select-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+@media (prefers-reduced-motion: reduce) { .select-list { animation: none; } }

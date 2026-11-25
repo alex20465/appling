@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { layoutFlow } from '../layout.js';
+import { useMemo, useState, type CSSProperties } from 'react';
+import { layoutFlow, layoutStates } from '../layout.js';
 import type { Bubble } from '../protocol.js';
 import { anchorOf, type Flow, type GraphIndex } from '../views.js';
 import { BubbleView, LooseBubbles, memberOf, type BubbleStep } from './Bubble.js';
@@ -13,13 +13,15 @@ interface FlowProps {
     step?: BubbleStep;
     /** Draws only the edges that leave the node clicked last, such as where a state can go. */
     edgesOnClick?: boolean;
+    /** Draws the flow as a UML state diagram: curved transitions and the initial pseudostate. */
+    states?: boolean;
     onSelect(qn: string): void;
     onOpenFile?(file: string, line: number): void;
 }
 
-/** A flowchart of states or steps: click a node or an edge label to select its element. */
-export function FlowCanvas({ index, flow, selected, bubbles = [], edgesOnClick, onSelect, onOpenFile, step }: FlowProps) {
-    const placed = useMemo(() => layoutFlow(flow), [flow]);
+/** A flowchart of steps or a state diagram: click a node or an edge label to select its element. */
+export function FlowCanvas({ index, flow, selected, bubbles = [], edgesOnClick, states, onSelect, onOpenFile, step }: FlowProps) {
+    const placed = useMemo(() => states ? layoutStates(flow) : layoutFlow(flow), [flow, states]);
     const [open, setOpen] = useState<string>();
     const edges = useMemo(() => edgesOnClick ? placed.edges.filter(e => e.edge.from === open) : placed.edges, [placed, open, edgesOnClick]);
     const press = (id: string, qn?: string) => {
@@ -34,9 +36,17 @@ export function FlowCanvas({ index, flow, selected, bubbles = [], edgesOnClick, 
         return at;
     }, [placed, edges]);
     const drawn = new Set(anchors.keys());
+    /** The intro: the nodes rank by rank from the top, each edge drawn once the node it leaves stands, then its label. */
+    const delays = useMemo(() => {
+        const ranks = [...new Set(placed.nodes.map(n => n.y))].sort((a, b) => a - b);
+        const node = new Map(placed.nodes.map(n => [n.node.id, 160 + ranks.indexOf(n.y) * 200]));
+        // edges that show on a click draw at once
+        return { node, edge: (from: string) => edgesOnClick ? 0 : (node.get(from) ?? 0) + 240 };
+    }, [placed, edgesOnClick]);
+    const delay = (ms: number) => ({ '--delay': `${ms}ms` }) as CSSProperties;
     const placedBubbles = bubbles.map(bubble => ({ bubble, anchor: index.nodes.has(bubble.target) ? anchorOf(index, bubble.target, drawn) : undefined }));
     return (
-        <div className="flow">
+        <div className={states ? 'flow states' : 'flow'}>
             <div className="flow-board" style={{ width: placed.width, height: placed.height }}>
                 <svg width={placed.width} height={placed.height} role="img" aria-label="Flowchart">
                     <defs>
@@ -44,19 +54,29 @@ export function FlowCanvas({ index, flow, selected, bubbles = [], edgesOnClick, 
                             <path d="M 0 0 L 10 5 L 0 10 z" />
                         </marker>
                     </defs>
-                    {edges.map((e, i) => <path key={i} className="flow-edge" d={e.path} markerEnd="url(#flow-arrow)" />)}
+                    {placed.initial && (
+                        <g className="flow-initial">
+                            <circle className="pop" cx={placed.initial.x} cy={placed.initial.y} r={9} />
+                            <Edge d={`M ${placed.initial.x} ${placed.initial.y + 9} L ${placed.initial.to[0]} ${placed.initial.to[1]}`} style={delay(60)} />
+                        </g>
+                    )}
+                    {edges.map((e, i) => <Edge key={`${e.edge.from} ${e.edge.to} ${i}`} d={e.path} style={delay(delays.edge(e.edge.from))} />)}
                     {placed.nodes.map(({ node, x, y, width, height }) => (
                         <g key={node.id} className={`flow-node${node.tag ? ` ${node.tag}` : ''}${node.qn && node.qn === selected ? ' selected' : ''}${node.id === open ? ' open' : ''}`} transform={`translate(${x - width / 2} ${y - height / 2})`} onClick={() => press(node.id, node.qn)}>
-                            <rect width={width} height={height} rx={8} />
-                            {node.tag === 'final' && <rect className="inner" x={3} y={3} width={width - 6} height={height - 6} rx={6} />}
-                            <text className="flow-label" x={width / 2} y={node.note ? 19 : 20}>{node.label}</text>
-                            {node.note && <text className="flow-note" x={width / 2} y={35}>{node.note}</text>}
+                            <g className="pop" style={delay(delays.node.get(node.id)!)}>
+                                <rect width={width} height={height} rx={states ? height / 2 : 8} />
+                                {node.tag === 'final' && <rect className="inner" x={4} y={4} width={width - 8} height={height - 8} rx={states ? (height - 8) / 2 : 6} />}
+                                <text className="flow-label" x={width / 2} y={node.note ? 19 : height / 2 + 4}>{node.label}</text>
+                                {node.note && <text className="flow-note" x={width / 2} y={35}>{node.note}</text>}
+                            </g>
                         </g>
                     ))}
                     {edges.filter(e => e.edge.label).map((e, i) => (
-                        <g key={i} className={`flow-edge-label${e.edge.qn && e.edge.qn === selected ? ' selected' : ''}`} transform={`translate(${e.x} ${e.y})`} onClick={() => e.edge.qn && onSelect(e.edge.qn)}>
-                            <text y={e.edge.note ? -2 : 4}>{e.edge.label}</text>
-                            {e.edge.note && <text className="flow-note" y={13}>{e.edge.note}</text>}
+                        <g key={i} className={`flow-edge-label${e.anchor ? ` ${e.anchor}` : ''}${e.edge.qn && e.edge.qn === selected ? ' selected' : ''}`} transform={`translate(${e.x} ${e.y})`} onClick={() => e.edge.qn && onSelect(e.edge.qn)}>
+                            <g className="fade" style={delay(delays.edge(e.edge.from) + 380)}>
+                                <text y={e.edge.note ? -2 : 4}>{e.edge.label}</text>
+                                {e.edge.note && <text className="flow-note" y={13}>{e.edge.note}</text>}
+                            </g>
                         </g>
                     ))}
                 </svg>
@@ -68,5 +88,15 @@ export function FlowCanvas({ index, flow, selected, bubbles = [], edgesOnClick, 
             {edgesOnClick && !open && <p className="flow-hint">click a state to see where it can go</p>}
             <LooseBubbles bubbles={placedBubbles.filter(b => !b.anchor).map(b => b.bubble)} step={step} onOpenFile={onOpenFile} />
         </div>
+    );
+}
+
+/** An edge that draws itself from its start; its arrowhead, on a copy without stroke, lands once the line arrives. */
+function Edge({ d, style }: { d: string, style: CSSProperties }) {
+    return (
+        <>
+            <path className="flow-edge draw" d={d} pathLength={1} style={style} />
+            <path className="flow-edge head" d={d} markerEnd="url(#flow-arrow)" style={style} />
+        </>
     );
 }

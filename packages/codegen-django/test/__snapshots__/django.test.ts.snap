@@ -22,8 +22,50 @@ from django.urls import include, path
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("api/", include("sales.api_urls")),
+    path("", include("crm.urls")),
     path("", include("sales.urls")),
 ]
+",
+  "crm/actions.py": "from django.core.exceptions import PermissionDenied
+from django.db import transaction
+from crm.enums import LeadStatus
+from crm.errors import InvalidTransition
+from crm.models import Lead
+from crm.policies import can_update_lead
+from crm.roles import is_clerk
+
+
+@transaction.atomic
+def contact(lead: Lead, *, actor=None) -> None:
+    if actor is not None and not (actor.is_authenticated and can_update_lead(actor, lead) and is_clerk(actor)):
+        raise PermissionDenied("Contact")
+    if lead.status in (LeadStatus.PROSPECT,):
+        lead.status = LeadStatus.CONTACTED
+    else:
+        raise InvalidTransition("contact", lead.status)
+    lead.save()
+
+
+@transaction.atomic
+def win(lead: Lead, *, actor=None) -> None:
+    if actor is not None and not (actor.is_authenticated and can_update_lead(actor, lead) and is_clerk(actor)):
+        raise PermissionDenied("Win")
+    if lead.status in (LeadStatus.CONTACTED,):
+        lead.status = LeadStatus.WON
+    else:
+        raise InvalidTransition("win", lead.status)
+    lead.save()
+
+
+@transaction.atomic
+def lose(lead: Lead, *, actor=None) -> None:
+    if actor is not None and not (actor.is_authenticated and can_update_lead(actor, lead) and is_clerk(actor)):
+        raise PermissionDenied("Lose")
+    if lead.status in (LeadStatus.PROSPECT, LeadStatus.CONTACTED):
+        lead.status = LeadStatus.LOST
+    else:
+        raise InvalidTransition("lose", lead.status)
+    lead.save()
 ",
   "crm/actors.py": "import rules
 
@@ -41,11 +83,27 @@ class CrmConfig(AppConfig):
     def ready(self):
         from . import groups  # noqa: F401
 ",
+  "crm/enums.py": "from django.db import models
+
+
+class LeadStatus(models.TextChoices):
+    PROSPECT = "prospect"
+    CONTACTED = "contacted"
+    WON = "won"
+    LOST = "lost"
+",
   "crm/factories.py": "from itertools import count
-from crm.models import Account
+from crm.models import Account, Lead
 
 
 _sequence = count(1)
+
+
+def make_lead(**fields):
+    """A Lead with a value for every required field; the fields given replace them."""
+    values = {"name": f"name-{next(_sequence)}"}
+    values.update(fields)
+    return Lead.objects.create(**values)
 
 
 def make_account(**fields):
@@ -71,12 +129,103 @@ def create_groups(sender, **kwargs) -> None:
     for name in GROUPS:
         Group.objects.get_or_create(name=name)
 ",
+  "crm/messages.py": "LABELS = {}
+",
   "crm/models.py": "from django.db import models
+from crm.enums import LeadStatus
 
 
 class Account(models.Model):
     name = models.CharField(max_length=255, unique=True)
     email = models.CharField(max_length=255)
+
+
+class Lead(models.Model):
+    name = models.CharField(max_length=255)
+    account = models.ForeignKey("crm.Account", on_delete=models.PROTECT, null=True, blank=True)
+    status = models.CharField(max_length=32, choices=LeadStatus.choices, default=LeadStatus.PROSPECT)
+",
+  "crm/pages.py": "from django.contrib import messages
+from django.core.exceptions import PermissionDenied
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.translation import get_language
+from django.views.decorators.http import require_POST
+from crm.actions import contact, lose, win
+from crm.errors import InvalidTransition
+from crm.messages import LABELS
+from crm.models import Lead
+from crm.policies import can_read_lead
+from crm.queries import open_leads
+
+
+def value(obj, path):
+    """Follows a dotted path such as "customer.name"; None when a step is missing."""
+    for part in path.split("."):
+        obj = getattr(obj, part, None) if obj is not None else None
+    return obj
+
+
+def label(key, default):
+    return LABELS.get(get_language()[:2], {}).get(key, default)
+
+
+def leads(request):
+    components = []
+    rows = open_leads(actor=request.user)
+    components.append({
+        "kind": "list",
+        "columns": [label("LeadRow.name", "Name"), label("LeadRow.status", "Status")],
+        "items": [{"id": row.pk, "values": [value(row, "name"), value(row, "status")]} for row in rows],
+        "actions": [{"label": "Contact", "url": "/_actions/crm/contact/"}, {"label": "Lose", "url": "/_actions/crm/lose/"}],
+    })
+    return render(request, "crm/page.html", {"title": "Leads", "components": components})
+
+
+@require_POST
+def run_contact(request, id):
+    lead = get_object_or_404(Lead, pk=id)
+    try:
+        contact(lead, actor=request.user)
+        messages.success(request, "Contact done.")
+    except (InvalidTransition,) as error:
+        messages.error(request, "Contact failed: " + type(error).__name__)
+    return redirect(request.POST.get("next") or "/")
+
+
+@require_POST
+def run_lose(request, id):
+    lead = get_object_or_404(Lead, pk=id)
+    try:
+        lose(lead, actor=request.user)
+        messages.success(request, "Lose done.")
+    except (InvalidTransition,) as error:
+        messages.error(request, "Lose failed: " + type(error).__name__)
+    return redirect(request.POST.get("next") or "/")
+
+
+def lead_detail(request, id):
+    components = []
+    record = get_object_or_404(Lead, pk=id)
+    if not can_read_lead(request.user, record):
+        raise PermissionDenied()
+    components.append({
+        "kind": "detail",
+        "id": record.pk,
+        "fields": [(label("LeadRow.name", "Name"), value(record, "name")), (label("LeadRow.status", "Status"), value(record, "status"))],
+        "actions": [{"label": "Win", "url": "/_actions/crm/win/"}, {"label": "Lose", "url": "/_actions/crm/lose/"}],
+    })
+    return render(request, "crm/page.html", {"title": "Lead detail", "components": components})
+
+
+@require_POST
+def run_win(request, id):
+    lead = get_object_or_404(Lead, pk=id)
+    try:
+        win(lead, actor=request.user)
+        messages.success(request, "Win done.")
+    except (InvalidTransition,) as error:
+        messages.error(request, "Win failed: " + type(error).__name__)
+    return redirect(request.POST.get("next") or "/")
 ",
   "crm/policies.py": "from django.db import models
 from crm.roles import is_clerk
@@ -106,6 +255,49 @@ def readable_account_rows(actor, rows):
     if not getattr(actor, "is_authenticated", False):
         return rows.none()
     return rows.filter(((models.Q(pk__isnull=False) if is_clerk(actor) else models.Q(pk__in=[]))) | (((models.Q(pk__isnull=False) if is_customer(actor) else models.Q(pk__in=[]))) & (models.Q(pk=getattr(actor.account, "pk", None)))))
+
+
+def can_read_lead(actor, lead) -> bool:
+    if not getattr(actor, "is_authenticated", False):
+        return False
+    return is_clerk(actor)
+
+
+def can_create_lead(actor, lead) -> bool:
+    if not getattr(actor, "is_authenticated", False):
+        return False
+    return is_clerk(actor)
+
+
+def can_update_lead(actor, lead) -> bool:
+    if not getattr(actor, "is_authenticated", False):
+        return False
+    return is_clerk(actor)
+
+
+def can_delete_lead(actor, lead) -> bool:
+    return False  # no policy grants delete
+
+
+def readable_lead_rows(actor, rows):
+    """Narrows a queryset of Lead to the rows the actor may read."""
+    if not getattr(actor, "is_authenticated", False):
+        return rows.none()
+    return rows.filter((models.Q(pk__isnull=False) if is_clerk(actor) else models.Q(pk__in=[])))
+",
+  "crm/queries.py": "from django.db import models
+from crm.models import Lead
+from crm.policies import readable_lead_rows
+
+
+def open_leads(actor=None):
+    rows = Lead.objects.filter(models.Q(status__in=["prospect", "contacted"]))
+    if actor is None:
+        return rows
+    if not actor.is_authenticated:
+        return rows.none()
+    rows = readable_lead_rows(actor, rows)
+    return rows
 ",
   "crm/roles.py": "import rules
 
@@ -113,6 +305,71 @@ def readable_account_rows(actor, rows):
 @rules.predicate
 def is_clerk(user):
     return user is not None and user.groups.filter(name__in=["Clerk", "Employee"]).exists()
+",
+  "crm/serializers.py": "from rest_framework import serializers
+from crm.models import Lead
+
+
+class LeadRow(serializers.ModelSerializer):
+    class Meta:
+        model = Lead
+        fields = ["name", "status"]
+",
+  "crm/templates/crm/base.html": "<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}{{ title }}{% endblock %}</title>
+  </head>
+  <body>
+    <nav>
+      <a href="/leads">Leads</a>
+    </nav>
+    {% for message in messages %}<p class="message {{ message.tags }}">{{ message }}</p>{% endfor %}
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>
+",
+  "crm/templates/crm/page.html": "{% extends "crm/base.html" %}
+{% block content %}
+<h1>{{ title }}</h1>
+{% for component in components %}
+  {% if component.kind == "list" %}
+    <table>
+      <thead><tr>{% for column in component.columns %}<th>{{ column }}</th>{% endfor %}<th></th></tr></thead>
+      <tbody>
+        {% for item in component.items %}
+          <tr>
+            {% for value in item.values %}<td>{{ value|default_if_none:"" }}</td>{% endfor %}
+            <td>{% for action in component.actions %}<form method="post" action="{{ action.url }}{{ item.id }}/">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button>{{ action.label }}</button></form>{% endfor %}</td>
+          </tr>
+        {% empty %}
+          <tr><td>Nothing here yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if component.page.has_other_pages %}
+      <p>
+        {% if component.page.has_previous %}<a href="?page={{ component.page.previous_page_number }}">Previous</a>{% endif %}
+        {% if component.page.has_next %}<a href="?page={{ component.page.next_page_number }}">Next</a>{% endif %}
+      </p>
+    {% endif %}
+  {% elif component.kind == "detail" %}
+    <dl>{% for name, value in component.fields %}<dt>{{ name }}</dt><dd>{{ value|default_if_none:"" }}</dd>{% endfor %}</dl>
+    {% for action in component.actions %}<form method="post" action="{{ action.url }}{{ component.id }}/">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button>{{ action.label }}</button></form>{% endfor %}
+  {% elif component.kind == "form" %}
+    <form method="post" action="{{ component.url }}">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.path }}">
+      {% for name, field_label in component.inputs %}<label>{{ field_label }} <input name="{{ name }}"></label>{% endfor %}
+      <button>{{ component.label }}</button>
+    </form>
+  {% endif %}
+{% endfor %}
+{% endblock %}
 ",
   "crm/tenants.py": "from contextvars import ContextVar
 
@@ -138,7 +395,16 @@ class CompanyMiddleware:
         finally:
             _company.reset(token)
 ",
-  "crm/tests.py": "from django.test import TestCase
+  "crm/tests.py": "from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.core.exceptions import PermissionDenied
+from django.test import TestCase
+from crm.actions import contact, lose, win
+from crm.enums import LeadStatus
+from crm.errors import InvalidTransition
+from crm.factories import make_lead
+from crm.policies import can_create_lead, can_read_lead, can_update_lead
+from crm.usecases import convert, follow_up
 
 
 class AccountReadPolicyTest(TestCase):
@@ -149,6 +415,179 @@ class AccountReadPolicyTest(TestCase):
 
     def test_denies_other_actors(self):
         self.skipTest("registry task: crm.Account.policy[read]")
+
+
+class LeadReadCreateUpdatePolicyTest(TestCase):
+    """crm.Lead.policy[read,create,update]: actor.is(Clerk)"""
+
+    def test_allows_permitted_actors(self):
+        user = get_user_model().objects.create(username="tester")
+        user.groups.add(Group.objects.get_or_create(name="Employee")[0])
+        lead = make_lead()
+        self.assertTrue(can_read_lead(user, lead))
+        self.assertTrue(can_create_lead(user, lead))
+        self.assertTrue(can_update_lead(user, lead))
+
+    def test_denies_other_actors(self):
+        user = get_user_model().objects.create(username="tester")
+        user.groups.add(Group.objects.get_or_create(name="Shopper")[0])
+        lead = make_lead()
+        self.assertFalse(can_read_lead(user, lead))
+        self.assertFalse(can_create_lead(user, lead))
+        self.assertFalse(can_update_lead(user, lead))
+
+
+class ContactAnyPolicyTest(TestCase):
+    """crm.Contact.policy[]: actor.is(Clerk)"""
+
+    def test_allows_permitted_actors(self):
+        self.skipTest("registry task: crm.Contact.policy[]")
+
+    def test_denies_other_actors(self):
+        user = get_user_model().objects.create(username="tester")
+        user.groups.add(Group.objects.get_or_create(name="Shopper")[0])
+        lead = make_lead()
+        with self.assertRaises(PermissionDenied):
+            contact(lead, actor=user)
+
+
+class WinAnyPolicyTest(TestCase):
+    """crm.Win.policy[]: actor.is(Clerk)"""
+
+    def test_allows_permitted_actors(self):
+        self.skipTest("registry task: crm.Win.policy[]")
+
+    def test_denies_other_actors(self):
+        user = get_user_model().objects.create(username="tester")
+        user.groups.add(Group.objects.get_or_create(name="Shopper")[0])
+        lead = make_lead()
+        with self.assertRaises(PermissionDenied):
+            win(lead, actor=user)
+
+
+class LoseAnyPolicyTest(TestCase):
+    """crm.Lose.policy[]: actor.is(Clerk)"""
+
+    def test_allows_permitted_actors(self):
+        self.skipTest("registry task: crm.Lose.policy[]")
+
+    def test_denies_other_actors(self):
+        user = get_user_model().objects.create(username="tester")
+        user.groups.add(Group.objects.get_or_create(name="Shopper")[0])
+        lead = make_lead()
+        with self.assertRaises(PermissionDenied):
+            lose(lead, actor=user)
+
+
+class LeadFlowProspectToContactedTest(TestCase):
+    """crm.LeadFlow.transition[prospect->contacted]: prospect -> contacted via Contact"""
+
+    def test_moves_from_allowed_states(self):
+        for state in (LeadStatus.PROSPECT,):
+            with self.subTest(state=state):
+                lead = make_lead(status=state)
+                contact(lead)
+                lead.refresh_from_db()
+                self.assertEqual(lead.status, LeadStatus.CONTACTED)
+
+    def test_refuses_other_states(self):
+        for state in (LeadStatus.CONTACTED, LeadStatus.WON, LeadStatus.LOST):
+            with self.subTest(state=state):
+                lead = make_lead(status=state)
+                with self.assertRaises(InvalidTransition):
+                    contact(lead)
+
+
+class LeadFlowContactedToWonTest(TestCase):
+    """crm.LeadFlow.transition[contacted->won]: contacted -> won via Win"""
+
+    def test_moves_from_allowed_states(self):
+        for state in (LeadStatus.CONTACTED,):
+            with self.subTest(state=state):
+                lead = make_lead(status=state)
+                win(lead)
+                lead.refresh_from_db()
+                self.assertEqual(lead.status, LeadStatus.WON)
+
+    def test_refuses_other_states(self):
+        for state in (LeadStatus.PROSPECT, LeadStatus.WON, LeadStatus.LOST):
+            with self.subTest(state=state):
+                lead = make_lead(status=state)
+                with self.assertRaises(InvalidTransition):
+                    win(lead)
+
+
+class LeadFlowProspectContactedToLostTest(TestCase):
+    """crm.LeadFlow.transition[prospect,contacted->lost]: prospect, contacted -> lost via Lose"""
+
+    def test_moves_from_allowed_states(self):
+        for state in (LeadStatus.PROSPECT, LeadStatus.CONTACTED):
+            with self.subTest(state=state):
+                lead = make_lead(status=state)
+                lose(lead)
+                lead.refresh_from_db()
+                self.assertEqual(lead.status, LeadStatus.LOST)
+
+    def test_refuses_other_states(self):
+        for state in (LeadStatus.WON, LeadStatus.LOST):
+            with self.subTest(state=state):
+                lead = make_lead(status=state)
+                with self.assertRaises(InvalidTransition):
+                    lose(lead)
+
+
+class FollowUpAnyPolicyTest(TestCase):
+    """crm.FollowUp.policy[]: actor.is(Clerk)"""
+
+    def test_allows_permitted_actors(self):
+        self.skipTest("registry task: crm.FollowUp.policy[]")
+
+    def test_denies_other_actors(self):
+        user = get_user_model().objects.create(username="tester")
+        user.groups.add(Group.objects.get_or_create(name="Shopper")[0])
+        with self.assertRaises(PermissionDenied):
+            follow_up(lead=make_lead(), actor=user)
+
+
+class ConvertAnyPolicyTest(TestCase):
+    """crm.Convert.policy[]: actor.is(Clerk)"""
+
+    def test_allows_permitted_actors(self):
+        self.skipTest("registry task: crm.Convert.policy[]")
+
+    def test_denies_other_actors(self):
+        user = get_user_model().objects.create(username="tester")
+        user.groups.add(Group.objects.get_or_create(name="Shopper")[0])
+        with self.assertRaises(PermissionDenied):
+            convert(lead=make_lead(), actor=user)
+",
+  "crm/urls.py": "from django.urls import path
+from crm import pages
+
+
+urlpatterns = [
+    path("leads", pages.leads),
+    path("_actions/crm/contact/<int:id>/", pages.run_contact),
+    path("_actions/crm/lose/<int:id>/", pages.run_lose),
+    path("leads/<int:id>", pages.lead_detail),
+    path("_actions/crm/win/<int:id>/", pages.run_win),
+]
+",
+  "crm/usecases.py": "from django.core.exceptions import PermissionDenied
+from crm.actions import contact
+from crm.models import Lead
+from crm.roles import is_clerk
+
+
+def follow_up(lead: Lead, *, actor=None) -> None:
+    if actor is not None and not (actor.is_authenticated and is_clerk(actor)):
+        raise PermissionDenied("FollowUp")
+    contact(lead, actor=actor)
+
+
+def convert(lead: Lead, *, actor=None) -> None:
+    if actor is not None and not (actor.is_authenticated and is_clerk(actor)):
+        raise PermissionDenied("Convert")
 ",
   "sales/actions.py": "from django.core.exceptions import PermissionDenied
 from django.db import transaction
@@ -668,6 +1107,7 @@ from sales.errors import EmptyOrder, InvalidTransition
 from sales.events import payment_received
 from sales.factories import make_order
 from sales.models import Order
+from sales.usecases import cancel_order, checkout
 
 
 class OrderTotalNeverNegativeTest(TestCase):
@@ -759,6 +1199,32 @@ class OrderFlowPlacedToPaidTest(TestCase):
                     payment_received.send(sender=None, order=order)
 
 
+class CheckoutAnyPolicyTest(TestCase):
+    """sales.Checkout.policy[]: actor.is(Customer)"""
+
+    def test_allows_permitted_actors(self):
+        self.skipTest("registry task: sales.Checkout.policy[]")
+
+    def test_denies_other_actors(self):
+        user = get_user_model().objects.create(username="tester")
+        user.groups.add(Group.objects.get_or_create(name="Employee")[0])
+        with self.assertRaises(PermissionDenied):
+            checkout(order=make_order(), actor=user, payments=None)
+
+
+class CancelOrderAnyPolicyTest(TestCase):
+    """sales.CancelOrder.policy[]: actor.is(crm.Clerk)"""
+
+    def test_allows_permitted_actors(self):
+        self.skipTest("registry task: sales.CancelOrder.policy[]")
+
+    def test_denies_other_actors(self):
+        user = get_user_model().objects.create(username="tester")
+        user.groups.add(Group.objects.get_or_create(name="Shopper")[0])
+        with self.assertRaises(PermissionDenied):
+            cancel_order(order=make_order(), actor=user)
+
+
 class ClerkCancelsDraftScenarioTest(TestCase):
     """sales.ClerkCancelsDraft: when Cancel(order, \\"changed mind\\") then order.status == cancelled"""
 
@@ -807,18 +1273,29 @@ urlpatterns = [
     path("_actions/sales/place_order/<int:id>/", pages.run_place_order),
 ]
 ",
-  "sales/usecases.py": "from sales.actions import cancel, place_order
+  "sales/usecases.py": "from django.core.exceptions import PermissionDenied
+from crm.roles import is_clerk
+from sales.actions import cancel, place_order
 from sales.errors import Declined
 from sales.externals import Payments
 from sales.models import Order
+from sales.roles import is_customer
 
 
 def checkout(order: Order, *, actor=None, payments: Payments) -> None:
+    if actor is not None and not (actor.is_authenticated and is_customer(actor)):
+        raise PermissionDenied("Checkout")
     place_order(order, actor=actor)
     try:
         payments.charge(order.total)
     except Declined:
         cancel(order, actor=actor)
+
+
+def cancel_order(order: Order, reason: str | None, *, actor=None) -> None:
+    if actor is not None and not (actor.is_authenticated and is_clerk(actor)):
+        raise PermissionDenied("CancelOrder")
+    cancel(order, reason=reason, actor=actor)
 ",
   "sales/values.py": "from decimal import Decimal
 from typing import TypedDict

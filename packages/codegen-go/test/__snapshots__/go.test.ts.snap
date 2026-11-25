@@ -118,9 +118,64 @@ func InTenant(actor Actor, record Tenanted) bool {
 	return ok && id == *actor.Tenant
 }
 ",
+  "internal/crm/actions.go": "package crm
+
+import (
+	"fmt"
+	"shop/internal/access"
+)
+
+
+// Contact is the action crm.Contact. It returns the events it emits.
+func Contact(actor access.Actor, lead *Lead) ([]any, error) {
+	var events []any
+	if !actor.IsSystem() && !CanContact(actor, lead) {
+		return nil, fmt.Errorf("%w: Contact", access.ErrForbidden)
+	}
+	switch {
+	case lead.Status == LeadStatusProspect:
+		lead.Status = LeadStatusContacted
+	default:
+		return nil, fmt.Errorf("%w: Contact from %s", ErrInvalidTransition, lead.Status)
+	}
+	return events, nil
+}
+
+// Win is the action crm.Win. It returns the events it emits.
+func Win(actor access.Actor, lead *Lead) ([]any, error) {
+	var events []any
+	if !actor.IsSystem() && !CanWin(actor, lead) {
+		return nil, fmt.Errorf("%w: Win", access.ErrForbidden)
+	}
+	switch {
+	case lead.Status == LeadStatusContacted:
+		lead.Status = LeadStatusWon
+	default:
+		return nil, fmt.Errorf("%w: Win from %s", ErrInvalidTransition, lead.Status)
+	}
+	return events, nil
+}
+
+// Lose is the action crm.Lose. It returns the events it emits.
+func Lose(actor access.Actor, lead *Lead) ([]any, error) {
+	var events []any
+	if !actor.IsSystem() && !CanLose(actor, lead) {
+		return nil, fmt.Errorf("%w: Lose", access.ErrForbidden)
+	}
+	switch {
+	case lead.Status == LeadStatusProspect || lead.Status == LeadStatusContacted:
+		lead.Status = LeadStatusLost
+	default:
+		return nil, fmt.Errorf("%w: Lose from %s", ErrInvalidTransition, lead.Status)
+	}
+	return events, nil
+}
+",
   "internal/crm/crm_test.go": "package crm
 
 import (
+	"errors"
+	"shop/internal/access"
 	"testing"
 )
 
@@ -128,11 +183,149 @@ import (
 func TestAccountPolicyRead(t *testing.T) {
 	t.Skip("registry task: crm.Account.policy[read]")
 }
+
+// validLead returns a Lead with the defaults of the model and a sample value for every other required field.
+func validLead() *Lead {
+	x := NewLead()
+	x.Name = "name-1"
+	return x
+}
+
+func TestLeadPolicyReadCreateUpdate(t *testing.T) {
+	t.Run("allows permitted actors", func(t *testing.T) {
+		actor := access.NewEmployee()
+		lead := validLead()
+		if !CanReadLead(actor, lead) {
+			t.Error("CanReadLead: want true for crm.Employee")
+		}
+		if !CanCreateLead(actor, lead) {
+			t.Error("CanCreateLead: want true for crm.Employee")
+		}
+		if !CanUpdateLead(actor, lead) {
+			t.Error("CanUpdateLead: want true for crm.Employee")
+		}
+	})
+	t.Run("denies other actors", func(t *testing.T) {
+		actor := access.NewShopper()
+		lead := validLead()
+		if CanReadLead(actor, lead) {
+			t.Error("CanReadLead: want false for sales.Shopper")
+		}
+		if CanCreateLead(actor, lead) {
+			t.Error("CanCreateLead: want false for sales.Shopper")
+		}
+		if CanUpdateLead(actor, lead) {
+			t.Error("CanUpdateLead: want false for sales.Shopper")
+		}
+	})
+}
+
+func TestCrmContact(t *testing.T) {
+	t.Skip("registry task: crm.Contact")
+}
+
+func TestContactPolicy(t *testing.T) {
+	t.Skip("registry task: crm.Contact.policy[]")
+}
+
+func TestCrmWin(t *testing.T) {
+	t.Skip("registry task: crm.Win")
+}
+
+func TestWinPolicy(t *testing.T) {
+	t.Skip("registry task: crm.Win.policy[]")
+}
+
+func TestCrmLose(t *testing.T) {
+	t.Skip("registry task: crm.Lose")
+}
+
+func TestLosePolicy(t *testing.T) {
+	t.Skip("registry task: crm.Lose.policy[]")
+}
+
+func TestLeadFlowTransitionProspectContacted(t *testing.T) {
+	t.Run("goes from prospect to contacted", func(t *testing.T) {
+		x := validLead()
+		x.Status = LeadStatusProspect
+		if _, err := Contact(access.NewEmployee(), x); err != nil {
+			t.Fatalf("Contact from prospect: %v", err)
+		}
+		if x.Status != LeadStatusContacted {
+			t.Fatalf("Contact from prospect: want contacted, got %v", x.Status)
+		}
+	})
+	t.Run("refuses contacted", func(t *testing.T) {
+		x := validLead()
+		x.Status = LeadStatusContacted
+		if _, err := Contact(access.NewEmployee(), x); !errors.Is(err, ErrInvalidTransition) {
+			t.Fatalf("Contact from contacted: want ErrInvalidTransition, got %v", err)
+		}
+	})
+}
+
+func TestLeadFlowTransitionContactedWon(t *testing.T) {
+	t.Run("goes from contacted to won", func(t *testing.T) {
+		x := validLead()
+		x.Status = LeadStatusContacted
+		if _, err := Win(access.NewEmployee(), x); err != nil {
+			t.Fatalf("Win from contacted: %v", err)
+		}
+		if x.Status != LeadStatusWon {
+			t.Fatalf("Win from contacted: want won, got %v", x.Status)
+		}
+	})
+	t.Run("refuses prospect", func(t *testing.T) {
+		x := validLead()
+		x.Status = LeadStatusProspect
+		if _, err := Win(access.NewEmployee(), x); !errors.Is(err, ErrInvalidTransition) {
+			t.Fatalf("Win from prospect: want ErrInvalidTransition, got %v", err)
+		}
+	})
+}
+
+func TestLeadFlowTransitionProspectContactedLost(t *testing.T) {
+	t.Run("goes from prospect to lost", func(t *testing.T) {
+		x := validLead()
+		x.Status = LeadStatusProspect
+		if _, err := Lose(access.NewEmployee(), x); err != nil {
+			t.Fatalf("Lose from prospect: %v", err)
+		}
+		if x.Status != LeadStatusLost {
+			t.Fatalf("Lose from prospect: want lost, got %v", x.Status)
+		}
+	})
+	t.Run("refuses won", func(t *testing.T) {
+		x := validLead()
+		x.Status = LeadStatusWon
+		if _, err := Lose(access.NewEmployee(), x); !errors.Is(err, ErrInvalidTransition) {
+			t.Fatalf("Lose from won: want ErrInvalidTransition, got %v", err)
+		}
+	})
+}
+
+func TestFollowUpPolicy(t *testing.T) {
+	t.Skip("registry task: crm.FollowUp.policy[]")
+}
+
+func TestConvertPolicy(t *testing.T) {
+	t.Skip("registry task: crm.Convert.policy[]")
+}
 ",
   "internal/crm/doc.go": "package crm
 
 
 // Package crm holds the crm module of the model.
+",
+  "internal/crm/errors.go": "package crm
+
+import (
+	"errors"
+)
+
+
+// ErrInvalidTransition is returned when the state does not allow an action.
+var ErrInvalidTransition = errors.New("invalid transition")
 ",
   "internal/crm/policies.go": "package crm
 
@@ -164,6 +357,98 @@ func CanDeleteAccount(actor access.Actor, account *Account) bool {
 // accountPolicyRead is the policy crm.Account.policy[read]: actor.is(Clerk) || (actor.is(sales.Customer) && actor.account == this)
 func accountPolicyRead(actor access.Actor, account *Account) bool {
 	return access.IsClerk(actor) || (access.IsCustomer(actor) && access.Same(actor.Account, account.ID))
+}
+
+// CanReadLead reports whether the policies of crm.Lead let the actor read the record.
+func CanReadLead(actor access.Actor, lead *Lead) bool {
+	return access.InTenant(actor, lead) && leadPolicyReadCreateUpdate(actor, lead)
+}
+
+// CanCreateLead reports whether the policies of crm.Lead let the actor create the record.
+func CanCreateLead(actor access.Actor, lead *Lead) bool {
+	return access.InTenant(actor, lead) && leadPolicyReadCreateUpdate(actor, lead)
+}
+
+// CanUpdateLead reports whether the policies of crm.Lead let the actor update the record.
+func CanUpdateLead(actor access.Actor, lead *Lead) bool {
+	return access.InTenant(actor, lead) && leadPolicyReadCreateUpdate(actor, lead)
+}
+
+// CanDeleteLead reports whether the policies of crm.Lead let the actor delete the record; no policy grants delete.
+func CanDeleteLead(actor access.Actor, lead *Lead) bool {
+	return false
+}
+
+// leadPolicyReadCreateUpdate is the policy crm.Lead.policy[read,create,update]: actor.is(Clerk)
+func leadPolicyReadCreateUpdate(actor access.Actor, lead *Lead) bool {
+	return access.IsClerk(actor)
+}
+
+// CanContact reports whether the actor may run crm.Contact, including the update check of crm.Lead.
+func CanContact(actor access.Actor, lead *Lead) bool {
+	return CanUpdateLead(actor, lead) && contactPolicy(actor, lead)
+}
+
+// contactPolicy is the policy crm.Contact.policy[]: actor.is(Clerk)
+func contactPolicy(actor access.Actor, lead *Lead) bool {
+	return access.IsClerk(actor)
+}
+
+// CanWin reports whether the actor may run crm.Win, including the update check of crm.Lead.
+func CanWin(actor access.Actor, lead *Lead) bool {
+	return CanUpdateLead(actor, lead) && winPolicy(actor, lead)
+}
+
+// winPolicy is the policy crm.Win.policy[]: actor.is(Clerk)
+func winPolicy(actor access.Actor, lead *Lead) bool {
+	return access.IsClerk(actor)
+}
+
+// CanLose reports whether the actor may run crm.Lose, including the update check of crm.Lead.
+func CanLose(actor access.Actor, lead *Lead) bool {
+	return CanUpdateLead(actor, lead) && losePolicy(actor, lead)
+}
+
+// losePolicy is the policy crm.Lose.policy[]: actor.is(Clerk)
+func losePolicy(actor access.Actor, lead *Lead) bool {
+	return access.IsClerk(actor)
+}
+
+// CanOpenLeads reports whether the actor may read a record through crm.OpenLeads, including the read check of crm.Lead.
+func CanOpenLeads(actor access.Actor, lead *Lead) bool {
+	return CanReadLead(actor, lead)
+}
+
+// CanFollowUp reports whether the actor may run crm.FollowUp.
+func CanFollowUp(actor access.Actor, lead *Lead) bool {
+	return followUpPolicy(actor, lead)
+}
+
+// followUpPolicy is the policy crm.FollowUp.policy[]: actor.is(Clerk)
+func followUpPolicy(actor access.Actor, lead *Lead) bool {
+	return access.IsClerk(actor)
+}
+
+// CanConvert reports whether the actor may run crm.Convert.
+func CanConvert(actor access.Actor, lead *Lead) bool {
+	return convertPolicy(actor, lead)
+}
+
+// convertPolicy is the policy crm.Convert.policy[]: actor.is(Clerk)
+func convertPolicy(actor access.Actor, lead *Lead) bool {
+	return access.IsClerk(actor)
+}
+",
+  "internal/crm/queries.go": "package crm
+
+import (
+	"slices"
+)
+
+
+// InOpenLeads reports whether a record is among the results of the query crm.OpenLeads.
+func InOpenLeads(lead *Lead) bool {
+	return slices.Contains([]LeadStatus{LeadStatusProspect, LeadStatusContacted}, lead.Status)
 }
 ",
   "internal/crm/support.go": "package crm
@@ -201,6 +486,45 @@ func (a *Account) Validate() error {
 // TenantID returns the ID of the crm.Account this Account belongs to, for the tenant crm.Company.
 func (a *Account) TenantID() (int64, bool) {
 	return a.ID, true
+}
+
+// LeadStatus is the enum crm.LeadStatus.
+type LeadStatus string
+
+const (
+	LeadStatusProspect LeadStatus = "prospect"
+	LeadStatusContacted LeadStatus = "contacted"
+	LeadStatusWon LeadStatus = "won"
+	LeadStatusLost LeadStatus = "lost"
+)
+
+// Lead is the entity crm.Lead.
+type Lead struct {
+	ID int64 \`json:"id"\`
+	Name string \`json:"name"\`
+	Account *Account \`json:"account"\`
+	Status LeadStatus \`json:"status"\`
+}
+
+// NewLead returns a new Lead with the defaults of the model.
+func NewLead() *Lead {
+	return &Lead{
+		Status: LeadStatusProspect,
+	}
+}
+
+// Validate checks the invariants of Lead.
+func (l *Lead) Validate() error {
+	var errs []error
+	return errors.Join(errs...)
+}
+
+// TenantID returns the ID of the crm.Account this Lead belongs to, for the tenant crm.Company.
+func (l *Lead) TenantID() (int64, bool) {
+	if l.Account == nil {
+		return 0, false
+	}
+	return l.Account.ID, true
 }
 ",
   "internal/sales/actions.go": "package sales
@@ -385,6 +709,26 @@ func CanOpenOrders(actor access.Actor, order *Order) bool {
 func CanOrdersOf(actor access.Actor, order *Order, of *crm.Account, since *time.Time) bool {
 	return CanReadOrder(actor, order)
 }
+
+// CanCheckout reports whether the actor may run sales.Checkout.
+func CanCheckout(actor access.Actor, order *Order) bool {
+	return checkoutPolicy(actor, order)
+}
+
+// checkoutPolicy is the policy sales.Checkout.policy[]: actor.is(Customer)
+func checkoutPolicy(actor access.Actor, order *Order) bool {
+	return access.IsCustomer(actor)
+}
+
+// CanCancelOrder reports whether the actor may run sales.CancelOrder.
+func CanCancelOrder(actor access.Actor, order *Order, reason *string) bool {
+	return cancelOrderPolicy(actor, order, reason)
+}
+
+// cancelOrderPolicy is the policy sales.CancelOrder.policy[]: actor.is(crm.Clerk)
+func cancelOrderPolicy(actor access.Actor, order *Order, reason *string) bool {
+	return access.IsClerk(actor)
+}
 ",
   "internal/sales/queries.go": "package sales
 
@@ -478,6 +822,14 @@ func TestCancelPolicy(t *testing.T) {
 
 func TestOrderFlowTransitionPlacedPaid(t *testing.T) {
 	t.Skip("registry task: sales.OrderFlow.transition[placed->paid]")
+}
+
+func TestCheckoutPolicy(t *testing.T) {
+	t.Skip("registry task: sales.Checkout.policy[]")
+}
+
+func TestCancelOrderPolicy(t *testing.T) {
+	t.Skip("registry task: sales.CancelOrder.policy[]")
 }
 ",
   "internal/sales/scenarios_test.go": "package sales_test

@@ -101,7 +101,7 @@ export function AgentCanvas({ index, view, session, settings: base, selected, ch
                 </ol>
             )}
             {cards ? <CardCanvas index={index} cards={cards} selected={selected} bubbles={bubbles} step={step} onSelect={onSelect} onOpenFile={onOpenFile} />
-                : flow ? <FlowCanvas index={index} flow={flow} selected={selected} bubbles={bubbles} step={step} edgesOnClick={show.view === 'machine'} onSelect={onSelect} onOpenFile={onOpenFile} />
+                : flow ? <FlowCanvas index={index} flow={flow} selected={selected} bubbles={bubbles} step={step} edgesOnClick={show.view === 'machine'} states={show.view === 'machine'} onSelect={onSelect} onOpenFile={onOpenFile} />
                 : <ModelCanvas index={index} focus={focus} folded={view.playbook} selected={selected} settings={settings} bubbles={bubbles} changes={changes} step={step} onSelect={onSelect} onSettings={next => setPicked({ at: here, settings: next })} onOpenFile={onOpenFile} />}
         </div>
     );

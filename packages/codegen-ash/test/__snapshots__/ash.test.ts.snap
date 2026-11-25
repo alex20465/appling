@@ -67,6 +67,77 @@ end
   end
 end
 ",
+  "lib/shop/crm/lead.ex": "defmodule Shop.Crm.Lead do
+  use Ash.Resource, otp_app: :shop, domain: Shop.Crm, data_layer: AshPostgres.DataLayer,
+    authorizers: [Ash.Policy.Authorizer],
+    extensions: [AshStateMachine]
+
+  actions do
+    defaults [:read, :destroy]
+
+    update :contact do
+      require_atomic? false
+      change transition_state(:contacted)
+    end
+
+    update :win do
+      require_atomic? false
+      change transition_state(:won)
+    end
+
+    update :lose do
+      require_atomic? false
+      change transition_state(:lost)
+    end
+
+    read :open_leads do
+      filter expr(status in [:prospect, :contacted])
+    end
+  end
+
+  attributes do
+    attribute :status, Shop.Crm.LeadStatus do
+      default :prospect
+      allow_nil? false
+    end
+  end
+
+  policies do
+    policy action_type([:read, :create, :update]) do
+      authorize_if Shop.Crm.Checks.Clerk
+    end
+
+    policy action(:contact) do
+      authorize_if Shop.Crm.Checks.Clerk
+    end
+
+    policy action(:win) do
+      authorize_if Shop.Crm.Checks.Clerk
+    end
+
+    policy action(:lose) do
+      authorize_if Shop.Crm.Checks.Clerk
+    end
+  end
+
+  multitenancy do
+    strategy :attribute
+    attribute :account_id
+  end
+
+  state_machine do
+    initial_states [:prospect]
+    default_initial_state :prospect
+    state_attribute :status
+
+    transitions do
+      transition :contact, from: [:prospect], to: :contacted
+      transition :win, from: [:contacted], to: :won
+      transition :lose, from: [:prospect, :contacted], to: :lost
+    end
+  end
+end
+",
   "lib/shop/sales.ex": "defmodule Shop.Sales do
   use Ash.Domain,
     otp_app: :shop,
@@ -261,6 +332,96 @@ end
     open_api: "/open_api"
 end
 ",
+  "lib/shop_web/live/lead_detail_live.ex": "defmodule ShopWeb.LeadDetailLive do
+  use ShopWeb, :live_view
+
+  @impl true
+  def mount(%{"id" => id}, _session, socket) do
+    {:ok, socket |> assign(:page_title, "Lead detail") |> assign(:id, id) |> load()}
+  end
+
+  defp load(socket) do
+    socket
+    |> assign(:record_1, Ash.get!(Shop.Crm.Lead, socket.assigns.id))
+  end
+
+  @impl true
+  def handle_event("run_win", %{"id" => id}, socket) do
+    case Ash.update(Ash.get!(Shop.Crm.Lead, id), %{}, action: :win) do
+      {:ok, _} -> {:noreply, socket |> put_flash(:info, "Win done.") |> load()}
+      {:error, error} -> {:noreply, put_flash(socket, :error, "Win failed: " <> Exception.message(error))}
+    end
+  end
+
+  @impl true
+  def handle_event("run_lose", %{"id" => id}, socket) do
+    case Ash.update(Ash.get!(Shop.Crm.Lead, id), %{}, action: :lose) do
+      {:ok, _} -> {:noreply, socket |> put_flash(:info, "Lose done.") |> load()}
+      {:error, error} -> {:noreply, put_flash(socket, :error, "Lose failed: " <> Exception.message(error))}
+    end
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <Layouts.app flash={@flash}>
+      <nav class="flex gap-4 mb-6"><.link navigate="/leads">Leads</.link></nav>
+      <.header>Lead detail</.header>
+      <.list>
+        <:item title="Name">{to_string(@record_1.name)}</:item>
+        <:item title="Status">{to_string(@record_1.status)}</:item>
+      </.list>
+      <.button phx-click="run_win" phx-value-id={@record_1.id}>Win</.button> <.button phx-click="run_lose" phx-value-id={@record_1.id}>Lose</.button>
+    </Layouts.app>
+    """
+  end
+end
+",
+  "lib/shop_web/live/leads_live.ex": "defmodule ShopWeb.LeadsLive do
+  use ShopWeb, :live_view
+
+  @impl true
+  def mount(_params, _session, socket) do
+    {:ok, socket |> assign(:page_title, "Leads") |> load()}
+  end
+
+  defp load(socket) do
+    socket
+    |> assign(:list_1, Ash.read!(Shop.Crm.Lead, action: :open_leads))
+  end
+
+  @impl true
+  def handle_event("run_contact", %{"id" => id}, socket) do
+    case Ash.update(Ash.get!(Shop.Crm.Lead, id), %{}, action: :contact) do
+      {:ok, _} -> {:noreply, socket |> put_flash(:info, "Contact done.") |> load()}
+      {:error, error} -> {:noreply, put_flash(socket, :error, "Contact failed: " <> Exception.message(error))}
+    end
+  end
+
+  @impl true
+  def handle_event("run_lose", %{"id" => id}, socket) do
+    case Ash.update(Ash.get!(Shop.Crm.Lead, id), %{}, action: :lose) do
+      {:ok, _} -> {:noreply, socket |> put_flash(:info, "Lose done.") |> load()}
+      {:error, error} -> {:noreply, put_flash(socket, :error, "Lose failed: " <> Exception.message(error))}
+    end
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <Layouts.app flash={@flash}>
+      <nav class="flex gap-4 mb-6"><.link navigate="/leads">Leads</.link></nav>
+      <.header>Leads</.header>
+      <.table id="list-1" rows={@list_1}>
+        <:col :let={row} label="Name">{to_string(row.name)}</:col>
+        <:col :let={row} label="Status">{to_string(row.status)}</:col>
+        <:action :let={row}><.button phx-click="run_contact" phx-value-id={row.id}>Contact</.button> <.button phx-click="run_lose" phx-value-id={row.id}>Lose</.button></:action>
+      </.table>
+    </Layouts.app>
+    """
+  end
+end
+",
   "lib/shop_web/live/order_detail_live.ex": "defmodule ShopWeb.OrderDetailLive do
   use ShopWeb, :live_view
 
@@ -370,6 +531,10 @@ end
     live "/orders/:id", OrderDetailLive
 
     live "/orders", OrdersLive
+
+    live "/leads/:id", LeadDetailLive
+
+    live "/leads", LeadsLive
   end
 end
 ",
@@ -381,6 +546,55 @@ end
 
   @tag skip: "registry task: crm.Account.policy[read]"
   test "policy[read] denies other actors"
+end
+",
+  "test/shop/crm/lead_test.exs": "defmodule Shop.Crm.LeadTest do
+  use ExUnit.Case, async: true
+
+  @tag skip: "registry task: crm.Lead.policy[read,create,update]"
+  test "policy[read,create,update] allows permitted actors"
+
+  @tag skip: "registry task: crm.Lead.policy[read,create,update]"
+  test "policy[read,create,update] denies other actors"
+
+  test "transition prospect -> contacted moves from allowed states" do
+    record = struct!(Shop.Crm.Lead, %{name: "name-1", status: :prospect})
+    changeset = Ash.Changeset.for_update(record, :contact, %{}, authorize?: false)
+    assert changeset.valid?
+  end
+
+  test "transition prospect -> contacted refuses other states" do
+    record = struct!(Shop.Crm.Lead, %{name: "name-1", status: :contacted})
+    changeset = Ash.Changeset.for_update(record, :contact, %{}, authorize?: false)
+    refute changeset.valid?
+    assert Enum.any?(changeset.errors, &match?(%AshStateMachine.Errors.NoMatchingTransition{}, &1))
+  end
+
+  test "transition contacted -> won moves from allowed states" do
+    record = struct!(Shop.Crm.Lead, %{name: "name-1", status: :contacted})
+    changeset = Ash.Changeset.for_update(record, :win, %{}, authorize?: false)
+    assert changeset.valid?
+  end
+
+  test "transition contacted -> won refuses other states" do
+    record = struct!(Shop.Crm.Lead, %{name: "name-1", status: :prospect})
+    changeset = Ash.Changeset.for_update(record, :win, %{}, authorize?: false)
+    refute changeset.valid?
+    assert Enum.any?(changeset.errors, &match?(%AshStateMachine.Errors.NoMatchingTransition{}, &1))
+  end
+
+  test "transition prospect, contacted -> lost moves from allowed states" do
+    record = struct!(Shop.Crm.Lead, %{name: "name-1", status: :prospect})
+    changeset = Ash.Changeset.for_update(record, :lose, %{}, authorize?: false)
+    assert changeset.valid?
+  end
+
+  test "transition prospect, contacted -> lost refuses other states" do
+    record = struct!(Shop.Crm.Lead, %{name: "name-1", status: :won})
+    changeset = Ash.Changeset.for_update(record, :lose, %{}, authorize?: false)
+    refute changeset.valid?
+    assert Enum.any?(changeset.errors, &match?(%AshStateMachine.Errors.NoMatchingTransition{}, &1))
+  end
 end
 ",
   "test/shop/sales/order_test.exs": "defmodule Shop.Sales.OrderTest do
@@ -464,6 +678,9 @@ exports[`examples plan domains, enums, embedded resources, resources and relatio
   "sales: mix ash.gen.domain Shop.Sales --yes",
   "crm.Account: mix ash.gen.resource Shop.Crm.Account --domain Shop.Crm --default-actions read,create,update,destroy --uuid-primary-key id --attribute name:string:required:public,email:string:required:public --extend postgres --timestamps --yes",
   "crm.Account.policy[read]: test/shop/crm/account_test.exs",
+  "crm.LeadStatus: mix ash.gen.enum Shop.Crm.LeadStatus prospect,contacted,won,lost --yes",
+  "crm.Lead: mix ash.gen.resource Shop.Crm.Lead --domain Shop.Crm --default-actions read,create,update,destroy --uuid-primary-key id --attribute name:string:required:public,status:Shop.Crm.LeadStatus:required:public --extend postgres --timestamps --yes",
+  "crm.Lead.policy[read,create,update]: test/shop/crm/lead_test.exs",
   "sales.OrderStatus: mix ash.gen.enum Shop.Sales.OrderStatus draft,placed,paid,cancelled --yes",
   "sales.Line: lib/shop/sales/line.ex",
   "sales.Order: mix ash.gen.resource Shop.Sales.Order --domain Shop.Sales --default-actions read,create,update,destroy --uuid-primary-key id --attribute reference:string:required:public,lines:Shop.Sales.Line:array:required:public,status:Shop.Sales.OrderStatus:required:public,created_at:utc_datetime_usec:required:public,placed_at:utc_datetime_usec:public,paid_at:utc_datetime_usec:public --extend postgres --timestamps --yes",
@@ -474,24 +691,38 @@ exports[`examples plan domains, enums, embedded resources, resources and relatio
   "sales.Order.policy[read fields total]: test/shop/sales/order_test.exs",
   "crm.Employee: mix ash.gen.resource Shop.Crm.Employee --domain Shop.Crm --default-actions read,create,update,destroy --uuid-primary-key id --attribute roles:atom:array --extend postgres --timestamps --yes",
   "sales.Shopper: mix ash.gen.resource Shop.Sales.Shopper --domain Shop.Sales --default-actions read,create,update,destroy --uuid-primary-key id --attribute roles:atom:array --extend postgres --timestamps --yes",
+  "crm.LeadFlow.transition[prospect->contacted]: test/shop/crm/lead_test.exs",
+  "crm.LeadFlow.transition[contacted->won]: test/shop/crm/lead_test.exs",
+  "crm.LeadFlow.transition[prospect,contacted->lost]: test/shop/crm/lead_test.exs",
   "sales.OrderFlow.transition[placed->paid]: test/shop/sales/order_test.exs",
   "sales.ClerkCancelsDraft: test/shop/sales/scenarios_test.exs",
   "sales.EmptyOrderIsRefused: test/shop/sales/scenarios_test.exs",
   "sales.OnlyOwnOrders: test/shop/sales/scenarios_test.exs",
+  "crm.Lead.account: mix ash.gen.resource Shop.Crm.Lead --relationship belongs_to:account:Shop.Crm.Account --yes",
   "sales.Order.customer: mix ash.gen.resource Shop.Sales.Order --relationship belongs_to:customer:Shop.Crm.Account:required --yes",
   "sales.Shopper.account: mix ash.gen.resource Shop.Sales.Shopper --relationship belongs_to:account:Shop.Crm.Account:required --yes",
   "crm.Account: lib/shop/crm/account.ex",
   "crm.Account.policy[read]: lib/shop/crm/account.ex",
+  "crm.Lead: lib/shop/crm/lead.ex",
+  "crm.Lead.policy[read,create,update]: lib/shop/crm/lead.ex",
   "sales.Order: lib/shop/sales/order.ex",
   "sales.Order.policy[read]: lib/shop/sales/order.ex",
   "sales.Order.policy[create,delete]: lib/shop/sales/order.ex",
   "sales.Order.policy[update]: lib/shop/sales/order.ex",
   "crm.Clerk: lib/shop/crm/checks/clerk.ex",
   "crm.Employee: lib/shop/crm/employee.ex",
+  "crm.Company: lib/shop/crm/lead.ex",
   "crm.Company: lib/shop/sales/order.ex",
   "crm.Company: lib/shop/sales/shopper.ex",
   "sales.Customer: lib/shop/sales/checks/customer.ex",
   "sales.Shopper: lib/shop/sales/shopper.ex",
+  "crm.Contact: lib/shop/crm/lead.ex",
+  "crm.Contact.policy[]: lib/shop/crm/lead.ex",
+  "crm.Win: lib/shop/crm/lead.ex",
+  "crm.Win.policy[]: lib/shop/crm/lead.ex",
+  "crm.Lose: lib/shop/crm/lead.ex",
+  "crm.Lose.policy[]: lib/shop/crm/lead.ex",
+  "crm.LeadFlow: lib/shop/crm/lead.ex",
   "sales.PlaceOrder: lib/shop/sales/order.ex",
   "sales.PlaceOrder.policy[]: lib/shop/sales/order.ex",
   "sales.Cancel: lib/shop/sales/order.ex",
@@ -499,12 +730,17 @@ exports[`examples plan domains, enums, embedded resources, resources and relatio
   "sales.OrderFlow: lib/shop/sales/order.ex",
   "sales.ExpireDrafts: lib/shop/sales/order.ex",
   "sales.ExpireDrafts: config/config.exs",
+  "crm.OpenLeads: lib/shop/crm/lead.ex",
   "sales.OpenOrders: lib/shop/sales/order.ex",
   "sales.OrdersOf: lib/shop/sales/order.ex",
   "sales.OrderSummary.customer_name: lib/shop/sales/order.ex",
   "sales.PublicApi: lib/shop/sales/order.ex",
   "sales.PublicApi: lib/shop/sales.ex",
   "sales.PublicApi: lib/shop_web/ash_json_api_router.ex",
+  "crm.Leads: lib/shop_web/live/leads_live.ex",
+  "crm.Leads: lib/shop_web/router.ex",
+  "crm.LeadDetail: lib/shop_web/live/lead_detail_live.ex",
+  "crm.LeadDetail: lib/shop_web/router.ex",
   "sales.Orders: lib/shop_web/live/orders_live.ex",
   "sales.Orders: lib/shop_web/router.ex",
   "sales.OrderDetail: lib/shop_web/live/order_detail_live.ex",

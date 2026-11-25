@@ -2,10 +2,10 @@ import { expect, test } from 'vitest';
 import type { Model } from '@appling/lang';
 import { buildGraph, diffGraphs, Simulator, withRemoved } from '@appling/model';
 import { buildWorkspace, examples } from '../../lang/test/workspace.js';
-import { bandsOf, layoutFlow, layoutTree } from '../src/layout.js';
+import { bandsOf, layoutFlow, layoutStates, layoutTree, layoutUseCases } from '../src/layout.js';
 import { joins, loads, sproutDelays, traces } from '../src/canvas/plant.js';
 import {
-    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, implementationMarks, sessionMarks, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, linked, modelPulse, peers, policyText, relations, revealPath, sideId, trailOf, viewFor,
+    abilities, actionSummary, anchorOf, cardView, changeMarks, elementAt, implementationMarks, sessionMarks, entityActions, factOf, flowView, GraphIndex, growTree, lensOf, linked, modelPulse, peers, policyText, relations, revealPath, screenFlow, sideId, trailOf, useCaseDiagram, viewFor,
     type Card, type Flow, type TreeNode
 } from '../src/views.js';
 
@@ -45,8 +45,8 @@ test('the pyramid starts folded at the seed and unfolds modules, then the declar
     expect(outline(growTree(index, DOMAIN, open))).toEqual([
         'model (2)',
         '  sales (3)',
-        '    L1 Order 13↑ 0↓',
-        '      L2 Cancel 4↑ 0↓ also sales.Checkout, crm.Clerk',
+        '    L1 Order 14↑ 0↓',
+        '      L2 Cancel 5↑ 0↓ also sales.Checkout, sales.CancelOrder, crm.Clerk',
         '        L4 Orders 4↑ 0↓',
         '        L4 OrderDetail 4↑ 0↓',
         '      L2 PlaceOrder 5↑ 0↓',
@@ -54,7 +54,8 @@ test('the pyramid starts folded at the seed and unfolds modules, then the declar
         '      L2 OrderPlaced 0↑ 0↓',
         '      L2 OrderFlow 0↑ 0↓',
         '      L2 ExpireDrafts 0↑ 0↓',
-        '      L3 Checkout 1↑ 0↓',
+        '      L3 Checkout 2↑ 0↓',
+        '      L3 CancelOrder 1↑ 0↓',
         '      L3 OpenOrders 2↑ 0↓',
         '      L3 OrdersOf 1↑ 0↓',
         '      L3 OrderSummary 3↑ 0↓',
@@ -63,7 +64,7 @@ test('the pyramid starts folded at the seed and unfolds modules, then the declar
         '      L5 Shopper 0↑ 0↓',
         '    L1 Line 0↑ 0↓',
         '    L1 OrderStatus 2↑ 0↓',
-        '  crm (1)'
+        '  crm (3)'
     ]);
     expect(growTree(index, DOMAIN, open).children!.find(m => m.label === 'sales')!.fact).toBe('1 entity · 1 value · 1 enum');
 });
@@ -96,8 +97,10 @@ test('the top level leads through the pages and interfaces that expose what its 
     const index = await indexOf(examples());
     const names = (qn: string, side: 'up' | 'down') => linked(index, qn, side).map(n => n.qn).sort();
     // what a page of the role already exposes shows under the page, the entities its policies name stay direct
-    expect(names('crm.Clerk', 'down')).toEqual(['crm.Account', 'sales.Order', 'sales.OrderDetail', 'sales.Orders', 'sales.PublicApi']);
-    expect(names('crm.Employee', 'down')).toEqual(['sales.OrderDetail', 'sales.Orders', 'sales.PublicApi']);
+    expect(names('crm.Clerk', 'down')).toEqual([
+        'crm.Account', 'crm.ConvertFlow', 'crm.FollowUp', 'crm.Lead', 'crm.LeadDetail', 'crm.Leads', 'sales.CancelOrder', 'sales.Order', 'sales.OrderDetail', 'sales.Orders', 'sales.PublicApi'
+    ]);
+    expect(names('crm.Employee', 'down')).toEqual(['crm.ConvertFlow', 'crm.LeadDetail', 'crm.Leads', 'sales.OrderDetail', 'sales.Orders', 'sales.PublicApi']);
     expect(names('sales.Orders', 'up')).toEqual(['crm.Clerk', 'crm.Employee', 'sales.Customer', 'sales.Shopper']);
     expect(names('sales.Orders', 'down')).toEqual(['sales.Cancel', 'sales.OpenOrders', 'sales.OrderSummary']);
     expect(peers(index, 'sales.Order.customer').sort()).toEqual(['crm.Account', 'sales.Line', 'sales.OrderStatus']);
@@ -105,11 +108,12 @@ test('the top level leads through the pages and interfaces that expose what its 
 });
 
 test('an empty module shows on every level', async () => {
-    const index = await indexOf({ ...examples(), 'billing.appling': 'module billing {\n}\n' });
+    const index = await indexOf({ ...examples(), 'billing.appling': 'module billing {\n}\n', 'tags.appling': 'module tags {\n  entity Tag {\n    label: String\n  }\n}\n' });
     const open = new Set(['~', '~/billing']);
     const behavior = growTree(index, { ...DOMAIN, lens: 'behavior' }, open);
     expect(behavior.children!.find(m => m.label === 'billing')).toMatchObject({ fact: 'empty', count: 0 });
-    expect(behavior.children!.map(m => m.label)).not.toContain('crm');
+    // a module with declarations, none of them on this level, is left out
+    expect(behavior.children!.map(m => m.label)).not.toContain('tags');
 });
 
 test('a trail draws only the elements shown one after another, each unfolded where the pyramid already has it', async () => {
@@ -121,7 +125,7 @@ test('a trail draws only the elements shown one after another, each unfolded whe
     const cancel = tree.children![0].children![0].children!.find(n => n.qn === 'sales.Cancel')!;
     // what Order already drew is joined, not drawn again
     expect(cancel.children!.map(n => n.label)).toEqual(['Orders', 'OrderDetail']);
-    expect(cancel.links).toEqual(['sales.Checkout', 'crm.Clerk']);
+    expect(cancel.links).toEqual(['sales.Checkout', 'sales.CancelOrder', 'crm.Clerk']);
     expect(trailOf(index, { ...DOMAIN, lens: 'behavior' }, ['sales.OrderFlow']).ids).toEqual(['~/sales/sales.OrderFlow']);
     expect([lensOf('Machine'), lensOf('Field')]).toEqual(['behavior', undefined]);
 });
@@ -177,7 +181,7 @@ test('relations lift members to declarations and group them by layer', async () 
     const via = (qn: string, direction: 'uses' | 'usedBy') => Object.fromEntries([...relations(index, qn, direction).values()].flat().map(r => [r.qn, r.via]));
     expect(grouped('sales.Order', 'usedBy')).toEqual({
         behavior: ['sales.OrderPlaced', 'sales.PaymentReceived', 'sales.PlaceOrder', 'sales.Cancel', 'sales.OrderFlow', 'sales.ExpireDrafts'],
-        application: ['sales.OpenOrders', 'sales.OrdersOf', 'sales.OrderSummary', 'sales.Checkout'],
+        application: ['sales.OpenOrders', 'sales.OrdersOf', 'sales.OrderSummary', 'sales.Checkout', 'sales.CancelOrder'],
         cross: ['sales.ClerkCancelsDraft', 'sales.EmptyOrderIsRefused', 'sales.OnlyOwnOrders']
     });
     expect(grouped('sales.Order', 'uses')).toEqual({ domain: ['crm.Account', 'sales.Line', 'sales.OrderStatus'], cross: ['crm.Clerk', 'sales.Customer', 'sales.Shopper'] });
@@ -244,6 +248,8 @@ test('abilities group what an actor may do, pages with the actions they offer', 
     const groups = abilities(index, new Simulator(index.graph).access('sales.Shopper'));
     expect([...groups.keys()]).toEqual(['Actions', 'Pages', 'Use cases', 'Queries', 'Data']);
     expect(groups.get('Pages')!.map(p => [p.target, p.verdict, p.offers!.map(o => `${o.target} ${o.verdict}`)])).toEqual([
+        ['crm.Leads', 'no', ['crm.Contact no', 'crm.Lose no']],
+        ['crm.LeadDetail', 'no', ['crm.Win no', 'crm.Lose no']],
         ['sales.Orders', 'depends', ['sales.Cancel no']],
         ['sales.OrderDetail', 'depends', ['sales.PlaceOrder depends', 'sales.Cancel no']]
     ]);
@@ -405,11 +411,167 @@ test('however far the pyramid unfolds, every level keeps its band, no nodes over
         for (const a of runs) for (const b of runs) if (a.net < b.net && a.upright === b.upright && Math.abs(a.at - b.at) < 3) expect(Math.min(a.hi, b.hi) - Math.max(a.lo, b.lo), `${a.net} along ${b.net}`).toBeLessThanOrEqual(0);
         if (lens === 'domain') expect(after.length).toBeGreaterThan(20);
     }
-});
+}, 30_000);
 
 test('equally relevant nodes stand in the order of their names, whatever the order of the source', async () => {
     const module = (members: string[]) => `module m {\n${members.map(name => `  entity ${name} {\n    label: String\n  }\n`).join('')}}\n`;
     const labels = async (members: string[]) => growTree(await indexOf({ 'm.appling': module(members) }), DOMAIN, new Set(['~', '~/m'])).children![0].children!.map(c => c.label);
     expect(await labels(['Cherry', 'Apple', 'Banana'])).toEqual(['Apple', 'Banana', 'Cherry']);
     expect(await labels(['Banana', 'Cherry', 'Apple'])).toEqual(['Apple', 'Banana', 'Cherry']);
+});
+
+const SHOP = `module shop {
+  role Buyer
+  role Staff
+  actor human Customer roles Buyer
+  actor human Clerk roles Staff
+  actor system Robot
+
+  entity Cart {
+    owner: String
+    policy read { actor.is(Buyer) || actor.is(Staff) }
+    policy update { actor.is(Buyer) || actor.is(Staff) }
+  }
+  entity Invoice {
+    total: Int
+    policy read { actor.is(Staff) }
+  }
+
+  action Pay on Cart {
+    input {
+      card: String
+    }
+    policy { actor.is(Buyer) }
+  }
+  action Refund on Cart {
+    policy { actor.is(Staff) }
+  }
+
+  query Carts from Cart {
+    where { owner != "" }
+  }
+  query Invoices from Invoice {
+    where { total > 0 }
+  }
+  projection CartRow from Cart {
+    owner
+  }
+  projection InvoiceRow from Invoice {
+    total
+  }
+
+  usecase Checkout (cart: Cart) {
+    step Pay(cart)
+    step Notify(cart)
+    policy { actor.is(Buyer) }
+  }
+  usecase Notify (cart: Cart) {
+    step Refund(cart)
+  }
+  usecase Audit {
+    step Invoices()
+    policy { actor.is(Clerk) }
+  }
+
+  page CartList route "/carts" {
+    list Carts as CartRow { owner } actions Pay, Refund
+  }
+  page PayPage route "/pay" {
+    detail CartRow
+    form Pay
+  }
+  page Books route "/books" {
+    list Invoices as InvoiceRow
+  }
+  page Hidden route "/hidden" {
+    list Invoices as InvoiceRow
+  }
+
+  navigation Main {
+    "Carts" -> CartList {
+      "Books" -> Books
+    }
+  }
+
+  flow Buying for Checkout { CartList -> PayPage }
+}
+`;
+
+test('the use case diagram draws the declared actors, who starts which use case by its policies, and «include» of what the steps call', async () => {
+    const diagram = useCaseDiagram(await indexOf({ 'shop.appling': SHOP }));
+    expect(diagram.actors.map(a => a.label).sort()).toEqual(['Clerk', 'Customer', 'Robot']);
+    // the actions the steps call follow the use cases as subfunctions; a query a step calls is no use case
+    expect(diagram.useCases.map(u => `${u.label}${u.subfunction ? ' (subfunction)' : ''}`).sort()).toEqual(['Audit', 'Checkout', 'Notify', 'Pay (subfunction)', 'Refund (subfunction)']);
+    // a role in a policy associates the actors that hold it, the actor itself associates only itself
+    expect(diagram.associations).toEqual(expect.arrayContaining([{ actor: 'shop.Customer', useCase: 'shop.Checkout' }, { actor: 'shop.Clerk', useCase: 'shop.Audit' }]));
+    expect(diagram.associations).toHaveLength(2);
+    expect(diagram.includes).toEqual(expect.arrayContaining([
+        { from: 'shop.Checkout', to: 'shop.Pay' }, { from: 'shop.Checkout', to: 'shop.Notify' }, { from: 'shop.Notify', to: 'shop.Refund' }
+    ]));
+    expect(diagram.includes).toHaveLength(3);
+
+    const placed = layoutUseCases(diagram);
+    const at = (qn: string) => placed.useCases.find(u => u.qn === qn)!;
+    // an included use case stands right below the one that includes it, subfunctions to the right
+    expect(at('shop.Notify').y - at('shop.Checkout').y).toBe(100);
+    expect(at('shop.Pay').x).toBeGreaterThan(at('shop.Checkout').x);
+    for (const u of placed.useCases) {
+        expect(u.x - u.w).toBeGreaterThan(placed.boundary.x);
+        expect(u.x + u.w).toBeLessThan(placed.boundary.x + placed.boundary.width);
+        expect(u.y + u.h).toBeLessThan(placed.boundary.y + placed.boundary.height);
+    }
+    for (const a of placed.actors) expect(a.x + a.w).toBeLessThan(placed.boundary.x);
+    // an actor stands beside the use case it starts, and its curve runs through no other chip
+    expect(placed.actors.find(a => a.qn === 'shop.Customer')!.y).toBe(at('shop.Checkout').y);
+    for (const line of placed.associations) for (const u of placed.useCases.filter(u => u.qn !== line.useCase)) {
+        const [[x1, y1], [x2, y2]] = [line.from, line.to];
+        for (const t of [0.25, 0.5, 0.75, 0.95]) {
+            // the curve leaves and enters horizontally, its control points halfway between the ends
+            const mx = (x1 + x2) / 2;
+            const x = (1 - t) ** 3 * x1 + 3 * (1 - t) ** 2 * t * mx + 3 * (1 - t) * t * t * mx + t ** 3 * x2;
+            const y = y1 + (y2 - y1) * (3 * t * t - 2 * t * t * t);
+            expect(Math.abs(x - u.x) < u.w && Math.abs(y - u.y) < u.h, `${line.actor} to ${line.useCase} through ${u.qn}`).toBe(false);
+        }
+    }
+});
+
+test('a state diagram stands the initial state on top under its pseudostate and keeps the states apart', async () => {
+    const index = await indexOf(examples());
+    const placed = layoutStates(flowView(index, 'machine', ['sales.OrderFlow']));
+    const at = (name: string) => placed.nodes.find(n => n.node.label === name)!;
+    expect(placed.initial!.x).toBe(at('draft').x);
+    expect(placed.initial!.y).toBeLessThan(at('draft').y);
+    for (const a of placed.nodes) for (const b of placed.nodes) if (a !== b) {
+        expect(Math.abs(a.x - b.x) >= (a.width + b.width) / 2 + 100 || Math.abs(a.y - b.y) >= 140, `${a.node.label} and ${b.node.label}`).toBe(true);
+    }
+    // the two transitions into cancelled and the one into paid get labels of their own
+    const labels = placed.edges.map(e => [e.x, e.y]);
+    for (const [i, [x1, y1]] of labels.entries()) for (const [x2, y2] of labels.slice(i + 1)) expect(Math.hypot(x1 - x2, y1 - y2)).toBeGreaterThan(40);
+});
+
+test('the screen flow of an actor holds the pages it may use, with only its actions, the menu cut to them and the steps of a flow', async () => {
+    const index = await indexOf({ 'shop.appling': SHOP });
+    const customer = screenFlow(index, 'shop.Customer');
+    expect(customer.screens.map(s => s.label)).toEqual(['CartList', 'PayPage']);
+    // a row of the cart list opens the page that details carts
+    expect(customer.screens[0].parts).toEqual([{ kind: 'list', query: 'shop.Carts', projection: 'shop.CartRow', submits: undefined, fields: ['owner'], actions: ['shop.Pay'], opens: 'shop.PayPage' }]);
+    expect(customer.screens[1].parts.map(p => [p.kind, p.fields])).toEqual([['detail', ['owner']], ['form', ['card']]]);
+    expect(customer.screens.map(s => s.flows)).toEqual([
+        [{ flow: 'shop.Buying', label: 'Checkout', step: 1, of: 2, next: 'shop.PayPage' }],
+        [{ flow: 'shop.Buying', label: 'Checkout', step: 2, of: 2, next: undefined }]
+    ]);
+    // PayPage is reached through the flow and the rows, so it needs no menu of its own
+    expect(customer.menus).toEqual([{ qn: 'shop.Main', label: 'Main', items: [{ label: 'Carts', page: 'shop.CartList', children: [] }] }]);
+
+    const clerk = screenFlow(index, 'shop.Clerk');
+    expect(clerk.screens.map(s => s.label)).toEqual(['CartList', 'PayPage', 'Books', 'Hidden']);
+    expect(clerk.screens[0].parts[0].actions).toEqual(['shop.Refund']);
+    // a form the actor may not submit is left out, and so is the flow of a use case it does not start
+    expect(clerk.screens[1].parts.map(p => p.kind)).toEqual(['detail']);
+    expect(clerk.screens[0].flows).toEqual([]);
+    expect(clerk.menus[0].items[0].children).toEqual([{ label: 'Books', page: 'shop.Books', children: [] }]);
+    // a page that nothing leads to stands under More
+    expect(clerk.menus.at(-1)).toEqual({ label: 'More', items: [{ label: 'Hidden', page: 'shop.Hidden', children: [] }] });
+
+    expect(screenFlow(index, 'shop.Robot').screens).toEqual([]);
 });

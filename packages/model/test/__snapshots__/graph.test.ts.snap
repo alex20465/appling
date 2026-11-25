@@ -4,6 +4,36 @@ exports[`graph of examples 1`] = `
 {
   "anchors": [
     {
+      "address": "crm.FollowUp#step[1]",
+      "kind": "step",
+      "owner": "crm.FollowUp",
+    },
+    {
+      "address": "crm.Convert#step[1]",
+      "kind": "step",
+      "owner": "crm.Convert",
+    },
+    {
+      "address": "crm.Convert#step[2]",
+      "kind": "step",
+      "owner": "crm.Convert",
+    },
+    {
+      "address": "crm.Leads#component[1]",
+      "kind": "component",
+      "owner": "crm.Leads",
+    },
+    {
+      "address": "crm.LeadDetail#component[1]",
+      "kind": "component",
+      "owner": "crm.LeadDetail",
+    },
+    {
+      "address": "crm.Office#item[Leads]",
+      "kind": "item",
+      "owner": "crm.Office",
+    },
+    {
       "address": "sales.PlaceOrder#requires[1]",
       "kind": "requires",
       "owner": "sales.PlaceOrder",
@@ -27,6 +57,11 @@ exports[`graph of examples 1`] = `
       "address": "sales.Checkout#step[3]",
       "kind": "step",
       "owner": "sales.Checkout",
+    },
+    {
+      "address": "sales.CancelOrder#step[1]",
+      "kind": "step",
+      "owner": "sales.CancelOrder",
     },
     {
       "address": "sales.Orders#component[1]",
@@ -76,6 +111,76 @@ exports[`graph of examples 1`] = `
       "to": "crm.Company",
     },
     {
+      "from": "crm",
+      "kind": "contains",
+      "to": "crm.LeadStatus",
+    },
+    {
+      "from": "crm",
+      "kind": "contains",
+      "to": "crm.Lead",
+    },
+    {
+      "from": "crm",
+      "kind": "contains",
+      "to": "crm.Contact",
+    },
+    {
+      "from": "crm",
+      "kind": "contains",
+      "to": "crm.Win",
+    },
+    {
+      "from": "crm",
+      "kind": "contains",
+      "to": "crm.Lose",
+    },
+    {
+      "from": "crm",
+      "kind": "contains",
+      "to": "crm.LeadFlow",
+    },
+    {
+      "from": "crm",
+      "kind": "contains",
+      "to": "crm.OpenLeads",
+    },
+    {
+      "from": "crm",
+      "kind": "contains",
+      "to": "crm.LeadRow",
+    },
+    {
+      "from": "crm",
+      "kind": "contains",
+      "to": "crm.FollowUp",
+    },
+    {
+      "from": "crm",
+      "kind": "contains",
+      "to": "crm.Convert",
+    },
+    {
+      "from": "crm",
+      "kind": "contains",
+      "to": "crm.Leads",
+    },
+    {
+      "from": "crm",
+      "kind": "contains",
+      "to": "crm.LeadDetail",
+    },
+    {
+      "from": "crm",
+      "kind": "contains",
+      "to": "crm.Office",
+    },
+    {
+      "from": "crm",
+      "kind": "contains",
+      "to": "crm.ConvertFlow",
+    },
+    {
       "from": "crm.Employee",
       "kind": "roles",
       "to": "crm.Clerk",
@@ -99,6 +204,251 @@ exports[`graph of examples 1`] = `
       "from": "crm.Company",
       "kind": "entity",
       "to": "crm.Account",
+    },
+    {
+      "from": "crm.LeadStatus",
+      "kind": "contains",
+      "to": "crm.LeadStatus.prospect",
+    },
+    {
+      "from": "crm.LeadStatus",
+      "kind": "contains",
+      "to": "crm.LeadStatus.contacted",
+    },
+    {
+      "from": "crm.LeadStatus",
+      "kind": "contains",
+      "to": "crm.LeadStatus.won",
+    },
+    {
+      "from": "crm.LeadStatus",
+      "kind": "contains",
+      "to": "crm.LeadStatus.lost",
+    },
+    {
+      "from": "crm.Lead",
+      "kind": "contains",
+      "to": "crm.Lead.name",
+    },
+    {
+      "from": "crm.Lead",
+      "kind": "contains",
+      "to": "crm.Lead.account",
+    },
+    {
+      "from": "crm.Lead",
+      "kind": "contains",
+      "to": "crm.Lead.status",
+    },
+    {
+      "from": "crm.Lead",
+      "kind": "contains",
+      "to": "crm.Lead.policy[read,create,update]",
+    },
+    {
+      "from": "crm.Lead.account",
+      "kind": "type",
+      "to": "crm.Account",
+    },
+    {
+      "from": "crm.Lead.status",
+      "kind": "type",
+      "to": "crm.LeadStatus",
+    },
+    {
+      "from": "crm.Contact",
+      "kind": "contains",
+      "to": "crm.Contact.policy[]",
+    },
+    {
+      "from": "crm.Contact",
+      "kind": "entity",
+      "to": "crm.Lead",
+    },
+    {
+      "from": "crm.Win",
+      "kind": "contains",
+      "to": "crm.Win.policy[]",
+    },
+    {
+      "from": "crm.Win",
+      "kind": "entity",
+      "to": "crm.Lead",
+    },
+    {
+      "from": "crm.Lose",
+      "kind": "contains",
+      "to": "crm.Lose.policy[]",
+    },
+    {
+      "from": "crm.Lose",
+      "kind": "entity",
+      "to": "crm.Lead",
+    },
+    {
+      "from": "crm.LeadFlow",
+      "kind": "contains",
+      "to": "crm.LeadFlow.transition[prospect->contacted]",
+    },
+    {
+      "from": "crm.LeadFlow",
+      "kind": "contains",
+      "to": "crm.LeadFlow.transition[contacted->won]",
+    },
+    {
+      "from": "crm.LeadFlow",
+      "kind": "contains",
+      "to": "crm.LeadFlow.transition[prospect,contacted->lost]",
+    },
+    {
+      "from": "crm.LeadFlow",
+      "kind": "field",
+      "to": "crm.Lead.status",
+    },
+    {
+      "from": "crm.LeadFlow.transition[prospect->contacted]",
+      "kind": "action",
+      "to": "crm.Contact",
+    },
+    {
+      "from": "crm.LeadFlow.transition[contacted->won]",
+      "kind": "action",
+      "to": "crm.Win",
+    },
+    {
+      "from": "crm.LeadFlow.transition[prospect,contacted->lost]",
+      "kind": "action",
+      "to": "crm.Lose",
+    },
+    {
+      "from": "crm.OpenLeads",
+      "kind": "entity",
+      "to": "crm.Lead",
+    },
+    {
+      "from": "crm.LeadRow",
+      "kind": "contains",
+      "to": "crm.LeadRow.name",
+    },
+    {
+      "from": "crm.LeadRow",
+      "kind": "contains",
+      "to": "crm.LeadRow.status",
+    },
+    {
+      "from": "crm.LeadRow",
+      "kind": "source",
+      "to": "crm.Lead",
+    },
+    {
+      "from": "crm.FollowUp",
+      "kind": "contains",
+      "to": "crm.FollowUp.lead",
+    },
+    {
+      "from": "crm.FollowUp",
+      "kind": "contains",
+      "to": "crm.FollowUp.policy[]",
+    },
+    {
+      "from": "crm.FollowUp",
+      "kind": "target",
+      "to": "crm.Contact",
+    },
+    {
+      "from": "crm.FollowUp.lead",
+      "kind": "type",
+      "to": "crm.Lead",
+    },
+    {
+      "from": "crm.Convert",
+      "kind": "contains",
+      "to": "crm.Convert.lead",
+    },
+    {
+      "from": "crm.Convert",
+      "kind": "contains",
+      "to": "crm.Convert.policy[]",
+    },
+    {
+      "from": "crm.Convert",
+      "kind": "target",
+      "to": "crm.FollowUp",
+    },
+    {
+      "from": "crm.Convert",
+      "kind": "target",
+      "to": "crm.Win",
+    },
+    {
+      "from": "crm.Convert.lead",
+      "kind": "type",
+      "to": "crm.Lead",
+    },
+    {
+      "from": "crm.Leads",
+      "kind": "query",
+      "to": "crm.OpenLeads",
+    },
+    {
+      "from": "crm.Leads",
+      "kind": "projection",
+      "to": "crm.LeadRow",
+    },
+    {
+      "from": "crm.Leads",
+      "kind": "picks",
+      "to": "crm.LeadRow.name",
+    },
+    {
+      "from": "crm.Leads",
+      "kind": "picks",
+      "to": "crm.LeadRow.status",
+    },
+    {
+      "from": "crm.Leads",
+      "kind": "actions",
+      "to": "crm.Contact",
+    },
+    {
+      "from": "crm.Leads",
+      "kind": "actions",
+      "to": "crm.Lose",
+    },
+    {
+      "from": "crm.LeadDetail",
+      "kind": "projection",
+      "to": "crm.LeadRow",
+    },
+    {
+      "from": "crm.LeadDetail",
+      "kind": "actions",
+      "to": "crm.Win",
+    },
+    {
+      "from": "crm.LeadDetail",
+      "kind": "actions",
+      "to": "crm.Lose",
+    },
+    {
+      "from": "crm.Office",
+      "kind": "page",
+      "to": "crm.Leads",
+    },
+    {
+      "from": "crm.ConvertFlow",
+      "kind": "usecase",
+      "to": "crm.Convert",
+    },
+    {
+      "from": "crm.ConvertFlow",
+      "kind": "pages",
+      "to": "crm.Leads",
+    },
+    {
+      "from": "crm.ConvertFlow",
+      "kind": "pages",
+      "to": "crm.LeadDetail",
     },
     {
       "from": "sales",
@@ -179,6 +529,11 @@ exports[`graph of examples 1`] = `
       "from": "sales",
       "kind": "contains",
       "to": "sales.Checkout",
+    },
+    {
+      "from": "sales",
+      "kind": "contains",
+      "to": "sales.CancelOrder",
     },
     {
       "from": "sales",
@@ -557,6 +912,11 @@ exports[`graph of examples 1`] = `
     },
     {
       "from": "sales.Checkout",
+      "kind": "contains",
+      "to": "sales.Checkout.policy[]",
+    },
+    {
+      "from": "sales.Checkout",
       "kind": "target",
       "to": "sales.PlaceOrder",
     },
@@ -582,6 +942,31 @@ exports[`graph of examples 1`] = `
     },
     {
       "from": "sales.Checkout.order",
+      "kind": "type",
+      "to": "sales.Order",
+    },
+    {
+      "from": "sales.CancelOrder",
+      "kind": "contains",
+      "to": "sales.CancelOrder.order",
+    },
+    {
+      "from": "sales.CancelOrder",
+      "kind": "contains",
+      "to": "sales.CancelOrder.reason",
+    },
+    {
+      "from": "sales.CancelOrder",
+      "kind": "contains",
+      "to": "sales.CancelOrder.policy[]",
+    },
+    {
+      "from": "sales.CancelOrder",
+      "kind": "target",
+      "to": "sales.Cancel",
+    },
+    {
+      "from": "sales.CancelOrder.order",
       "kind": "type",
       "to": "sales.Order",
     },
@@ -806,6 +1191,66 @@ exports[`graph of examples 1`] = `
       "to": "sales.Shopper.account",
     },
     {
+      "from": "crm.Lead.status",
+      "kind": "uses",
+      "to": "crm.LeadStatus.prospect",
+    },
+    {
+      "from": "crm.Lead.policy[read,create,update]",
+      "kind": "uses",
+      "to": "crm.Clerk",
+    },
+    {
+      "from": "crm.Contact.policy[]",
+      "kind": "uses",
+      "to": "crm.Clerk",
+    },
+    {
+      "from": "crm.Win.policy[]",
+      "kind": "uses",
+      "to": "crm.Clerk",
+    },
+    {
+      "from": "crm.Lose.policy[]",
+      "kind": "uses",
+      "to": "crm.Clerk",
+    },
+    {
+      "from": "crm.OpenLeads",
+      "kind": "uses",
+      "to": "crm.Lead.status",
+    },
+    {
+      "from": "crm.OpenLeads",
+      "kind": "uses",
+      "to": "crm.LeadStatus.prospect",
+    },
+    {
+      "from": "crm.OpenLeads",
+      "kind": "uses",
+      "to": "crm.LeadStatus.contacted",
+    },
+    {
+      "from": "crm.FollowUp",
+      "kind": "uses",
+      "to": "crm.FollowUp.lead",
+    },
+    {
+      "from": "crm.FollowUp.policy[]",
+      "kind": "uses",
+      "to": "crm.Clerk",
+    },
+    {
+      "from": "crm.Convert",
+      "kind": "uses",
+      "to": "crm.Convert.lead",
+    },
+    {
+      "from": "crm.Convert.policy[]",
+      "kind": "uses",
+      "to": "crm.Clerk",
+    },
+    {
       "from": "sales.Order.status",
       "kind": "uses",
       "to": "sales.OrderStatus.draft",
@@ -1004,6 +1449,26 @@ exports[`graph of examples 1`] = `
       "from": "sales.Checkout",
       "kind": "uses",
       "to": "sales.Order.total",
+    },
+    {
+      "from": "sales.Checkout.policy[]",
+      "kind": "uses",
+      "to": "sales.Customer",
+    },
+    {
+      "from": "sales.CancelOrder",
+      "kind": "uses",
+      "to": "sales.CancelOrder.order",
+    },
+    {
+      "from": "sales.CancelOrder",
+      "kind": "uses",
+      "to": "sales.CancelOrder.reason",
+    },
+    {
+      "from": "sales.CancelOrder.policy[]",
+      "kind": "uses",
+      "to": "crm.Clerk",
     },
     {
       "from": "sales.ClerkCancelsDraft",
@@ -1269,6 +1734,698 @@ exports[`graph of examples 1`] = `
       "module": "crm",
       "props": {},
       "qn": "crm.Company",
+    },
+    {
+      "data": {},
+      "kind": "Enum",
+      "layer": "domain",
+      "level": "medium",
+      "module": "crm",
+      "props": {},
+      "qn": "crm.LeadStatus",
+    },
+    {
+      "data": {},
+      "kind": "EnumLiteral",
+      "layer": "domain",
+      "level": "in",
+      "module": "crm",
+      "props": {},
+      "qn": "crm.LeadStatus.prospect",
+    },
+    {
+      "data": {},
+      "kind": "EnumLiteral",
+      "layer": "domain",
+      "level": "in",
+      "module": "crm",
+      "props": {},
+      "qn": "crm.LeadStatus.contacted",
+    },
+    {
+      "data": {},
+      "kind": "EnumLiteral",
+      "layer": "domain",
+      "level": "in",
+      "module": "crm",
+      "props": {},
+      "qn": "crm.LeadStatus.won",
+    },
+    {
+      "data": {},
+      "kind": "EnumLiteral",
+      "layer": "domain",
+      "level": "in",
+      "module": "crm",
+      "props": {},
+      "qn": "crm.LeadStatus.lost",
+    },
+    {
+      "data": {},
+      "kind": "Entity",
+      "layer": "domain",
+      "level": "medium",
+      "module": "crm",
+      "props": {},
+      "qn": "crm.Lead",
+    },
+    {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "primitive": "String",
+        },
+      },
+      "kind": "Field",
+      "layer": "domain",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "type": "String",
+      },
+      "qn": "crm.Lead.name",
+    },
+    {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "decl": "crm.Account",
+          "optional": true,
+        },
+      },
+      "kind": "Field",
+      "layer": "domain",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "type": "Account?",
+      },
+      "qn": "crm.Lead.account",
+    },
+    {
+      "data": {
+        "default": {
+          "$type": "NameExpr",
+          "name": "prospect",
+          "target": "crm.LeadStatus.prospect",
+          "type": "LeadStatus",
+        },
+        "modifiers": [
+          "state",
+        ],
+        "type": {
+          "$type": "TypeRef",
+          "decl": "crm.LeadStatus",
+        },
+      },
+      "kind": "Field",
+      "layer": "domain",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "default": "prospect",
+        "modifiers": [
+          "state",
+        ],
+        "type": "LeadStatus",
+      },
+      "qn": "crm.Lead.status",
+    },
+    {
+      "data": {
+        "condition": {
+          "$type": "MemberExpr",
+          "args": [
+            {
+              "$type": "NameExpr",
+              "name": "Clerk",
+              "target": "crm.Clerk",
+              "type": "unknown",
+            },
+          ],
+          "call": true,
+          "member": "is",
+          "receiver": {
+            "$type": "NameExpr",
+            "name": "actor",
+            "type": "actor",
+          },
+          "type": "Bool",
+        },
+        "operations": [
+          "read",
+          "create",
+          "update",
+        ],
+      },
+      "kind": "Policy",
+      "layer": "domain",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "condition": "actor.is(Clerk)",
+        "operations": [
+          "read",
+          "create",
+          "update",
+        ],
+      },
+      "qn": "crm.Lead.policy[read,create,update]",
+    },
+    {
+      "data": {
+        "entity": "crm.Lead",
+      },
+      "kind": "Action",
+      "layer": "behavior",
+      "level": "medium",
+      "module": "crm",
+      "props": {},
+      "qn": "crm.Contact",
+    },
+    {
+      "data": {
+        "condition": {
+          "$type": "MemberExpr",
+          "args": [
+            {
+              "$type": "NameExpr",
+              "name": "Clerk",
+              "target": "crm.Clerk",
+              "type": "unknown",
+            },
+          ],
+          "call": true,
+          "member": "is",
+          "receiver": {
+            "$type": "NameExpr",
+            "name": "actor",
+            "type": "actor",
+          },
+          "type": "Bool",
+        },
+      },
+      "kind": "Policy",
+      "layer": "behavior",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "condition": "actor.is(Clerk)",
+      },
+      "qn": "crm.Contact.policy[]",
+    },
+    {
+      "data": {
+        "entity": "crm.Lead",
+      },
+      "kind": "Action",
+      "layer": "behavior",
+      "level": "medium",
+      "module": "crm",
+      "props": {},
+      "qn": "crm.Win",
+    },
+    {
+      "data": {
+        "condition": {
+          "$type": "MemberExpr",
+          "args": [
+            {
+              "$type": "NameExpr",
+              "name": "Clerk",
+              "target": "crm.Clerk",
+              "type": "unknown",
+            },
+          ],
+          "call": true,
+          "member": "is",
+          "receiver": {
+            "$type": "NameExpr",
+            "name": "actor",
+            "type": "actor",
+          },
+          "type": "Bool",
+        },
+      },
+      "kind": "Policy",
+      "layer": "behavior",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "condition": "actor.is(Clerk)",
+      },
+      "qn": "crm.Win.policy[]",
+    },
+    {
+      "data": {
+        "entity": "crm.Lead",
+      },
+      "kind": "Action",
+      "layer": "behavior",
+      "level": "medium",
+      "module": "crm",
+      "props": {},
+      "qn": "crm.Lose",
+    },
+    {
+      "data": {
+        "condition": {
+          "$type": "MemberExpr",
+          "args": [
+            {
+              "$type": "NameExpr",
+              "name": "Clerk",
+              "target": "crm.Clerk",
+              "type": "unknown",
+            },
+          ],
+          "call": true,
+          "member": "is",
+          "receiver": {
+            "$type": "NameExpr",
+            "name": "actor",
+            "type": "actor",
+          },
+          "type": "Bool",
+        },
+      },
+      "kind": "Policy",
+      "layer": "behavior",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "condition": "actor.is(Clerk)",
+      },
+      "qn": "crm.Lose.policy[]",
+    },
+    {
+      "data": {
+        "field": "crm.Lead.status",
+      },
+      "kind": "Machine",
+      "layer": "behavior",
+      "level": "medium",
+      "module": "crm",
+      "props": {},
+      "qn": "crm.LeadFlow",
+    },
+    {
+      "data": {
+        "action": "crm.Contact",
+        "from": [
+          "prospect",
+        ],
+        "to": "contacted",
+      },
+      "kind": "Transition",
+      "layer": "behavior",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "from": [
+          "prospect",
+        ],
+        "to": "contacted",
+      },
+      "qn": "crm.LeadFlow.transition[prospect->contacted]",
+    },
+    {
+      "data": {
+        "action": "crm.Win",
+        "from": [
+          "contacted",
+        ],
+        "to": "won",
+      },
+      "kind": "Transition",
+      "layer": "behavior",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "from": [
+          "contacted",
+        ],
+        "to": "won",
+      },
+      "qn": "crm.LeadFlow.transition[contacted->won]",
+    },
+    {
+      "data": {
+        "action": "crm.Lose",
+        "from": [
+          "prospect",
+          "contacted",
+        ],
+        "to": "lost",
+      },
+      "kind": "Transition",
+      "layer": "behavior",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "from": [
+          "prospect",
+          "contacted",
+        ],
+        "to": "lost",
+      },
+      "qn": "crm.LeadFlow.transition[prospect,contacted->lost]",
+    },
+    {
+      "data": {
+        "entity": "crm.Lead",
+        "filter": {
+          "$type": "BinaryExpr",
+          "left": {
+            "$type": "NameExpr",
+            "name": "status",
+            "target": "crm.Lead.status",
+            "type": "LeadStatus",
+          },
+          "op": "in",
+          "right": {
+            "$type": "ListExpr",
+            "items": [
+              {
+                "$type": "NameExpr",
+                "name": "prospect",
+                "target": "crm.LeadStatus.prospect",
+                "type": "LeadStatus",
+              },
+              {
+                "$type": "NameExpr",
+                "name": "contacted",
+                "target": "crm.LeadStatus.contacted",
+                "type": "LeadStatus",
+              },
+            ],
+            "type": "LeadStatus[]",
+          },
+          "type": "Bool",
+        },
+      },
+      "kind": "Query",
+      "layer": "application",
+      "level": "medium",
+      "module": "crm",
+      "props": {
+        "filter": "status in [prospect, contacted]",
+      },
+      "qn": "crm.OpenLeads",
+    },
+    {
+      "data": {
+        "source": "crm.Lead",
+      },
+      "kind": "Projection",
+      "layer": "application",
+      "level": "medium",
+      "module": "crm",
+      "props": {},
+      "qn": "crm.LeadRow",
+    },
+    {
+      "data": {},
+      "kind": "ProjectionField",
+      "layer": "application",
+      "level": "in",
+      "module": "crm",
+      "props": {},
+      "qn": "crm.LeadRow.name",
+    },
+    {
+      "data": {},
+      "kind": "ProjectionField",
+      "layer": "application",
+      "level": "in",
+      "module": "crm",
+      "props": {},
+      "qn": "crm.LeadRow.status",
+    },
+    {
+      "data": {
+        "steps": [
+          {
+            "$type": "CallStep",
+            "call": {
+              "$type": "Call",
+              "args": [
+                {
+                  "$type": "NameExpr",
+                  "name": "lead",
+                  "target": "crm.FollowUp.lead",
+                  "type": "Lead",
+                },
+              ],
+              "target": "crm.Contact",
+            },
+          },
+        ],
+      },
+      "kind": "UseCase",
+      "layer": "application",
+      "level": "out",
+      "module": "crm",
+      "props": {
+        "steps": [
+          "step Contact(lead)",
+        ],
+      },
+      "qn": "crm.FollowUp",
+    },
+    {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "decl": "crm.Lead",
+        },
+      },
+      "kind": "Param",
+      "layer": "application",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "type": "Lead",
+      },
+      "qn": "crm.FollowUp.lead",
+    },
+    {
+      "data": {
+        "condition": {
+          "$type": "MemberExpr",
+          "args": [
+            {
+              "$type": "NameExpr",
+              "name": "Clerk",
+              "target": "crm.Clerk",
+              "type": "unknown",
+            },
+          ],
+          "call": true,
+          "member": "is",
+          "receiver": {
+            "$type": "NameExpr",
+            "name": "actor",
+            "type": "actor",
+          },
+          "type": "Bool",
+        },
+      },
+      "kind": "Policy",
+      "layer": "application",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "condition": "actor.is(Clerk)",
+      },
+      "qn": "crm.FollowUp.policy[]",
+    },
+    {
+      "data": {
+        "steps": [
+          {
+            "$type": "CallStep",
+            "call": {
+              "$type": "Call",
+              "args": [
+                {
+                  "$type": "NameExpr",
+                  "name": "lead",
+                  "target": "crm.Convert.lead",
+                  "type": "Lead",
+                },
+              ],
+              "target": "crm.FollowUp",
+            },
+          },
+          {
+            "$type": "CallStep",
+            "call": {
+              "$type": "Call",
+              "args": [
+                {
+                  "$type": "NameExpr",
+                  "name": "lead",
+                  "target": "crm.Convert.lead",
+                  "type": "Lead",
+                },
+              ],
+              "target": "crm.Win",
+            },
+          },
+        ],
+      },
+      "kind": "UseCase",
+      "layer": "application",
+      "level": "out",
+      "module": "crm",
+      "props": {
+        "steps": [
+          "step FollowUp(lead)",
+          "step Win(lead)",
+        ],
+      },
+      "qn": "crm.Convert",
+    },
+    {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "decl": "crm.Lead",
+        },
+      },
+      "kind": "Param",
+      "layer": "application",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "type": "Lead",
+      },
+      "qn": "crm.Convert.lead",
+    },
+    {
+      "data": {
+        "condition": {
+          "$type": "MemberExpr",
+          "args": [
+            {
+              "$type": "NameExpr",
+              "name": "Clerk",
+              "target": "crm.Clerk",
+              "type": "unknown",
+            },
+          ],
+          "call": true,
+          "member": "is",
+          "receiver": {
+            "$type": "NameExpr",
+            "name": "actor",
+            "type": "actor",
+          },
+          "type": "Bool",
+        },
+      },
+      "kind": "Policy",
+      "layer": "application",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "condition": "actor.is(Clerk)",
+      },
+      "qn": "crm.Convert.policy[]",
+    },
+    {
+      "data": {
+        "components": [
+          {
+            "$type": "ListView",
+            "actions": [
+              "crm.Contact",
+              "crm.Lose",
+            ],
+            "picks": [
+              "crm.LeadRow.name",
+              "crm.LeadRow.status",
+            ],
+            "projection": "crm.LeadRow",
+            "query": "crm.OpenLeads",
+          },
+        ],
+        "route": "/leads",
+      },
+      "kind": "Page",
+      "layer": "experience",
+      "level": "medium",
+      "module": "crm",
+      "props": {
+        "components": [
+          "list OpenLeads as LeadRow { name, status } actions Contact, Lose",
+        ],
+        "route": "/leads",
+      },
+      "qn": "crm.Leads",
+    },
+    {
+      "data": {
+        "components": [
+          {
+            "$type": "DetailView",
+            "actions": [
+              "crm.Win",
+              "crm.Lose",
+            ],
+            "projection": "crm.LeadRow",
+          },
+        ],
+        "route": "/leads/{id}",
+      },
+      "kind": "Page",
+      "layer": "experience",
+      "level": "medium",
+      "module": "crm",
+      "props": {
+        "components": [
+          "detail LeadRow actions Win, Lose",
+        ],
+        "route": "/leads/{id}",
+      },
+      "qn": "crm.LeadDetail",
+    },
+    {
+      "data": {
+        "items": [
+          {
+            "$type": "NavItem",
+            "label": "Leads",
+            "page": "crm.Leads",
+          },
+        ],
+      },
+      "kind": "Navigation",
+      "layer": "experience",
+      "level": "medium",
+      "module": "crm",
+      "props": {
+        "items": [
+          ""Leads" -> Leads",
+        ],
+      },
+      "qn": "crm.Office",
+    },
+    {
+      "data": {
+        "pages": [
+          "crm.Leads",
+          "crm.LeadDetail",
+        ],
+        "usecase": "crm.Convert",
+      },
+      "kind": "Flow",
+      "layer": "experience",
+      "level": "medium",
+      "module": "crm",
+      "props": {},
+      "qn": "crm.ConvertFlow",
     },
     {
       "data": {
@@ -2844,6 +4001,143 @@ exports[`graph of examples 1`] = `
         "type": "Order",
       },
       "qn": "sales.Checkout.order",
+    },
+    {
+      "data": {
+        "condition": {
+          "$type": "MemberExpr",
+          "args": [
+            {
+              "$type": "NameExpr",
+              "name": "Customer",
+              "target": "sales.Customer",
+              "type": "unknown",
+            },
+          ],
+          "call": true,
+          "member": "is",
+          "receiver": {
+            "$type": "NameExpr",
+            "name": "actor",
+            "type": "actor",
+          },
+          "type": "Bool",
+        },
+      },
+      "kind": "Policy",
+      "layer": "application",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "condition": "actor.is(Customer)",
+      },
+      "qn": "sales.Checkout.policy[]",
+    },
+    {
+      "data": {
+        "steps": [
+          {
+            "$type": "CallStep",
+            "call": {
+              "$type": "Call",
+              "args": [
+                {
+                  "$type": "NameExpr",
+                  "name": "order",
+                  "target": "sales.CancelOrder.order",
+                  "type": "Order",
+                },
+                {
+                  "$type": "NameExpr",
+                  "name": "reason",
+                  "target": "sales.CancelOrder.reason",
+                  "type": "String?",
+                },
+              ],
+              "target": "sales.Cancel",
+            },
+          },
+        ],
+      },
+      "kind": "UseCase",
+      "layer": "application",
+      "level": "out",
+      "module": "sales",
+      "props": {
+        "steps": [
+          "step Cancel(order, reason)",
+        ],
+      },
+      "qn": "sales.CancelOrder",
+    },
+    {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "decl": "sales.Order",
+        },
+      },
+      "kind": "Param",
+      "layer": "application",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "type": "Order",
+      },
+      "qn": "sales.CancelOrder.order",
+    },
+    {
+      "data": {
+        "type": {
+          "$type": "TypeRef",
+          "optional": true,
+          "primitive": "String",
+        },
+      },
+      "kind": "Param",
+      "layer": "application",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "type": "String?",
+      },
+      "qn": "sales.CancelOrder.reason",
+    },
+    {
+      "data": {
+        "condition": {
+          "$type": "MemberExpr",
+          "args": [
+            {
+              "$type": "MemberExpr",
+              "member": "Clerk",
+              "receiver": {
+                "$type": "NameExpr",
+                "name": "crm",
+                "type": "unknown",
+              },
+              "target": "crm.Clerk",
+              "type": "unknown",
+            },
+          ],
+          "call": true,
+          "member": "is",
+          "receiver": {
+            "$type": "NameExpr",
+            "name": "actor",
+            "type": "actor",
+          },
+          "type": "Bool",
+        },
+      },
+      "kind": "Policy",
+      "layer": "application",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "condition": "actor.is(crm.Clerk)",
+      },
+      "qn": "sales.CancelOrder.policy[]",
     },
     {
       "data": {

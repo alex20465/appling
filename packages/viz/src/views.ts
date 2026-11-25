@@ -32,7 +32,12 @@ export interface ViewSettings {
      * declaration of it without an icon of its own) or `~` for the seed. Set by the `set_icons` tool.
      */
     icons?: Record<string, string>;
+    /** The view of the model the inspector shows; the level canvas when unset. */
+    view?: ModelView;
 }
+
+/** The views of the model: the level canvas, the use case diagram, the state diagrams and the screens. */
+export type ModelView = 'levels' | 'usecases' | 'states' | 'screens';
 
 export const DEFAULT_VIEW: ViewSettings = { lens: 'domain', linkEntities: false };
 
@@ -536,6 +541,150 @@ const FLOWS: Record<FlowViewKind, (index: GraphIndex, qn: string) => Flow> = { m
 export function flowView(index: GraphIndex, view: FlowViewKind, focus: string[]): Flow {
     const flows = focus.filter(qn => index.nodes.has(qn)).map(qn => FLOWS[view](index, qn));
     return { nodes: flows.flatMap(f => f.nodes), edges: flows.flatMap(f => f.edges) };
+}
+
+export interface DiagramElement {
+    qn: string;
+    label: string;
+}
+
+/** A UML use case diagram of the whole application, in one system boundary. */
+export interface UseCaseDiagram {
+    actors: DiagramElement[];
+    /** The use cases, then the actions their steps call as subfunctions. */
+    useCases: (DiagramElement & { subfunction?: boolean })[];
+    /** An actor starts a use case: one of the use case's policies names the actor or one of its roles. */
+    associations: { actor: string, useCase: string }[];
+    /** A step of a use case calls another use case or an action, which it always runs. */
+    includes: { from: string, to: string }[];
+}
+
+export function useCaseDiagram(index: GraphIndex): UseCaseDiagram {
+    const element = (node: GraphNode) => ({ qn: node.qn, label: shortName(node.qn, index) });
+    const actors = byRelevance(index, 'Actor');
+    const useCases = byRelevance(index, 'UseCase');
+    const associations = useCases.flatMap(useCase => startedBy(index, useCase.qn).map(actor => ({ actor, useCase: useCase.qn })));
+    // a call step always runs what it calls; a handler or the timeout of an await only in a special case
+    const calls = (useCase: GraphNode) => ((useCase.data.steps as StepData[] | undefined) ?? []).flatMap(step => step.$type === 'CallStep' ? [step.call!.target] : [])
+        .filter(target => target !== useCase.qn && ['UseCase', 'Action'].includes(index.nodes.get(target)?.kind ?? ''));
+    const includes = useCases.flatMap(useCase => [...new Set(calls(useCase))].map(to => ({ from: useCase.qn, to })));
+    const subfunctions = [...new Set(includes.map(i => i.to))].map(qn => index.nodes.get(qn)!).filter(n => n.kind === 'Action');
+    return { actors: actors.map(element), useCases: [...useCases.map(element), ...subfunctions.map(n => ({ ...element(n), subfunction: true }))], associations, includes };
+}
+
+/** The declarations of a kind, the most relevant first. */
+export function byRelevance(index: GraphIndex, kind: string): GraphNode[] {
+    return index.graph.nodes.filter(n => n.kind === kind)
+        .sort((a, b) => index.relevanceOf(b.qn) - index.relevanceOf(a.qn) || a.qn.localeCompare(b.qn));
+}
+
+/** The actors that start a use case: one of its policies names the actor or one of its roles. */
+function startedBy(index: GraphIndex, useCase: string): string[] {
+    const named = new Set(index.graph.edges
+        .filter(e => e.kind === 'uses' && index.parent(e.from) === useCase && index.nodes.get(e.from)!.kind === 'Policy')
+        .map(e => e.to));
+    return byRelevance(index, 'Actor').filter(a => [a.qn, ...(a.data.roles as string[] | undefined) ?? []].some(qn => named.has(qn))).map(a => a.qn);
+}
+
+export interface MenuItem {
+    label: string;
+    page: string;
+    children: MenuItem[];
+}
+
+/** A navigation as a menu; pages that nothing else reaches stand in one without a qualified name. */
+export interface ScreenMenu {
+    qn?: string;
+    label: string;
+    items: MenuItem[];
+}
+
+/** A component of a page as a placeholder: what it shows and the actions it offers the actor. */
+export interface ScreenPart {
+    kind: 'list' | 'detail' | 'form';
+    query?: string;
+    projection?: string;
+    /** The action a form submits. */
+    submits?: string;
+    /** The columns of a list, the fields of a detail or the inputs of a form. */
+    fields: string[];
+    actions: string[];
+    /** For a list: the page a row opens, the one that details records of the same entity. */
+    opens?: string;
+}
+
+export interface Screen extends DiagramElement {
+    route: string;
+    shows?: string;
+    parts: ScreenPart[];
+    /** Each flow this page is a step of: the use case, the step from 1, the steps and the next page. */
+    flows: { flow: string, label: string, step: number, of: number, next?: string }[];
+}
+
+/** The wireframe of what one actor sees: the menus and the screens the actor reaches. */
+export interface ScreenFlow {
+    menus: ScreenMenu[];
+    screens: Screen[];
+}
+
+interface ComponentData {
+    $type: 'ListView' | 'DetailView' | 'FormView';
+    query?: string;
+    projection?: string;
+    picks?: string[];
+    actions?: string[];
+    submits?: string;
+}
+
+/**
+ * The screens of an actor: the pages whose queries and projections it may read or whose actions it may run, each
+ * with only the actions it may run, the navigations cut to those pages, the page a list row opens, and the steps of
+ * the flows of the use cases it starts.
+ */
+export function screenFlow(index: GraphIndex, actor: string): ScreenFlow {
+    const access = new Map(new Simulator(index.graph).access(actor).filter(a => !a.operation).map(a => [a.target, a.verdict]));
+    const may = (qn: string) => (access.get(qn) ?? 'no') !== 'no';
+    const parts = (page: GraphNode) => ((page.data.components ?? []) as ComponentData[]).map((c): ScreenPart => ({
+        kind: c.$type === 'ListView' ? 'list' : c.$type === 'DetailView' ? 'detail' : 'form',
+        query: c.query, projection: c.projection, submits: c.submits,
+        fields: (c.submits ? index.children(c.submits).filter(m => m.kind === 'Param') : c.picks?.length ? c.picks.map(p => index.nodes.get(p)!) : index.children(c.projection ?? '').filter(m => m.kind === 'ProjectionField'))
+            .map(m => localName(m.qn, index)),
+        actions: (c.actions ?? []).filter(may)
+    })).filter(part => part.kind !== 'form' || may(part.submits!));
+    const pages = index.graph.nodes.filter(n => n.kind === 'Page').map(page => ({ page, parts: parts(page) }))
+        .filter(({ page, parts }) => may(page.qn) || parts.some(p => p.actions.length || p.kind === 'form'));
+    const shown = new Set(pages.map(p => p.page.qn));
+    const flows = index.graph.nodes.filter(n => n.kind === 'Flow' && startedBy(index, String(n.data.usecase)).includes(actor));
+    const source = (projection?: string) => projection && index.nodes.get(projection)?.data.source;
+    const details = pages.filter(p => p.parts.some(part => part.kind === 'detail'));
+    const screens = pages.map(({ page, parts }): Screen => ({
+        qn: page.qn, label: shortName(page.qn, index), route: String(page.data.route), shows: page.data.shows as string | undefined,
+        parts: parts.map(part => part.kind !== 'list' ? part : {
+            ...part, opens: details.find(d => d.page !== page && d.parts.some(p => p.kind === 'detail' && source(p.projection) === source(part.projection)))?.page.qn
+        }),
+        flows: flows.flatMap(flow => {
+            const steps = (flow.data.pages as string[]).filter(p => shown.has(p));
+            const at = steps.indexOf(page.qn);
+            return at < 0 ? [] : [{ flow: flow.qn, label: shortName(String(flow.data.usecase), index), step: at + 1, of: steps.length, next: steps[at + 1] }];
+        })
+    }));
+    const items = (list: { label: string, page: string, children?: unknown[] }[]): MenuItem[] => list
+        .map(item => ({ label: item.label, page: item.page, children: items((item.children ?? []) as typeof list) }))
+        .filter(item => shown.has(item.page) || item.children.length);
+    const menus: ScreenMenu[] = index.graph.nodes.filter(n => n.kind === 'Navigation')
+        .map(nav => ({ qn: nav.qn, label: shortName(nav.qn, index), items: items(nav.data.items as { label: string, page: string }[]) }))
+        .filter(menu => menu.items.length);
+    const reached = new Set([
+        ...menus.flatMap(menu => menuPages(menu.items)),
+        ...screens.flatMap(s => [...s.flows.flatMap(f => f.next ?? []), ...s.parts.flatMap(p => p.opens ?? [])])
+    ]);
+    const loose = screens.filter(s => !reached.has(s.qn));
+    if (loose.length) menus.push({ label: 'More', items: loose.map(s => ({ label: s.label, page: s.qn, children: [] })) });
+    return { menus, screens };
+}
+
+function menuPages(items: MenuItem[]): string[] {
+    return items.flatMap(item => [item.page, ...menuPages(item.children)]);
 }
 
 /**

@@ -16,7 +16,9 @@ npx appling inspect models
 > [!TIP]
 > To try the inspector without installing anything, open the [demo](https://appling.tools/inspect/). It runs on the sample sales and CRM model entirely in your browser.
 
-The header shows the workspace folder, the release indicator (once a release exists) and an icon for the state of the model: a check mark when it is valid, a warning sign with the number of errors otherwise. Pointing at it says so in words and lists the first errors. Next to the Appling name, "sponsored by Techthos.net" links to the sponsor, https://www.techthos.net/.
+The header shows the workspace folder, the release indicator (once a release exists) and an icon for the state of the model: a check mark when it is valid, a warning sign with the number of errors otherwise. Pointing at it says so in words and lists the first errors. At the bottom right, "sponsored by Techthos.net" links to the sponsor, https://www.techthos.net/.
+
+The view rail on the left switches between the four views of the model: **Levels**, the [model canvas](#the-model-canvas), and the [diagrams](#diagrams) **Use cases**, **States** and **Screens**. Pointing at an icon shows its name and the question the view answers; the keys 1 to 4 switch too. On a phone the rail is a bar at the bottom. The chosen view is saved in `.appling/view.json`, so the inspector opens on it next time.
 
 In VS Code, **Appling: Show in the inspector** selects the element at the cursor of a `.appling` editor on the canvas, and **Open source** in the inspector opens an element's source in VS Code.
 
@@ -58,9 +60,21 @@ With a server, the canvas also shows how far the code is: the outline of each de
 - The toolbar at the bottom right holds the zoom level with its minus and plus buttons and **Fit**, which shows the whole pyramid. Next to them, **Tasks** opens the [task board](implementation.md#registry-tasks-and-agent-sessions) with the count of open tasks and **Legend** explains every mark: the code states, the change badges, the levels, the unfold arrows, the dashed outline, claim rings, the annotation note and relevance. Pointing at a button names it.
 - **View settings**, the last button, opens the visual options. **Link entities** adds [link entities](../language/domain.md#link-entities) such as join records, which are left out by default. **Sound** switches the soft notes the canvas plays: a rising run when declarations unfold, two falling notes on a fold and a short chime when the model changes. The choice is kept in your browser, and the first sound waits for your first click. **Replant** folds the pyramid back to the modules of the entry level. Drag to pan and scroll to zoom; on a touch screen, drag with one finger and pinch with two. On a narrow screen the inspector opens below the canvas instead of beside it.
 
-The entry level and the link entities option are saved in `.appling/view.json` in the workspace folder, so the view opens the same way next time.
+The entry level, the link entities option and the chosen view are saved in `.appling/view.json` in the workspace folder, so the view opens the same way next time.
 
 A node can carry an icon from the [Lucide](https://lucide.dev/icons) catalog, in the middle of its cell. Icons are set by an AI assistant with the [`set_icons`](ai.md#view-tools) tool of the MCP server, for a kind (every declaration of that kind), or for one module or declaration. They are kept under `icons` in `.appling/view.json`, which you can also edit by hand, and appear on every open canvas the moment the file changes.
+
+## Diagrams
+
+The diagrams draw the same model regardless of levels, each built from the whole model and each a view of its own on the rail. Clicking an element in a diagram selects it and opens the [inspector](#the-inspector), as on the canvas. Each plays a short intro when it appears.
+
+| View | Draws |
+|---|---|
+| Use cases | A use case diagram in the chips of the canvas: one dashed system boundary for the whole application, the declared actors left of it, and the use cases inside it. A curve joins an actor to a use case when one of the use case's policies names the actor or one of its roles. A `step` always runs what it calls, so it draws a dashed include arrow: to another use case, which stands right below, or to an action, drawn as an action chip to the right. Error handlers and the timeout of an `await` run only in a special case and are not drawn. Selecting an element lights its lines |
+| States | A UML state diagram of the machine you pick in the dropdown at the top left: the initial pseudostate pointing at the state of the field's default, rounded states, final states with a double border, and every transition as a curve labelled with the action or event that drives it, its guard and the jobs that run it |
+| Screens | A clickable mockup of the application as the actor you pick sees it, in a browser window with the route of the open page. The app bar holds the navigations as the main menu, cut to the pages the actor reaches, and the actor as the signed in account, whose dropdown switches to another actor. A page shows its components: a list as a table with a row action for each action the actor may run and rows that open the page detailing the same entity, a detail as a card of fields with its actions, a form with the inputs of the action it submits. A page of a [flow](../language/experience.md) of a use case the actor starts shows the step it is and a button that continues to the next page. Pages the actor reaches in no other way stand under **More**. Clicking a title or a button selects its element of the model. APIs are not shown |
+
+A diagram with nothing to draw names the declarations that would fill it, such as a `machine` for States.
 
 ## Selection
 

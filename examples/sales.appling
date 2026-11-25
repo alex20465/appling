@@ -102,6 +102,12 @@ module sales {
     step PlaceOrder(order)
     step Payments.Charge(order.total) on Declined do Cancel(order)
     await PaymentReceived timeout "24h" do Cancel(order)
+    policy { actor.is(Customer) }
+  }
+
+  usecase CancelOrder (order: Order, reason: String?) {
+    step Cancel(order, reason)
+    policy { actor.is(crm.Clerk) }
   }
 
   // L4 Interfaces

@@ -70,7 +70,7 @@ test('access lists what one actor may do, with policies added up along the refer
         'sales.Order update': 'depends sales.Order.policy[update]',
         'sales.PlaceOrder': 'depends sales.PlaceOrder.policy[] & sales.Order.policy[update]',
         'sales.OpenOrders': 'depends sales.Order.policy[read]',
-        'sales.Checkout': 'no sales.PlaceOrder.policy[] & sales.Order.policy[update] & sales.Cancel.policy[]',
+        'sales.Checkout': 'no sales.Checkout.policy[] & sales.PlaceOrder.policy[] & sales.Order.policy[update] & sales.Cancel.policy[]',
         'sales.Orders': 'depends sales.Order.policy[read]',
         'sales.OrderDetail': 'depends sales.Order.policy[read]'
     });

@@ -1,4 +1,4 @@
-import type { Flow, FlowEdge, FlowNode, TreeNode } from './views.js';
+import type { DiagramElement, Flow, FlowEdge, FlowNode, TreeNode, UseCaseDiagram } from './views.js';
 
 export type Point = [number, number];
 
@@ -278,8 +278,10 @@ export interface PlacedFlow {
     height: number;
     /** Centered on `x`, `y`. */
     nodes: { node: FlowNode, x: number, y: number, width: number, height: number }[];
-    /** The label centered on `x`, `y`. */
-    edges: { edge: FlowEdge, path: string, x: number, y: number }[];
+    /** The label at `x`, `y`: centered, or beside its edge starting or ending there. */
+    edges: { edge: FlowEdge, path: string, x: number, y: number, anchor?: 'start' | 'end' }[];
+    /** The initial pseudostate of a state diagram, and where its arrow ends. */
+    initial?: { x: number, y: number, to: Point };
 }
 
 /** The width of one character of the flowchart's 12px monospace labels. */
@@ -362,4 +364,203 @@ function mean(values: number[]): number {
 
 function textWidth({ label = '', note = '' }: { label?: string, note?: string }, padding: number): number {
     return Math.max(label.length, note.length * 0.9) * CHAR + padding;
+}
+
+/** A chip of the use case diagram: its centre and half its width and height, as the chips of the level canvas. */
+export interface UseCaseChip extends DiagramElement {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+export interface PlacedUseCases {
+    width: number;
+    height: number;
+    /** The system boundary around the use cases. */
+    boundary: Box;
+    actors: UseCaseChip[];
+    useCases: (UseCaseChip & { subfunction?: boolean })[];
+    /** A curve from the right edge of the actor to the left edge of the use case. */
+    associations: { actor: string, useCase: string, from: Point, to: Point, path: string }[];
+    /** The arrow as an SVG path, and the middle of it, where its label stands. */
+    includes: { from: string, to: string, path: string, label: Point }[];
+}
+
+const GOAL_ROW = 100;
+const SUB_ROW = 72;
+const CASE_GAP = 150;
+const CHIP_HALF = 26;
+/** Room for the cell with the icon and the padding around the name, as on the level canvas. */
+const CHIP_PAD = 48 + 30;
+
+/** Half the width of a chip that fits the longest of the labels. */
+function chipHalf(labels: string[], least: number): number {
+    return Math.max(least, ...labels.map(l => (l.length * 7.6 + CHIP_PAD) / 2));
+}
+
+/** A curve that leaves and enters horizontally. */
+function sCurve([x1, y1]: Point, [x2, y2]: Point): string {
+    const mx = (x1 + x2) / 2;
+    return `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
+}
+
+/**
+ * Places a use case diagram: the use cases in a column inside the system boundary, an included one right below the
+ * one that includes it, the subfunctions in a column to the right beside the use cases that include them, and each
+ * actor left of the boundary beside the use cases it starts, so no line runs through another chip.
+ */
+export function layoutUseCases(diagram: UseCaseDiagram): PlacedUseCases {
+    const goals = diagram.useCases.filter(u => !u.subfunction);
+    const subs = diagram.useCases.filter(u => u.subfunction);
+    const order: typeof goals = [];
+    const visit = (u: typeof goals[number]) => {
+        if (order.includes(u)) return;
+        order.push(u);
+        diagram.includes.filter(i => i.from === u.qn).forEach(i => { const to = goals.find(g => g.qn === i.to); if (to) visit(to); });
+    };
+    [...goals.filter(g => !diagram.includes.some(i => i.to === g.qn)), ...goals].forEach(visit);
+    const [actorW, goalW, subW] = [chipHalf(diagram.actors.map(a => a.label), 90), chipHalf(goals.map(g => g.label), 110), chipHalf(subs.map(u => u.label), 90)];
+    const actorX = MARGIN + actorW;
+    const left = actorX + actorW + 80;
+    const goalX = left + 40 + goalW;
+    const top = MARGIN + 24 + 40 + CHIP_HALF;
+    const placedGoals = order.map((g, row) => ({ ...g, x: goalX, y: top + row * GOAL_ROW, w: goalW, h: CHIP_HALF }));
+    const yOf = new Map(placedGoals.map(g => [g.qn, g.y]));
+    const subX = goalX + goalW + CASE_GAP + subW;
+    const placedSubs = spread(subs.map(u => ({ ...u, y: mean(diagram.includes.filter(i => i.to === u.qn).map(i => yOf.get(i.from) ?? top)) })), SUB_ROW, top)
+        .map(u => ({ ...u, x: subX, w: subW, h: CHIP_HALF }));
+    const useCases = [...placedGoals, ...placedSubs];
+    const at = new Map(useCases.map(u => [u.qn, u]));
+    const includes = diagram.includes.map(i => {
+        const [from, to] = [at.get(i.from)!, at.get(i.to)!];
+        if (from.x !== to.x) {
+            const [start, end]: Point[] = [[from.x + from.w, from.y], [to.x - to.w, to.y]];
+            return { ...i, path: sCurve(start, end), label: [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2] as Point };
+        }
+        // within the column: out of the right edge and back into it, the label on the middle of the curve
+        const [x, out] = [from.x + from.w, from.x + from.w + 64];
+        const [y1, y2] = [from.y + 10, to.y - 10];
+        return { ...i, path: `M ${x} ${y1} C ${out} ${y1}, ${out} ${y2}, ${x} ${y2}`, label: [x + 48, (y1 + y2) / 2] as Point };
+    });
+    const bottom = Math.max(top, ...useCases.map(u => u.y + u.h)) + 40;
+    const right = Math.max(subs.length ? subX + subW : goalX + goalW, ...includes.map(i => i.label[0] + 40)) + 40;
+    const boundary = { x: left, y: MARGIN + 24, width: right - left, height: bottom - MARGIN - 24 };
+    const started = (actor: string) => diagram.associations.filter(a => a.actor === actor).map(a => yOf.get(a.useCase)!).filter(y => y !== undefined);
+    const actors = spread(diagram.actors.map(a => ({ ...a, y: started(a.qn).length ? mean(started(a.qn)) : bottom })), GOAL_ROW, top)
+        .map(a => ({ ...a, x: actorX, w: actorW, h: CHIP_HALF }));
+    return {
+        width: right + MARGIN,
+        height: Math.max(bottom, ...actors.map(a => a.y + a.h)) + MARGIN, boundary, actors, useCases,
+        associations: diagram.associations.map(a => {
+            const [actor, useCase] = [actors.find(x => x.qn === a.actor)!, at.get(a.useCase)!];
+            const [from, to]: Point[] = [[actor.x + actor.w, actor.y], [useCase.x - useCase.w, useCase.y]];
+            return { ...a, from, to, path: sCurve(from, to) };
+        }),
+        includes
+    };
+}
+
+/** Keeps the wished `y` of each item in order, pushing items down until they stand `gap` apart. */
+function spread<T extends { y: number }>(items: T[], gap: number, top: number): T[] {
+    let last = top - gap;
+    return [...items].sort((a, b) => a.y - b.y).map(item => {
+        last = Math.max(item.y, last + gap);
+        return { ...item, y: last };
+    });
+}
+
+const STATE_RANK = 190;
+const STATE_GAP = 200;
+const STATE_HEIGHT = 48;
+
+/**
+ * Places a state diagram: each state one rank below the first state that leads to it, the initial state on top with
+ * the initial pseudostate above it. A transition is a curve from border to border; transitions between the same two
+ * states bend apart, and one whose straight line would cross another state bends around it.
+ */
+export function layoutStates(flow: Flow): PlacedFlow {
+    const rank = new Map<string, number>();
+    const rows: string[][] = [];
+    const initial = flow.nodes.find(n => n.tag === 'initial');
+    const queue = [initial ?? flow.nodes[0]].filter(n => n).map(n => n!.id);
+    const enqueue = (id: string, at: number) => { if (!rank.has(id)) { rank.set(id, at); (rows[at] ??= []).push(id); queue.push(id); } };
+    if (queue[0]) { rank.set(queue[0], 0); rows[0] = [queue[0]]; }
+    for (let head = 0; head < flow.nodes.length * 2; head++) {
+        const id = queue[head] ?? flow.nodes.find(n => !rank.has(n.id))?.id;
+        if (!id) break;
+        if (!rank.has(id)) enqueue(id, rows.length);
+        for (const e of flow.edges.filter(e => e.from === id)) enqueue(e.to, rank.get(id)! + 1);
+    }
+    const size = new Map(flow.nodes.map(n => [n.id, { width: Math.max(120, n.label.length * 9 + 48), height: STATE_HEIGHT }]));
+    const x = new Map<string, number>();
+    rows.forEach((row, r) => {
+        const above = (id: string) => flow.edges.filter(e => e.to === id && (rank.get(e.from) ?? r) < r).map(e => x.get(e.from)!);
+        const ordered = r ? [...row].sort((a, b) => mean(above(a)) - mean(above(b))) : row;
+        const widths = ordered.map(id => size.get(id)!.width);
+        let at = -(widths.reduce((a, b) => a + b, 0) + STATE_GAP * (ordered.length - 1)) / 2;
+        ordered.forEach((id, i) => { x.set(id, at + widths[i] / 2); at += widths[i] + STATE_GAP; });
+    });
+    const nodes = flow.nodes.map(node => ({ node, x: x.get(node.id)!, y: rank.get(node.id)! * STATE_RANK, ...size.get(node.id)! }));
+    const at = new Map(nodes.map(n => [n.node.id, n]));
+    const border = (box: Box, toward: Point): Point => {
+        const [dx, dy] = [toward[0] - box.x, toward[1] - box.y];
+        const t = Math.min(Math.abs((box.width / 2 + 4) / (dx || 1e-9)), Math.abs((box.height / 2 + 4) / (dy || 1e-9)));
+        return [box.x + dx * t, box.y + dy * t];
+    };
+    const crosses = (from: Box, to: Box, bend: number) => nodes.some(n => n !== from && n !== to && [0.25, 0.5, 0.75].some(t => {
+        const [px, py] = curvePoint(from, to, bend, t);
+        return Math.abs(px - n.x) < n.width / 2 + 10 && Math.abs(py - n.y) < n.height / 2 + 10;
+    }));
+    const pairs = new Map<string, number>();
+    const edges = flow.edges.map(edge => {
+        const [from, to] = [at.get(edge.from)!, at.get(edge.to)!];
+        if (from === to) {
+            const [sx, sy] = [from.x + from.width / 2, from.y - 10];
+            const path = `M ${sx} ${sy} C ${sx + 70} ${sy - 50}, ${sx + 70} ${sy + 70}, ${sx} ${sy + 20}`;
+            return { edge, path, x: sx + 60, y: from.y };
+        }
+        const key = [edge.from, edge.to].sort().join(' ');
+        const k = pairs.get(key) ?? 0;
+        pairs.set(key, k + 1);
+        const together = flow.edges.filter(e => [e.from, e.to].sort().join(' ') === key).length;
+        let bend = (k - (together - 1) / 2) * 90 * (edge.from < edge.to ? 1 : -1);
+        for (const extra of [0, 90, -90, 180, -180]) if (!crosses(from, to, bend + extra)) { bend += extra; break; }
+        const control = curvePoint(from, to, bend, 0.5, true);
+        const [start, end] = [border(from, control), border(to, control)];
+        const [lx, ly] = curvePoint(from, to, bend, 0.5);
+        const path = `M ${start[0]} ${start[1]} Q ${control[0]} ${control[1]}, ${end[0]} ${end[1]}`;
+        // beside a rising or falling edge on the side it bends to, above a level one
+        if (Math.abs(to.y - from.y) < STATE_HEIGHT) return { edge, path, x: lx, y: ly - (edge.note ? 26 : 14) };
+        const side = lx !== (from.x + to.x) / 2 ? Math.sign(lx - (from.x + to.x) / 2) : Math.sign(to.x - from.x) || 1;
+        return { edge, path, x: lx + side * 14, y: ly, anchor: side < 0 ? 'end' as const : 'start' as const };
+    });
+    const start = initial && at.get(initial.id)!;
+    const xs = [...nodes.flatMap(n => [n.x - n.width / 2, n.x + n.width / 2]), ...edges.flatMap(e => {
+        const width = textWidth(e.edge, 16) * 1.15;
+        return e.anchor === 'start' ? [e.x, e.x + width] : e.anchor === 'end' ? [e.x - width, e.x] : [e.x - width / 2, e.x + width / 2];
+    })];
+    const [left, right] = [Math.min(...xs) - MARGIN * 2, Math.max(...xs) + MARGIN * 2];
+    const top = -STATE_HEIGHT / 2 - (start ? 90 : MARGIN);
+    const bottom = (rows.length - 1) * STATE_RANK + STATE_HEIGHT / 2 + MARGIN * 2;
+    const shift = (p: string) => p.replace(/(-?[\d.]+) (-?[\d.]+)/g, (_, px: string, py: string) => `${Number(px) - left} ${Number(py) - top}`);
+    return {
+        width: right - left, height: bottom - top,
+        nodes: nodes.map(n => ({ ...n, x: n.x - left, y: n.y - top })),
+        edges: edges.map(e => ({ ...e, path: shift(e.path), x: e.x - left, y: e.y - top })),
+        initial: start && { x: start.x - left, y: start.y - top - 80, to: [start.x - left, start.y - top - STATE_HEIGHT / 2 - 4] }
+    };
+}
+
+/**
+ * A point on the curve between two boxes bent by `bend` at its middle: the control point when `control` is set,
+ * else the point at `t` of the quadratic curve from centre to centre.
+ */
+function curvePoint(from: Box, to: Box, bend: number, t: number, control = false): Point {
+    const [dx, dy] = [to.x - from.x, to.y - from.y];
+    const length = Math.hypot(dx, dy) || 1;
+    const c: Point = [(from.x + to.x) / 2 - dy / length * bend * 2, (from.y + to.y) / 2 + dx / length * bend * 2];
+    if (control) return c;
+    const u = 1 - t;
+    return [u * u * from.x + 2 * u * t * c[0] + t * t * to.x, u * u * from.y + 2 * u * t * c[1] + t * t * to.y];
 }
