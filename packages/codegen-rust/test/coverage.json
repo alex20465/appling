@@ -218,9 +218,9 @@
   {
     "kind": "Policy",
     "generated": 0,
-    "partial": 7,
+    "partial": 9,
     "todo": 0,
-    "tasks": 7,
+    "tasks": 9,
     "left": 0
   },
   {
@@ -298,8 +298,8 @@
   {
     "kind": "UseCase",
     "generated": 0,
-    "partial": 1,
-    "todo": 1,
+    "partial": 2,
+    "todo": 0,
     "tasks": 2,
     "left": 0
   },
@@ -314,9 +314,9 @@
   {
     "kind": "total",
     "generated": 122,
-    "partial": 16,
-    "todo": 17,
-    "tasks": 34,
+    "partial": 19,
+    "todo": 16,
+    "tasks": 36,
     "left": 6
   }
 ]

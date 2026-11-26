@@ -537,10 +537,10 @@ class LeadFlowProspectContactedToLostTest(TestCase):
 
 
 class FollowUpAnyPolicyTest(TestCase):
-    """crm.FollowUp.policy[]: actor.is(Clerk)"""
+    """crm.FollowUp.policy[by]: actor.is(Clerk)"""
 
     def test_allows_permitted_actors(self):
-        self.skipTest("registry task: crm.FollowUp.policy[]")
+        self.skipTest("registry task: crm.FollowUp.policy[by]")
 
     def test_denies_other_actors(self):
         user = get_user_model().objects.create(username="tester")
@@ -550,10 +550,10 @@ class FollowUpAnyPolicyTest(TestCase):
 
 
 class ConvertAnyPolicyTest(TestCase):
-    """crm.Convert.policy[]: actor.is(Clerk)"""
+    """crm.Convert.policy[by]: actor.is(Clerk)"""
 
     def test_allows_permitted_actors(self):
-        self.skipTest("registry task: crm.Convert.policy[]")
+        self.skipTest("registry task: crm.Convert.policy[by]")
 
     def test_denies_other_actors(self):
         user = get_user_model().objects.create(username="tester")
@@ -582,6 +582,7 @@ from crm.roles import is_clerk
 def follow_up(lead: Lead, *, actor=None) -> None:
     if actor is not None and not (actor.is_authenticated and is_clerk(actor)):
         raise PermissionDenied("FollowUp")
+    # call or mail the lead
     contact(lead, actor=actor)
 
 
@@ -1200,10 +1201,10 @@ class OrderFlowPlacedToPaidTest(TestCase):
 
 
 class CheckoutAnyPolicyTest(TestCase):
-    """sales.Checkout.policy[]: actor.is(Customer)"""
+    """sales.Checkout.policy[by]: actor.is(Customer)"""
 
     def test_allows_permitted_actors(self):
-        self.skipTest("registry task: sales.Checkout.policy[]")
+        self.skipTest("registry task: sales.Checkout.policy[by]")
 
     def test_denies_other_actors(self):
         user = get_user_model().objects.create(username="tester")
@@ -1213,10 +1214,10 @@ class CheckoutAnyPolicyTest(TestCase):
 
 
 class CancelOrderAnyPolicyTest(TestCase):
-    """sales.CancelOrder.policy[]: actor.is(crm.Clerk)"""
+    """sales.CancelOrder.policy[by]: actor.is(crm.Clerk)"""
 
     def test_allows_permitted_actors(self):
-        self.skipTest("registry task: sales.CancelOrder.policy[]")
+        self.skipTest("registry task: sales.CancelOrder.policy[by]")
 
     def test_denies_other_actors(self):
         user = get_user_model().objects.create(username="tester")

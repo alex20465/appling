@@ -1,6 +1,6 @@
 import type { Access, Graph, GraphNode, TypeData } from '@appling/model';
 import { annotationOf } from '@appling/lang/layers';
-import { relevance } from '@appling/model/relevance';
+import { relevance, RELEVANCE_LEVELS, type RelevanceLevel } from '@appling/model/relevance';
 import { Simulator } from '@appling/model/simulator';
 import { rollupState, type ImplementationState } from '@appling/model/implementation';
 
@@ -34,12 +34,19 @@ export interface ViewSettings {
     icons?: Record<string, string>;
     /** The view of the model the inspector shows; the level canvas when unset. */
     view?: ModelView;
+    /** The least relevance level the views draw: `core` alone, or down to this level; everything when unset. */
+    relevance?: RelevanceLevel;
 }
 
 /** The views of the model: the level canvas, the use case diagram, the state diagrams and the screens. */
 export type ModelView = 'levels' | 'usecases' | 'states' | 'screens';
 
-export const DEFAULT_VIEW: ViewSettings = { lens: 'domain', linkEntities: false };
+export const DEFAULT_VIEW: ViewSettings = { lens: 'domain', linkEntities: false, relevance: 'core' };
+
+/** Whether a declaration is relevant enough for the views: its score reaches the level they draw down to. */
+export function relevantFor(index: GraphIndex, qn: string, level?: RelevanceLevel): boolean {
+    return !level || index.relevanceOf(qn) >= RELEVANCE_LEVELS[level][0];
+}
 
 /**
  * One node of the pyramid. The seed holds the modules, a module its declarations of the entry level, a declaration
@@ -135,7 +142,8 @@ export function peers(index: GraphIndex, qn: string): string[] {
  * trail. Away from the entry level a branch keeps its direction, so every level stands in its own band.
  */
 export function growTree(index: GraphIndex, settings: ViewSettings, unfolded: Set<string>, name = 'model', trail = new Set<string>()): TreeNode {
-    const shown = (n: GraphNode) => settings.linkEntities || !n.props.link;
+    // what an agent shows on a trail is drawn whatever its relevance
+    const shown = (n: GraphNode) => (settings.linkEntities || !n.props.link) && (trail.size > 0 || relevantFor(index, n.qn, settings.relevance));
     const roots = index.graph.nodes.filter(n => LENSES[settings.lens].kinds.includes(n.kind) && index.declaration(n.qn) === n.qn && shown(n));
     // an empty module shows on every level, such as right after an agent wrote it
     const filled = new Set(index.graph.nodes.filter(n => n.kind !== 'Module').map(n => n.module));
@@ -495,6 +503,7 @@ interface StepData {
     call?: CallData;
     event?: string;
     timeout?: string;
+    text?: string;
     handlers?: { error: string, call: CallData }[];
 }
 
@@ -525,6 +534,8 @@ export interface FlowEdge {
     qn?: string;
     /** The element the edge stands for, such as a transition. */
     of?: string;
+    /** What the label stands for when it is shortened, such as the states of a bundle. */
+    title?: string;
 }
 
 /** A flowchart: states or steps as nodes, transitions or the step order as edges. */
@@ -559,14 +570,16 @@ export interface UseCaseDiagram {
     includes: { from: string, to: string }[];
 }
 
-export function useCaseDiagram(index: GraphIndex): UseCaseDiagram {
+export function useCaseDiagram(index: GraphIndex, level?: RelevanceLevel): UseCaseDiagram {
     const element = (node: GraphNode) => ({ qn: node.qn, label: shortName(node.qn, index) });
-    const actors = byRelevance(index, 'Actor');
-    const useCases = byRelevance(index, 'UseCase');
+    const useCases = byRelevance(index, 'UseCase').filter(u => relevantFor(index, u.qn, level));
+    // an actor that starts a drawn use case is drawn whatever its own relevance
+    const starts = new Set(useCases.flatMap(useCase => startedBy(index, useCase.qn)));
+    const actors = byRelevance(index, 'Actor').filter(a => starts.has(a.qn) || relevantFor(index, a.qn, level));
     const associations = useCases.flatMap(useCase => startedBy(index, useCase.qn).map(actor => ({ actor, useCase: useCase.qn })));
     // a call step always runs what it calls; a handler or the timeout of an await only in a special case
     const calls = (useCase: GraphNode) => ((useCase.data.steps as StepData[] | undefined) ?? []).flatMap(step => step.$type === 'CallStep' ? [step.call!.target] : [])
-        .filter(target => target !== useCase.qn && ['UseCase', 'Action'].includes(index.nodes.get(target)?.kind ?? ''));
+        .filter(target => target !== useCase.qn && ['UseCase', 'Action'].includes(index.nodes.get(target)?.kind ?? '') && relevantFor(index, target, level));
     const includes = useCases.flatMap(useCase => [...new Set(calls(useCase))].map(to => ({ from: useCase.qn, to })));
     const subfunctions = [...new Set(includes.map(i => i.to))].map(qn => index.nodes.get(qn)!).filter(n => n.kind === 'Action');
     return { actors: actors.map(element), useCases: [...useCases.map(element), ...subfunctions.map(n => ({ ...element(n), subfunction: true }))], associations, includes };
@@ -578,7 +591,7 @@ export function byRelevance(index: GraphIndex, kind: string): GraphNode[] {
         .sort((a, b) => index.relevanceOf(b.qn) - index.relevanceOf(a.qn) || a.qn.localeCompare(b.qn));
 }
 
-/** The actors that start a use case: one of its policies names the actor or one of its roles. */
+/** The actors that start a use case: its `by` or one of its policies names the actor or one of its roles. */
 function startedBy(index: GraphIndex, useCase: string): string[] {
     const named = new Set(index.graph.edges
         .filter(e => e.kind === 'uses' && index.parent(e.from) === useCase && index.nodes.get(e.from)!.kind === 'Policy')
@@ -641,7 +654,7 @@ interface ComponentData {
  * with only the actions it may run, the navigations cut to those pages, the page a list row opens, and the steps of
  * the flows of the use cases it starts.
  */
-export function screenFlow(index: GraphIndex, actor: string): ScreenFlow {
+export function screenFlow(index: GraphIndex, actor: string, level?: RelevanceLevel): ScreenFlow {
     const access = new Map(new Simulator(index.graph).access(actor).filter(a => !a.operation).map(a => [a.target, a.verdict]));
     const may = (qn: string) => (access.get(qn) ?? 'no') !== 'no';
     const parts = (page: GraphNode) => ((page.data.components ?? []) as ComponentData[]).map((c): ScreenPart => ({
@@ -649,9 +662,9 @@ export function screenFlow(index: GraphIndex, actor: string): ScreenFlow {
         query: c.query, projection: c.projection, submits: c.submits,
         fields: (c.submits ? index.children(c.submits).filter(m => m.kind === 'Param') : c.picks?.length ? c.picks.map(p => index.nodes.get(p)!) : index.children(c.projection ?? '').filter(m => m.kind === 'ProjectionField'))
             .map(m => localName(m.qn, index)),
-        actions: (c.actions ?? []).filter(may)
+        actions: (c.actions ?? []).filter(may).sort((a, b) => index.relevanceOf(b) - index.relevanceOf(a))
     })).filter(part => part.kind !== 'form' || may(part.submits!));
-    const pages = index.graph.nodes.filter(n => n.kind === 'Page').map(page => ({ page, parts: parts(page) }))
+    const pages = index.graph.nodes.filter(n => n.kind === 'Page' && relevantFor(index, n.qn, level)).map(page => ({ page, parts: parts(page) }))
         .filter(({ page, parts }) => may(page.qn) || parts.some(p => p.actions.length || p.kind === 'form'));
     const shown = new Set(pages.map(p => p.page.qn));
     const flows = index.graph.nodes.filter(n => n.kind === 'Flow' && startedBy(index, String(n.data.usecase)).includes(actor));
@@ -678,8 +691,17 @@ export function screenFlow(index: GraphIndex, actor: string): ScreenFlow {
         ...menus.flatMap(menu => menuPages(menu.items)),
         ...screens.flatMap(s => [...s.flows.flatMap(f => f.next ?? []), ...s.parts.flatMap(p => p.opens ?? [])])
     ]);
-    const loose = screens.filter(s => !reached.has(s.qn));
-    if (loose.length) menus.push({ label: 'More', items: loose.map(s => ({ label: s.label, page: s.qn, children: [] })) });
+    // a page nothing leads to stands below the page its route lies under, such as /admin/users below /admin
+    const segments = (route: string) => route.split('/').filter(Boolean);
+    const below = (route: string, parent: string) => segments(parent).length < segments(route).length && segments(parent).every((s, i) => s === segments(route)[i]);
+    const itemOf = (items: MenuItem[], page: string): MenuItem | undefined => items.flatMap(item => item.page === page ? [item] : [itemOf(item.children, page) ?? []].flat())[0];
+    const more: MenuItem[] = [];
+    for (const screen of screens.filter(s => !reached.has(s.qn)).sort((a, b) => segments(a.route).length - segments(b.route).length)) {
+        const parents = screens.filter(s => below(screen.route, s.route)).sort((a, b) => segments(b.route).length - segments(a.route).length);
+        const parent = parents.map(p => itemOf([...menus.flatMap(m => m.items), ...more], p.qn)).find(item => item);
+        (parent?.children ?? more).push({ label: screen.label, page: screen.qn, children: [] });
+    }
+    if (more.length) menus.push({ label: 'More', items: more });
     return { menus, screens };
 }
 
@@ -757,6 +779,9 @@ function useCaseFlow(index: GraphIndex, qn: string): Flow {
             nodes.push({ id, label: `await ${shortName(step.event!, index)}`, qn: step.event });
             edges.push({ from: previous, to: id });
             if (step.call) call(`${id}.timeout`, step.call.target, id, { label: `timeout ${step.timeout}` });
+        } else if (step.$type === 'TextStep') {
+            nodes.push({ id, label: step.text! });
+            edges.push({ from: previous, to: id });
         } else {
             call(id, step.call!.target, previous);
             for (const handler of step.handlers ?? []) call(`${id}.${handler.error}`, handler.call.target, id, { label: localName(handler.error, index), qn: handler.error });

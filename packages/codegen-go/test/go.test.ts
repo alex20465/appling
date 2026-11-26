@@ -252,7 +252,7 @@ const SCENARIOS = `module s {
   machine Flow on Ticket.state {
     transition open -> closed via Close
   }
-  usecase Triage (ticket: Ticket) {
+  usecase Triage (ticket: Ticket) by Agent {
     step Close(ticket, 1)
   }
   scenario Closes {

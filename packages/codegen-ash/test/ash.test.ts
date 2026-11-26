@@ -246,7 +246,7 @@ test('actors without is become resources or structs, and actor.is of an actor be
                 level: Int default 1
                 team: Team
             }
-            actor service Mailer roles Agent
+            actor thirdparty Mailer roles Agent
             entity Team {
                 name: String
                 policy read { actor.is(Operator) || actor.is(Mailer) }
@@ -261,7 +261,7 @@ test('actors without is become resources or structs, and actor.is of an actor be
     expect(operator).toContain('    attribute :level, :integer do\n      default 1\n');
     expect(operator).toContain('    attribute :roles, {:array, :atom} do\n      default []\n      constraints items: [one_of: [:agent, :lead]]\n');
     expect(operator).toContain('    calculate :lead?, :boolean, expr(level > 2)\n');
-    expect(write('lib/shop/desk/mailer.ex')).toBe('defmodule Shop.Desk.Mailer do\n  @moduledoc "The service actor Mailer. Pass %Shop.Desk.Mailer{} as the actor."\n  defstruct [roles: [:agent]]\nend\n');
+    expect(write('lib/shop/desk/mailer.ex')).toBe('defmodule Shop.Desk.Mailer do\n  @moduledoc "The thirdparty actor Mailer. Pass %Shop.Desk.Mailer{} as the actor."\n  defstruct [roles: [:agent]]\nend\n');
     expect(write('lib/shop/desk/checks/lead.ex')).toContain([
         '  def match?(%Shop.Desk.Operator{} = actor, context, _opts) do',
         '    actor = Ash.load!(actor, :lead?, authorize?: false, tenant: context.subject.tenant)',
@@ -605,7 +605,7 @@ test('scenarios become ExUnit tests that seed the given rows, run the action as 
             machine Flow on Item.status {
                 transition open -> done via Close
             }
-            usecase Batch (item: Item) { step Close(item, "batch") }
+            usecase Batch (item: Item) by Staff { step Close(item, "batch") }
 
             scenario Closes describe "A clerk closes an item" {
                 given {

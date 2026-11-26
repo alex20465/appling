@@ -196,10 +196,14 @@ export function useCaseCode(useCase: GraphNode, context: MapContext): { code: st
     const pyScope: PythonScope = { ...scope(context, imports), actor: 'actor' };
     const externals = new Set<GraphNode>();
     const lines: string[] = [];
-    for (const step of (useCase.data.steps ?? []) as { $type: string, call?: Call, handlers?: { error: string, call: Call }[], event?: string, timeout?: string }[]) {
+    for (const step of (useCase.data.steps ?? []) as { $type: string, text?: string, call?: Call, handlers?: { error: string, call: Call }[], event?: string, timeout?: string }[]) {
         if (step.$type === 'AwaitStep') {
             tasks.push(task(`continue ${lastOf(useCase.qn)} when ${lastOf(step.event!)} happens${step.timeout ? `, or after ${step.timeout} with the timeout call` : ''}; the steps from here on are not generated`));
             break;
+        }
+        if (step.$type === 'TextStep') {
+            lines.push(`# ${step.text}`);
+            continue;
         }
         const call = callCode(step.call!, context, pyScope, externals);
         if (!call) {

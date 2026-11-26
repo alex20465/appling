@@ -231,3 +231,5 @@ button:focus-visible { outline: 2px solid var(--appling-leaf); outline-offset: 2
     .view-rail button[aria-pressed=true]::before { left: 8px; right: 8px; top: auto; bottom: -4px; width: auto; height: 3px; border-radius: 2px 2px 0 0; }
     .view-tip { display: none; }
 }
+.relevance-pick { margin-left: auto; }
+.bar .relevance-pick + .ok, .bar .relevance-pick + .errors { margin-left: 12px; }

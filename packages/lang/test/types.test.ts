@@ -48,7 +48,7 @@ test('well typed expressions pass', async () => {
       query Open from Order {
         where { status != done && total >= 0.5 }
       }
-      usecase Run (order: Order) {
+      usecase Run (order: Order) by Shopper {
         step Close(order, "late")
       }`)).toEqual([]);
 });
@@ -106,11 +106,11 @@ test('assignments name a field of the target', async () => {
 });
 
 test('call arity', async () => {
-    expect(await check('usecase U (o: Order) { step Close() }')).toContain('Close takes 1 to 2 argument(s), got 0.');
+    expect(await check('usecase U (o: Order) by Shopper { step Close() }')).toContain('Close takes 1 to 2 argument(s), got 0.');
 });
 
 test('call argument types', async () => {
-    expect(await check('usecase U (o: Order) { step Close(o, 5) }')).toContain('Int is not assignable to String?.');
+    expect(await check('usecase U (o: Order) by Shopper { step Close(o, 5) }')).toContain('Int is not assignable to String?.');
 });
 
 const BY_STATUS = `query ByStatus from Order {
@@ -122,9 +122,9 @@ const BY_STATUS = `query ByStatus from Order {
   }`;
 
 test('query inputs are typed in the filter and passed by calls', async () => {
-    expect(await check(`${BY_STATUS} usecase U { step ByStatus(open) step ByStatus(done, now) }`)).toEqual([]);
-    expect(await check(`${BY_STATUS} usecase U { step ByStatus() }`)).toContain('ByStatus takes 1 to 2 argument(s), got 0.');
-    expect(await check(`${BY_STATUS} usecase U { step ByStatus(open, "x") }`)).toContain('String is not assignable to DateTime?.');
+    expect(await check(`${BY_STATUS} usecase U by Shopper { step ByStatus(open) step ByStatus(done, now) }`)).toEqual([]);
+    expect(await check(`${BY_STATUS} usecase U by Shopper { step ByStatus() }`)).toContain('ByStatus takes 1 to 2 argument(s), got 0.');
+    expect(await check(`${BY_STATUS} usecase U by Shopper { step ByStatus(open, "x") }`)).toContain('String is not assignable to DateTime?.');
     expect(await check('query Q from Order { input { n: Int } where { n == "x" } }')).toContain('Operator "==" does not apply to Int and String.');
 });
 

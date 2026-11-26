@@ -114,21 +114,22 @@ Code generation reads every key from the environment variable `<EXTERNAL>_<KEY>`
 
 ## Use cases
 
-A use case is the single process concept: it orchestrates actions, queries, external operations and events into one application level operation, which may run for a long time.
+A use case is one thing an actor starts that decides something for the business: plain steps, and calls of actions, queries, external operations and events. It may run for a long time.
 
 ```appling
-usecase Checkout (order: Order) {
+usecase Checkout (order: Order) by Shopper {
+  step "reserve the stock"
   step PlaceOrder(order)
   step Payments.Charge(order.total) on Declined do Cancel(order)
   await PaymentReceived timeout "24h" do Cancel(order)
 }
 ```
 
-A use case has optional parameters in parentheses, followed by steps and policies in any order.
+A use case has optional parameters in parentheses, then `by A, B`, followed by steps and policies in any order. `by` is required and names the actors or roles that start the use case: nobody else may, and a `policy` adds conditions.
 
 ### Steps
 
-`step Target(args)` calls an action, a query, another use case or an external operation. The arguments are expressions that can read the use case's parameters, `actor`, `now` and `tenant`.
+`step "text"` says what happens in plain words and calls nothing. `step Target(args)` calls an action, a query, another use case or an external operation. The arguments are expressions that can read the use case's parameters, `actor`, `now` and `tenant`.
 
 The arguments must match the target:
 
@@ -217,11 +218,10 @@ module sales {
     op Charge (amount: Money) returns String errors Declined
   }
 
-  usecase Checkout (order: Order) {
+  usecase Checkout (order: Order) by Shopper {
     step PlaceOrder(order)
     step Payments.Charge(order.total) on Declined do Cancel(order, "declined")
     await PaymentReceived timeout "24h" do Cancel(order)
-    policy { actor.is(Shopper) }
   }
 
   actor human Shopper

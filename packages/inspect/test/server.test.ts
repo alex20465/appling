@@ -24,7 +24,7 @@ test('the snapshot has files, graph and locations', async () => {
     expect(snapshot.files.map((f: { path: string }) => f.path).sort()).toEqual(['crm.appling', 'sales.appling']);
     expect(snapshot.errors).toEqual([]);
     expect(snapshot.locations['sales.Order'].uri).toMatch(/sales\.appling$/);
-    expect(snapshot.dependencies).toContainEqual({ from: 'sales', to: 'crm', count: 17 });
+    expect(snapshot.dependencies).toContainEqual({ from: 'sales', to: 'crm', count: 18 });
 });
 
 test('the snapshot has the code references with their lines', async () => {

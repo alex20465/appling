@@ -60,7 +60,7 @@ export function FlowCanvas({ index, flow, selected, bubbles = [], edgesOnClick, 
                             <Edge d={`M ${placed.initial.x} ${placed.initial.y + 9} L ${placed.initial.to[0]} ${placed.initial.to[1]}`} style={delay(60)} />
                         </g>
                     )}
-                    {edges.map((e, i) => <Edge key={`${e.edge.from} ${e.edge.to} ${i}`} d={e.path} style={delay(delays.edge(e.edge.from))} />)}
+                    {edges.map((e, i) => <Edge key={`${e.edge.from} ${e.edge.to} ${i}`} d={e.path} className={e.back ? ' back' : e.bundle ? ' bundle' : ''} style={delay(delays.edge(e.edge.from))} />)}
                     {placed.nodes.map(({ node, x, y, width, height }) => (
                         <g key={node.id} className={`flow-node${node.tag ? ` ${node.tag}` : ''}${node.qn && node.qn === selected ? ' selected' : ''}${node.id === open ? ' open' : ''}`} transform={`translate(${x - width / 2} ${y - height / 2})`} onClick={() => press(node.id, node.qn)}>
                             <g className="pop" style={delay(delays.node.get(node.id)!)}>
@@ -73,6 +73,7 @@ export function FlowCanvas({ index, flow, selected, bubbles = [], edgesOnClick, 
                     ))}
                     {edges.filter(e => e.edge.label).map((e, i) => (
                         <g key={i} className={`flow-edge-label${e.anchor ? ` ${e.anchor}` : ''}${e.edge.qn && e.edge.qn === selected ? ' selected' : ''}`} transform={`translate(${e.x} ${e.y})`} onClick={() => e.edge.qn && onSelect(e.edge.qn)}>
+                            {e.edge.title && <title>{e.edge.title}</title>}
                             <g className="fade" style={delay(delays.edge(e.edge.from) + 380)}>
                                 <text y={e.edge.note ? -2 : 4}>{e.edge.label}</text>
                                 {e.edge.note && <text className="flow-note" y={13}>{e.edge.note}</text>}
@@ -92,11 +93,11 @@ export function FlowCanvas({ index, flow, selected, bubbles = [], edgesOnClick, 
 }
 
 /** An edge that draws itself from its start; its arrowhead, on a copy without stroke, lands once the line arrives. */
-function Edge({ d, style }: { d: string, style: CSSProperties }) {
+function Edge({ d, style, className = '' }: { d: string, style: CSSProperties, className?: string }) {
     return (
         <>
-            <path className="flow-edge draw" d={d} pathLength={1} style={style} />
-            <path className="flow-edge head" d={d} markerEnd="url(#flow-arrow)" style={style} />
+            <path className={`flow-edge draw${className}`} d={d} pathLength={1} style={style} />
+            <path className={`flow-edge head${className}`} d={d} markerEnd="url(#flow-arrow)" style={style} />
         </>
     );
 }

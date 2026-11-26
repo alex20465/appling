@@ -334,6 +334,7 @@ export class Simulator {
         };
         // The run stops at the first await: what follows waits for an event.
         for (const s of (node.data.steps ?? []) as StepData[]) {
+            if (s.$type === 'TextStep') continue;
             if (s.$type !== 'CallStep' || !s.call) break;
             let result = step(s.call);
             merge(result);

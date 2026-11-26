@@ -1,17 +1,18 @@
 import type { Graph } from './graph.js';
 
-export type RelevanceLevel = 'core' | 'supporting' | 'peripheral';
+export type RelevanceLevel = 'core' | 'supporting' | 'peripheral' | 'internal';
 
 /** The score range of each level; the graph places an element within its level. */
 export const RELEVANCE_LEVELS: Record<RelevanceLevel, [number, number]> = {
     core: [0.7, 1],
     supporting: [0.35, 0.7],
-    peripheral: [0, 0.35]
+    peripheral: [0.15, 0.35],
+    internal: [0, 0.15]
 };
 
 /** The level a score falls in. */
 export function relevanceLevel(score: number): RelevanceLevel {
-    return score >= RELEVANCE_LEVELS.core[0] ? 'core' : score >= RELEVANCE_LEVELS.supporting[0] ? 'supporting' : 'peripheral';
+    return score >= RELEVANCE_LEVELS.core[0] ? 'core' : score >= RELEVANCE_LEVELS.supporting[0] ? 'supporting' : score >= RELEVANCE_LEVELS.peripheral[0] ? 'peripheral' : 'internal';
 }
 
 /**

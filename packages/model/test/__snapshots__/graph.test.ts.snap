@@ -9,6 +9,11 @@ exports[`graph of examples 1`] = `
       "owner": "crm.FollowUp",
     },
     {
+      "address": "crm.FollowUp#step[2]",
+      "kind": "step",
+      "owner": "crm.FollowUp",
+    },
+    {
       "address": "crm.Convert#step[1]",
       "kind": "step",
       "owner": "crm.Convert",
@@ -347,8 +352,8 @@ exports[`graph of examples 1`] = `
     },
     {
       "from": "crm.FollowUp",
-      "kind": "contains",
-      "to": "crm.FollowUp.policy[]",
+      "kind": "by",
+      "to": "crm.Clerk",
     },
     {
       "from": "crm.FollowUp",
@@ -367,8 +372,8 @@ exports[`graph of examples 1`] = `
     },
     {
       "from": "crm.Convert",
-      "kind": "contains",
-      "to": "crm.Convert.policy[]",
+      "kind": "by",
+      "to": "crm.Clerk",
     },
     {
       "from": "crm.Convert",
@@ -912,8 +917,8 @@ exports[`graph of examples 1`] = `
     },
     {
       "from": "sales.Checkout",
-      "kind": "contains",
-      "to": "sales.Checkout.policy[]",
+      "kind": "by",
+      "to": "sales.Customer",
     },
     {
       "from": "sales.Checkout",
@@ -957,8 +962,8 @@ exports[`graph of examples 1`] = `
     },
     {
       "from": "sales.CancelOrder",
-      "kind": "contains",
-      "to": "sales.CancelOrder.policy[]",
+      "kind": "by",
+      "to": "crm.Clerk",
     },
     {
       "from": "sales.CancelOrder",
@@ -1176,6 +1181,46 @@ exports[`graph of examples 1`] = `
       "to": "sales.PlaceOrder",
     },
     {
+      "from": "crm.FollowUp",
+      "kind": "contains",
+      "to": "crm.FollowUp.policy[by]",
+    },
+    {
+      "from": "crm.FollowUp.policy[by]",
+      "kind": "uses",
+      "to": "crm.Clerk",
+    },
+    {
+      "from": "crm.Convert",
+      "kind": "contains",
+      "to": "crm.Convert.policy[by]",
+    },
+    {
+      "from": "crm.Convert.policy[by]",
+      "kind": "uses",
+      "to": "crm.Clerk",
+    },
+    {
+      "from": "sales.Checkout",
+      "kind": "contains",
+      "to": "sales.Checkout.policy[by]",
+    },
+    {
+      "from": "sales.Checkout.policy[by]",
+      "kind": "uses",
+      "to": "sales.Customer",
+    },
+    {
+      "from": "sales.CancelOrder",
+      "kind": "contains",
+      "to": "sales.CancelOrder.policy[by]",
+    },
+    {
+      "from": "sales.CancelOrder.policy[by]",
+      "kind": "uses",
+      "to": "crm.Clerk",
+    },
+    {
       "from": "crm.Account.policy[read]",
       "kind": "uses",
       "to": "crm.Clerk",
@@ -1236,19 +1281,9 @@ exports[`graph of examples 1`] = `
       "to": "crm.FollowUp.lead",
     },
     {
-      "from": "crm.FollowUp.policy[]",
-      "kind": "uses",
-      "to": "crm.Clerk",
-    },
-    {
       "from": "crm.Convert",
       "kind": "uses",
       "to": "crm.Convert.lead",
-    },
-    {
-      "from": "crm.Convert.policy[]",
-      "kind": "uses",
-      "to": "crm.Clerk",
     },
     {
       "from": "sales.Order.status",
@@ -1451,11 +1486,6 @@ exports[`graph of examples 1`] = `
       "to": "sales.Order.total",
     },
     {
-      "from": "sales.Checkout.policy[]",
-      "kind": "uses",
-      "to": "sales.Customer",
-    },
-    {
       "from": "sales.CancelOrder",
       "kind": "uses",
       "to": "sales.CancelOrder.order",
@@ -1464,11 +1494,6 @@ exports[`graph of examples 1`] = `
       "from": "sales.CancelOrder",
       "kind": "uses",
       "to": "sales.CancelOrder.reason",
-    },
-    {
-      "from": "sales.CancelOrder.policy[]",
-      "kind": "uses",
-      "to": "crm.Clerk",
     },
     {
       "from": "sales.ClerkCancelsDraft",
@@ -2164,7 +2189,14 @@ exports[`graph of examples 1`] = `
     },
     {
       "data": {
+        "by": [
+          "crm.Clerk",
+        ],
         "steps": [
+          {
+            "$type": "TextStep",
+            "text": "call or mail the lead",
+          },
           {
             "$type": "CallStep",
             "call": {
@@ -2188,6 +2220,7 @@ exports[`graph of examples 1`] = `
       "module": "crm",
       "props": {
         "steps": [
+          "step "call or mail the lead"",
           "step Contact(lead)",
         ],
       },
@@ -2211,37 +2244,9 @@ exports[`graph of examples 1`] = `
     },
     {
       "data": {
-        "condition": {
-          "$type": "MemberExpr",
-          "args": [
-            {
-              "$type": "NameExpr",
-              "name": "Clerk",
-              "target": "crm.Clerk",
-              "type": "unknown",
-            },
-          ],
-          "call": true,
-          "member": "is",
-          "receiver": {
-            "$type": "NameExpr",
-            "name": "actor",
-            "type": "actor",
-          },
-          "type": "Bool",
-        },
-      },
-      "kind": "Policy",
-      "layer": "application",
-      "level": "in",
-      "module": "crm",
-      "props": {
-        "condition": "actor.is(Clerk)",
-      },
-      "qn": "crm.FollowUp.policy[]",
-    },
-    {
-      "data": {
+        "by": [
+          "crm.Clerk",
+        ],
         "steps": [
           {
             "$type": "CallStep",
@@ -2302,37 +2307,6 @@ exports[`graph of examples 1`] = `
         "type": "Lead",
       },
       "qn": "crm.Convert.lead",
-    },
-    {
-      "data": {
-        "condition": {
-          "$type": "MemberExpr",
-          "args": [
-            {
-              "$type": "NameExpr",
-              "name": "Clerk",
-              "target": "crm.Clerk",
-              "type": "unknown",
-            },
-          ],
-          "call": true,
-          "member": "is",
-          "receiver": {
-            "$type": "NameExpr",
-            "name": "actor",
-            "type": "actor",
-          },
-          "type": "Bool",
-        },
-      },
-      "kind": "Policy",
-      "layer": "application",
-      "level": "in",
-      "module": "crm",
-      "props": {
-        "condition": "actor.is(Clerk)",
-      },
-      "qn": "crm.Convert.policy[]",
     },
     {
       "data": {
@@ -3899,6 +3873,9 @@ exports[`graph of examples 1`] = `
     },
     {
       "data": {
+        "by": [
+          "sales.Customer",
+        ],
         "steps": [
           {
             "$type": "CallStep",
@@ -4004,37 +3981,9 @@ exports[`graph of examples 1`] = `
     },
     {
       "data": {
-        "condition": {
-          "$type": "MemberExpr",
-          "args": [
-            {
-              "$type": "NameExpr",
-              "name": "Customer",
-              "target": "sales.Customer",
-              "type": "unknown",
-            },
-          ],
-          "call": true,
-          "member": "is",
-          "receiver": {
-            "$type": "NameExpr",
-            "name": "actor",
-            "type": "actor",
-          },
-          "type": "Bool",
-        },
-      },
-      "kind": "Policy",
-      "layer": "application",
-      "level": "in",
-      "module": "sales",
-      "props": {
-        "condition": "actor.is(Customer)",
-      },
-      "qn": "sales.Checkout.policy[]",
-    },
-    {
-      "data": {
+        "by": [
+          "crm.Clerk",
+        ],
         "steps": [
           {
             "$type": "CallStep",
@@ -4102,42 +4051,6 @@ exports[`graph of examples 1`] = `
         "type": "String?",
       },
       "qn": "sales.CancelOrder.reason",
-    },
-    {
-      "data": {
-        "condition": {
-          "$type": "MemberExpr",
-          "args": [
-            {
-              "$type": "MemberExpr",
-              "member": "Clerk",
-              "receiver": {
-                "$type": "NameExpr",
-                "name": "crm",
-                "type": "unknown",
-              },
-              "target": "crm.Clerk",
-              "type": "unknown",
-            },
-          ],
-          "call": true,
-          "member": "is",
-          "receiver": {
-            "$type": "NameExpr",
-            "name": "actor",
-            "type": "actor",
-          },
-          "type": "Bool",
-        },
-      },
-      "kind": "Policy",
-      "layer": "application",
-      "level": "in",
-      "module": "sales",
-      "props": {
-        "condition": "actor.is(crm.Clerk)",
-      },
-      "qn": "sales.CancelOrder.policy[]",
     },
     {
       "data": {
@@ -4646,6 +4559,130 @@ exports[`graph of examples 1`] = `
         "refused": true,
       },
       "qn": "sales.OnlyOwnOrders",
+    },
+    {
+      "data": {
+        "condition": {
+          "$type": "MemberExpr",
+          "args": [
+            {
+              "$type": "NameExpr",
+              "name": "Clerk",
+              "target": "crm.Clerk",
+              "type": "unknown",
+            },
+          ],
+          "call": true,
+          "member": "is",
+          "receiver": {
+            "$type": "NameExpr",
+            "name": "actor",
+            "type": "actor",
+          },
+          "type": "Bool",
+        },
+      },
+      "kind": "Policy",
+      "layer": "application",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "condition": "actor.is(Clerk)",
+      },
+      "qn": "crm.FollowUp.policy[by]",
+    },
+    {
+      "data": {
+        "condition": {
+          "$type": "MemberExpr",
+          "args": [
+            {
+              "$type": "NameExpr",
+              "name": "Clerk",
+              "target": "crm.Clerk",
+              "type": "unknown",
+            },
+          ],
+          "call": true,
+          "member": "is",
+          "receiver": {
+            "$type": "NameExpr",
+            "name": "actor",
+            "type": "actor",
+          },
+          "type": "Bool",
+        },
+      },
+      "kind": "Policy",
+      "layer": "application",
+      "level": "in",
+      "module": "crm",
+      "props": {
+        "condition": "actor.is(Clerk)",
+      },
+      "qn": "crm.Convert.policy[by]",
+    },
+    {
+      "data": {
+        "condition": {
+          "$type": "MemberExpr",
+          "args": [
+            {
+              "$type": "NameExpr",
+              "name": "Customer",
+              "target": "sales.Customer",
+              "type": "unknown",
+            },
+          ],
+          "call": true,
+          "member": "is",
+          "receiver": {
+            "$type": "NameExpr",
+            "name": "actor",
+            "type": "actor",
+          },
+          "type": "Bool",
+        },
+      },
+      "kind": "Policy",
+      "layer": "application",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "condition": "actor.is(Customer)",
+      },
+      "qn": "sales.Checkout.policy[by]",
+    },
+    {
+      "data": {
+        "condition": {
+          "$type": "MemberExpr",
+          "args": [
+            {
+              "$type": "NameExpr",
+              "name": "Clerk",
+              "target": "crm.Clerk",
+              "type": "unknown",
+            },
+          ],
+          "call": true,
+          "member": "is",
+          "receiver": {
+            "$type": "NameExpr",
+            "name": "actor",
+            "type": "actor",
+          },
+          "type": "Bool",
+        },
+      },
+      "kind": "Policy",
+      "layer": "application",
+      "level": "in",
+      "module": "sales",
+      "props": {
+        "condition": "actor.is(crm.Clerk)",
+      },
+      "qn": "sales.CancelOrder.policy[by]",
     },
   ],
 }

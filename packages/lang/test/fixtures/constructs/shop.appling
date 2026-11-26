@@ -10,7 +10,7 @@ module shop core {
     nickname: String?
   }
   actor system Clock
-  actor service Billing roles Manager peripheral
+  actor thirdparty Billing roles Manager internal
 
   // L1 Domain
   enum Status supporting {
@@ -50,7 +50,7 @@ module shop core {
     status: Status state default draft
     address: Address
     lines: Line[] owned
-    note: Text?
+    note: Text? internal
     created_at: DateTime default now
     placed_at: DateTime?
     discount: Int default 0
@@ -193,7 +193,8 @@ module shop core {
     secret api_key: String
   }
 
-  usecase Checkout (order: Order) core {
+  usecase Checkout (order: Order) by Shopper, Buyer core {
+    step "reserve the stock"
     step PlaceOrder(order, now)
     step Payments.Charge(order.total, order.reference) on Declined do Cancel(order) on Timeout do Payments.Refund(order.total)
     step OpenOrders(order.buyer)
@@ -202,7 +203,7 @@ module shop core {
     policy { actor.is(Buyer) }
   }
 
-  usecase Reorder (order: Order) {
+  usecase Reorder (order: Order) by Clock {
     step Checkout(order)
   }
 

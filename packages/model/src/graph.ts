@@ -1,6 +1,6 @@
 import { AstUtils, isAstNode, isReference, type AstNode, type Reference, type ReferenceInfo } from 'langium';
 import {
-    ExpressionTyper, LAYER_OF, doesTargets, effectEntity, isCreateEffect, isDeleteEffect, isEntity, isForEffect, isNameExpr, isUpdateEffect, isEnumLiteral, isExport, isExpr, isMemberExpr, show, isEmitEffect, isEndpoint, isInvariant, isPolicy, isSetEffect, isTransition, modulePath, print,
+    ExpressionTyper, LAYER_OF, doesTargets, effectEntity, isCreateEffect, isDeleteEffect, isEntity, isForEffect, isNameExpr, isUpdateEffect, isUseCase, isEnumLiteral, isExport, isExpr, isMemberExpr, show, isEmitEffect, isEndpoint, isInvariant, isPolicy, isSetEffect, isTransition, modulePath, print,
     type ApplingServices, type Entity, type Expr, type Layer, type Model, type Module
 } from '@appling/lang';
 
@@ -123,6 +123,22 @@ export function buildGraph(models: Model[], services: ApplingServices): Graph {
         });
     }
     const nodes = [...byNode.values()];
+    const startedBy: { policy: string, useCase: string, by: string[] }[] = [];
+    // Who starts a use case is also its permission: `by A, B` stands as the policy `actor.is(A) || actor.is(B)`.
+    for (const [node, qn] of qns) {
+        if (!isUseCase(node)) continue;
+        const by = node.by.map(b => b.ref && qns.get(b.ref)).filter(b => b !== undefined);
+        if (!by.length) continue;
+        const useCase = byNode.get(node)!;
+        const is = (target: string): ExprData => ({
+            $type: 'MemberExpr', receiver: { $type: 'NameExpr', name: 'actor', type: 'actor' }, member: 'is', call: true,
+            args: [{ $type: 'NameExpr', name: target.slice(target.lastIndexOf('.') + 1), type: 'unknown', target }], type: 'Bool'
+        });
+        const condition = by.map(is).reduce((left, right) => ({ $type: 'BinaryExpr', op: '||', left, right, type: 'Bool' }));
+        const text = node.by.map(b => `actor.is(${b.$refText})`).join(' || ');
+        nodes.push({ qn: `${qn}.policy[by]`, kind: 'Policy', layer: useCase.layer, level: 'in', module: useCase.module, props: { condition: text }, data: { condition } });
+        startedBy.push({ policy: `${qn}.policy[by]`, useCase: qn, by });
+    }
 
     const edges: GraphEdge[] = [];
     const seen = new Set<string>();
@@ -141,6 +157,10 @@ export function buildGraph(models: Model[], services: ApplingServices): Graph {
             const target = referenced && qns.get(referenced);
             if (target) add({ from: qn, to: target, kind: ref.property === 'decl' ? 'type' : ref.property });
         }
+    }
+    for (const { policy, useCase, by } of startedBy) {
+        add({ from: useCase, to: policy, kind: 'contains' });
+        for (const to of by) add({ from: policy, to, kind: 'uses' });
     }
     // `@Name` in a `describe` or annotation text uses the element it names.
     for (const [node, qn] of qns) {

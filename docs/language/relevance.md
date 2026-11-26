@@ -13,7 +13,8 @@ Every module and every top level declaration has a relevance score from 0 to 1. 
 |---|---|---|
 | `core` | 0.7 to 1 | What the business runs on: its main records, the actions and use cases that carry its process |
 | `supporting` | 0.35 to 0.7 | What the core needs: settings, lookups, integrations, logs and history |
-| `peripheral` | 0 to 0.35 | Housekeeping: imports, internal tokens, tools around the application |
+| `peripheral` | 0.15 to 0.35 | Housekeeping: imports, tools around the application |
+| `internal` | 0 to 0.15 | What no domain expert names: API keys, job state, internal tokens |
 
 ## Declaring a level
 
@@ -52,9 +53,9 @@ module observability supporting {
 }
 ```
 
-`module`, `role`, `actor`, `tenant`, `enum`, `value`, `entity`, `event`, `action`, `machine`, `job`, `query`, `projection`, `external`, `usecase`, `interface`, `page`, `navigation`, `flow`, `messages` and `scenario` take a level. A module's level applies to its declarations and its nested modules, unless they declare their own: `observability.Event` above is `supporting`.
+`module`, `role`, `actor`, `tenant`, `enum`, `value`, `entity`, `event`, `action`, `machine`, `job`, `query`, `projection`, `external`, `usecase`, `interface`, `page`, `navigation`, `flow`, `messages` and `scenario` take a level, as does a field (`token: String internal`). A module's level applies to its declarations and its nested modules, unless they declare their own: `observability.Event` above is `supporting`.
 
-`core`, `supporting` and `peripheral` stay valid as names.
+`core`, `supporting`, `peripheral` and `internal` stay valid as names.
 
 ## The computed score
 

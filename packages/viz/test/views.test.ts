@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import type { Model } from '@appling/lang';
 import { buildGraph, diffGraphs, Simulator, withRemoved } from '@appling/model';
@@ -460,17 +461,15 @@ const SHOP = `module shop {
     total
   }
 
-  usecase Checkout (cart: Cart) {
+  usecase Checkout (cart: Cart) by Buyer {
     step Pay(cart)
     step Notify(cart)
-    policy { actor.is(Buyer) }
   }
-  usecase Notify (cart: Cart) {
+  usecase Notify (cart: Cart) by Robot {
     step Refund(cart)
   }
-  usecase Audit {
+  usecase Audit by Clerk {
     step Invoices()
-    policy { actor.is(Clerk) }
   }
 
   page CartList route "/carts" {
@@ -497,14 +496,14 @@ const SHOP = `module shop {
 }
 `;
 
-test('the use case diagram draws the declared actors, who starts which use case by its policies, and «include» of what the steps call', async () => {
+test('the use case diagram draws the declared actors, who starts which use case, and «include» of what the steps call', async () => {
     const diagram = useCaseDiagram(await indexOf({ 'shop.appling': SHOP }));
     expect(diagram.actors.map(a => a.label).sort()).toEqual(['Clerk', 'Customer', 'Robot']);
     // the actions the steps call follow the use cases as subfunctions; a query a step calls is no use case
     expect(diagram.useCases.map(u => `${u.label}${u.subfunction ? ' (subfunction)' : ''}`).sort()).toEqual(['Audit', 'Checkout', 'Notify', 'Pay (subfunction)', 'Refund (subfunction)']);
-    // a role in a policy associates the actors that hold it, the actor itself associates only itself
-    expect(diagram.associations).toEqual(expect.arrayContaining([{ actor: 'shop.Customer', useCase: 'shop.Checkout' }, { actor: 'shop.Clerk', useCase: 'shop.Audit' }]));
-    expect(diagram.associations).toHaveLength(2);
+    // a role after `by` associates the actors that hold it, an actor only itself
+    expect(diagram.associations).toEqual(expect.arrayContaining([{ actor: 'shop.Customer', useCase: 'shop.Checkout' }, { actor: 'shop.Clerk', useCase: 'shop.Audit' }, { actor: 'shop.Robot', useCase: 'shop.Notify' }]));
+    expect(diagram.associations).toHaveLength(3);
     expect(diagram.includes).toEqual(expect.arrayContaining([
         { from: 'shop.Checkout', to: 'shop.Pay' }, { from: 'shop.Checkout', to: 'shop.Notify' }, { from: 'shop.Notify', to: 'shop.Refund' }
     ]));
@@ -574,4 +573,72 @@ test('the screen flow of an actor holds the pages it may use, with only its acti
     expect(clerk.menus.at(-1)).toEqual({ label: 'More', items: [{ label: 'Hidden', page: 'shop.Hidden', children: [] }] });
 
     expect(screenFlow(index, 'shop.Robot').screens).toEqual([]);
+});
+
+test('a state diagram of a machine with many transitions runs top down, with rollbacks and hubs as bundles', async () => {
+    const index = await indexOf({ 'quotes.appling': readFileSync(new URL('./fixtures/quotes.appling', import.meta.url), 'utf8') });
+    const placed = layoutStates(flowView(index, 'machine', ['quotes.QuoteLifecycle']));
+    const y = (state: string) => placed.nodes.find(n => n.node.label === state)!.y;
+    // the initial state on top, the states nothing leaves at the bottom
+    expect(y('new')).toBe(Math.min(...placed.nodes.map(n => n.y)));
+    expect([y('archived'), y('confirmed')]).toEqual(Array(2).fill(Math.max(...placed.nodes.map(n => n.y))));
+    // the order of the business: prepared, sent, opened, accepted
+    expect(['new', 'draft', 'sent', 'opened', 'accepted'].map(y)).toEqual(['new', 'draft', 'sent', 'opened', 'accepted'].map(y).sort((a, b) => a - b));
+    // a state that most others lead to stands below them, not in the middle
+    expect(y('cancelled')).toBeGreaterThan(y('accepted'));
+    // Cancel from nine states is one arrow, and so is the rollback into each state
+    const bundles = placed.edges.filter(e => e.bundle);
+    expect(bundles.map(e => e.edge.label)).toContain('Cancel · from 9 states');
+    expect(bundles.find(e => e.edge.label === 'Cancel · from 9 states')!.edge.title).toBe('new, draft, waiting, pending, sent, opened, accepted, unavailable, rejected');
+    const curves = placed.edges.filter(e => !e.bundle);
+    expect(curves.some(e => e.edge.label?.includes('FailTransition'))).toBe(false);
+    expect(curves.length).toBeLessThan(25);
+    // no two states overlap
+    for (const a of placed.nodes) for (const b of placed.nodes) if (a !== b && a.y === b.y) expect(Math.abs(a.x - b.x)).toBeGreaterThanOrEqual((a.width + b.width) / 2);
+});
+
+const ADMIN = `module app {
+  actor human Admin
+  entity User core { name: String  policy read, update { actor.is(Admin) } }
+  entity Token internal { hash: String  policy read { actor.is(Admin) } }
+  action Rename on User { input { name: String } effect { set name = name } policy { actor.is(Admin) } }
+  action Block on User { policy { actor.is(Admin) } }
+  action Unblock on User { policy { actor.is(Admin) } }
+  action Promote on User { policy { actor.is(Admin) } }
+  action Demote on User { policy { actor.is(Admin) } }
+  query Users from User { }
+  query Tokens from Token { }
+  projection UserRow from User { name }
+  projection TokenRow from Token { hash }
+  usecase Onboard (user: User) by Admin core { step "welcome the user" step Rename(user, "new") }
+  usecase Rotate (token: Token) by Admin internal { step "replace the token" }
+  page Home route "/" core { list Users as UserRow }
+  page Admin route "/admin" core { list Users as UserRow }
+  page AdminUsers route "/admin/users" core { list Users as UserRow }
+  page AdminUser route "/admin/users/{id}/roles" core { detail UserRow actions Rename, Block, Unblock, Promote, Demote }
+  page AdminAudit route "/admin/users/audit" core { list Users as UserRow }
+  page AdminTokens route "/admin/tokens" internal { list Tokens as TokenRow }
+  navigation Main { "Home" -> Home "Admin" -> Admin }
+}`;
+
+test('a page nothing leads to stands below the page its route lies under', async () => {
+    const flow = screenFlow(await indexOf({ 'app.appling': ADMIN }), 'app.Admin');
+    const admin = flow.menus[0].items[1];
+    expect(admin.children.map(c => c.label)).toEqual(['AdminUsers', 'AdminTokens']);
+    // a third level; the page a row opens needs no item of its own
+    expect(admin.children[0].children).toEqual([{ label: 'AdminAudit', page: 'app.AdminAudit', children: [] }]);
+    expect(flow.menus).toHaveLength(1);
+});
+
+test('the views draw down to a relevance level, and everything without one', async () => {
+    const index = await indexOf({ 'app.appling': ADMIN });
+    expect(useCaseDiagram(index).useCases.map(u => u.label)).toEqual(expect.arrayContaining(['Onboard', 'Rotate']));
+    const core = useCaseDiagram(index, 'core');
+    expect(core.useCases.map(u => u.label)).toEqual(['Onboard']);
+    // the actor that starts a drawn use case is drawn whatever its own relevance
+    expect(core.associations).toEqual([{ actor: 'app.Admin', useCase: 'app.Onboard' }]);
+    expect(screenFlow(index, 'app.Admin', 'core').screens.map(s => s.label)).not.toContain('AdminTokens');
+    const entities = (relevance?: 'core') => growTree(index, { ...DOMAIN, relevance }, new Set(['~', '~/app'])).children![0].children!.map(c => c.label);
+    expect(entities()).toEqual(['User', 'Token']);
+    expect(entities('core')).toEqual(['User']);
 });

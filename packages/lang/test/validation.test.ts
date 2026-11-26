@@ -142,7 +142,7 @@ test('annotation names resolve and follow the layer rules', async () => {
 test('does names follow the layer rules', async () => {
     expect(await check(`module m { external Mail { op Send () } ${ORDER} action Edit on Order does "Calls @Mail.Send" { } }`))
         .toContain('behavior element Action may not reference application element External "@Mail.Send".');
-    expect(await check(`module m { external Mail { op Send () } usecase Notify describe "Calls @Mail.Send" { } }`)).toEqual([]);
+    expect(await check(`module m { external Mail { op Send () } actor human A usecase Notify by A describe "Calls @Mail.Send" { } }`)).toEqual([]);
 });
 
 test('a role condition reads only actor, tenant and now', async () => {
@@ -175,9 +175,9 @@ async function warningsOf(text: string): Promise<string[]> {
 }
 
 test('a setting or secret has a primitive type', async () => {
-    expect(await check('module m { enum Region { eu us } external Mail { secret key: String[] setting region: Region op Send () } usecase U { step Mail.Send() } }'))
+    expect(await check('module m { enum Region { eu us } external Mail { secret key: String[] setting region: Region op Send () } actor human A usecase U by A { step Mail.Send() } }'))
         .toEqual(['A secret has a primitive type, not String[].', 'A setting has a primitive type, not Region.']);
-    expect(await check('module m { external Mail { secret key: String setting timeout: Duration? op Send () } usecase U { step Mail.Send() } }')).toEqual([]);
+    expect(await check('module m { external Mail { secret key: String setting timeout: Duration? op Send () } actor human A usecase U by A { step Mail.Send() } }')).toEqual([]);
 });
 
 test('auth and interfaces name an external', async () => {
@@ -197,7 +197,7 @@ test('a webhook interface names its vendor and has endpoints', async () => {
 test('an external with settings or secrets is used', async () => {
     const message = 'External Mail declares settings or secrets, but nothing calls or names it.';
     expect(await warningsOf('module m { external Mail { secret key: String op Send () } }')).toContain(message);
-    expect(await warningsOf('module m { external Mail { secret key: String op Send () } usecase U { step Mail.Send() } }')).not.toContain(message);
+    expect(await warningsOf('module m { external Mail { secret key: String op Send () } actor human A usecase U by A { step Mail.Send() } }')).not.toContain(message);
     expect(await warningsOf('module m { external Mail { secret key: String } interface rest Api { auth bearer from Mail } }')).not.toContain(message);
 });
 
@@ -318,4 +318,15 @@ test('a scenario fails with an error of what it calls', async () => {
     expect(await check(`module m { ${SCENARIO} scenario S { given { a = create Order { } } when Close(a) then fails Blank } }`))
         .toContain("Could not resolve reference to ErrorDecl named 'Blank'.");
     expect(await check(`module m { ${SCENARIO} scenario S { given { a = create Order { } } when Note(a, "x") then fails Blank } }`)).toEqual([]);
+});
+
+test('a use case names who starts it', async () => {
+    expect(await check('module m { usecase U { } }')).toContain('Use case "U" must name who starts it: by <actor>.');
+    expect(await check('module m { role Clerk actor human A actor thirdparty Bank usecase U by A, Bank, Clerk { step "count the stock" } }')).toEqual([]);
+});
+
+test('the application acts as one system actor', async () => {
+    expect(await check('module m { actor system System actor system Worker }'))
+        .toContain('The application acts on its own as one system actor; "System" is already declared.');
+    expect(await check('module m { actor system System }')).toEqual([]);
 });

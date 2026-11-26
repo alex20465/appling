@@ -56,7 +56,7 @@ Identifiers start with a letter or an underscore, followed by letters, digits or
 
 Many keywords are also valid names, so fields such as `state`, `from` or `input` stay legal:
 
-`state`, `input`, `value`, `from`, `to`, `on`, `for`, `step`, `list`, `detail`, `form`, `route`, `run`, `actions`, `fields`, `role`, `event`, `action`, `query`, `page`, `timeout`, `sort`, `when`, `create`, `read`, `update`, `delete`, `per`, `flow`, `actor`, `tenant`, `set`, `op`, `human`, `system`, `service`, `asc`, `desc`, `remove`, `rename`, `retype`, `roles`, `second`, `minute`, `hour`, `link`, `core`, `supporting`, `peripheral`, `default`, `limit`, `messages`, `migration`, `is`, `does`, `describe`, `holds`, `handles`, `serves`, `shows`, `setting`, `secret`, `scenario`, `given`, `then`, `fails`, `refused`.
+`state`, `input`, `value`, `from`, `to`, `on`, `for`, `step`, `list`, `detail`, `form`, `route`, `run`, `actions`, `fields`, `role`, `event`, `action`, `query`, `page`, `timeout`, `sort`, `when`, `create`, `read`, `update`, `delete`, `per`, `flow`, `actor`, `tenant`, `set`, `op`, `human`, `system`, `thirdparty`, `by`, `asc`, `desc`, `remove`, `rename`, `retype`, `roles`, `second`, `minute`, `hour`, `link`, `core`, `supporting`, `peripheral`, `internal`, `default`, `limit`, `messages`, `migration`, `is`, `does`, `describe`, `holds`, `handles`, `serves`, `shows`, `setting`, `secret`, `scenario`, `given`, `then`, `fails`, `refused`.
 
 Followed by `:`, such a keyword is always a name, so a field named `state` may follow a field that ends with a modifier: `code: String unique` then `state: Status state`.
 
@@ -172,7 +172,7 @@ Other unnamed parts, such as preconditions, sort clauses, use case steps, page c
 | Page | Covers |
 |---|---|
 | [Modules](modules.md) | `module`, nested modules, `export`, references across modules and files |
-| [Relevance](relevance.md) | `core`, `supporting`, `peripheral` and the computed relevance score |
+| [Relevance](relevance.md) | `core`, `supporting`, `peripheral`, `internal` and the computed relevance score |
 | [Descriptions](descriptions.md) | `describe`, the annotations `holds`, `does`, `handles`, `serves`, `shows`, text blocks, `@Name` |
 | [Access](access.md) | `role`, `actor`, `tenant`, policies, `actor.is(...)`, narrowing |
 | [Domain](domain.md) | `enum`, `value`, `entity`, field types and modifiers, `invariant`, `policy` |

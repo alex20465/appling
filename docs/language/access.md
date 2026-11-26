@@ -26,20 +26,20 @@ What a role may do is not written in the role. Permissions stay in the policies,
 
 ## Actors
 
-An actor is someone or something that acts on the application. It has a kind, a name, optional roles and optional typed fields.
+An actor is who acts on the application, never how they connect: an API key or a token is the `auth` of an interface. It has a kind, a name, optional roles and optional typed fields.
 
 ```appling
 actor human Shopper roles Customer {
   account: crm.Account
 }
 actor human Employee is User roles Operator
-actor system Scheduler
-actor service PaymentWebhook roles Integration
+actor system System
+actor thirdparty PaymentProvider
 ```
 
 | Part | Meaning |
 |---|---|
-| `human`, `system`, `service` | The kind of actor: a person, an internal process, an external service |
+| `human`, `thirdparty`, `system` | The kind of actor: a kind of person or organization, an outside system that calls in, or the application acting on its own (at most one) |
 | `is Entity` | The entity that stores this actor, such as the user. `actor.<field>` then reads the entity's fields too, and the actor compares with records of that entity: `customer == actor` |
 | `roles A, B` | The roles this actor carries; references to `role` declarations, also from other modules (`roles crm.Clerk`) |
 | `{ fields }` | Typed fields, written like [entity fields](domain.md#fields), that expressions read as `actor.<field>` |
@@ -88,7 +88,7 @@ A policy is a condition in braces, introduced by `policy`. Policies sit on the e
 | `entity` | `policy [operations] [fields f, g] { condition }` | The entity's fields, `this` |
 | `action` | `policy { condition }` | The fields of the action's entity, `this`, the action's inputs |
 | `query` | `policy { condition }` | The fields of the query's entity, `this`, the query's inputs |
-| `usecase` | `policy { condition }` | The use case's parameters |
+| `usecase` | `by A, B`, `policy { condition }` | The use case's parameters |
 
 `actor`, `now` and `tenant` are available in all of them. An element can have any number of policies.
 
@@ -161,9 +161,8 @@ module shop {
     policy { actor.is(Customer) }
   }
 
-  usecase Close (order: Order) {
+  usecase Close (order: Order) by Clerk {
     step Refund(order, order.total)
-    policy { actor.is(Clerk) }
   }
 }
 ```

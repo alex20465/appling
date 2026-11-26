@@ -2,7 +2,7 @@ import { AstUtils, WorkspaceCache, type AstNode, type ValidationAcceptor, type V
 import {
     isAction, isActor, isBinaryExpr, isBoolExpr, isEntity, isField, isExternal, isRole, isExternalOperation, isMemberExpr, isNameExpr, isEnum, isMachine, isMigration, isModule, isValueType,
     type ApplingAstType, type Endpoint, type External, type ExternalKey, type Interface, type Machine, type Migration, type MigrationStep, type Model,
-    type Expr, type Policy, type Projection, type Query, type RenameStep, type Scenario, type SetEffect, type CreateEffect, type DeleteEffect, type ForEffect, type UpdateEffect
+    type Expr, type Policy, type Projection, type Query, type RenameStep, type Scenario, type UseCase, type Actor, type SetEffect, type CreateEffect, type DeleteEffect, type ForEffect, type UpdateEffect
 } from './generated/ast.js';
 import { scenarioTarget } from './appling-scenario.js';
 import { effectEntity, namedPaths, projectionSourceEntity } from './appling-scope.js';
@@ -29,7 +29,9 @@ export function registerValidationChecks(services: ApplingServices): void {
         ExternalKey: validator.checkExternalKey,
         External: validator.checkExternalUsed,
         Interface: validator.checkInterfaceSource,
-        Scenario: validator.checkScenario
+        Scenario: validator.checkScenario,
+        UseCase: validator.checkStartedBy,
+        Actor: validator.checkOneSystem
     };
     services.validation.ValidationRegistry.register(checks, validator);
 }
@@ -45,6 +47,16 @@ export class ApplingValidator {
     constructor(private readonly services: ApplingServices) {
         this.machines = new WorkspaceCache(services.shared);
         this.usedExternals = new WorkspaceCache(services.shared);
+    }
+
+    checkStartedBy(useCase: UseCase, accept: ValidationAcceptor): void {
+        if (!useCase.by.length) accept('error', `Use case "${useCase.name}" must name who starts it: by <actor>.`, { node: useCase, property: 'name' });
+    }
+
+    checkOneSystem(actor: Actor, accept: ValidationAcceptor): void {
+        if (actor.kind !== 'system') return;
+        const first = new ExpressionTyper(this.services).actors.find(a => a.kind === 'system');
+        if (first && first !== actor) accept('error', `The application acts on its own as one system actor; "${first.name}" is already declared.`, { node: actor, property: 'name' });
     }
 
     checkLayerReferences(model: Model, accept: ValidationAcceptor): void {

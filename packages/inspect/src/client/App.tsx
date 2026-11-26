@@ -10,13 +10,21 @@ import type { AgentView, LiveChanges } from '../shared/live.js';
 import { loadRelease, loadReview, loadRevisions, loadSnapshot, loadView, onEvents, saveView } from './api.js';
 import { TaskBoard } from './TaskBoard.js';
 import { AgentCanvas, AgentStrip } from './AgentView.js';
-import { Glyph, ModelCanvas } from '@appling/viz/canvas';
+import { Glyph, ModelCanvas, Select } from '@appling/viz/canvas';
 import { elementAt, GraphIndex, type ModelView, type SessionMark } from '@appling/viz/views';
 import { Inspector } from './Inspector.js';
 import { Diagram, MODEL_VIEWS } from './Diagrams.js';
 
 /** The hooks of the page that embeds the inspector (`hooks.ts`), such as VS Code's; absent in a plain browser. */
 const host = window.applingHost;
+
+/** How much of the model the views draw, from what the business runs on down to everything. */
+const RELEVANCE_OPTIONS = [
+    { value: 'core', label: 'Core', hint: 'what the business runs on' },
+    { value: 'supporting', label: 'Supporting', hint: 'and what it needs' },
+    { value: 'peripheral', label: 'Peripheral', hint: 'and housekeeping' },
+    { value: 'internal', label: 'Everything', hint: 'and internals' }
+];
 
 export function App() {
     const [snapshot, setSnapshot] = useState<Snapshot>();
@@ -220,6 +228,7 @@ export function App() {
                         release {release.version} · {steps} migration step(s) since
                     </button>
                 )}
+                <Select className="relevance-pick" value={view.relevance ?? 'internal'} options={RELEVANCE_OPTIONS} label="Show" showLabel align="end" onChange={level => { const settings = { ...view, relevance: level as ViewSettings['relevance'] }; setView(settings); saveView(settings); }} />
                 <span className={snapshot.errors.length ? 'errors' : 'ok'} role="status" tabIndex={0} aria-label={snapshot.errors.length ? `${snapshot.errors.length} error(s)` : 'The model is valid'}>
                     <Glyph name={snapshot.errors.length ? 'triangle-alert' : 'circle-check'} />{snapshot.errors.length || ''}
                     <span role="tooltip">{snapshot.errors.length ? <><b>{snapshot.errors.length} error(s)</b>{snapshot.errors.slice(0, 5).map((error, i) => <span key={i}>{error}</span>)}</> : <b>The model is valid</b>}</span>
@@ -237,7 +246,7 @@ export function App() {
             <main className="canvas-area">
                 {watched?.show
                     ? <AgentCanvas key={watched.session} index={canvasIndex} view={watched} session={sessions.find(s => s.id === watched.session)} settings={view} selected={element} changes={canvasChanges} at={step} list={!host?.panels} onStep={setStep} onSelect={select} onClose={() => watch()} onOpenFile={openFile} />
-                    : modelView !== 'levels' ? <Diagram key={modelView} view={modelView} index={index} name={name} icons={view.icons} selected={element} onSelect={select} />
+                    : modelView !== 'levels' ? <Diagram key={modelView} view={modelView} index={index} name={name} level={view.relevance} icons={view.icons} selected={element} onSelect={select} />
                     : <ModelCanvas index={canvasIndex} changes={canvasChanges} name={name} selected={element} settings={view} sessions={sessionMarks} onSession={host?.focusSession} implementation={snapshot.implementation} buttons={[{ label: openTasks ? `Tasks ${openTasks}` : 'Tasks', icon: 'list-checks', pressed: board, run: () => setBoard(!board) }]} onSelect={select} onSettings={next => { setView(next); saveView(next); }} />}
                 {board && !watched?.show && modelView === 'levels' && <TaskBoard tasks={snapshot.tasks} sessions={sessions} selected={element} onSelect={select} onClose={() => setBoard(false)} />}
                 <AgentStrip views={Object.values(agentViews)} sessions={sessions} watching={watching} onWatch={watch} />

@@ -209,9 +209,8 @@ const ACCESS = `module shop {
         status
         total
     }
-    usecase Close (order: Order) {
+    usecase Close (order: Order) by Employee {
         step Place(order)
-        policy { actor.is(Employee) }
     }
 }`;
 
@@ -390,23 +389,22 @@ test('a use case policy over actor kinds gets an active denied test', async () =
             external Payments {
                 op Refund (amount: Money)
             }
-            usecase Settle (order: Order, note: String) {
+            usecase Settle (order: Order, note: String) by Clerk {
                 step Payments.Refund(order.total)
-                policy { actor.is(Clerk) }
             }
-            usecase Audit (order: Order) {
+            usecase Audit (order: Order) by Employee {
                 policy { actor.account == order }
             }
         }`
     });
     const tests = files['shop/tests.py'];
-    expect(tests).toContain('from shop.usecases import settle');
+    expect(tests).toContain('from shop.usecases import audit, settle');
     expect(tests).toContain([
         'class SettleAnyPolicyTest(TestCase):',
-        '    """shop.Settle.policy[]: actor.is(Clerk)"""',
+        '    """shop.Settle.policy[by]: actor.is(Clerk)"""',
         '',
         '    def test_allows_permitted_actors(self):',
-        '        self.skipTest("registry task: shop.Settle.policy[]")',
+        '        self.skipTest("registry task: shop.Settle.policy[by]")',
         '',
         '    def test_denies_other_actors(self):',
         '        user = get_user_model().objects.create(username="tester")',
@@ -557,7 +555,8 @@ const QUERY_INPUTS = `module shop {
         where { customer == of && (since == null || placed >= since) }
     }
     projection OrderView from Order { status }
-    usecase Show (c: Customer) { step OrdersOf(null, c) }
+    actor human Staff
+    usecase Show (c: Customer) by Staff { step OrdersOf(null, c) }
     interface rest Api { GET "/customers/{of}/orders" -> OrdersOf as OrderView }
     page Orders route "/orders" { list OrdersOf as OrderView }
 }`;
@@ -567,8 +566,8 @@ test('query inputs become parameters, read from the path and the query string by
     expect(entries['shop.OrdersOf'].missing).toEqual([]);
     // Required inputs come first so optional ones can default to None; the null case decides before the lookup is built.
     expect(files['shop/queries.py']).toContain([
-        'def orders_of(of: Customer, since: date | None = None, states: list[Status] | None = None):',
-        '    return Order.objects.filter((models.Q(customer=of)) & (models.Q(pk__isnull=False) if since is None else models.Q(placed__gte=since)))'
+        'def orders_of(of: Customer, since: date | None = None, states: list[Status] | None = None, actor=None):',
+        '    rows = Order.objects.filter((models.Q(customer=of)) & (models.Q(pk__isnull=False) if since is None else models.Q(placed__gte=since)))'
     ].join('\n'));
     expect(files['shop/serializers.py']).toContain([
         'class OrdersOfInput(serializers.Serializer):',
@@ -583,16 +582,16 @@ test('query inputs become parameters, read from the path and the query string by
         '        params.update(self.kwargs)',
         '        inputs = OrdersOfInput(data=params)',
         '        inputs.is_valid(raise_exception=True)',
-        '        return orders_of(**inputs.validated_data)'
+        '        return orders_of(**inputs.validated_data, actor=self.request.user)'
     ].join('\n'));
     expect(files['shop/api_urls.py']).toContain('path("customers/<str:of>/orders", api.ApiOrdersOf.as_view())');
     // Calls pass every input by name, in the declared order of the arguments.
-    expect(files['shop/usecases.py']).toContain('    orders_of(since=None, of=c)');
+    expect(files['shop/usecases.py']).toContain('    orders_of(since=None, of=c, actor=actor)');
     expect(files['shop/pages.py']).toContain([
         '    inputs = OrdersOfInput(data=request.GET)',
         '    if not inputs.is_valid():',
         '        raise BadRequest(inputs.errors)',
-        '    rows = orders_of(**inputs.validated_data)'
+        '    rows = orders_of(**inputs.validated_data, actor=request.user)'
     ].join('\n'));
 });
 

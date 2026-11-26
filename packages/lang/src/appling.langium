@@ -28,7 +28,7 @@ Role:
 
 // `is` binds the actor to the entity that stores it, such as the user.
 Actor:
-    'actor' kind=('human' | 'system' | 'service') name=Ident ('is' entity=[Entity:QualifiedName])?
+    'actor' kind=('human' | 'system' | 'thirdparty') name=Ident ('is' entity=[Entity:QualifiedName])?
     ('roles' roles+=[Role:QualifiedName] (',' roles+=[Role:QualifiedName])*)? relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))?
     ('{' fields+=Field* '}')?;
 
@@ -43,7 +43,7 @@ Tenant:
 
 // How much a declaration matters to what the application does; a module's level applies to its members.
 Relevance returns string:
-    'core' | 'supporting' | 'peripheral';
+    'core' | 'supporting' | 'peripheral' | 'internal';
 
 // L1 Domain
 
@@ -62,7 +62,7 @@ Entity:
     '}';
 
 Field:
-    name=Ident ':' type=TypeRef modifiers+=FieldModifier*
+    name=Ident ':' type=TypeRef modifiers+=FieldModifier* relevance=Relevance?
     ('default' default=Expr)? ('=' derived=Expr)? ('describe' describe=(TEXT_BLOCK | STRING))?;
 
 FieldModifier returns string:
@@ -189,13 +189,21 @@ ExternalOperation:
     ('errors' errors+=ErrorDecl (',' errors+=ErrorDecl)*)?
     ('describe' describe=(TEXT_BLOCK | STRING))?;
 
+// `by` names who starts the use case: actors, or roles where one actor holds different permissions.
 UseCase:
-    'usecase' name=Ident ('(' (params+=Param (',' params+=Param)*)? ')')? relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('handles' handles=(TEXT_BLOCK | STRING))? '{'
+    'usecase' name=Ident ('(' (params+=Param (',' params+=Param)*)? ')')?
+    ('by' by+=[Principal:QualifiedName] (',' by+=[Principal:QualifiedName])*)? relevance=Relevance? ('describe' describe=(TEXT_BLOCK | STRING))? ('handles' handles=(TEXT_BLOCK | STRING))? '{'
         (steps+=Step | policies+=Policy)*
     '}';
 
+type Principal = Actor | Role;
+
 Step:
-    CallStep | AwaitStep;
+    CallStep | AwaitStep | TextStep;
+
+// A step in the words of a domain expert; it calls nothing.
+TextStep:
+    'step' text=STRING;
 
 CallStep:
     'step' call=Call handlers+=Handler*;
@@ -356,9 +364,9 @@ Ident returns string:
     ID | 'state' | 'input' | 'value' | 'from' | 'to' | 'on' | 'for' | 'step' | 'list' | 'detail'
     | 'form' | 'route' | 'run' | 'actions' | 'fields' | 'role' | 'event' | 'action' | 'query'
     | 'page' | 'timeout' | 'sort' | 'when' | 'create' | 'read' | 'update' | 'delete' | 'per'
-    | 'flow' | 'actor' | 'tenant' | 'set' | 'op' | 'human' | 'system' | 'service' | 'asc'
+    | 'flow' | 'actor' | 'tenant' | 'set' | 'op' | 'human' | 'system' | 'thirdparty' | 'by' | 'asc'
     | 'desc' | 'remove' | 'rename' | 'retype' | 'roles' | 'second' | 'minute' | 'hour' | 'link'
-    | 'core' | 'supporting' | 'peripheral' | 'default' | 'limit' | 'messages' | 'migration' | 'is' | 'does' | 'describe' | 'holds' | 'handles' | 'serves' | 'shows'
+    | 'core' | 'supporting' | 'peripheral' | 'internal' | 'default' | 'limit' | 'messages' | 'migration' | 'is' | 'does' | 'describe' | 'holds' | 'handles' | 'serves' | 'shows'
     | 'setting' | 'secret' | 'scenario' | 'given' | 'then' | 'fails' | 'refused';
 
 hidden terminal WS: /\s+/;

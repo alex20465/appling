@@ -73,7 +73,7 @@ scenario ClerkCancelsDraft {
 
 `then fails <Error>` expects a declared error, `then fails` any error, `then refused` a refusal by a policy; checks are Bool expressions over the rows and `emitted <Event> { field = value }`. `appling check` runs the scenarios in the simulator of `@appling/model`.
 
-A module or declaration may state its relevance to the business before its opening brace: `core`, `supporting` or `peripheral` (`entity Quote core { ... }`, `module observability peripheral { ... }`). A module's level applies to its members unless they state their own.
+A module or declaration may state its relevance to the business before its opening brace: `core`, `supporting`, `peripheral` or `internal` (`entity Quote core { ... }`, `module observability peripheral { ... }`). A module's level applies to its members unless they state their own.
 
 Where the structure leaves something unclear, an element may add a plain text note with the optional `describe` clause, like a doc block in code, after its head and before its body, or at the end without one: `entity Account describe "Mirrors the Clerk user" { ... }`, `op BanUser (id: String) describe "..."`. A top level declaration may also say with the annotation of its level, after `describe`, what its code has to do beyond the model: `holds` on `enum`, `value`, `entity`; `does` on `event`, `action`, `machine`, `job`; `handles` on `query`, `projection`, `external`, `usecase`; `serves` on `interface`; `shows` on `page`, `navigation`, `flow`, `messages`: `action Ban on Account does "Signs the user out of every device" { ... }`. An annotation on another kind is a syntax error. A text block `"""..."""` spans lines; its common indentation is stripped and `fmt` re indents it with its block. `@Name` inside the text names an element like a qualified name.
 
@@ -112,6 +112,7 @@ actor human Shopper roles Customer {
 - Other modules can only reference what a module lists in `export`, by its module path such as `crm.Account`. Export names are references to the module's members, so rename and find references cover them.
 - Only a `machine` changes a `state` field, and each state field has at most one machine.
 - Action effects `set` fields, `create` records (`as name` for later effects), `emit` events, loop with `for x in <collection relationship>`, change a related record with `update <path> { set ... }` and delete with `delete self` or `delete <path>`; a path starts at a field, a loop variable or an `as` name and leads to one record.
+- A use case names who starts it with `by <actor or role>`, which is also its permission; a workspace has at most one `system` actor.
 - Expressions must type check: conditions are Bool, values fit the field they are assigned to, `null` only fits optional fields, and calls in use cases pass the right number and types of arguments (an action on an entity takes the entity first, then its inputs; a query takes its inputs).
 - `migration` steps target elements by their path inside the module, as it was before the step: `rename Order.code -> reference`, `retype Order.total: Decimal -> Money`, `remove Order.legacy`. Renamed and retyped elements must exist, removed ones must not.
 - `@Name` in a `describe` text or an annotation must name a visible element and follow the layer order, except in a module's own description.

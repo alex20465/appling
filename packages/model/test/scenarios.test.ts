@@ -38,7 +38,7 @@ const SHOP = `module shop {
   machine Flow on Order.status {
     transition draft -> placed via Place
   }
-  usecase Checkout (order: Order) {
+  usecase Checkout (order: Order) by Staff {
     step Place(order) on Empty do Annotate(order, "empty")
     step Annotate(order, "done")
   }

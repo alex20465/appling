@@ -85,6 +85,8 @@ A loop variable is visible inside its loop and an `as` name after its `create` o
 |---|---|
 | Operations and `fields` appear only on entity policies | `Operations and fields narrow entity policies only.` |
 | Every `\|\|` branch of a policy grants by role (warning) | `A policy grants by role: every "\|\|" branch needs actor.is(Role), or write { false }.` |
+| A use case names who starts it | `Use case "<name>" must name who starts it: by <actor>.` |
+| At most one `system` actor | `The application acts on its own as one system actor; "<name>" is already declared.` |
 | A role condition reads only `actor`, `tenant` and `now` | `A role condition reads only actor, tenant and now, not "<name>".` |
 
 ## Projections and endpoints

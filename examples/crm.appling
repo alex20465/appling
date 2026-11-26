@@ -53,15 +53,14 @@ module crm {
     status
   }
 
-  usecase FollowUp (lead: Lead) {
+  usecase FollowUp (lead: Lead) by Clerk {
+    step "call or mail the lead"
     step Contact(lead)
-    policy { actor.is(Clerk) }
   }
 
-  usecase Convert (lead: Lead) {
+  usecase Convert (lead: Lead) by Clerk {
     step FollowUp(lead)
     step Win(lead)
-    policy { actor.is(Clerk) }
   }
 
   page Leads route "/leads" {

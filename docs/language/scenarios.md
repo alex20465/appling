@@ -73,7 +73,7 @@ module sales {
 ## Syntax
 
 ```appling
-scenario <Name> [core | supporting | peripheral] [describe "..."] {
+scenario <Name> [core | supporting | peripheral | internal] [describe "..."] {
   given { [<name> =] create <Entity> { <field> = <expression>, ... } ... }
   as <Actor or Role> [{ <field> = <expression>, ... }]
   when <Action or UseCase>(<arguments>)

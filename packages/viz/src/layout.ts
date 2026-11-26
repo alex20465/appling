@@ -279,7 +279,7 @@ export interface PlacedFlow {
     /** Centered on `x`, `y`. */
     nodes: { node: FlowNode, x: number, y: number, width: number, height: number }[];
     /** The label at `x`, `y`: centered, or beside its edge starting or ending there. */
-    edges: { edge: FlowEdge, path: string, x: number, y: number, anchor?: 'start' | 'end' }[];
+    edges: { edge: FlowEdge, path: string, x: number, y: number, anchor?: 'start' | 'end', back?: boolean, bundle?: boolean }[];
     /** The initial pseudostate of a state diagram, and where its arrow ends. */
     initial?: { x: number, y: number, to: Point };
 }
@@ -474,32 +474,74 @@ const STATE_RANK = 190;
 const STATE_GAP = 200;
 const STATE_HEIGHT = 48;
 
+/** From how many states on one trigger into one state a transition is drawn once, as a bundle beside its target. */
+const BUNDLE = 4;
+/** Into how many states a trigger leads before it says nothing about their order, such as a rollback. */
+const SPREAD = 3;
+
 /**
- * Places a state diagram: each state one rank below the first state that leads to it, the initial state on top with
- * the initial pseudostate above it. A transition is a curve from border to border; transitions between the same two
- * states bend apart, and one whose straight line would cross another state bends around it.
+ * Places a state diagram top down: the initial state on top with the initial pseudostate above it, every state below
+ * all states that lead to it (a transition that closes a cycle does not count), the final states at the bottom.
+ * Transitions between the same two states are one curve with all their triggers. A trigger that leads into one state
+ * from `BUNDLE` states or more, or into `SPREAD` states or more, is one short arrow beside its target, which names
+ * where it comes from, and does not rank. A transition is a curve from border to border: straight to the next rank,
+ * on a lane of its own on the left when it passes other ranks, on the right when it leads back up.
  */
 export function layoutStates(flow: Flow): PlacedFlow {
-    const rank = new Map<string, number>();
-    const rows: string[][] = [];
     const initial = flow.nodes.find(n => n.tag === 'initial');
-    const queue = [initial ?? flow.nodes[0]].filter(n => n).map(n => n!.id);
-    const enqueue = (id: string, at: number) => { if (!rank.has(id)) { rank.set(id, at); (rows[at] ??= []).push(id); queue.push(id); } };
-    if (queue[0]) { rank.set(queue[0], 0); rows[0] = [queue[0]]; }
-    for (let head = 0; head < flow.nodes.length * 2; head++) {
-        const id = queue[head] ?? flow.nodes.find(n => !rank.has(n.id))?.id;
-        if (!id) break;
-        if (!rank.has(id)) enqueue(id, rows.length);
-        for (const e of flow.edges.filter(e => e.from === id)) enqueue(e.to, rank.get(id)! + 1);
+    const spread = new Map([...Map.groupBy(flow.edges.filter(e => e.from !== e.to), e => e.label)].map(([trigger, group]) => [trigger, new Set(group.map(e => e.to)).size]));
+    const into = Map.groupBy(flow.edges.filter(e => e.from !== e.to || spread.get(e.label)! >= SPREAD), e => `${e.label} ${e.to}`);
+    const bundles = [...into.values()].filter(group => spread.get(group[0].label)! >= SPREAD || new Set(group.map(e => e.from)).size >= BUNDLE);
+    const bundled = new Set(bundles.flat());
+    const label = new Map(flow.nodes.map(n => [n.id, n.label]));
+    // transitions between the same two states are one edge
+    const drawn = [...Map.groupBy(flow.edges.filter(e => !bundled.has(e)), e => `${e.from} ${e.to}`).values()].map((group): FlowEdge => ({
+        ...group[0], label: [...new Set(group.map(e => e.label).filter(Boolean))].join(', ') || undefined,
+        note: [...new Set(group.map(e => e.note).filter(Boolean))].join(' · ') || undefined
+    }));
+    const sources = (group: FlowEdge[]) => [...new Set(group.map(e => label.get(e.from) ?? e.from))];
+    const stubText = (group: FlowEdge[]) => `${group[0].label ?? ''} · from ${sources(group).length > 2 ? `${sources(group).length} states` : sources(group).join(', ')}`;
+    // a bundle of a trigger with one outcome still says that its target comes later
+    const ranking = [...drawn, ...bundles.filter(group => spread.get(group[0].label)! < SPREAD).flat().filter(e => e.from !== e.to)];
+    // a depth first walk in the order of the declarations finds the transitions that lead back
+    const back = new Set<FlowEdge>();
+    const state = new Map<string, 'open' | 'done'>();
+    const sorted: string[] = [];
+    const walk = (id: string) => {
+        state.set(id, 'open');
+        for (const e of ranking.filter(e => e.from === id && e.to !== id)) {
+            if (state.get(e.to) === 'open') back.add(e);
+            else if (!state.has(e.to)) walk(e.to);
+        }
+        state.set(id, 'done');
+        sorted.unshift(id);
+    };
+    for (const node of [...(initial ? [initial] : []), ...flow.nodes]) if (!state.has(node.id)) walk(node.id);
+    const rank = new Map<string, number>(sorted.map(id => [id, 0]));
+    for (const id of sorted) for (const e of ranking.filter(e => e.from === id && e.to !== id && !back.has(e))) rank.set(e.to, Math.max(rank.get(e.to)!, rank.get(id)! + 1));
+    const leaves = (id: string) => ranking.filter(e => e.from === id && e.to !== id);
+    // a state nothing leads to stands right above where it leads
+    for (const id of [...sorted].reverse()) {
+        if (id === initial?.id || ranking.some(e => e.to === id && e.from !== id && !back.has(e)) || !leaves(id).length) continue;
+        rank.set(id, Math.max(0, Math.min(...leaves(id).map(e => rank.get(e.to)!)) - 1));
     }
+    const last = Math.max(0, ...rank.values());
+    const finals = flow.nodes.filter(n => !leaves(n.id).length && rank.get(n.id)! > 0);
+    const bottom = finals.length && finals.some(n => rank.get(n.id)! < last) ? last + 1 : last;
+    for (const node of finals) rank.set(node.id, bottom);
+    const rows: string[][] = [];
+    for (const id of sorted) (rows[rank.get(id)!] ??= []).push(id);
+    for (let r = 0; r < rows.length; r++) rows[r] ??= [];
     const size = new Map(flow.nodes.map(n => [n.id, { width: Math.max(120, n.label.length * 9 + 48), height: STATE_HEIGHT }]));
     const x = new Map<string, number>();
     rows.forEach((row, r) => {
-        const above = (id: string) => flow.edges.filter(e => e.to === id && (rank.get(e.from) ?? r) < r).map(e => x.get(e.from)!);
+        const above = (id: string) => drawn.filter(e => e.to === id && (rank.get(e.from) ?? r) < r).map(e => x.get(e.from)!);
         const ordered = r ? [...row].sort((a, b) => mean(above(a)) - mean(above(b))) : row;
-        const widths = ordered.map(id => size.get(id)!.width);
-        let at = -(widths.reduce((a, b) => a + b, 0) + STATE_GAP * (ordered.length - 1)) / 2;
-        ordered.forEach((id, i) => { x.set(id, at + widths[i] / 2); at += widths[i] + STATE_GAP; });
+        // a state keeps room for its own loop on the left and its bundles on the right
+        const left = (id: string) => size.get(id)!.width / 2 + (drawn.some(e => e.from === id && e.to === id) ? 80 + textWidth(drawn.find(e => e.from === id && e.to === id)!, 0) : 0);
+        const right = (id: string) => size.get(id)!.width / 2 + Math.max(0, ...bundles.filter(g => g[0].to === id).map(g => 48 + textWidth({ label: stubText(g) }, 0) * 1.15));
+        let at = -(ordered.reduce((sum, id) => sum + left(id) + right(id), 0) + STATE_GAP * (ordered.length - 1)) / 2;
+        for (const id of ordered) { x.set(id, at + left(id)); at += left(id) + right(id) + STATE_GAP; }
     });
     const nodes = flow.nodes.map(node => ({ node, x: x.get(node.id)!, y: rank.get(node.id)! * STATE_RANK, ...size.get(node.id)! }));
     const at = new Map(nodes.map(n => [n.node.id, n]));
@@ -508,33 +550,61 @@ export function layoutStates(flow: Flow): PlacedFlow {
         const t = Math.min(Math.abs((box.width / 2 + 4) / (dx || 1e-9)), Math.abs((box.height / 2 + 4) / (dy || 1e-9)));
         return [box.x + dx * t, box.y + dy * t];
     };
-    const crosses = (from: Box, to: Box, bend: number) => nodes.some(n => n !== from && n !== to && [0.25, 0.5, 0.75].some(t => {
+    const crosses = (from: Box, to: Box, bend: number) => nodes.some(n => n !== from && n !== to && [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9].some(t => {
         const [px, py] = curvePoint(from, to, bend, t);
         return Math.abs(px - n.x) < n.width / 2 + 10 && Math.abs(py - n.y) < n.height / 2 + 10;
     }));
-    const pairs = new Map<string, number>();
-    const edges = flow.edges.map(edge => {
+    const reverse = (edge: FlowEdge) => drawn.some(e => e.from === edge.to && e.to === edge.from);
+    // the shorter a curve, the nearer its lane
+    const span = (edge: FlowEdge) => Math.abs(rank.get(edge.to)! - rank.get(edge.from)!);
+    const lanes = { down: 0, up: 0 };
+    const bends = new Map<FlowEdge, number>();
+    for (const edge of [...drawn].filter(e => e.from !== e.to).sort((a, b) => span(a) - span(b))) {
+        const [from, to] = [at.get(edge.from)!, at.get(edge.to)!];
+        const up = to.y < from.y;
+        // positive bends a falling curve to the left and a rising one to the right
+        if (!crosses(from, to, 0)) bends.set(edge, reverse(edge) ? 30 : 0);
+        else bends.set(edge, 50 + 34 * lanes[up ? 'up' : 'down']++);
+    }
+    const taken: Box[] = [];
+    const stubEdges: PlacedFlow['edges'] = [];
+    // a bundle is a short arrow into its state from the right, one below the other
+    const stubs = new Map<string, number>();
+    for (const group of bundles) {
+        const to = at.get(group[0].to)!;
+        const k = stubs.get(to.node.id) ?? 0;
+        stubs.set(to.node.id, k + 1);
+        const [ex, ey] = [to.x + to.width / 2 + 4, to.y - 8 + k * 18];
+        const text = stubText(group);
+        taken.push({ x: ex + 40 + textWidth({ label: text }, 0) * 0.6, y: ey, width: textWidth({ label: text }, 0) * 1.2, height: 18 });
+        stubEdges.push({
+            edge: { ...group[0], from: group[0].to, label: text, note: undefined, title: sources(group).join(', ') },
+            path: `M ${ex + 34} ${ey} L ${ex} ${ey}`, x: ex + 40, y: ey, anchor: 'start', bundle: true
+        });
+    }
+    /** The labels placed so far, as boxes; a label moves along its curve until it covers none of them and no state. */
+    const free = (box: Box) => ![...taken, ...nodes].some(b => Math.abs(b.x - box.x) < (b.width + box.width) / 2 && Math.abs(b.y - box.y) < (b.height + box.height) / 2);
+    const edges: PlacedFlow['edges'] = drawn.map(edge => {
         const [from, to] = [at.get(edge.from)!, at.get(edge.to)!];
         if (from === to) {
-            const [sx, sy] = [from.x + from.width / 2, from.y - 10];
-            const path = `M ${sx} ${sy} C ${sx + 70} ${sy - 50}, ${sx + 70} ${sy + 70}, ${sx} ${sy + 20}`;
-            return { edge, path, x: sx + 60, y: from.y };
+            const [sx, sy] = [from.x - from.width / 2, from.y - 10];
+            const path = `M ${sx} ${sy} C ${sx - 70} ${sy - 50}, ${sx - 70} ${sy + 70}, ${sx} ${sy + 20}`;
+            return { edge, path, x: sx - 58, y: from.y, anchor: 'end' as const };
         }
-        const key = [edge.from, edge.to].sort().join(' ');
-        const k = pairs.get(key) ?? 0;
-        pairs.set(key, k + 1);
-        const together = flow.edges.filter(e => [e.from, e.to].sort().join(' ') === key).length;
-        let bend = (k - (together - 1) / 2) * 90 * (edge.from < edge.to ? 1 : -1);
-        for (const extra of [0, 90, -90, 180, -180]) if (!crosses(from, to, bend + extra)) { bend += extra; break; }
+        const bend = bends.get(edge)!;
         const control = curvePoint(from, to, bend, 0.5, true);
         const [start, end] = [border(from, control), border(to, control)];
-        const [lx, ly] = curvePoint(from, to, bend, 0.5);
+        const box = (t: number): Box => { const [px, py] = curvePoint(from, to, bend, t); return { x: px, y: py, width: textWidth(edge, 16) * 1.15, height: edge.note ? 34 : 20 }; };
+        const spot = [0.5, 0.4, 0.6, 0.3, 0.7, 0.22, 0.78].map(box).find(free) ?? box(0.5);
+        taken.push(spot);
+        const [lx, ly] = [spot.x, spot.y];
         const path = `M ${start[0]} ${start[1]} Q ${control[0]} ${control[1]}, ${end[0]} ${end[1]}`;
+        const up = to.y < from.y;
         // beside a rising or falling edge on the side it bends to, above a level one
-        if (Math.abs(to.y - from.y) < STATE_HEIGHT) return { edge, path, x: lx, y: ly - (edge.note ? 26 : 14) };
-        const side = lx !== (from.x + to.x) / 2 ? Math.sign(lx - (from.x + to.x) / 2) : Math.sign(to.x - from.x) || 1;
-        return { edge, path, x: lx + side * 14, y: ly, anchor: side < 0 ? 'end' as const : 'start' as const };
+        if (Math.abs(to.y - from.y) < STATE_HEIGHT) return { edge, path, x: lx, y: ly - (edge.note ? 26 : 14), back: up };
+        return { edge, path, x: lx, y: ly, back: up };
     });
+    edges.push(...stubEdges);
     const start = initial && at.get(initial.id)!;
     const xs = [...nodes.flatMap(n => [n.x - n.width / 2, n.x + n.width / 2]), ...edges.flatMap(e => {
         const width = textWidth(e.edge, 16) * 1.15;
@@ -542,10 +612,10 @@ export function layoutStates(flow: Flow): PlacedFlow {
     })];
     const [left, right] = [Math.min(...xs) - MARGIN * 2, Math.max(...xs) + MARGIN * 2];
     const top = -STATE_HEIGHT / 2 - (start ? 90 : MARGIN);
-    const bottom = (rows.length - 1) * STATE_RANK + STATE_HEIGHT / 2 + MARGIN * 2;
+    const floor = (rows.length - 1) * STATE_RANK + STATE_HEIGHT / 2 + MARGIN * 2;
     const shift = (p: string) => p.replace(/(-?[\d.]+) (-?[\d.]+)/g, (_, px: string, py: string) => `${Number(px) - left} ${Number(py) - top}`);
     return {
-        width: right - left, height: bottom - top,
+        width: right - left, height: floor - top,
         nodes: nodes.map(n => ({ ...n, x: n.x - left, y: n.y - top })),
         edges: edges.map(e => ({ ...e, path: shift(e.path), x: e.x - left, y: e.y - top })),
         initial: start && { x: start.x - left, y: start.y - top - 80, to: [start.x - left, start.y - top - STATE_HEIGHT / 2 - 4] }

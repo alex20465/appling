@@ -70,7 +70,7 @@ export class ExpressionTyper {
     /** For members that stand for more than one field (`actor.f` declared by several actors): every one, the first is in `targets`. */
     readonly candidates = new Map<AstNode, AstNode[]>();
     readonly problems: Problem[] = [];
-    private readonly actors: Actor[];
+    readonly actors: Actor[];
     private readonly tenants: Tenant[];
 
     constructor(private readonly services: ApplingServices) {

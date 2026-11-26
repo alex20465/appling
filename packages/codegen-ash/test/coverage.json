@@ -219,8 +219,8 @@
     "kind": "Policy",
     "generated": 1,
     "partial": 4,
-    "todo": 2,
-    "tasks": 6,
+    "todo": 4,
+    "tasks": 8,
     "left": 0
   },
   {
@@ -315,8 +315,8 @@
     "kind": "total",
     "generated": 120,
     "partial": 19,
-    "todo": 16,
-    "tasks": 53,
+    "todo": 18,
+    "tasks": 55,
     "left": 9
   }
 ]

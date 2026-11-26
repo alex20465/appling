@@ -304,12 +304,12 @@ func TestLeadFlowTransitionProspectContactedLost(t *testing.T) {
 	})
 }
 
-func TestFollowUpPolicy(t *testing.T) {
-	t.Skip("registry task: crm.FollowUp.policy[]")
+func TestFollowUpPolicyBy(t *testing.T) {
+	t.Skip("registry task: crm.FollowUp.policy[by]")
 }
 
-func TestConvertPolicy(t *testing.T) {
-	t.Skip("registry task: crm.Convert.policy[]")
+func TestConvertPolicyBy(t *testing.T) {
+	t.Skip("registry task: crm.Convert.policy[by]")
 }
 ",
   "internal/crm/doc.go": "package crm
@@ -421,21 +421,21 @@ func CanOpenLeads(actor access.Actor, lead *Lead) bool {
 
 // CanFollowUp reports whether the actor may run crm.FollowUp.
 func CanFollowUp(actor access.Actor, lead *Lead) bool {
-	return followUpPolicy(actor, lead)
-}
-
-// followUpPolicy is the policy crm.FollowUp.policy[]: actor.is(Clerk)
-func followUpPolicy(actor access.Actor, lead *Lead) bool {
-	return access.IsClerk(actor)
+	return followUpPolicyBy(actor, lead)
 }
 
 // CanConvert reports whether the actor may run crm.Convert.
 func CanConvert(actor access.Actor, lead *Lead) bool {
-	return convertPolicy(actor, lead)
+	return convertPolicyBy(actor, lead)
 }
 
-// convertPolicy is the policy crm.Convert.policy[]: actor.is(Clerk)
-func convertPolicy(actor access.Actor, lead *Lead) bool {
+// followUpPolicyBy is the policy crm.FollowUp.policy[by]: actor.is(Clerk)
+func followUpPolicyBy(actor access.Actor, lead *Lead) bool {
+	return access.IsClerk(actor)
+}
+
+// convertPolicyBy is the policy crm.Convert.policy[by]: actor.is(Clerk)
+func convertPolicyBy(actor access.Actor, lead *Lead) bool {
 	return access.IsClerk(actor)
 }
 ",
@@ -712,21 +712,21 @@ func CanOrdersOf(actor access.Actor, order *Order, of *crm.Account, since *time.
 
 // CanCheckout reports whether the actor may run sales.Checkout.
 func CanCheckout(actor access.Actor, order *Order) bool {
-	return checkoutPolicy(actor, order)
-}
-
-// checkoutPolicy is the policy sales.Checkout.policy[]: actor.is(Customer)
-func checkoutPolicy(actor access.Actor, order *Order) bool {
-	return access.IsCustomer(actor)
+	return checkoutPolicyBy(actor, order)
 }
 
 // CanCancelOrder reports whether the actor may run sales.CancelOrder.
 func CanCancelOrder(actor access.Actor, order *Order, reason *string) bool {
-	return cancelOrderPolicy(actor, order, reason)
+	return cancelOrderPolicyBy(actor, order, reason)
 }
 
-// cancelOrderPolicy is the policy sales.CancelOrder.policy[]: actor.is(crm.Clerk)
-func cancelOrderPolicy(actor access.Actor, order *Order, reason *string) bool {
+// checkoutPolicyBy is the policy sales.Checkout.policy[by]: actor.is(Customer)
+func checkoutPolicyBy(actor access.Actor, order *Order) bool {
+	return access.IsCustomer(actor)
+}
+
+// cancelOrderPolicyBy is the policy sales.CancelOrder.policy[by]: actor.is(crm.Clerk)
+func cancelOrderPolicyBy(actor access.Actor, order *Order, reason *string) bool {
 	return access.IsClerk(actor)
 }
 ",
@@ -824,12 +824,12 @@ func TestOrderFlowTransitionPlacedPaid(t *testing.T) {
 	t.Skip("registry task: sales.OrderFlow.transition[placed->paid]")
 }
 
-func TestCheckoutPolicy(t *testing.T) {
-	t.Skip("registry task: sales.Checkout.policy[]")
+func TestCheckoutPolicyBy(t *testing.T) {
+	t.Skip("registry task: sales.Checkout.policy[by]")
 }
 
-func TestCancelOrderPolicy(t *testing.T) {
-	t.Skip("registry task: sales.CancelOrder.policy[]")
+func TestCancelOrderPolicyBy(t *testing.T) {
+	t.Skip("registry task: sales.CancelOrder.policy[by]")
 }
 ",
   "internal/sales/scenarios_test.go": "package sales_test

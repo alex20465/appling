@@ -16,7 +16,8 @@ const SOURCE = `module m {
     }
     query Open from Order { where { total > 0 } }
     projection Row from Order { total }
-    usecase Checkout(order: Order, total: Int) {
+    actor human Staff
+    usecase Checkout(order: Order, total: Int) by Staff {
         step Place(order, total)
             on Empty do Place(order, 1)
         await Placed

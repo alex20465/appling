@@ -137,7 +137,9 @@ module sales {
     label = reference + " " + "order"
   }
 
-  usecase Checkout (order: Order) {
+  actor human Shopper
+
+  usecase Checkout (order: Order) by Shopper {
     step PlaceOrder(order)
   }
 

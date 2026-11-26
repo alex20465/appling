@@ -1,0 +1,107 @@
+module quotes {
+  actor human Operator
+
+  enum QuoteState {
+    new
+    draft
+    waiting
+    pending
+    sent
+    opened
+    accepted
+    unavailable
+    rejected
+    confirmed
+    expired
+    cancelled
+    archived
+  }
+
+  entity Quote {
+    state: QuoteState state default new
+    policy read, update { actor.is(Operator) }
+  }
+
+  action Prepare on Quote {
+    policy { actor.is(Operator) }
+  }
+
+  action Send on Quote {
+    policy { actor.is(Operator) }
+  }
+
+  action MarkPending on Quote {
+    policy { actor.is(Operator) }
+  }
+
+  action Open on Quote {
+    policy { actor.is(Operator) }
+  }
+
+  action Accept on Quote {
+    policy { actor.is(Operator) }
+  }
+
+  action Reject on Quote {
+    policy { actor.is(Operator) }
+  }
+
+  action Expire on Quote {
+    policy { actor.is(Operator) }
+  }
+
+  action Confirm on Quote {
+    policy { actor.is(Operator) }
+  }
+
+  action MarkUnavailable on Quote {
+    policy { actor.is(Operator) }
+  }
+
+  action RetryBooking on Quote {
+    policy { actor.is(Operator) }
+  }
+
+  action Resend on Quote {
+    policy { actor.is(Operator) }
+  }
+
+  action Cancel on Quote {
+    policy { actor.is(Operator) }
+  }
+
+  action Archive on Quote {
+    policy { actor.is(Operator) }
+  }
+
+  action FailTransition on Quote {
+    policy { actor.is(Operator) }
+  }
+
+  machine QuoteLifecycle on Quote.state {
+    transition new -> draft via Prepare
+    transition draft, waiting, pending -> sent via Send
+    transition waiting -> pending via MarkPending
+    transition sent -> opened via Open
+    transition sent, opened, accepted -> accepted via Accept
+    transition sent, opened -> rejected via Reject
+    transition sent, opened, accepted -> expired via Expire
+    transition accepted -> confirmed via Confirm
+    transition accepted -> unavailable via MarkUnavailable
+    transition unavailable -> accepted via RetryBooking
+    transition unavailable, cancelled -> sent via Resend
+    transition new, draft, waiting, pending, sent, opened, accepted, unavailable, rejected -> cancelled via Cancel
+    transition rejected, expired, cancelled -> archived via Archive
+    transition draft, cancelled -> new via FailTransition
+    transition sent, cancelled -> draft via FailTransition
+    transition sent, pending, cancelled -> waiting via FailTransition
+    transition sent, cancelled -> pending via FailTransition
+    transition opened, accepted, rejected, expired, unavailable, cancelled -> sent via FailTransition
+    transition accepted, rejected, expired, unavailable, cancelled -> opened via FailTransition
+    transition accepted, expired, confirmed, unavailable, cancelled -> accepted via FailTransition
+    transition accepted, sent, cancelled -> unavailable via FailTransition
+    transition cancelled, archived -> rejected via FailTransition
+    transition archived -> expired via FailTransition
+    transition sent, archived -> cancelled via FailTransition
+  }
+}

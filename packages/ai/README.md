@@ -61,7 +61,7 @@ Agent sessions also get tools that draw on the repo's canvas in the inspector. T
 
 ## Reverse engineering skill
 
-`skills/appling-reverse/SKILL.md` (also the MCP prompt `derive_model`) is an agent skill for deriving an Appling model from an existing application: survey the code, map it to the five layers (with rules for modeling access), write and validate module by module, record the code each element describes, compare behavior with `simulate`, and report what the model cannot say exactly.
+`skills/appling-reverse/SKILL.md` (also the MCP prompt `derive_model`) is an agent skill for deriving an Appling model from an existing application: survey the application from the outside, decide what belongs by how a domain expert would describe it (actors as who acts, use cases as the decisions they start, all data kept and ranked by relevance), map it to the five layers (with rules for modeling access), write and validate module by module, record the code each element describes, compare behavior with `simulate`, and report what the model cannot say exactly.
 
 ## License
 

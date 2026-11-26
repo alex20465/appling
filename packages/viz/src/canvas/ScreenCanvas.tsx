@@ -28,6 +28,9 @@ export function ScreenCanvas({ flow, name, actor, actors, selected, onActor, onS
     // the item of the open page, or of the page whose route the open one lies under, such as /leads for /leads/{id}
     const active = items.find(item => item.page === screen?.qn || pagesOf(item).includes(screen?.qn ?? ''))
         ?? items.find(item => screen?.route.startsWith(`${routeOf(item.page)}/`));
+    // one row of sub navigation per level, from the main item down to the open page
+    const levels: MenuItem[] = [];
+    for (let at = active; at?.children.length; at = at.children.find(child => child.page === screen?.qn || pagesOf(child).includes(screen?.qn ?? ''))) levels.push(at);
     const go = (page: string) => {
         if (!flow.screens.some(s => s.qn === page)) return;
         setOpen(page);
@@ -49,13 +52,13 @@ export function ScreenCanvas({ flow, name, actor, actors, selected, onActor, onS
                     </nav>
                     <Select className="mock-account" value={actor} options={qualifiedOptions(actors)} label="Signed in as" align="end" lead={<span className="mock-avatar">{initials(actor)}</span>} onChange={onActor} />
                 </header>
-                {active && active.children.length > 0 && (
-                    <nav className="mock-subnav" aria-label={`${active.label} navigation`}>
-                        {[active, ...active.children].map(item => (
-                            <button key={`${item.label} ${item.page}`} aria-current={item.page === screen?.qn ? 'page' : undefined} onClick={() => go(item.page)}>{item.label}</button>
+                {levels.map((level, depth) => (
+                    <nav key={level.page} className={`mock-subnav${depth ? ' deep' : ''}`} aria-label={`${level.label} navigation`}>
+                        {[...(depth ? [] : [level]), ...level.children].map(item => (
+                            <button key={`${item.label} ${item.page}`} aria-current={item.page === screen?.qn || (item !== level && pagesOf(item).includes(screen?.qn ?? '')) ? 'page' : undefined} onClick={() => go(item.page)}>{item.label}</button>
                         ))}
                     </nav>
-                )}
+                ))}
                 {screen && <Page key={screen.qn} screen={screen} start={moved ? 0 : 380} mark={mark} go={go} onSelect={onSelect} />}
             </div>
         </div>
@@ -77,6 +80,14 @@ function Page({ screen, start, mark, go, onSelect }: PageProps) {
     const button = (action: string, primary = false) => (
         <button key={action} className={`mock-button${primary ? ' primary' : ''}${mark(action)}`} title={`action ${action}`} onClick={event => { event.stopPropagation(); onSelect(action); }}>{human(action.split('.').at(-1)!)}</button>
     );
+    /** The most relevant actions as buttons, the others behind a menu. */
+    const actions = (list: string[], shown: number) => list.length <= shown + 1 ? list.map(a => button(a)) : [
+        ...list.slice(0, shown).map(a => button(a)),
+        <details key="more" className="mock-more" onClick={event => event.stopPropagation()}>
+            <summary className="mock-button">{list.length - shown} more</summary>
+            <div>{list.slice(shown).map(a => button(a))}</div>
+        </details>
+    ];
     const part = (p: ScreenPart, i: number) => {
         const of = p.query ?? p.projection ?? p.submits!;
         const title = (
@@ -93,7 +104,7 @@ function Page({ screen, start, mark, go, onSelect }: PageProps) {
                         {[0, 1, 2, 3].map(row => (
                             <tr key={row} style={{ '--r': row } as CSSProperties} className={p.opens ? 'opens' : undefined} title={p.opens ? `opens ${p.opens}` : undefined} onClick={() => p.opens && go(p.opens)}>
                                 {p.fields.map((f, c) => <td key={f}><span className="mock-bar" style={{ width: `${45 + ((row * 3 + c * 5) % 6) * 9}%` }} /></td>)}
-                                {p.actions.length > 0 && <td className="mock-row-actions">{p.actions.map(a => button(a))}</td>}
+                                {p.actions.length > 0 && <td className="mock-row-actions">{actions(p.actions, 2)}</td>}
                                 {p.opens && <td className="mock-chevron" aria-hidden="true">›</td>}
                             </tr>
                         ))}
@@ -103,7 +114,7 @@ function Page({ screen, start, mark, go, onSelect }: PageProps) {
         );
         if (p.kind === 'detail') return (
             <section key={i} className="mock-card" style={next()}>
-                <header>{title}<span className="mock-actions">{p.actions.map(a => button(a))}</span></header>
+                <header>{title}<span className="mock-actions">{actions(p.actions, 3)}</span></header>
                 <dl className="mock-fields">
                     {p.fields.map((f, c) => <div key={f}><dt>{human(f)}</dt><dd><span className="mock-bar" style={{ width: `${40 + (c * 7 % 5) * 12}%` }} /></dd></div>)}
                 </dl>
