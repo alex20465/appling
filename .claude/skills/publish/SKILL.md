@@ -42,7 +42,9 @@ Pick the bump from the commit types:
 | `fix`, `perf`, `refactor` touching src | patch | patch |
 | only `docs`, `test`, `chore`, `style` | no intent | no intent |
 
-Dependents through `workspace:` ranges are bumped by pnpm itself; do not add intents for them.
+Dependents through `workspace:` ranges are bumped by pnpm itself; do not add intents for them. Changes that already have a pending intent (`corepack pnpm change status`, recorded when their task finished) need none.
+
+A version already ahead of the registry takes new intents into itself instead of bumping again, even a minor one; raise it by hand when the intents need a larger bump than it has.
 
 ## 3. Confirm the plan
 

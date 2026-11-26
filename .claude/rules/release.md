@@ -10,7 +10,7 @@ paths:
 
 - Never change a package's `version` field by hand; versions change only through `corepack pnpm version -r`.
 - Never edit `CHANGELOG.md` files or `.changeset/ledger.yaml`; pnpm writes them.
-- Never record change intents outside a release; they are written at release time from the git log.
+- Change intents are recorded when a task finishes (`change-intents.md`); at release, add intents only for changes that have none yet.
 - Never publish to npm or push a release commit without the user's confirmation in this conversation.
 - Before bumping versions or publishing, use the `release` skill.
 - Never publish before the VS Code screenshots of the landing site (`packages/landing/public/vscode-canvas.webp`, `vscode-editor.webp`) are retaken from the current build and committed.

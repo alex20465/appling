@@ -77,4 +77,5 @@ Grammar conventions: keywords that should remain valid as names (fields like `st
 | `packages/landing/**` | `landing-site` |
 | `packages/*/src/**`, `packages/*/README.md`, `examples/**`, `docs/**`, the docs files of `packages/landing` | `documentation` |
 | `packages/*/package.json`, `packages/*/CHANGELOG.md`, `.changeset/**`, `pnpm-workspace.yaml` | `release` |
+| `packages/*/src/**`, `packages/*/README.md`, `packages/ai/skills/**` | `change-intents` (rule only: record a change intent when a task finishes) |
 | `packages/lang/src/appling.langium`, `packages/lang/test/fixtures/constructs/**`, `docs/language/**`, `docs/concept.md`, `examples/**` | `language-scope` (rule only; the test is `docs/concept.md` section 8, repeated by the hook `.claude/hooks/language-scope.sh` on every edit of the grammar or `docs/language/`) |
