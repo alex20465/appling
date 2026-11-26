@@ -16,6 +16,10 @@
   dir: packages/ai
   intents:
     - light-worms-punch
+"@appling/ai@0.2.3":
+  dir: packages/ai
+  intents:
+    - tidy-pandas-hide
 "@appling/cli@0.2.0":
   dir: packages/cli
   intents:
@@ -75,6 +79,7 @@
   intents:
     - cool-spoons-wave
     - great-mangos-think
+    - shiny-pots-nail
 "@appling/codegen-go@0.1.3":
   dir: packages/codegen-go
   intents:
@@ -141,6 +146,7 @@
     - breezy-forks-work
     - breezy-pears-rush
     - hungry-fishes-rhyme
+    - tiny-walls-drive
     - warm-lizards-perform
 "@appling/lang@0.2.0":
   dir: packages/lang
@@ -179,9 +185,10 @@
   dir: packages/lang
   intents:
     - olive-maps-invent
-"@appling/lang@0.4.2":
+"@appling/lang@0.5.0":
   dir: packages/lang
   intents:
+    - angry-mails-melt
     - sweet-rice-buy
 "@appling/model@0.1.1":
   dir: packages/model
@@ -206,6 +213,7 @@
 "@appling/model@0.1.6":
   dir: packages/model
   intents:
+    - slow-poets-enjoy
     - slow-rice-unite
 "@appling/viz@0.1.1":
   dir: packages/viz
@@ -225,5 +233,6 @@
   intents:
     - brave-buses-rhyme
     - clean-clouds-beg
+    - itchy-roses-shine
     - spicy-rivers-camp
     - tame-ducks-design

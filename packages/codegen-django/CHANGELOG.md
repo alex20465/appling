@@ -4,6 +4,8 @@
 
 ### Patch Changes
 
+- Plain text use case steps become comments in the generated use case.
+
 - Describe and annotation texts are written into the generated code.
 
 - Generated code is rendered from Nunjucks templates that a project can override or extend block by block.

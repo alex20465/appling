@@ -1,6 +1,10 @@
 # @appling/lang
 
-## 0.4.2
+## 0.5.0
+
+### Minor Changes
+
+- A use case must name who starts it with `by`, which is also its permission; the actor kind `service` is now `thirdparty`, a model declares at most one system actor, steps can be plain text and `internal` is a fourth relevance level.
 
 ### Patch Changes
 

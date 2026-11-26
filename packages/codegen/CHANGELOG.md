@@ -9,7 +9,7 @@
 - plan adds one left to code registry task per annotation.
 
 - Updated dependencies:
-  - @appling/lang@0.4.2
+  - @appling/lang@0.5.0
   - @appling/model@0.1.6
 
 ## 0.2.1

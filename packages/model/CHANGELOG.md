@@ -4,10 +4,12 @@
 
 ### Patch Changes
 
+- A use case's `by` actors become its policy in the graph, and relevance knows the internal level.
+
 - Annotation texts appear in graph props and data and can be set through applyEdit.
 
 - Updated dependencies:
-  - @appling/lang@0.4.2
+  - @appling/lang@0.5.0
 
 ## 0.1.5
 

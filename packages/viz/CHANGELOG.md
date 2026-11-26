@@ -4,6 +4,8 @@
 
 ### Patch Changes
 
+- The use case diagram joins actors to their use cases, the state diagram runs top down with rollbacks drawn as bundles, and screens nest pages under their route parent.
+
 - Adds the use case, state and screen diagrams (useCaseDiagram, screenFlow, layoutUseCases, layoutStates, UseCaseCanvas, ScreenCanvas) and the Select dropdown of the canvases.
 
 - Keeps the idle model canvas still and draws it faster, with larger unfold tabs.

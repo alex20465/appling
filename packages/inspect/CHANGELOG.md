@@ -4,6 +4,8 @@
 
 ### Patch Changes
 
+- The canvas shows only core declarations by default, with a Show selector for the wider levels.
+
 - A view rail switches between Levels, Use cases, States and Screens and keeps the chosen view in .appling/view.json.
 
 - Lays the inspector out for phones.
@@ -15,7 +17,7 @@
 - Updated dependencies:
   - @appling/ai@0.2.3
   - @appling/codegen@0.2.2
-  - @appling/lang@0.4.2
+  - @appling/lang@0.5.0
   - @appling/model@0.1.6
   - @appling/viz@0.3.2
 

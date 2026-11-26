@@ -4,9 +4,11 @@
 
 ### Patch Changes
 
+- The reverse engineering skill writes use cases with `by`, the new actor kinds and the internal level.
+
 - Updated dependencies:
   - @appling/codegen@0.2.2
-  - @appling/lang@0.4.2
+  - @appling/lang@0.5.0
   - @appling/model@0.1.6
   - @appling/viz@0.3.2
 
