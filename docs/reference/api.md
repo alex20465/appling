@@ -331,6 +331,8 @@ The root export (also `@appling/viz/protocol`) has the types the [visual tools](
 
 `@appling/viz/canvas` exports the SVG pyramid `ModelCanvas` (five level bands from one entry level, unfolded side by side of each declaration, only trails when given a `focus`), the SVG flowchart `FlowCanvas` (a UML state diagram with `states`) and the card grid `CardCanvas`, each with optional `bubbles`, the SVG use case diagram `UseCaseCanvas` and the clickable wireframe `ScreenCanvas`, the dropdown `Select` (`value`, `options` of `SelectOption`, `label`, `onChange`; `qualifiedOptions(qns)` gives a name per option with its module as the hint), and `Glyph` (`name`, `size`), a Lucide icon in the colour of the text around it; `ModelCanvas` also marks the declarations and modules of optional `changes` (any `MarkedChanges`, such as a `GraphDiff`), draws removed ones ghosted and rings those of optional `sessions` (`SessionMark[]`) in the session's colour; import `@appling/viz/canvas.css` with them; it takes its colours from the `--appling-*` theme tokens. They need `react` as a peer dependency.
 
+`StoryCanvas` (`story`, `index`, `name`) draws one story: a view (`levels`, `states`, `usecases` or `screens`) started from one element, the level canvas from that element's own level, a diagram scaled to fit its box. `@appling/viz/stories` exports `STORIES`, the stories the landing site and the demo's stories page draw on the sample model (`Story`: `id`, `view`, `element`, `title`, `question`, `text`).
+
 ## Inspector: @appling/inspect
 
 The package has no root export. An app such as the VS Code extension uses three subpaths:

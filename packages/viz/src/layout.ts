@@ -584,6 +584,9 @@ export function layoutStates(flow: Flow): PlacedFlow {
     }
     /** The labels placed so far, as boxes; a label moves along its curve until it covers none of them and no state. */
     const free = (box: Box) => ![...taken, ...nodes].some(b => Math.abs(b.x - box.x) < (b.width + box.width) / 2 && Math.abs(b.y - box.y) < (b.height + box.height) / 2);
+    /** Points along every curve, so a label can keep off the curves of other transitions. */
+    const curves = drawn.filter(e => e.from !== e.to).map(e => ({ e, points: Array.from({ length: 21 }, (_, i) => curvePoint(at.get(e.from)!, at.get(e.to)!, bends.get(e)!, 0.1 + i * 0.04)) }));
+    const clear = (box: Box, own: FlowEdge) => curves.every(({ e, points }) => e === own || !points.some(([px, py]) => Math.abs(px - box.x) < box.width / 2 + 8 && Math.abs(py - box.y) < box.height / 2 + 4));
     const edges: PlacedFlow['edges'] = drawn.map(edge => {
         const [from, to] = [at.get(edge.from)!, at.get(edge.to)!];
         if (from === to) {
@@ -595,7 +598,11 @@ export function layoutStates(flow: Flow): PlacedFlow {
         const control = curvePoint(from, to, bend, 0.5, true);
         const [start, end] = [border(from, control), border(to, control)];
         const box = (t: number): Box => { const [px, py] = curvePoint(from, to, bend, t); return { x: px, y: py, width: textWidth(edge, 16) * 1.15, height: edge.note ? 34 : 20 }; };
-        const spot = [0.5, 0.4, 0.6, 0.3, 0.7, 0.22, 0.78].map(box).find(free) ?? box(0.5);
+        // on the curve, else beside it: a label never covers a state or another label, and keeps off other curves where it can
+        const along = [0.5, 0.4, 0.6, 0.3, 0.7, 0.22, 0.78].map(box);
+        const beside = [20, 40, 60, 80, 100, 130, 160, 200, 240, 300].flatMap(d => [-d, d]).flatMap(dx => along.map(b => ({ ...b, x: b.x + dx })));
+        const spots = [...along, ...beside];
+        const spot = spots.find(b => free(b) && clear(b, edge)) ?? spots.find(free) ?? along[0];
         taken.push(spot);
         const [lx, ly] = [spot.x, spot.y];
         const path = `M ${start[0]} ${start[1]} Q ${control[0]} ${control[1]}, ${end[0]} ${end[1]}`;

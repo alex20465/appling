@@ -32,8 +32,8 @@ export function UseCaseCanvas({ diagram, name, icons, selected, onSelect }: UseC
             onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(c.qn); } }}>
             <g className={enter} style={delay(c.qn)}>
                 <title>{c.qn}</title>
-                <rect className="ring" x={-c.w} y={-c.h} width={2 * c.w} height={2 * c.h} rx={5} />
-                <rect className="cell" x={3 - c.w} y={3 - c.h} width={CELL - 6} height={2 * c.h - 6} rx={3} />
+                <rect className="ring" x={-c.w} y={-c.h} width={2 * c.w} height={2 * c.h} rx={12} />
+                <rect className="cell" x={3 - c.w} y={3 - c.h} width={CELL - 6} height={2 * c.h - 6} rx={9} />
                 <line className="ring" x1={CELL - c.w} x2={CELL - c.w} y1={-c.h} y2={c.h} />
                 <g className="icon" transform={`translate(${CELL / 2 - c.w - 9} -9) scale(0.75)`}>
                     {(iconOf(icons?.[c.qn] ?? icons?.[kind] ?? ICON[kind]) ?? []).map(([tag, attributes], i) => createElement(tag, { key: i, ...attributes }))}
@@ -51,7 +51,7 @@ export function UseCaseCanvas({ diagram, name, icons, selected, onSelect }: UseC
                         <path d="M 0 0 L 10 5 L 0 10 z" />
                     </marker>
                 </defs>
-                <rect className="uc-boundary fade" x={placed.boundary.x} y={placed.boundary.y} width={placed.boundary.width} height={placed.boundary.height} rx={10} />
+                <rect className="uc-boundary fade" x={placed.boundary.x} y={placed.boundary.y} width={placed.boundary.width} height={placed.boundary.height} rx={24} />
                 <text className="uc-system fade" x={placed.boundary.x + 12} y={placed.boundary.y - 8}>{name}</text>
                 {placed.associations.map(a => <path key={`${a.actor} ${a.useCase}`} className={`uc-association draw${lit(a.actor, a.useCase)}`} d={a.path} pathLength={1} style={delay(a.actor, a.useCase)} />)}
                 {placed.includes.map(i => (

@@ -53,16 +53,16 @@ const tools = [
 ];
 ---
 
-<section id="tools" class="border-t border-line px-4 py-16 sm:px-8">
+<section id="tools" class="px-4 py-16 sm:px-8">
   <div class="mx-auto flex max-w-[1200px] flex-col gap-8">
     <div class="flex max-w-[640px] flex-col gap-3">
       <span class="eyebrow">Toolchain</span>
       <h2 class="text-h1">Every tool reads the same graph</h2>
       <p class="text-ink-soft">The command line, the inspector, the AI and the generators all read one validated model. Changes go through the same edit operations; the inspector only shows them.</p>
     </div>
-    <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-px border border-line bg-line">
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-4">
       {tools.map((tool) => (
-        <a href={tool.href} class:list={["step flex min-w-0 flex-col gap-3 p-6 text-ink no-underline hover:text-ink", tool.highlight ? "bg-leaf-soft" : "bg-surface-raised hover:bg-surface-elevated"]}>
+        <a href={tool.href} class:list={["step flex min-w-0 flex-col gap-3 rounded-lg p-6 text-ink no-underline hover:text-ink", tool.highlight ? "bg-leaf-soft" : "bg-surface-raised hover:bg-surface-elevated"]}>
           <code class="text-code text-ink-muted">{tool.pkg}</code>
           <h3 class="text-[17px] leading-6 font-semibold">{tool.title}</h3>
           <p class="text-sm leading-[22px] text-ink-muted">{tool.text}</p>

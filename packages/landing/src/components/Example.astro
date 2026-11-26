@@ -1,5 +1,8 @@
 ---
+import { buildSources, errorsOf, type Model } from "@appling/lang";
+import { buildGraph } from "@appling/model";
 import { GITHUB_URL } from "../links";
+import Story from "./Story.astro";
 
 const source = `<span class="kw">module</span> sales <span class="pu">{</span>
   <span class="kw">export</span> <span class="ty">Order</span>
@@ -22,38 +25,38 @@ const source = `<span class="kw">module</span> sales <span class="pu">{</span>
     <span class="kw">transition</span> <span class="va">draft</span> <span class="pu">-&gt;</span> <span class="va">placed</span> <span class="kw">via</span> <span class="ty">PlaceOrder</span>
   <span class="pu">}</span>
 <span class="pu">}</span>`;
+
+// The canvas beside the text is the real one, drawn from this very source
+const workspace = await buildSources({ "file:///sales.appling": source.replace(/<[^>]+>/g, "").replaceAll("&gt;", ">") });
+const errors = errorsOf(workspace);
+if (errors.length) throw new Error(`The example has errors:\n${errors.join("\n")}`);
+const graph = buildGraph(workspace.documents.map((doc) => doc.parseResult.value as Model), workspace.services);
 ---
 
-<section id="example" class="border-t border-line px-4 py-16 sm:px-8">
+<section id="example" class="px-4 py-16 sm:px-8">
   <div class="mx-auto flex max-w-[1200px] flex-col gap-8">
     <div class="flex max-w-[640px] flex-col gap-3">
       <span class="eyebrow">Example</span>
       <h2 class="text-h1">The canvas</h2>
       <p class="text-ink-soft">A sales module as text, and the model on the canvas of the inspector. Unfold a bud and select a node to see what it does, who may run it and where it is used.</p>
     </div>
-    <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,440px),1fr))] gap-px border border-line bg-line">
-      <div class="min-w-0 bg-surface-raised">
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,440px),1fr))] gap-4">
+      <div class="min-w-0 overflow-hidden rounded-lg bg-surface-raised">
         <div class="flex justify-between gap-4 border-b border-line px-4 py-2 font-mono text-xs leading-5">
           <span class="text-ink-muted">sales.appling</span>
           <span class="flex items-center gap-2 text-leaf"><span class="size-1.5 rounded-full bg-leaf"></span>valid</span>
         </div>
         <pre class="overflow-x-auto p-6 text-code" set:html={source}></pre>
       </div>
-      <div class="flex min-h-[520px] min-w-0 flex-col bg-surface-raised">
-        <div class="border-b border-line px-4 py-2 font-mono text-xs leading-5 text-ink-muted">
-          <span class="truncate">Appling Inspect · examples</span>
+      <div class="flex min-h-[520px] min-w-0 flex-col overflow-hidden rounded-lg bg-surface-raised">
+        <div class="flex justify-between gap-4 border-b border-line px-4 py-2 font-mono text-xs leading-5">
+          <span class="truncate text-ink-muted">Appling Inspect · sales</span>
+          <a href="/inspect/" target="_blank" rel="noopener" class="font-semibold no-underline">Full demo →</a>
         </div>
-        <div class="relative flex-1 bg-surface">
-          <img src="/inspect-canvas.webp" width="960" height="480" loading="lazy" alt="" class="absolute inset-0 size-full object-cover opacity-40" />
-          <div class="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
-            <a href="/inspect/" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center rounded-md bg-leaf px-6 font-mono text-[13px] leading-4 font-semibold text-on-leaf no-underline hover:bg-leaf-hover">Open the inspector in a new tab →</a>
-            <p class="max-w-[420px] text-sm leading-[22px] text-ink">The real inspector on the sample sales and CRM model, running in your browser. Read only: nothing leaves the page.</p>
-          </div>
-        </div>
+        <Story view="levels" element="sales.Order" graph={graph} name="sales" class="flex-1" />
       </div>
     </div>
 
     <a href={`${GITHUB_URL}/tree/main/examples`} class="font-mono text-[13px] leading-5 font-semibold">Browse full models on GitHub →</a>
   </div>
 </section>
-

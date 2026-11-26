@@ -55,6 +55,8 @@ const HALF: Record<TreeNode['type'], number> = { seed: 34, module: 26, element: 
 /** A chip from its left to its right, around the node's place where the traces meet it: a cell of `CELL` on the left for the icon, the texts right of it. Inside the slots of `layout.ts`. */
 const WIDE: Record<TreeNode['type'], number> = { seed: 34, module: 116, element: 116 };
 const CELL = 48;
+/** The corner radius of a chip. */
+const CORNER = 12;
 
 function radius(node: TreeNode): number {
     return HALF[node.type];
@@ -88,7 +90,8 @@ const FRAME_HALF = 44;
  */
 function outline(node: Pick<TreeNode, 'type'>): string {
     const [h, w] = [HALF[node.type], WIDE[node.type]];
-    const body = `M ${5 - w} ${-h} H ${w - 5} Q ${w} ${-h} ${w} ${5 - h} V ${h - 5} Q ${w} ${h} ${w - 5} ${h} H ${5 - w} Q ${-w} ${h} ${-w} ${h - 5} V ${5 - h} Q ${-w} ${-h} ${5 - w} ${-h} Z`;
+    const r = CORNER;
+    const body = `M ${r - w} ${-h} H ${w - r} Q ${w} ${-h} ${w} ${r - h} V ${h - r} Q ${w} ${h} ${w - r} ${h} H ${r - w} Q ${-w} ${h} ${-w} ${h - r} V ${r - h} Q ${-w} ${-h} ${r - w} ${-h} Z`;
     return node.type === 'seed' ? body : `${body} M ${CELL - w} ${-h} V ${h}`;
 }
 
@@ -400,7 +403,7 @@ export function ModelCanvas({ index, name, focus, folded, selected, settings, bu
                         const at = byId.get(ripple.id);
                         return at && (
                             <g key={ripple.key} className={`ripple ${ripple.kind}${at.node.layer ? ` layer-${at.node.layer}` : ''}`} style={{ transform: `translate(${at.x}px, ${at.y}px)` }}>
-                                {[0, 1].map(i => <rect key={i} x={-WIDE[at.node.type] - 3} y={-radius(at.node) - 3} width={2 * WIDE[at.node.type] + 6} height={2 * radius(at.node) + 6} rx={7} onAnimationEnd={i ? () => setRipples(now => now.filter(r => r.key !== ripple.key)) : undefined} />)}
+                                {[0, 1].map(i => <rect key={i} x={-WIDE[at.node.type] - 3} y={-radius(at.node) - 3} width={2 * WIDE[at.node.type] + 6} height={2 * radius(at.node) + 6} rx={CORNER + 3} onAnimationEnd={i ? () => setRipples(now => now.filter(r => r.key !== ripple.key)) : undefined} />)}
                             </g>
                         );
                     })}
@@ -482,17 +485,17 @@ function TreeItem({ placed, delay = 0, current, chosen, related, dim, icon, mark
             {framed ? (
                 <g className="grow" style={sprout}>
                     <title>{`module ${node.qn}\n${node.fact}`}</title>
-                    <rect className="frame" x={-half} y={-FRAME_HALF} width={2 * half} height={2 * FRAME_HALF} rx={8} />
+                    <rect className="frame" x={-half} y={-FRAME_HALF} width={2 * half} height={2 * FRAME_HALF} rx={16} />
                     <text className="frame-name" x={12 - half} y={-FRAME_HALF - 6}>{node.label}</text>
                 </g>
             ) : (
                 <g className="grow" style={sprout}>
                     <title>{node.qn}{node.type === 'element' ? `\n${kindLabel(node.kind!)}, ${relevanceLevel(node.relevance)}` : ''}{node.fact ? `\n${node.fact}` : ''}{session ? `\nClaimed by ${session.label}` : ''}{implementation ? `\nCode: ${IMPLEMENTATION_LABELS[implementation]}` : ''}</title>
-                    {session && <rect className={`session-ring${onSession ? ' jump' : ''}`} x={-w - 5} y={-r - 5} width={2 * w + 10} height={2 * r + 10} rx={9} style={{ stroke: session.color }}
+                    {session && <rect className={`session-ring${onSession ? ' jump' : ''}`} x={-w - 5} y={-r - 5} width={2 * w + 10} height={2 * r + 10} rx={CORNER + 5} style={{ stroke: session.color }}
                         onClick={onSession ? event => { event.stopPropagation(); onSession(session.session); } : undefined}><title>{`Claimed by ${session.label}${onSession ? '. Click to go to the session' : ''}`}</title></rect>}
-                    {change && <rect className="change-halo" x={-w - 8} y={-r - 8} width={2 * w + 16} height={2 * r + 16} rx={12} />}
+                    {change && <rect className="change-halo" x={-w - 8} y={-r - 8} width={2 * w + 16} height={2 * r + 16} rx={CORNER + 8} />}
                     <path className="ring" d={outline(node)} />
-                    <rect className="cell" x={3 - w} y={3 - r} width={CELL - 6} height={2 * r - 6} rx={3} />
+                    <rect className="cell" x={3 - w} y={3 - r} width={CELL - 6} height={2 * r - 6} rx={CORNER - 3} />
                     {change && (
                         <g className="change-badge" transform={`translate(${-w} ${-r})`}>
                             <circle r={8} />

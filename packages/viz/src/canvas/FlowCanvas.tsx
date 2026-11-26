@@ -64,8 +64,8 @@ export function FlowCanvas({ index, flow, selected, bubbles = [], edgesOnClick, 
                     {placed.nodes.map(({ node, x, y, width, height }) => (
                         <g key={node.id} className={`flow-node${node.tag ? ` ${node.tag}` : ''}${node.qn && node.qn === selected ? ' selected' : ''}${node.id === open ? ' open' : ''}`} transform={`translate(${x - width / 2} ${y - height / 2})`} onClick={() => press(node.id, node.qn)}>
                             <g className="pop" style={delay(delays.node.get(node.id)!)}>
-                                <rect width={width} height={height} rx={states ? height / 2 : 8} />
-                                {node.tag === 'final' && <rect className="inner" x={4} y={4} width={width - 8} height={height - 8} rx={states ? (height - 8) / 2 : 6} />}
+                                <rect width={width} height={height} rx={states ? height / 2 : 14} />
+                                {node.tag === 'final' && <rect className="inner" x={4} y={4} width={width - 8} height={height - 8} rx={states ? (height - 8) / 2 : 10} />}
                                 <text className="flow-label" x={width / 2} y={node.note ? 19 : height / 2 + 4}>{node.label}</text>
                                 {node.note && <text className="flow-note" x={width / 2} y={35}>{node.note}</text>}
                             </g>

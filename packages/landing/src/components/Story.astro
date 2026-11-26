@@ -1,0 +1,71 @@
+---
+import type { Graph } from "@appling/model";
+import { STORIES } from "@appling/viz/stories";
+
+// A story of @appling/viz drawn live in place: by id on the examples, or a view of an own graph
+interface Props {
+  id?: string;
+  view?: string;
+  element?: string;
+  graph?: Graph;
+  name?: string;
+  class?: string;
+}
+const { id, graph, name = "examples", class: className } = Astro.props;
+const story = id ? STORIES.find((s) => s.id === id) : Astro.props;
+if (!story?.view || !story.element) throw new Error(`Unknown story ${id}`);
+---
+
+<div data-story data-view={story.view} data-element={story.element} data-name={name} class:list={["live-canvas", className]}>
+  {graph && <script type="application/json" set:html={JSON.stringify(graph).replaceAll("<", "\\u003c")}></script>}
+</div>
+
+<script>
+  // The canvases and their icons are large: load them once a story comes near
+  const observer = new IntersectionObserver(async (entries) => {
+    for (const entry of entries.filter((e) => e.isIntersecting)) {
+      observer.unobserve(entry.target);
+      (await import("../live-canvas.ts")).mount(entry.target as HTMLElement);
+    }
+  }, { rootMargin: "600px" });
+  document.querySelectorAll("[data-story]").forEach((element) => observer.observe(element));
+</script>
+
+<style is:global>
+  /* the inspector's tokens, from the site's */
+  .live-canvas {
+    --appling-surface: var(--color-surface);
+    --appling-surface-raised: var(--color-surface-raised);
+    --appling-surface-elevated: var(--color-surface-elevated);
+    --appling-surface-hover: var(--color-surface-hover);
+    --appling-line: var(--color-line);
+    --appling-line-strong: var(--color-line-strong);
+    --appling-ink: var(--color-ink);
+    --appling-ink-soft: var(--color-ink-soft);
+    --appling-ink-muted: var(--color-ink-muted);
+    --appling-leaf: var(--color-leaf);
+    --appling-leaf-soft: var(--color-leaf-soft);
+    --appling-sprout: var(--color-sprout);
+    --appling-rust: var(--color-rust);
+    --appling-amber: var(--color-amber);
+    --appling-copper: var(--color-copper);
+    --appling-info: #4c9fe0;
+    --appling-shadow: #0008;
+    --appling-canvas-glow: #16200f;
+    --appling-branch: #3d6b2e;
+    --appling-seed: #1f3a19;
+    --appling-change-added: #3fd27a;
+    --appling-change-changed: #4c9fe0;
+    --appling-change-removed: #e5534b;
+    --appling-layer-domain: var(--appling-leaf);
+    --appling-layer-behavior: var(--appling-sprout);
+    --appling-layer-application: var(--appling-rust);
+    --appling-layer-interface: var(--appling-amber);
+    --appling-layer-experience: var(--appling-copper);
+    --appling-layer-cross: var(--appling-line-strong);
+    --appling-font-sans: var(--font-sans);
+    --appling-font-mono: var(--font-mono);
+    position: relative;
+  }
+  .live-canvas > .story-view { position: absolute; inset: 0; }
+</style>

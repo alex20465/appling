@@ -1,14 +1,14 @@
 ---
+import Story from "./Story.astro";
+
 const shots = [
   {
-    src: "/vscode-canvas.webp",
-    alt: "VS Code with the Appling sidebar and the model canvas in a tab: the sales module unfolded up to the Order entity, the Inspector panel listing its actions, fields and what uses it",
+    story: "placeorder-levels",
     title: "The canvas in a tab, the panels in the sidebar",
     text: "Each project opens its model canvas in a tab. The selected element shows in the Inspector panel as a native tree: its actions, fields, policies and everything that uses it.",
   },
   {
-    src: "/vscode-editor.webp",
-    alt: "VS Code with the model canvas on the left and sales.appling on the right, a mark in the gutter of every line that declares an element",
+    story: "order-states",
     title: "Text and canvas side by side",
     text: "Open source jumps from a node to its declaration. Gutter marks show which model lines are implemented in code, and Go to Implementation opens that code.",
   },
@@ -21,19 +21,17 @@ const points = [
 ];
 ---
 
-<section id="vscode" class="border-t border-line px-4 py-16 sm:px-8">
+<section id="vscode" class="px-4 py-16 sm:px-8">
   <div class="mx-auto flex max-w-[1200px] flex-col gap-8">
     <div class="flex max-w-[640px] flex-col gap-3">
       <span class="eyebrow">In VS Code</span>
       <h2 class="text-h1">The inspector, next to your code and your agent</h2>
       <p class="text-ink-soft">The Appling extension finds the projects of your workspace and brings the inspector into VS Code. The text stays in VS Code's own editors, with diagnostics, completion and rename from the language server.</p>
     </div>
-    <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,440px),1fr))] gap-px border border-line bg-line">
+    <div class="grid gap-4">
       {shots.map((shot) => (
-        <figure class="flex min-w-0 flex-col bg-surface-raised">
-          <a href={shot.src} target="_blank" class="block border-b border-line">
-            <img src={shot.src} alt={shot.alt} width="1440" height="900" loading="lazy" decoding="async" class="block h-auto w-full" />
-          </a>
+        <figure class="flex min-w-0 flex-col overflow-hidden rounded-lg bg-surface-raised">
+          <Story id={shot.story} class="h-[520px]" />
           <figcaption class="flex flex-col gap-2 p-6">
             <h3 class="text-[17px] leading-6 font-semibold">{shot.title}</h3>
             <p class="text-sm leading-[22px] text-ink-muted">{shot.text}</p>

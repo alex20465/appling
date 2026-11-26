@@ -44,7 +44,7 @@ const checks = ["layer rules", "exports", "migrations"];
 const outputs = ["django", "ash", "go", "rust"];
 ---
 
-<section id="how" class="border-t border-line px-4 py-16 sm:px-8">
+<section id="how" class="px-4 py-16 sm:px-8">
   <div class="mx-auto flex max-w-[1200px] flex-col gap-8">
     <div class="flex max-w-[640px] flex-col gap-3">
       <span class="eyebrow">How it works</span>
@@ -64,7 +64,7 @@ const outputs = ["django", "ash", "go", "rust"];
               </div>
             )}
             <article
-              class:list={["stage step flex min-w-0 flex-[1_1_0] flex-col gap-3 rounded-sm border p-6", step.highlight && "[--off-bg:var(--color-leaf-soft)] [--off-line:var(--color-leaf-line)]"]}
+              class:list={["stage step flex min-w-0 flex-[1_1_0] flex-col gap-3 rounded-lg border p-6", step.highlight && "[--off-bg:var(--color-leaf-soft)] [--off-line:var(--color-leaf-line)]"]}
               style={`--d: ${i * SLOT}s`}
             >
               <div class="flex items-center justify-between gap-4">

@@ -22,6 +22,10 @@
       "types": "./out/protocol.d.ts",
       "default": "./out/protocol.js"
     },
+    "./stories": {
+      "types": "./out/stories.d.ts",
+      "default": "./out/stories.js"
+    },
     "./icons": {
       "types": "./out/icons.d.ts",
       "default": "./out/icons.js"

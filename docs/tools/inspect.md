@@ -14,7 +14,7 @@ npx appling inspect models
 ```
 
 > [!TIP]
-> To try the inspector without installing anything, open the [demo](https://appling.tools/inspect/). It runs on the sample sales and CRM model entirely in your browser.
+> To try the inspector without installing anything, open the [demo](https://appling.tools/inspect/). It runs on the sample sales and CRM model entirely in your browser. Its [stories page](https://appling.tools/inspect/stories.html) shows one angle of each view on the same model.
 
 The header shows the workspace folder, the release indicator (once a release exists) and an icon for the state of the model: a check mark when it is valid, a warning sign with the number of errors otherwise. Pointing at it says so in words and lists the first errors. At the bottom right, "sponsored by Techthos.net" links to the sponsor, https://www.techthos.net/.
 

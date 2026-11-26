@@ -6,5 +6,8 @@ import config from './vite.config.js';
 export default mergeConfig(config, defineConfig({
     base: '/inspect/',
     resolve: { alias: [{ find: /^\.\/api\.js$/, replacement: fileURLToPath(new URL('src/demo/api.ts', import.meta.url)) }] },
-    build: { outDir: '../../dist/demo' }
+    build: {
+        outDir: '../../dist/demo',
+        rollupOptions: { input: [fileURLToPath(new URL('src/client/index.html', import.meta.url)), fileURLToPath(new URL('src/client/stories.html', import.meta.url))] }
+    }
 }));

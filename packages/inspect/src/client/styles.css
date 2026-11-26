@@ -233,3 +233,12 @@ button:focus-visible { outline: 2px solid var(--appling-leaf); outline-offset: 2
 }
 .relevance-pick { margin-left: auto; }
 .bar .relevance-pick + .ok, .bar .relevance-pick + .errors { margin-left: 12px; }
+
+/* The stories page of the demo (stories.html) */
+.stories { display: grid; gap: 32px; max-width: 1200px; margin: 0 auto; padding: 32px 16px; }
+.story header { display: grid; gap: 4px; margin-bottom: 12px; }
+.story header a { color: var(--appling-ink-muted); font: 13px var(--appling-font-mono); text-decoration: none; }
+.story header b { color: var(--appling-ink); font-weight: 600; }
+.story header p { margin: 0; color: var(--appling-ink-soft); }
+.story-canvas { height: 640px; overflow: hidden; border-radius: 16px; background: var(--appling-surface-raised); }
+html:has(.stories), html:has(.stories) body, html:has(.stories) #root { height: auto; }
