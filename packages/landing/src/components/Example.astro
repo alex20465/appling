@@ -39,19 +39,15 @@ const source = `<span class="kw">module</span> sales <span class="pu">{</span>
         </div>
         <pre class="overflow-x-auto p-6 text-code" set:html={source}></pre>
       </div>
-      <div id="inspect-window" class="flex min-h-[520px] min-w-0 flex-col bg-surface-raised">
-        <div class="flex items-center justify-between gap-4 border-b border-line px-4 py-2 font-mono text-xs leading-5 text-ink-muted">
+      <div class="flex min-h-[520px] min-w-0 flex-col bg-surface-raised">
+        <div class="border-b border-line px-4 py-2 font-mono text-xs leading-5 text-ink-muted">
           <span class="truncate">Appling Inspect · examples</span>
-          <span class="flex items-center gap-4">
-            <a href="/inspect/" target="_blank" class="font-semibold whitespace-nowrap">Open in a new tab →</a>
-            <button type="button" data-fullscreen class="cursor-pointer font-semibold whitespace-nowrap text-leaf hover:text-leaf-hover">Full screen</button>
-          </span>
         </div>
-        <div id="inspect-stage" class="relative flex-1 bg-surface">
+        <div class="relative flex-1 bg-surface">
           <img src="/inspect-canvas.webp" width="960" height="480" loading="lazy" alt="" class="absolute inset-0 size-full object-cover opacity-40" />
           <div class="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
-            <button type="button" data-start class="inline-flex min-h-11 cursor-pointer items-center rounded-md bg-leaf px-6 font-mono text-[13px] leading-4 font-semibold text-on-leaf hover:bg-leaf-hover">Open the inspector</button>
-            <p class="max-w-[420px] text-sm leading-[22px] text-ink">The real inspector on the sample sales and CRM model, running in your browser. Read only: nothing leaves this page.</p>
+            <a href="/inspect/" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center rounded-md bg-leaf px-6 font-mono text-[13px] leading-4 font-semibold text-on-leaf no-underline hover:bg-leaf-hover">Open the inspector in a new tab →</a>
+            <p class="max-w-[420px] text-sm leading-[22px] text-ink">The real inspector on the sample sales and CRM model, running in your browser. Read only: nothing leaves the page.</p>
           </div>
         </div>
       </div>
@@ -61,23 +57,3 @@ const source = `<span class="kw">module</span> sales <span class="pu">{</span>
   </div>
 </section>
 
-<script>
-  const win = document.querySelector<HTMLElement>("#inspect-window")!;
-  const stage = win.querySelector("#inspect-stage")!;
-  const start = () => {
-    if (stage.querySelector("iframe")) return;
-    const frame = document.createElement("iframe");
-    frame.src = "/inspect/";
-    frame.title = "The Appling inspector on the sample model";
-    frame.allow = "fullscreen";
-    frame.className = "absolute inset-0 size-full border-0";
-    stage.replaceChildren(frame);
-    frame.focus();
-  };
-  win.querySelector("[data-start]")!.addEventListener("click", start);
-  win.querySelector("[data-fullscreen]")!.addEventListener("click", () => {
-    start();
-    if (document.fullscreenElement) document.exitFullscreen();
-    else win.requestFullscreen();
-  });
-</script>

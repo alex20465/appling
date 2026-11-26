@@ -4,6 +4,12 @@
 
 ### Patch Changes
 
+- Adds the use case, state and screen diagrams (useCaseDiagram, screenFlow, layoutUseCases, layoutStates, UseCaseCanvas, ScreenCanvas) and the Select dropdown of the canvases.
+
+- Keeps the idle model canvas still and draws it faster, with larger unfold tabs.
+
+- Adds pinch to zoom and a phone layout to the model canvas.
+
 - Annotated chips on the model canvas carry a note badge.
 
 - Updated dependencies:

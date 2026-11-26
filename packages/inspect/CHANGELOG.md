@@ -4,6 +4,10 @@
 
 ### Patch Changes
 
+- A view rail switches between Levels, Use cases, States and Screens and keeps the chosen view in .appling/view.json.
+
+- Lays the inspector out for phones.
+
 - The Inspector sidebar shows the describe and annotation texts, and annotated chips carry a note badge.
 
 - Adds a Techthos.net sponsor link to the header.

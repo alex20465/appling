@@ -1,0 +1,56 @@
+---
+const views = [
+  {
+    src: "/view-levels.webp",
+    alt: "The level canvas: five level bands, the sales module framing its entities, the Order entity unfolded upwards to the behavior, application, interfaces and access that rest on it",
+    name: "Levels",
+    question: "What rests on what?",
+    text: "A pyramid of the five levels. Every declaration unfolds upwards to what rests on it and downwards to what it rests on.",
+  },
+  {
+    src: "/view-usecases.webp",
+    alt: "The use case diagram: the actors Shopper and Employee left of the system boundary, joined by curves to the use cases Checkout, Convert, FollowUp and CancelOrder, and dashed include arrows to the actions they run",
+    name: "Use cases",
+    question: "Who does what?",
+    text: "The actors, the use cases their policies let them start, and what each use case includes.",
+  },
+  {
+    src: "/view-states.webp",
+    alt: "The state diagram of OrderFlow: draft below the initial point, PlaceOrder leading to placed, Cancel to cancelled, PaymentReceived to paid, each transition with its guard",
+    name: "States",
+    question: "How does it change?",
+    text: "The state diagram of a machine: its states, and every transition with the action or event that drives it and its guard.",
+  },
+  {
+    src: "/view-screens.webp",
+    alt: "The screens of the Shopper: an application window with the main navigation, the Checkout flow at step one of two, the Orders page with a table of open orders and a button that continues to the order detail",
+    name: "Screens",
+    question: "What does it look like?",
+    text: "A clickable mockup of the application as one actor sees it: its menu, its pages, and next buttons along its flows.",
+  },
+];
+---
+
+<section id="views" class="border-t border-line px-4 py-16 sm:px-8">
+  <div class="mx-auto flex max-w-[1200px] flex-col gap-8">
+    <div class="flex max-w-[640px] flex-col gap-3">
+      <span class="eyebrow">Four views</span>
+      <h2 class="text-h1">One model, seen four ways</h2>
+      <p class="text-ink-soft">The inspector draws every view from the same text. A rail switches between them, and a click on any element opens it in the inspector.</p>
+    </div>
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,440px),1fr))] gap-px border border-line bg-line">
+      {views.map((view) => (
+        <figure class="flex min-w-0 flex-col bg-surface-raised">
+          <a href={view.src} target="_blank" class="block border-b border-line">
+            <img src={view.src} alt={view.alt} width="1440" height="900" loading="lazy" decoding="async" class="block h-auto w-full" />
+          </a>
+          <figcaption class="flex flex-col gap-2 p-6">
+            <h3 class="text-[17px] leading-6 font-semibold">{view.name}{" "}<span class="font-mono text-[13px] font-normal text-ink-muted">{view.question}</span></h3>
+            <p class="text-sm leading-[22px] text-ink-muted">{view.text}</p>
+          </figcaption>
+        </figure>
+      ))}
+    </div>
+    <a href="/docs/tools/inspect/#diagrams" class="font-mono text-[13px] leading-5 font-semibold">How the views are drawn →</a>
+  </div>
+</section>
